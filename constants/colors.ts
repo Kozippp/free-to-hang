@@ -1,0 +1,30 @@
+export default {
+  light: {
+    background: '#FFFFFF',
+    text: '#000000',
+    secondaryText: '#666666',
+    primary: '#5B8AF5',
+    secondary: '#FF6B6B',
+    border: '#E5E5E5',
+    offlineGray: '#999999',
+    onlineGreen: '#4CAF50',
+    cardBackground: '#F8F8F8',
+    modalBackground: 'rgba(0, 0, 0, 0.5)',
+    buttonBackground: '#F0F0F0',
+    warning: '#FFA726',
+  },
+  dark: {
+    background: '#000000',
+    text: '#FFFFFF',
+    secondaryText: '#999999',
+    primary: '#5B8AF5',
+    secondary: '#FF6B6B',
+    border: '#333333',
+    offlineGray: '#666666',
+    onlineGreen: '#4CAF50',
+    cardBackground: '#1A1A1A',
+    modalBackground: 'rgba(0, 0, 0, 0.7)',
+    buttonBackground: '#2A2A2A',
+    warning: '#FFA726',
+  }
+};
