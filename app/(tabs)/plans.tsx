@@ -7,7 +7,6 @@ import TabBar from '@/components/plans/TabBar';
 import InvitationCard from '@/components/plans/InvitationCard';
 import PlanDetailModal from '@/components/plans/PlanDetailModal';
 import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
-import InviteShareModal from '@/components/InviteShareModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 
 export default function PlansScreen() {
@@ -15,7 +14,6 @@ export default function PlansScreen() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
   const [newPlanTitle, setNewPlanTitle] = useState('');
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
@@ -91,28 +89,21 @@ export default function PlansScreen() {
   }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation, dropInAnimation]);
 
   const startNewPlanAnimation = () => {
-    Animated.sequence([
-      // First, a quick scale up with glow
-      Animated.timing(newPlanAnimation, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: false,
-      }),
-      // Hold the highlight
-      Animated.timing(newPlanAnimation, {
-        toValue: 0.8,
-        duration: 800,
-        useNativeDriver: false,
-      }),
-      // Finally fade out
+    // Use only transform animations with native driver
+    Animated.timing(newPlanAnimation, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start(() => {
+      // Fade out after highlighting
       Animated.timing(newPlanAnimation, {
         toValue: 0,
         duration: 600,
-        useNativeDriver: false,
-      })
-    ]).start(() => {
-      setHighlightedPlanId(null);
-      dropInAnimation.setValue(0); // Reset drop animation
+        useNativeDriver: true,
+      }).start(() => {
+        setHighlightedPlanId(null);
+        dropInAnimation.setValue(0); // Reset drop animation
+      });
     });
   };
   
@@ -175,10 +166,6 @@ export default function PlansScreen() {
     respondToPlan(planId, response, conditionalFriends);
   };
   
-  const handleInviteFriends = () => {
-    setShowInviteModal(true);
-  };
-  
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyTitle}>No {activeTab.toLowerCase()} yet</Text>
@@ -201,10 +188,6 @@ export default function PlansScreen() {
     const isFirst = index === 0 && isHighlighted;
     
     const highlightStyle = isHighlighted ? {
-      backgroundColor: newPlanAnimation.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['transparent', 'rgba(76, 175, 80, 0.25)']
-      }),
       transform: [
         {
           translateY: isFirst ? dropInAnimation : 0
@@ -216,35 +199,17 @@ export default function PlansScreen() {
           })
         }
       ],
-      borderRadius: 12,
-      borderWidth: newPlanAnimation.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 2]
-      }),
-      borderColor: newPlanAnimation.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['transparent', '#4CAF50']
-      }),
-      shadowColor: '#4CAF50',
-      shadowOffset: {
-        width: 0,
-        height: newPlanAnimation.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, 4]
-        })
-      },
-      shadowOpacity: newPlanAnimation.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 0.3]
-      }),
-      shadowRadius: newPlanAnimation.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 8]
-      }),
+      // Remove backgroundColor animation to avoid native driver conflicts
     } : {};
 
     return (
-      <Animated.View style={highlightStyle}>
+      <Animated.View style={[
+        highlightStyle,
+        isHighlighted && { 
+          backgroundColor: 'rgba(76, 175, 80, 0.25)',
+          borderRadius: 12,
+        }
+      ]}>
         <InvitationCard plan={item} onPress={handlePlanPress} />
       </Animated.View>
     );
@@ -322,12 +287,6 @@ export default function PlansScreen() {
           planTitle={newPlanTitle}
           isAnonymous={isAnonymousPlan}
           onClose={() => setShowSuccessModal(false)}
-          onInviteFriends={handleInviteFriends}
-        />
-        
-        <InviteShareModal
-          visible={showInviteModal}
-          onClose={() => setShowInviteModal(false)}
         />
       </SafeAreaView>
     </>

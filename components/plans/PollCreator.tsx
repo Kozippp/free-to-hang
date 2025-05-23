@@ -77,7 +77,7 @@ export default function PollCreator({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <View style={styles.overlay}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingView}
@@ -171,20 +171,26 @@ export default function PollCreator({
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', // Light white overlay
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   keyboardAvoidingView: {
     width: '100%',
   },
   modalContainer: {
-    backgroundColor: '#1E1E1E', // Dark background like Instagram
+    backgroundColor: 'white', // Clean white background like Bolt
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: Platform.OS === 'ios' ? 40 : 20,
     maxHeight: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -193,16 +199,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+    borderBottomColor: Colors.light.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: 'white',
+    color: Colors.light.text,
   },
   cancelButtonText: {
     fontSize: 16,
-    color: '#3897F0', // Instagram blue
+    color: Colors.light.primary,
     fontWeight: '500',
   },
   modalContent: {
@@ -214,17 +220,19 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 14,
-    color: '#8E8E8E', // Instagram gray
+    color: Colors.light.secondaryText,
     marginBottom: 8,
     fontWeight: '500',
   },
   questionInput: {
     fontSize: 16,
-    color: 'white',
-    backgroundColor: '#262626', // Instagram dark input
+    color: Colors.light.text,
+    backgroundColor: Colors.light.buttonBackground,
     borderRadius: 8,
     padding: 12,
     marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   optionsContainer: {
     marginBottom: 20,
@@ -237,10 +245,12 @@ const styles = StyleSheet.create({
   optionInput: {
     flex: 1,
     fontSize: 16,
-    color: 'white',
-    backgroundColor: '#262626', // Instagram dark input
+    color: Colors.light.text,
+    backgroundColor: Colors.light.buttonBackground,
     borderRadius: 8,
     padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   focusedInput: {
     borderColor: Colors.light.primary,
@@ -268,7 +278,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   submitButton: {
-    backgroundColor: '#3897F0', // Instagram blue
+    backgroundColor: Colors.light.primary,
     borderRadius: 8,
     padding: 14,
     alignItems: 'center',

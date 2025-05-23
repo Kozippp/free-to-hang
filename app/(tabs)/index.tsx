@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -10,16 +10,15 @@ import {
   Image
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import StatusToggle from '@/components/StatusToggle';
-import ActivityModal from '@/components/ActivityModal';
-import FriendCard from '@/components/FriendCard';
-import UserStatusBar from '@/components/UserStatusBar';
-import PlanSuggestionSheet from '@/components/PlanSuggestionSheet';
-import useHangStore from '@/store/hangStore';
-import Colors from '@/constants/colors';
-import { offlineFriends } from '@/constants/mockData';
-import InviteShareModal from '@/components/InviteShareModal';
 import { UserPlus } from 'lucide-react-native';
+import Colors from '@/constants/colors';
+import StatusToggle from '@/components/StatusToggle';
+import UserStatusBar from '@/components/UserStatusBar';
+import FriendCard from '@/components/FriendCard';
+import ActivityModal from '@/components/ActivityModal';
+import PlanSuggestionSheet from '@/components/plans/PlanSuggestionSheet';
+import useHangStore from '@/store/hangStore';
+import { mockFriends, offlineFriends } from '@/constants/mockData';
 
 export default function HangScreen() {
   const { 
@@ -42,9 +41,7 @@ export default function HangScreen() {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [planCreated, setPlanCreated] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   
   // Handle initial state when component mounts
   useEffect(() => {
@@ -95,36 +92,26 @@ export default function HangScreen() {
   };
 
   const handlePlanSubmitted = () => {
-    setPlanCreated(true);
-    setShowPlanSheet(false);
-    
-    // Navigate to the appropriate tab based on plan type
-    if (isAnonymousPlan) {
-      router.push('/plans');
-      // Set a timeout to ensure the navigation completes before showing success message
-      setTimeout(() => {
-        setShowSuccessModal(true);
-      }, 300);
-    } else {
-      router.push('/plans');
-      // Set a timeout to ensure the navigation completes before showing success message
-      setTimeout(() => {
-        setShowSuccessModal(true);
-      }, 300);
-    }
+    // Don't update state here - let the sheet handle its own closing
+    // The new success flow is now handled in the plans tab
   };
   
   // Get all friends for display (including pinged offline friends)
   const getAllFriends = () => {
-    const allFriends = [...friends];
+    const allFriends = [...mockFriends];
     
     // Add pinged offline friends
     pingedFriends.forEach(id => {
       const friend = offlineFriends.find(f => f.id === id);
       if (friend && !allFriends.some(f => f.id === id)) {
         allFriends.push({
-          ...friend,
-          status: 'pinged' as any // This is a custom status just for UI
+          id: friend.id,
+          name: friend.name,
+          avatar: friend.avatar,
+          status: 'pinged' as const,
+          activity: '',
+          lastActive: friend.lastSeen,
+          responseStatus: friend.responseStatus
         });
       }
     });
@@ -135,10 +122,6 @@ export default function HangScreen() {
   const selectedFriendsData = getAllFriends().filter(friend => 
     selectedFriends.includes(friend.id)
   );
-  
-  const handleInviteFriends = () => {
-    setShowSuccessModal(true);
-  };
   
   return (
     <>
@@ -192,7 +175,7 @@ export default function HangScreen() {
                     lastActive={friend.lastActive || friend.lastSeen}
                     selected={isSelectedFriend(friend.id)}
                     onSelect={handleFriendSelect}
-                    status={friend.status}
+                    status={friend.status as 'online' | 'offline' | 'pinged' | undefined}
                   />
                 ))
               ) : (
@@ -205,7 +188,7 @@ export default function HangScreen() {
                   </Text>
                   <TouchableOpacity 
                     style={styles.inviteFriendsButton}
-                    onPress={handleInviteFriends}
+                    onPress={() => {}}
                   >
                     <UserPlus size={18} color="white" style={styles.inviteFriendsIcon} />
                     <Text style={styles.inviteFriendsText}>Invite Friends</Text>
@@ -221,7 +204,7 @@ export default function HangScreen() {
                   </Text>
                   <TouchableOpacity 
                     style={styles.inviteFriendsButtonSmall}
-                    onPress={handleInviteFriends}
+                    onPress={() => {}}
                   >
                     <UserPlus size={16} color={Colors.light.primary} style={styles.inviteFriendsIconSmall} />
                     <Text style={styles.inviteFriendsTextSmall}>Invite Friends</Text>
@@ -271,12 +254,6 @@ export default function HangScreen() {
           !selectedFriends.includes(friend.id) && friend.status === 'online'
         )}
         onPlanSubmitted={handlePlanSubmitted}
-      />
-
-      <InviteShareModal
-        visible={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
-        showSuccessMessage={planCreated}
       />
     </>
   );

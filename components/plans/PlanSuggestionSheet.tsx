@@ -136,7 +136,7 @@ export default function PlanSuggestionSheet({
       description: description,
       type: isAnonymous ? 'anonymous' as const : 'normal' as const,
       creator: isAnonymous ? null : {
-        id: user.id,
+        id: 'current',
         name: user.name,
         avatar: user.avatar
       },
@@ -155,7 +155,7 @@ export default function PlanSuggestionSheet({
           id: friend.id,
           name: friend.name,
           avatar: friend.avatar,
-          status: friend.id === user.id ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
+          status: friend.id === 'current' ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
         };
       }),
       date: 'Today, 7:00 PM', // This would be set by the user in a real app
@@ -242,6 +242,7 @@ export default function PlanSuggestionSheet({
     // Add current user with (you) label
     const currentUser = {
       ...user,
+      id: 'current',
       name: `${user.name} (you)`,
       status: 'online' as const
     };
@@ -498,7 +499,7 @@ export default function PlanSuggestionSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Light white overlay instead of black
     justifyContent: 'flex-end',
   },
   sheetContainer: {

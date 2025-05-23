@@ -210,28 +210,33 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
 
   const handleCreateInvitationPoll = (friendIds: string[], friendNames: string[]) => {
-    // Create an invitation poll
-    const invitationPoll: Poll = {
-      id: `invitation-poll-${Date.now()}`,
-      question: `Should we invite ${friendNames.join(', ')} to this plan?`,
-      type: 'invitation',
-      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
-      invitedUsers: friendIds,
-      options: [
-        {
-          id: `allow-${Date.now()}`,
-          text: 'Allow',
-          votes: []
-        },
-        {
-          id: `deny-${Date.now()}`,
-          text: 'Deny',
-          votes: []
-        }
-      ]
-    };
+    // Create individual invitation polls for each person
+    friendIds.forEach((friendId, index) => {
+      const friendName = friendNames[index];
+      
+      const invitationPoll: Poll = {
+        id: `invitation-poll-${Date.now()}-${friendId}`,
+        question: `Should we invite ${friendName} to this plan?`,
+        type: 'invitation',
+        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
+        invitedUsers: [friendId], // Only one user per poll
+        options: [
+          {
+            id: `allow-${Date.now()}-${friendId}`,
+            text: 'Allow',
+            votes: []
+          },
+          {
+            id: `deny-${Date.now()}-${friendId}`,
+            text: 'Deny',
+            votes: []
+          }
+        ]
+      };
 
-    addPoll(latestPlan.id, invitationPoll);
+      addPoll(latestPlan.id, invitationPoll);
+    });
+    
     setShowInviteModal(false);
   };
   
@@ -543,37 +548,67 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             acceptedParticipants={acceptedParticipants}
             maybeParticipants={maybeParticipants}
             pendingParticipants={pendingParticipants}
-            onInvite={handleInviteFriends}
-            canInvite={isInYesGang}
+            onInvite={() => {}}
+            canInvite={false}
           />
 
-          {/* Invitation Polls */}
-          {invitationPolls.map((poll) => {
-            const invitedUsers = poll.invitedUsers?.map(userId => {
-              // Mock data for invited users - in real app this would come from user store
-              return {
-                id: userId,
-                name: `User ${userId}`,
-                avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`
-              };
-            }) || [];
+          {/* Invitations Section - Combined invite and voting */}
+          <View style={styles.section}>
+            <View style={styles.headerRow}>
+              <UserPlus size={20} color={Colors.light.text} style={styles.headerIcon} />
+              <Text style={styles.sectionTitle}>Invitations</Text>
+            </View>
+            
+            {/* Invite more people button */}
+            <TouchableOpacity 
+              style={[
+                styles.createPollButton,
+                !isInYesGang && styles.disabledCreateButton
+              ]}
+              onPress={handleInviteFriends}
+            >
+              <Text style={[
+                styles.createPollButtonText,
+                !isInYesGang && styles.disabledCreateButtonText
+              ]}>
+                Invite more people
+              </Text>
+            </TouchableOpacity>
+            
+            {/* Active invitation votes */}
+            {invitationPolls.map((poll) => {
+              const invitedUsers = poll.invitedUsers?.map(userId => {
+                // Mock data for invited users - in real app this would come from user store
+                return {
+                  id: userId,
+                  name: `User ${userId}`,
+                  avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`
+                };
+              }) || [];
 
-            const hasUserVoted = poll.options.some(option => 
-              option.votes.includes('current')
-            );
+              const hasUserVoted = poll.options.some(option => 
+                option.votes.includes('current')
+              );
 
-            return (
-              <InvitationVotingPoll
-                key={poll.id}
-                poll={poll}
-                onVote={(pollId, optionId) => {
-                  voteOnPoll(latestPlan.id, pollId, [optionId], 'current');
-                }}
-                userVoted={hasUserVoted}
-                invitedUsers={invitedUsers}
-              />
-            );
-          })}
+              return (
+                <InvitationVotingPoll
+                  key={poll.id}
+                  poll={poll}
+                  onVote={(pollId, optionId) => {
+                    voteOnPoll(latestPlan.id, pollId, [optionId], 'current');
+                  }}
+                  userVoted={hasUserVoted}
+                  invitedUsers={invitedUsers}
+                />
+              );
+            })}
+            
+            {invitationPolls.length === 0 && (
+              <Text style={styles.emptyPollText}>
+                No pending invitations
+              </Text>
+            )}
+          </View>
           
           {/* Group Visibility Section */}
           <PlanVisibilityToggle
@@ -735,10 +770,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
+    borderRadius: 12,
   },
   declineText: {
     fontSize: 24,

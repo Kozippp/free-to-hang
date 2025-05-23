@@ -64,7 +64,7 @@ export default function PollVoting({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <View style={styles.overlay}>
         <View style={styles.modalContainer}>
           <Text style={styles.question}>{question}</Text>
           
@@ -149,24 +149,29 @@ export default function PollVoting({
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', // Light white overlay
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContainer: {
     width: '90%',
     maxWidth: 400,
-    backgroundColor: '#1E1E1E', // Dark background like Instagram
+    backgroundColor: 'white', // Clean white background like Bolt
     borderRadius: 16,
     padding: 20,
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   question: {
     fontSize: 20,
     fontWeight: '700',
-    color: 'white',
+    color: Colors.light.text, // Dark text on white background
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -176,13 +181,16 @@ const styles = StyleSheet.create({
   optionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262626', // Instagram dark input
+    backgroundColor: Colors.light.buttonBackground, // Light gray background
     borderRadius: 10,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   selectedOption: {
-    backgroundColor: '#0F3460', // Darker blue when selected
+    backgroundColor: `${Colors.light.primary}15`, // Light blue when selected
+    borderColor: Colors.light.primary,
   },
   checkboxContainer: {
     marginRight: 12,
@@ -192,16 +200,16 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 24,
     borderWidth: 2,
-    borderColor: '#3897F0', // Instagram blue
+    borderColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkedBox: {
-    backgroundColor: '#3897F0', // Instagram blue
+    backgroundColor: Colors.light.primary,
   },
   optionText: {
     fontSize: 16,
-    color: 'white',
+    color: Colors.light.text, // Dark text
     flex: 1,
   },
   votersContainer: {
@@ -213,7 +221,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#262626', // Same as background
+    borderColor: 'white',
     overflow: 'hidden',
   },
   avatarImage: {
@@ -222,7 +230,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   moreVoters: {
-    backgroundColor: '#3897F0', // Instagram blue
+    backgroundColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -238,19 +246,19 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#262626', // Instagram dark input
+    backgroundColor: Colors.light.buttonBackground,
     borderRadius: 8,
     padding: 14,
     alignItems: 'center',
   },
   cancelButtonText: {
-    color: 'white',
+    color: Colors.light.secondaryText,
     fontSize: 16,
     fontWeight: '500',
   },
   submitButton: {
     flex: 2,
-    backgroundColor: '#3897F0', // Instagram blue
+    backgroundColor: Colors.light.primary,
     borderRadius: 8,
     padding: 14,
     alignItems: 'center',

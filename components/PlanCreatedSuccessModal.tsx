@@ -7,9 +7,12 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   Animated,
-  Dimensions
+  Dimensions,
+  TextInput,
+  Share,
+  Platform
 } from 'react-native';
-import { CheckCircle, X, UserPlus, Sparkles } from 'lucide-react-native';
+import { CheckCircle, X, Copy, Share2, Sparkles } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PlanCreatedSuccessModalProps {
@@ -17,7 +20,6 @@ interface PlanCreatedSuccessModalProps {
   onClose: () => void;
   planTitle: string;
   isAnonymous?: boolean;
-  onInviteFriends?: () => void;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -27,11 +29,11 @@ export default function PlanCreatedSuccessModal({
   onClose,
   planTitle,
   isAnonymous = false,
-  onInviteFriends
 }: PlanCreatedSuccessModalProps) {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [scaleAnim] = useState(new Animated.Value(0.5));
   const [bounceAnim] = useState(new Animated.Value(0));
+  const [copied, setCopied] = useState(false);
   const [confettiAnims] = useState(
     Array(20).fill(null).map(() => ({
       translateY: new Animated.Value(0),
@@ -41,12 +43,15 @@ export default function PlanCreatedSuccessModal({
     }))
   );
 
+  const inviteLink = 'https://freetohang.app/invite?ref=alextaylor';
+
   useEffect(() => {
     if (visible) {
       // Reset animations
       fadeAnim.setValue(0);
       scaleAnim.setValue(0.5);
       bounceAnim.setValue(0);
+      setCopied(false);
       confettiAnims.forEach(anim => {
         anim.translateY.setValue(0);
         anim.translateX.setValue(0);
@@ -89,8 +94,6 @@ export default function PlanCreatedSuccessModal({
       setTimeout(() => {
         startConfettiAnimation();
       }, 200);
-
-      // Don't auto-close - let user interact with invite button
     }
   }, [visible]);
 
@@ -146,12 +149,27 @@ export default function PlanCreatedSuccessModal({
     });
   };
 
-  const handleInviteFriends = () => {
-    handleClose();
-    if (onInviteFriends) {
-      setTimeout(() => {
-        onInviteFriends();
-      }, 300);
+  const handleCopyLink = () => {
+    // In a real app, you would use Clipboard.setString(inviteLink)
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleShare = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        // Web doesn't support Share API in all browsers
+        handleCopyLink();
+        return;
+      }
+      
+      const result = await Share.share({
+        message: `Hey! I'm free to hang out. Click this link to join me: ${inviteLink}`,
+        url: inviteLink, // iOS only
+        title: 'Free to Hang Invitation', // Android only
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
     }
   };
 
@@ -227,19 +245,40 @@ export default function PlanCreatedSuccessModal({
               
               <Text style={styles.successText}>
                 {isAnonymous 
-                  ? "Your secret plan is out there! Want to invite friends outside the app to join the mystery?"
-                  : `"${planTitle}" is ready for action! Want to invite friends outside the app to join?`
+                  ? "Your secret plan is out there! Invite friends outside the app:"
+                  : `"${planTitle}" is ready for action! Invite friends outside the app:`
                 }
               </Text>
               
-              {/* Invite Button */}
-              <TouchableOpacity 
-                style={styles.inviteButton}
-                onPress={handleInviteFriends}
-              >
-                <UserPlus size={20} color="white" style={styles.inviteIcon} />
-                <Text style={styles.inviteButtonText}>Invite with Link</Text>
-              </TouchableOpacity>
+              {/* Direct invite link section */}
+              <View style={styles.inviteSection}>
+                <View style={styles.linkContainer}>
+                  <TextInput
+                    style={styles.linkInput}
+                    value={inviteLink}
+                    editable={false}
+                    selectTextOnFocus
+                  />
+                  <TouchableOpacity 
+                    style={styles.copyButton}
+                    onPress={handleCopyLink}
+                  >
+                    <Copy size={18} color={Colors.light.primary} />
+                  </TouchableOpacity>
+                </View>
+                
+                {copied && (
+                  <Text style={styles.copiedText}>Link copied! 📋</Text>
+                )}
+                
+                <TouchableOpacity 
+                  style={styles.shareButton}
+                  onPress={handleShare}
+                >
+                  <Share2 size={18} color="white" style={styles.shareIcon} />
+                  <Text style={styles.shareButtonText}>Share Invite Link</Text>
+                </TouchableOpacity>
+              </View>
               
               {/* Skip Link */}
               <TouchableOpacity onPress={handleClose} style={styles.skipButton}>
@@ -256,14 +295,14 @@ export default function PlanCreatedSuccessModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContainer: {
     width: '85%',
     maxWidth: 350,
-    backgroundColor: Colors.light.modalBackground,
+    backgroundColor: 'white',
     borderRadius: 24,
     padding: 28,
     alignItems: 'center',
@@ -272,7 +311,7 @@ const styles = StyleSheet.create({
       width: 0,
       height: 8,
     },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 12,
   },
@@ -320,13 +359,44 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     paddingHorizontal: 12,
   },
-  inviteButton: {
+  inviteSection: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  linkContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.buttonBackground,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  linkInput: {
+    flex: 1,
+    color: Colors.light.text,
+    fontSize: 14,
+  },
+  copyButton: {
+    padding: 8,
+    backgroundColor: `${Colors.light.primary}15`,
+    borderRadius: 8,
+  },
+  copiedText: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  shareButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.primary,
     paddingVertical: 14,
     paddingHorizontal: 28,
-    borderRadius: 30,
+    borderRadius: 12,
+    justifyContent: 'center',
     shadowColor: Colors.light.primary,
     shadowOffset: {
       width: 0,
@@ -336,10 +406,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  inviteIcon: {
+  shareIcon: {
     marginRight: 8,
   },
-  inviteButtonText: {
+  shareButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '700',
