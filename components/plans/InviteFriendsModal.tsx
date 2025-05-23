@@ -7,9 +7,10 @@ import {
   TouchableOpacity, 
   Image, 
   ScrollView,
-  TextInput
+  TextInput,
+  Alert
 } from 'react-native';
-import { X, Check, Search, UserPlus } from 'lucide-react-native';
+import { X, Check, Search, UserPlus, Link, Mail } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { offlineFriends } from '@/constants/mockData';
 
@@ -93,6 +94,13 @@ export default function InviteFriendsModal({
             </TouchableOpacity>
           </View>
           
+          {/* Description */}
+          <View style={styles.descriptionContainer}>
+            <Text style={styles.descriptionText}>
+              Invite people to the hang, a vote will be cast and majority decides.
+            </Text>
+          </View>
+          
           <View style={styles.searchContainer}>
             <Search size={20} color={Colors.light.secondaryText} style={styles.searchIcon} />
             <TextInput
@@ -139,6 +147,26 @@ export default function InviteFriendsModal({
               </Text>
             )}
           </ScrollView>
+          
+          {/* Invite by link section */}
+          <View style={styles.inviteLinkSection}>
+            <Text style={styles.inviteLinkText}>
+              Invite people outside the app
+            </Text>
+            <TouchableOpacity 
+              style={styles.inviteLinkButton}
+              onPress={() => {
+                Alert.alert(
+                  'Invite by Link',
+                  'This feature will be available soon! When ready, people will be able to join through a link and the voting will start once they create an account.',
+                  [{ text: 'OK' }]
+                );
+              }}
+            >
+              <Link size={16} color={Colors.light.primary} />
+              <Text style={styles.inviteLinkButtonText}>Send invite link</Text>
+            </TouchableOpacity>
+          </View>
           
           <View style={styles.modalFooter}>
             <TouchableOpacity
@@ -310,5 +338,37 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  descriptionContainer: {
+    padding: 16,
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+  },
+  inviteLinkSection: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  inviteLinkText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.secondaryText,
+    marginBottom: 12,
+  },
+  inviteLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+  },
+  inviteLinkButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.light.primary,
+    marginLeft: 8,
   },
 });

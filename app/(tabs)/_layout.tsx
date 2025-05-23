@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
-import { Calendar, Users, User } from "lucide-react-native";
+import { Calendar, ToggleLeft, User } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { StatusBar } from "expo-status-bar";
 import { Platform, View, Text } from "react-native";
@@ -50,7 +50,7 @@ export default function TabLayout() {
           options={{
             title: "Hang",
             tabBarIcon: ({ color, size }) => (
-              <Users size={size} color={color} />
+              <ToggleLeft size={size} color={color} />
             ),
           }}
         />

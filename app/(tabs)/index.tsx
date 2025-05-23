@@ -159,6 +159,7 @@ export default function HangScreen() {
             />
             
             <Text style={styles.friendsTitle}>Friends available to hang</Text>
+            <Text style={styles.friendsDescription}>Choose the people to suggest a hang.</Text>
             
             <ScrollView 
               style={styles.friendsList}
@@ -287,6 +288,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 16,
+  },
+  friendsDescription: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    marginBottom: 20,
   },
   friendsList: {
     flex: 1,

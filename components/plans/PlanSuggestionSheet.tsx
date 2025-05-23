@@ -503,13 +503,18 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: Colors.light.modalBackground,
+    backgroundColor: 'white',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
     paddingBottom: 30,
     maxHeight: '90%',
     minHeight: '70%', // Increased to 70% of screen height
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   anonymousSheet: {
     borderTopColor: Colors.light.secondary,
@@ -691,7 +696,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   availableFriendsScrollView: {
-    maxHeight: 200, // Limit height to ensure scrollability
+    // Remove maxHeight to allow full scrolling
   },
   availableFriendsContainer: {
     marginBottom: 16,

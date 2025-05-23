@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   Image,
+  Alert,
 } from 'react-native';
 import { Clock, Check, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -19,6 +20,7 @@ interface InvitationVotingPollProps {
     name: string;
     avatar: string;
   }[];
+  canVote: boolean;
 }
 
 interface IndividualVoteBlockProps {
@@ -34,6 +36,7 @@ interface IndividualVoteBlockProps {
   denyVotes: number;
   isExpired: boolean;
   userVoteChoice: 'accept' | 'deny' | null;
+  canVote: boolean;
 }
 
 function IndividualVoteBlock({
@@ -44,7 +47,8 @@ function IndividualVoteBlock({
   allowVotes,
   denyVotes,
   isExpired,
-  userVoteChoice
+  userVoteChoice,
+  canVote
 }: IndividualVoteBlockProps) {
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
@@ -59,10 +63,7 @@ function IndividualVoteBlock({
         {/* User info */}
         <View style={styles.userInfo}>
           <Image source={{ uri: user.avatar }} style={styles.avatar} />
-          <View style={styles.userDetails}>
-            <Text style={styles.userName}>{user.name}</Text>
-            <Text style={styles.description}>Should we invite them?</Text>
-          </View>
+          <Text style={styles.userName}>{user.name}</Text>
         </View>
 
         {/* Timer */}
@@ -80,20 +81,30 @@ function IndividualVoteBlock({
               styles.voteButton,
               styles.acceptButton,
               userVoteChoice === 'accept' && styles.selectedButton,
-              isExpired && styles.disabledButton
+              (isExpired || !canVote) && styles.disabledButton
             ]}
-            onPress={() => onVote(true)}
+            onPress={() => {
+              if (!canVote) {
+                Alert.alert(
+                  'Cannot Vote',
+                  'You need to respond "Going" to the plan to vote on invitations.',
+                  [{ text: 'OK' }]
+                );
+                return;
+              }
+              onVote(true);
+            }}
             disabled={isExpired}
           >
             <Check size={16} color={
               userVoteChoice === 'accept' ? 'white' : 
-              isExpired ? Colors.light.secondaryText : '#4CAF50'
+              (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
             } />
             <Text style={[
               styles.voteCount,
               { 
                 color: userVoteChoice === 'accept' ? 'white' : 
-                       isExpired ? Colors.light.secondaryText : '#4CAF50' 
+                       (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50' 
               }
             ]}>
               {allowVotes}
@@ -105,20 +116,30 @@ function IndividualVoteBlock({
               styles.voteButton,
               styles.denyButton,
               userVoteChoice === 'deny' && styles.selectedDenyButton,
-              isExpired && styles.disabledButton
+              (isExpired || !canVote) && styles.disabledButton
             ]}
-            onPress={() => onVote(false)}
+            onPress={() => {
+              if (!canVote) {
+                Alert.alert(
+                  'Cannot Vote',
+                  'You need to respond "Going" to the plan to vote on invitations.',
+                  [{ text: 'OK' }]
+                );
+                return;
+              }
+              onVote(false);
+            }}
             disabled={isExpired}
           >
             <X size={16} color={
               userVoteChoice === 'deny' ? 'white' : 
-              isExpired ? Colors.light.secondaryText : '#F44336'
+              (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
             } />
             <Text style={[
               styles.voteCount,
               { 
                 color: userVoteChoice === 'deny' ? 'white' : 
-                       isExpired ? Colors.light.secondaryText : '#F44336' 
+                       (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336' 
               }
             ]}>
               {denyVotes}
@@ -134,7 +155,8 @@ export default function InvitationVotingPoll({
   poll,
   onVote,
   userVoted,
-  invitedUsers
+  invitedUsers,
+  canVote
 }: InvitationVotingPollProps) {
   const [timeLeft, setTimeLeft] = useState(0);
 
@@ -191,6 +213,7 @@ export default function InvitationVotingPoll({
           denyVotes={denyVotes}
           isExpired={isExpired}
           userVoteChoice={userVoteChoice}
+          canVote={canVote}
         />
       ))}
     </View>
@@ -230,19 +253,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginRight: 10,
   },
-  userDetails: {
-    flexDirection: 'column',
-    flex: 1,
-  },
   userName: {
     fontSize: 14,
     fontWeight: '500',
     color: Colors.light.text,
-  },
-  description: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-    marginTop: 2,
   },
   timer: {
     flexDirection: 'row',
