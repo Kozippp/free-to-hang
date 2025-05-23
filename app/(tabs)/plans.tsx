@@ -1,23 +1,80 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
-import { Stack } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import TabBar from '@/components/plans/TabBar';
 import InvitationCard from '@/components/plans/InvitationCard';
 import PlanDetailModal from '@/components/plans/PlanDetailModal';
+import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 
 export default function PlansScreen() {
   const [activeTab, setActiveTab] = useState('Invitations');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [newPlanTitle, setNewPlanTitle] = useState('');
+  const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
+  const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
   const { invitations, activePlans, completedPlans, markAsRead, respondToPlan } = usePlansStore();
+  const params = useLocalSearchParams();
   
   const tabs = ['Invitations', 'Plan', 'Completed'];
   const screenWidth = Dimensions.get('window').width;
   const translateX = useRef(new Animated.Value(0)).current;
+  const newPlanAnimation = useRef(new Animated.Value(0)).current;
+
+  // Check for new plan creation
+  useEffect(() => {
+    if (params.newPlan === 'true') {
+      // Find the newest plan (highest timestamp)
+      const allPlans = [...invitations, ...activePlans];
+      const newestPlan = allPlans.reduce((newest, current) => {
+        return new Date(current.createdAt) > new Date(newest.createdAt) ? current : newest;
+      }, allPlans[0]);
+
+      if (newestPlan) {
+        // Set the tab based on plan type
+        const targetTab = newestPlan.type === 'anonymous' || newestPlan.creator?.id !== 'current' 
+          ? 'Invitations' 
+          : 'Plan';
+        
+        setActiveTab(targetTab);
+        setNewPlanTitle(newestPlan.title);
+        setIsAnonymousPlan(newestPlan.type === 'anonymous');
+        setHighlightedPlanId(newestPlan.id);
+        
+        // Show success modal after a brief delay
+        setTimeout(() => {
+          setShowSuccessModal(true);
+        }, 300);
+        
+        // Start new plan highlight animation
+        setTimeout(() => {
+          startNewPlanAnimation();
+        }, 500);
+      }
+    }
+  }, [params.newPlan, invitations, activePlans]);
+
+  const startNewPlanAnimation = () => {
+    Animated.sequence([
+      Animated.timing(newPlanAnimation, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: false,
+      }),
+      Animated.timing(newPlanAnimation, {
+        toValue: 0,
+        duration: 1000,
+        useNativeDriver: false,
+      })
+    ]).start(() => {
+      setHighlightedPlanId(null);
+    });
+  };
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -95,6 +152,28 @@ export default function PlansScreen() {
   // Count unread invitations
   const unreadCount = invitations.filter(plan => !plan.isRead).length;
   
+  const renderPlanItem = ({ item }: { item: Plan }) => {
+    const isHighlighted = highlightedPlanId === item.id;
+    const highlightStyle = isHighlighted ? {
+      backgroundColor: newPlanAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['transparent', 'rgba(76, 175, 80, 0.2)']
+      }),
+      transform: [{
+        scale: newPlanAnimation.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [1, 1.05, 1]
+        })
+      }]
+    } : {};
+
+    return (
+      <Animated.View style={highlightStyle}>
+        <InvitationCard plan={item} onPress={handlePlanPress} />
+      </Animated.View>
+    );
+  };
+  
   return (
     <>
       <Stack.Screen 
@@ -124,9 +203,7 @@ export default function PlansScreen() {
             {activeTab === 'Invitations' && (
               <FlatList
                 data={invitations}
-                renderItem={({ item }) => (
-                  <InvitationCard plan={item} onPress={handlePlanPress} />
-                )}
+                renderItem={renderPlanItem}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={renderEmptyState}
@@ -138,9 +215,7 @@ export default function PlansScreen() {
                 {activePlans.length === 0 ? renderEmptyState() : (
                   <FlatList
                     data={activePlans}
-                    renderItem={({ item }) => (
-                      <InvitationCard plan={item} onPress={handlePlanPress} />
-                    )}
+                    renderItem={renderPlanItem}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
                     ListEmptyComponent={renderEmptyState}
@@ -164,6 +239,13 @@ export default function PlansScreen() {
           plan={selectedPlan}
           onClose={handleCloseModal}
           onRespond={handleRespondToPlan}
+        />
+        
+        <PlanCreatedSuccessModal
+          visible={showSuccessModal}
+          planTitle={newPlanTitle}
+          isAnonymous={isAnonymousPlan}
+          onClose={() => setShowSuccessModal(false)}
         />
       </SafeAreaView>
     </>

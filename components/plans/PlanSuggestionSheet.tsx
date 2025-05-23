@@ -144,11 +144,11 @@ export default function PlanSuggestionSheet({
         id: friend.id,
         name: friend.name,
         avatar: friend.avatar,
-        status: friend.id === user.id ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
+        status: friend.id === user.id && !isAnonymous ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
       })),
       date: 'Today, 7:00 PM', // This would be set by the user in a real app
       location: 'To be determined', // This would be set by the user in a real app
-      isRead: true, // Mark as read since you created it
+      isRead: false, // Mark as unread so it appears as new
       createdAt: new Date().toISOString()
     };
     
@@ -168,12 +168,8 @@ export default function PlanSuggestionSheet({
       // Close the plan sheet
       onClose();
       
-      // Navigate to the appropriate tab based on plan type
-      if (isAnonymous) {
-        router.push('/plans');
-      } else {
-        router.push('/plans');
-      }
+      // Navigate to plans tab with visual swipe effect
+      router.push('/plans?newPlan=true');
     });
   };
   

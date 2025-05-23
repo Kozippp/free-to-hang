@@ -74,11 +74,17 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [currentPollId, setCurrentPollId] = useState<string | null>(null);
   const [pollType, setPollType] = useState<'when' | 'where' | 'custom'>('custom');
   
+  // Decline animation states
+  const [isClosing, setIsClosing] = useState(false);
+  const declineAnimation = useRef(new Animated.Value(1)).current;
+  const fadeAnimation = useRef(new Animated.Value(1)).current;
+  const slideAnimation = useRef(new Animated.Value(0)).current;
+  
   // Get current user's status from latest plan data
   const currentUser = latestPlan.participants.find(p => p.id === 'current');
   const currentUserStatus = currentUser?.status || 'pending';
   
-  // Check if user is in "Yes Gang" (has responded with 'accepted')
+  // Check if user is going (has responded with 'accepted')
   const isInYesGang = currentUserStatus === 'accepted';
   
   // Group participants by status
@@ -129,20 +135,20 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const handleTitleSave = () => {
     // In a real app, this would update the plan in the backend
     setEditingTitle(false);
-    // Only Yes Gang can edit title
+    // Only people who are going can edit title
   };
   
   const handleDescriptionSave = () => {
     // In a real app, this would update the plan in the backend
     setEditingDescription(false);
-    // Only Yes Gang can edit description
+    // Only people who are going can edit description
   };
   
   const handleCreatePoll = (type: 'when' | 'where' | 'custom') => {
     if (!isInYesGang) {
       Alert.alert(
         'Cannot Create Poll',
-        'You need to respond "Yes" to the plan to create polls and suggest changes.',
+        'You need to respond "Going" to the plan to create polls and suggest changes.',
         [
           { text: 'OK', style: 'default' }
         ]
@@ -258,6 +264,36 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           }
         ]
       );
+    } else if (status === 'declined') {
+      // Start decline animation
+      setIsClosing(true);
+      
+      // Create smooth closing animation
+      Animated.parallel([
+        Animated.timing(declineAnimation, {
+          toValue: 0.8,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnimation, {
+          toValue: 0.3,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnimation, {
+          toValue: -50,
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        // After animation, actually decline and close
+        onRespond(plan.id, status, conditionalFriends);
+        
+        // Small delay to show the effect, then close
+        setTimeout(() => {
+          onClose();
+        }, 200);
+      });
     } else {
       onRespond(plan.id, status, conditionalFriends);
     }
@@ -323,7 +359,31 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const unreadCount = getUnreadCount(latestPlan.id, 'current');
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor: highlightBackground }]}>
+    <Animated.View style={[
+      styles.container, 
+      { 
+        backgroundColor: highlightBackground,
+        transform: [
+          { scale: declineAnimation },
+          { translateY: slideAnimation }
+        ],
+        opacity: fadeAnimation
+      }
+    ]}>
+      {/* Decline overlay effect */}
+      {isClosing && (
+        <Animated.View style={[
+          styles.declineOverlay,
+          { opacity: fadeAnimation.interpolate({
+            inputRange: [0.3, 1],
+            outputRange: [0.7, 0],
+            extrapolate: 'clamp'
+          })}
+        ]}>
+          <Text style={styles.declineText}>Plan Declined ✓</Text>
+        </Animated.View>
+      )}
+      
       <PlanTabs 
         activeTab={activeTab} 
         onTabChange={handleTabChange}
@@ -524,20 +584,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             canVote={isInYesGang}
           />
           
-          {/* Warning at top for non-Yes Gang users */}
-          {!isInYesGang && (
-            <View style={styles.topWarningContainer}>
-              <HelpCircle size={16} color={Colors.light.warning} style={styles.warningIcon} />
-              <Text style={styles.topWarningText}>
-                {currentUserStatus === 'maybe' 
-                  ? 'You can view but not vote or edit as "Maybe"'
-                  : currentUserStatus === 'conditional'
-                  ? 'You can view but not vote or edit as "If"'
-                  : 'You can view but not vote or edit until you respond'}
-              </Text>
-            </View>
-          )}
-
           {/* User Status Section */}
           <PlanUserStatus
             currentStatus={currentUserStatus}
@@ -681,37 +727,21 @@ const styles = StyleSheet.create({
   bottomPadding: {
     height: 40,
   },
-  topWarningContainer: {
-    flexDirection: 'row',
+  declineOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    borderRadius: 6,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.light.warning,
-    backgroundColor: `${Colors.light.warning}08`,
+    zIndex: 1000,
   },
-  warningContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${Colors.light.warning}15`,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  warningIcon: {
-    marginRight: 8,
-  },
-  topWarningText: {
-    flex: 1,
-    fontSize: 13,
-    color: Colors.light.warning,
-    fontWeight: '500',
-  },
-  warningText: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.light.warning,
+  declineText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
   },
 });

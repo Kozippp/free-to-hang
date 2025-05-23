@@ -42,7 +42,7 @@ export default function PollDisplay({
     if (!canVote) {
       Alert.alert(
         'Cannot Vote',
-        'You need to respond "Yes" to the plan to vote in polls and suggest changes.',
+        'You need to respond "Going" to the plan to vote in polls and suggest changes.',
         [
           { text: 'OK', style: 'default' }
         ]

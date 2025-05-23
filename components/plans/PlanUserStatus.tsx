@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Alert, Animated } from 'react-native';
-import { CheckCircle, HelpCircle, Eye } from 'lucide-react-native';
+import { CheckCircle, HelpCircle, Eye, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { ParticipantStatus } from '@/store/plansStore';
 
@@ -66,6 +66,46 @@ export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUs
     });
   };
 
+  const getStatusStyle = (status: ParticipantStatus) => {
+    switch (status) {
+      case 'accepted':
+        return {
+          backgroundColor: currentStatus === 'accepted' ? '#4CAF50' : '#E8F5E8',
+          borderColor: '#4CAF50',
+          iconColor: currentStatus === 'accepted' ? 'white' : '#4CAF50',
+          textColor: currentStatus === 'accepted' ? 'white' : '#4CAF50'
+        };
+      case 'maybe':
+        return {
+          backgroundColor: currentStatus === 'maybe' ? '#FF9800' : '#FFF3E0',
+          borderColor: '#FF9800',
+          iconColor: currentStatus === 'maybe' ? 'white' : '#FF9800',
+          textColor: currentStatus === 'maybe' ? 'white' : '#FF9800'
+        };
+      case 'conditional':
+        return {
+          backgroundColor: currentStatus === 'conditional' ? '#2196F3' : '#E3F2FD',
+          borderColor: '#2196F3',
+          iconColor: currentStatus === 'conditional' ? 'white' : '#2196F3',
+          textColor: currentStatus === 'conditional' ? 'white' : '#2196F3'
+        };
+      case 'declined':
+        return {
+          backgroundColor: currentStatus === 'declined' ? '#F44336' : '#FFEBEE',
+          borderColor: '#F44336',
+          iconColor: currentStatus === 'declined' ? 'white' : '#F44336',
+          textColor: currentStatus === 'declined' ? 'white' : '#F44336'
+        };
+      default:
+        return {
+          backgroundColor: Colors.light.buttonBackground,
+          borderColor: Colors.light.border,
+          iconColor: Colors.light.text,
+          textColor: Colors.light.text
+        };
+    }
+  };
+
   return (
     <Animated.View style={[styles.container, { transform: [{ scale: statusAnimation }] }]}>
       <Text style={styles.title}>Your Status</Text>
@@ -74,30 +114,38 @@ export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUs
         <TouchableOpacity
           style={[
             styles.statusButton,
-            currentStatus === 'accepted' && styles.selectedStatus
+            {
+              backgroundColor: getStatusStyle('accepted').backgroundColor,
+              borderColor: getStatusStyle('accepted').borderColor,
+              borderWidth: 2,
+            }
           ]}
           onPress={() => handleStatusChange('accepted')}
         >
-          <CheckCircle size={20} color={currentStatus === 'accepted' ? Colors.light.primary : Colors.light.text} />
+          <CheckCircle size={20} color={getStatusStyle('accepted').iconColor} />
           <Text style={[
             styles.statusText,
-            currentStatus === 'accepted' && styles.selectedStatusText
+            { color: getStatusStyle('accepted').textColor, fontWeight: currentStatus === 'accepted' ? '600' : '500' }
           ]}>
-            Yes
+            Going
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[
             styles.statusButton,
-            currentStatus === 'maybe' && styles.selectedStatus
+            {
+              backgroundColor: getStatusStyle('maybe').backgroundColor,
+              borderColor: getStatusStyle('maybe').borderColor,
+              borderWidth: 2,
+            }
           ]}
           onPress={() => handleStatusChange('maybe')}
         >
-          <HelpCircle size={20} color={currentStatus === 'maybe' ? Colors.light.primary : Colors.light.text} />
+          <HelpCircle size={20} color={getStatusStyle('maybe').iconColor} />
           <Text style={[
             styles.statusText,
-            currentStatus === 'maybe' && styles.selectedStatusText
+            { color: getStatusStyle('maybe').textColor, fontWeight: currentStatus === 'maybe' ? '600' : '500' }
           ]}>
             Maybe
           </Text>
@@ -106,14 +154,18 @@ export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUs
         <TouchableOpacity
           style={[
             styles.statusButton,
-            currentStatus === 'conditional' && styles.selectedStatus
+            {
+              backgroundColor: getStatusStyle('conditional').backgroundColor,
+              borderColor: getStatusStyle('conditional').borderColor,
+              borderWidth: 2,
+            }
           ]}
           onPress={() => handleStatusChange('conditional')}
         >
-          <Eye size={20} color={currentStatus === 'conditional' ? Colors.light.primary : Colors.light.text} />
+          <Eye size={20} color={getStatusStyle('conditional').iconColor} />
           <Text style={[
             styles.statusText,
-            currentStatus === 'conditional' && styles.selectedStatusText
+            { color: getStatusStyle('conditional').textColor, fontWeight: currentStatus === 'conditional' ? '600' : '500' }
           ]}>
             If...
           </Text>
@@ -122,18 +174,34 @@ export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUs
         <TouchableOpacity
           style={[
             styles.statusButton,
-            currentStatus === 'declined' && styles.selectedStatus
+            {
+              backgroundColor: getStatusStyle('declined').backgroundColor,
+              borderColor: getStatusStyle('declined').borderColor,
+              borderWidth: 2,
+            }
           ]}
           onPress={() => handleStatusChange('declined')}
         >
+          <X size={20} color={getStatusStyle('declined').iconColor} />
           <Text style={[
             styles.statusText,
-            currentStatus === 'declined' && styles.selectedStatusText
+            { color: getStatusStyle('declined').textColor, fontWeight: currentStatus === 'declined' ? '600' : '500' }
           ]}>
             No
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Single disclaimer based on current status */}
+      {(currentStatus === 'maybe' || currentStatus === 'conditional') && (
+        <View style={styles.disclaimerContainer}>
+          <Text style={styles.disclaimerText}>
+            {currentStatus === 'maybe' 
+              ? 'As "Maybe", you can view but not vote or edit this plan until you respond "Going".'
+              : 'As "If", you can view but not vote or edit this plan until you respond "Going".'}
+          </Text>
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -144,35 +212,56 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 12,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   statusButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 8,
   },
   statusButton: {
-    flexDirection: 'row',
+    flex: 1,
+    flexDirection: 'column',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: Colors.light.buttonBackground,
-  },
-  selectedStatus: {
-    backgroundColor: `${Colors.light.primary}20`,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    minHeight: 60,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   statusText: {
-    marginLeft: 4,
-    fontSize: 14,
-    color: Colors.light.text,
+    marginTop: 4,
+    fontSize: 12,
+    textAlign: 'center',
   },
-  selectedStatusText: {
-    color: Colors.light.primary,
-    fontWeight: '500',
+  disclaimerContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: `${Colors.light.warning}15`,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.light.warning,
+  },
+  disclaimerText: {
+    fontSize: 13,
+    color: Colors.light.warning,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
 });

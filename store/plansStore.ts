@@ -148,18 +148,27 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   addPlan: (plan: Plan) => {
     set((state) => {
+      // Anonymous plans always go to invitations (since user didn't create them knowingly)
+      if (plan.type === 'anonymous') {
+        return {
+          invitations: [plan, ...state.invitations], // Add to top
+          activePlans: state.activePlans,
+          completedPlans: state.completedPlans
+        };
+      }
+      
       // If the plan is created by the current user, add it to activePlans
-      if (plan.creator?.id === 'current' || plan.participants.find(p => p.id === 'current')?.status === 'accepted') {
+      if (plan.creator?.id === 'current') {
         return {
           invitations: state.invitations,
-          activePlans: [...state.activePlans, plan],
+          activePlans: [plan, ...state.activePlans], // Add to top
           completedPlans: state.completedPlans
         };
       }
       
       // Otherwise, add it to invitations
       return {
-        invitations: [...state.invitations, plan],
+        invitations: [plan, ...state.invitations], // Add to top
         activePlans: state.activePlans,
         completedPlans: state.completedPlans
       };

@@ -13,23 +13,19 @@ import {
 } from 'react-native';
 import { X, Copy, Share2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { useRouter } from 'expo-router';
 
 interface InviteShareModalProps {
   visible: boolean;
   onClose: () => void;
-  showSuccessMessage?: boolean;
 }
 
 export default function InviteShareModal({
   visible,
-  onClose,
-  showSuccessMessage = false
+  onClose
 }: InviteShareModalProps) {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
-  const router = useRouter();
   
   const inviteLink = 'https://freetohang.app/invite?ref=alextaylor';
   
@@ -83,11 +79,6 @@ export default function InviteShareModal({
     }
   };
   
-  const handleGoToPlans = () => {
-    onClose();
-    router.push('/plans');
-  };
-  
   return (
     <Modal
       transparent={true}
@@ -108,31 +99,7 @@ export default function InviteShareModal({
                 <X size={24} color={Colors.light.secondaryText} />
               </TouchableOpacity>
               
-              {showSuccessMessage ? (
-                <View style={styles.successMessage}>
-                  <Text style={styles.successTitle}>
-                    Plan created successfully!
-                  </Text>
-                  <Text style={styles.successText}>
-                    You can find it under the Plans tab.
-                  </Text>
-                  
-                  <TouchableOpacity 
-                    style={styles.goToPlansButton}
-                    onPress={handleGoToPlans}
-                  >
-                    <Text style={styles.goToPlansText}>Go to Plans</Text>
-                  </TouchableOpacity>
-                  
-                  <View style={styles.divider} />
-                  
-                  <Text style={styles.inviteDescription}>
-                    Want to invite someone who's not on the app yet? Share this link with them:
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.title}>Invite Friends</Text>
-              )}
+              <Text style={styles.title}>Invite Friends</Text>
               
               <View style={styles.linkContainer}>
                 <TextInput
@@ -209,45 +176,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.text,
     marginBottom: 20,
-  },
-  successMessage: {
-    marginBottom: 12,
-  },
-  successTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.light.primary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  successText: {
-    fontSize: 16,
-    color: Colors.light.text,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  goToPlansButton: {
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  goToPlansText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.light.border,
-    marginVertical: 12,
-  },
-  inviteDescription: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    marginBottom: 8,
-    textAlign: 'center',
   },
   linkContainer: {
     flexDirection: 'row',
