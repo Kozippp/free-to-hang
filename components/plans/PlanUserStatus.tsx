@@ -2,15 +2,24 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Alert, Animated } from 'react-native';
 import { CheckCircle, HelpCircle, Eye, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { ParticipantStatus } from '@/store/plansStore';
+import { ParticipantStatus, Participant } from '@/store/plansStore';
+import ConditionalFriendsModal from './ConditionalFriendsModal';
 
 interface PlanUserStatusProps {
   currentStatus: ParticipantStatus;
-  onStatusChange: (status: ParticipantStatus) => void;
+  onStatusChange: (status: ParticipantStatus, conditionalFriends?: string[]) => void;
+  participants: Participant[];
+  currentUserId: string;
 }
 
-export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUserStatusProps) {
+export default function PlanUserStatus({ 
+  currentStatus, 
+  onStatusChange, 
+  participants, 
+  currentUserId 
+}: PlanUserStatusProps) {
   const [statusAnimation] = useState(new Animated.Value(1));
+  const [showConditionalModal, setShowConditionalModal] = useState(false);
 
   const handleStatusChange = (newStatus: ParticipantStatus) => {
     if (currentStatus === 'accepted' && newStatus !== 'accepted') {
@@ -24,7 +33,13 @@ export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUs
           },
           {
             text: 'Change',
-            onPress: () => animateAndChangeStatus(newStatus)
+            onPress: () => {
+              if (newStatus === 'maybe') {
+                setShowConditionalModal(true);
+              } else {
+                animateAndChangeStatus(newStatus);
+              }
+            }
           }
         ]
       );
@@ -44,12 +59,15 @@ export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUs
           }
         ]
       );
+    } else if (newStatus === 'maybe') {
+      // Show conditional friends modal
+      setShowConditionalModal(true);
     } else {
       animateAndChangeStatus(newStatus);
     }
   };
 
-  const animateAndChangeStatus = (newStatus: ParticipantStatus) => {
+  const animateAndChangeStatus = (newStatus: ParticipantStatus, conditionalFriends?: string[]) => {
     Animated.sequence([
       Animated.timing(statusAnimation, {
         toValue: 0.8,
@@ -62,8 +80,18 @@ export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUs
         useNativeDriver: true
       })
     ]).start(() => {
-      onStatusChange(newStatus);
+      onStatusChange(newStatus, conditionalFriends);
     });
+  };
+
+  const handleConditionalConfirm = (selectedFriendIds: string[]) => {
+    if (selectedFriendIds.length > 0) {
+      // Set as conditional with selected friends
+      animateAndChangeStatus('conditional', selectedFriendIds);
+    } else {
+      // If no friends selected, just set as maybe
+      animateAndChangeStatus('maybe');
+    }
   };
 
   const getStatusStyle = (status: ParticipantStatus) => {
@@ -107,102 +135,124 @@ export default function PlanUserStatus({ currentStatus, onStatusChange }: PlanUs
   };
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ scale: statusAnimation }] }]}>
-      <Text style={styles.title}>Your Status</Text>
-      
-      <View style={styles.statusButtons}>
-        <TouchableOpacity
-          style={[
-            styles.statusButton,
-            {
-              backgroundColor: getStatusStyle('accepted').backgroundColor,
-              borderColor: getStatusStyle('accepted').borderColor,
-              borderWidth: 2,
-            }
-          ]}
-          onPress={() => handleStatusChange('accepted')}
-        >
-          <CheckCircle size={20} color={getStatusStyle('accepted').iconColor} />
-          <Text style={[
-            styles.statusText,
-            { color: getStatusStyle('accepted').textColor, fontWeight: currentStatus === 'accepted' ? '600' : '500' }
-          ]}>
-            Going
-          </Text>
-        </TouchableOpacity>
+    <>
+      <Animated.View style={[styles.container, { transform: [{ scale: statusAnimation }] }]}>
+        <Text style={styles.title}>Your Status</Text>
+        
+        <View style={styles.statusButtons}>
+          <TouchableOpacity
+            style={[
+              styles.statusButton,
+              {
+                backgroundColor: getStatusStyle('accepted').backgroundColor,
+                borderColor: getStatusStyle('accepted').borderColor,
+                borderWidth: 2,
+              }
+            ]}
+            onPress={() => handleStatusChange('accepted')}
+          >
+            <CheckCircle size={20} color={getStatusStyle('accepted').iconColor} />
+            <Text style={[
+              styles.statusText,
+              { color: getStatusStyle('accepted').textColor, fontWeight: currentStatus === 'accepted' ? '600' : '500' }
+            ]}>
+              Going
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.statusButton,
-            {
-              backgroundColor: getStatusStyle('maybe').backgroundColor,
-              borderColor: getStatusStyle('maybe').borderColor,
-              borderWidth: 2,
-            }
-          ]}
-          onPress={() => handleStatusChange('maybe')}
-        >
-          <HelpCircle size={20} color={getStatusStyle('maybe').iconColor} />
-          <Text style={[
-            styles.statusText,
-            { color: getStatusStyle('maybe').textColor, fontWeight: currentStatus === 'maybe' ? '600' : '500' }
-          ]}>
-            Maybe
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.statusButton,
+              {
+                backgroundColor: getStatusStyle('maybe').backgroundColor,
+                borderColor: getStatusStyle('maybe').borderColor,
+                borderWidth: 2,
+              }
+            ]}
+            onPress={() => handleStatusChange('maybe')}
+          >
+            <HelpCircle size={20} color={getStatusStyle('maybe').iconColor} />
+            <Text style={[
+              styles.statusText,
+              { color: getStatusStyle('maybe').textColor, fontWeight: currentStatus === 'maybe' ? '600' : '500' }
+            ]}>
+              Maybe
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.statusButton,
-            {
-              backgroundColor: getStatusStyle('conditional').backgroundColor,
-              borderColor: getStatusStyle('conditional').borderColor,
-              borderWidth: 2,
-            }
-          ]}
-          onPress={() => handleStatusChange('conditional')}
-        >
-          <Eye size={20} color={getStatusStyle('conditional').iconColor} />
-          <Text style={[
-            styles.statusText,
-            { color: getStatusStyle('conditional').textColor, fontWeight: currentStatus === 'conditional' ? '600' : '500' }
-          ]}>
-            If...
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.statusButton,
+              {
+                backgroundColor: getStatusStyle('conditional').backgroundColor,
+                borderColor: getStatusStyle('conditional').borderColor,
+                borderWidth: 2,
+              }
+            ]}
+            onPress={() => handleStatusChange('conditional')}
+          >
+            <Eye size={20} color={getStatusStyle('conditional').iconColor} />
+            <Text style={[
+              styles.statusText,
+              { color: getStatusStyle('conditional').textColor, fontWeight: currentStatus === 'conditional' ? '600' : '500' }
+            ]}>
+              If...
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.statusButton,
-            {
-              backgroundColor: getStatusStyle('declined').backgroundColor,
-              borderColor: getStatusStyle('declined').borderColor,
-              borderWidth: 2,
-            }
-          ]}
-          onPress={() => handleStatusChange('declined')}
-        >
-          <X size={20} color={getStatusStyle('declined').iconColor} />
-          <Text style={[
-            styles.statusText,
-            { color: getStatusStyle('declined').textColor, fontWeight: currentStatus === 'declined' ? '600' : '500' }
-          ]}>
-            No
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Single disclaimer based on current status */}
-      {(currentStatus === 'maybe' || currentStatus === 'conditional') && (
-        <View style={styles.disclaimerContainer}>
-          <Text style={styles.disclaimerText}>
-            {currentStatus === 'maybe' 
-              ? 'As "Maybe", you can view but not vote or edit this plan until you respond "Going".'
-              : 'As "If", you can view but not vote or edit this plan until you respond "Going".'}
-          </Text>
+          <TouchableOpacity
+            style={[
+              styles.statusButton,
+              {
+                backgroundColor: getStatusStyle('declined').backgroundColor,
+                borderColor: getStatusStyle('declined').borderColor,
+                borderWidth: 2,
+              }
+            ]}
+            onPress={() => handleStatusChange('declined')}
+          >
+            <X size={20} color={getStatusStyle('declined').iconColor} />
+            <Text style={[
+              styles.statusText,
+              { color: getStatusStyle('declined').textColor, fontWeight: currentStatus === 'declined' ? '600' : '500' }
+            ]}>
+              No
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
-    </Animated.View>
+
+        {/* Enhanced disclaimer based on current status */}
+        {(currentStatus === 'maybe' || currentStatus === 'conditional') && (
+          <View style={styles.disclaimerContainer}>
+            <Text style={styles.disclaimerText}>
+              {currentStatus === 'maybe' 
+                ? 'As "Maybe", you can view but not vote or edit this plan until you respond "Going".'
+                : currentStatus === 'conditional'
+                  ? (() => {
+                      const currentUser = participants.find(p => p.id === currentUserId);
+                      if (currentUser?.conditionalFriends && currentUser.conditionalFriends.length > 0) {
+                        const dependsOn = currentUser.conditionalFriends
+                          .map(id => participants.find(p => p.id === id)?.name)
+                          .filter(Boolean)
+                          .join(', ');
+                        return `You'll be marked as "Going" if ${dependsOn} also come. You can view but not vote or edit this plan until then.`;
+                      }
+                      return 'As "If", you can view but not vote or edit this plan until you respond "Going".';
+                    })()
+                  : 'As "If", you can view but not vote or edit this plan until you respond "Going".'}
+            </Text>
+          </View>
+        )}
+      </Animated.View>
+
+      <ConditionalFriendsModal
+        visible={showConditionalModal}
+        onClose={() => setShowConditionalModal(false)}
+        onConfirm={handleConditionalConfirm}
+        participants={participants}
+        currentUserId={currentUserId}
+      />
+    </>
   );
 }
 

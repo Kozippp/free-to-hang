@@ -140,36 +140,51 @@ export default function PlanSuggestionSheet({
         name: user.name,
         avatar: user.avatar
       },
-      participants: getAllFriends().map(friend => ({
-        id: friend.id,
-        name: friend.name,
-        avatar: friend.avatar,
-        status: friend.id === user.id && !isAnonymous ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
-      })),
+      participants: getAllFriends().map(friend => {
+        // For anonymous plans, even the creator starts as pending
+        if (isAnonymous) {
+          return {
+            id: friend.id,
+            name: friend.name,
+            avatar: friend.avatar,
+            status: 'pending' as ParticipantStatus
+          };
+        }
+        // For normal plans, creator is automatically going
+        return {
+          id: friend.id,
+          name: friend.name,
+          avatar: friend.avatar,
+          status: friend.id === user.id ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
+        };
+      }),
       date: 'Today, 7:00 PM', // This would be set by the user in a real app
       location: 'To be determined', // This would be set by the user in a real app
       isRead: false, // Mark as unread so it appears as new
       createdAt: new Date().toISOString()
     };
     
-    // Add the plan to the store
+    // Add the plan to the store first
     addPlan(newPlan);
     
-    // Animate the sheet closing
+    // Clear selected friends in the store
+    clearSelectedFriends();
+    
+    // Notify parent component that plan was submitted immediately
+    onPlanSubmitted();
+    
+    // Close the plan sheet with animation
     Animated.timing(slideAnim, {
       toValue: 0,
       duration: 200,
       useNativeDriver: true,
     }).start(() => {
-      // Clear selected friends in the store
-      clearSelectedFriends();
-      // Notify parent component that plan was submitted
-      onPlanSubmitted();
-      // Close the plan sheet
       onClose();
       
-      // Navigate to plans tab with visual swipe effect
-      router.push('/plans?newPlan=true');
+      // Navigate to plans tab with immediate effect
+      setTimeout(() => {
+        router.push('/plans?newPlan=true');
+      }, 100); // Small delay to ensure sheet is closed
     });
   };
   

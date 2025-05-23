@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import TabBar from '@/components/plans/TabBar';
 import InvitationCard from '@/components/plans/InvitationCard';
@@ -20,11 +20,13 @@ export default function PlansScreen() {
   
   const { invitations, activePlans, completedPlans, markAsRead, respondToPlan } = usePlansStore();
   const params = useLocalSearchParams();
+  const router = useRouter();
   
   const tabs = ['Invitations', 'Plan', 'Completed'];
   const screenWidth = Dimensions.get('window').width;
   const translateX = useRef(new Animated.Value(0)).current;
   const newPlanAnimation = useRef(new Animated.Value(0)).current;
+  const tabSwitchAnimation = useRef(new Animated.Value(0)).current;
 
   // Check for new plan creation
   useEffect(() => {
@@ -36,39 +38,63 @@ export default function PlansScreen() {
       }, allPlans[0]);
 
       if (newestPlan) {
-        // Set the tab based on plan type
+        // Set the tab based on plan type and creator
         const targetTab = newestPlan.type === 'anonymous' || newestPlan.creator?.id !== 'current' 
           ? 'Invitations' 
           : 'Plan';
         
+        // Animate tab switch for visual feedback
+        Animated.timing(tabSwitchAnimation, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          // Reset animation
+          tabSwitchAnimation.setValue(0);
+        });
+        
+        // Immediately switch to the correct tab
         setActiveTab(targetTab);
         setNewPlanTitle(newestPlan.title);
         setIsAnonymousPlan(newestPlan.type === 'anonymous');
         setHighlightedPlanId(newestPlan.id);
         
-        // Show success modal after a brief delay
+        // Show success modal with short delay for smooth transition
         setTimeout(() => {
           setShowSuccessModal(true);
-        }, 300);
+        }, 200);
         
-        // Start new plan highlight animation
+        // Start new plan highlight animation after modal appears
         setTimeout(() => {
           startNewPlanAnimation();
-        }, 500);
+        }, 400);
+        
+        // Clear the URL parameter after handling
+        setTimeout(() => {
+          router.replace('/plans');
+        }, 1000);
       }
     }
-  }, [params.newPlan, invitations, activePlans]);
+  }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation]);
 
   const startNewPlanAnimation = () => {
     Animated.sequence([
+      // First, a quick scale up
       Animated.timing(newPlanAnimation, {
         toValue: 1,
-        duration: 600,
+        duration: 400,
         useNativeDriver: false,
       }),
+      // Hold the highlight
+      Animated.timing(newPlanAnimation, {
+        toValue: 0.8,
+        duration: 800,
+        useNativeDriver: false,
+      }),
+      // Finally fade out
       Animated.timing(newPlanAnimation, {
         toValue: 0,
-        duration: 1000,
+        duration: 600,
         useNativeDriver: false,
       })
     ]).start(() => {
@@ -157,14 +183,23 @@ export default function PlansScreen() {
     const highlightStyle = isHighlighted ? {
       backgroundColor: newPlanAnimation.interpolate({
         inputRange: [0, 1],
-        outputRange: ['transparent', 'rgba(76, 175, 80, 0.2)']
+        outputRange: ['transparent', 'rgba(76, 175, 80, 0.25)'] // Stronger green highlight
       }),
       transform: [{
         scale: newPlanAnimation.interpolate({
           inputRange: [0, 0.5, 1],
-          outputRange: [1, 1.05, 1]
+          outputRange: [1, 1.08, 1.02] // More pronounced scale effect
         })
-      }]
+      }],
+      borderRadius: 12,
+      borderWidth: newPlanAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 2] // Add border during highlight
+      }),
+      borderColor: newPlanAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['transparent', '#4CAF50'] // Green border
+      }),
     } : {};
 
     return (

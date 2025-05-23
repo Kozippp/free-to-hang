@@ -588,6 +588,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           <PlanUserStatus
             currentStatus={currentUserStatus}
             onStatusChange={handleStatusChange}
+            participants={latestPlan.participants}
+            currentUserId="current"
           />
           
           {/* Bottom padding for better scrolling */}

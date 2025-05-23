@@ -70,10 +70,10 @@ export default function PlanCreatedSuccessModal({
         startConfettiAnimation();
       }, 200);
 
-      // Auto close after 3 seconds
+      // Auto close after 4 seconds (longer to enjoy the celebration)
       setTimeout(() => {
         handleClose();
-      }, 3000);
+      }, 4000);
     }
   }, [visible]);
 
@@ -130,7 +130,11 @@ export default function PlanCreatedSuccessModal({
   };
 
   const getConfettiColors = () => {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
+      '#DDA0DD', '#98D8C8', '#FF9999', '#87CEEB', '#90EE90',
+      '#FFB6C1', '#F0E68C', '#E6E6FA'
+    ];
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
@@ -193,8 +197,8 @@ export default function PlanCreatedSuccessModal({
               
               <Text style={styles.successText}>
                 {isAnonymous 
-                  ? "Your anonymous plan is ready! Check the Invitations tab to see who joins."
-                  : "Your plan is ready! Check the Plans tab to manage it."
+                  ? "Your secret plan is brewing! 🤫\nCheck the Invitations tab to see who's curious enough to join the mystery."
+                  : "Your awesome plan is ready! 🚀\nTime to see who's up for some fun!"
                 }
               </Text>
             </Animated.View>
@@ -208,7 +212,7 @@ export default function PlanCreatedSuccessModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -216,53 +220,65 @@ const styles = StyleSheet.create({
     width: '85%',
     maxWidth: 350,
     backgroundColor: Colors.light.modalBackground,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 24,
+    padding: 32,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 8,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 3,
+    borderColor: '#4CAF50',
   },
   closeButton: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 16,
+    right: 16,
     zIndex: 1,
-    padding: 4,
+    padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
   },
   successIcon: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   successTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: '#4CAF50',
-    marginBottom: 12,
+    marginBottom: 16,
     textAlign: 'center',
+    textShadowColor: 'rgba(76, 175, 80, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   planTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 16,
+    marginBottom: 20,
     textAlign: 'center',
     fontStyle: 'italic',
+    backgroundColor: `${Colors.light.primary}10`,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
   },
   successText: {
     fontSize: 16,
     color: Colors.light.secondaryText,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
+    fontWeight: '500',
   },
   confetti: {
     position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 }); 

@@ -58,6 +58,14 @@ interface PlansState {
   addPlan: (plan: Plan) => void;
   checkConditionalDependencies: (planId: string) => void;
   
+  // Helper function for conditional dependencies
+  canParticipantBeAccepted: (
+    participant: Participant, 
+    allParticipants: Participant[], 
+    dependencyGraph: Record<string, string[]>,
+    visited: Set<string>
+  ) => boolean;
+  
   // Poll actions
   addPoll: (planId: string, poll: Poll) => void;
   voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => void;
@@ -148,10 +156,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   addPlan: (plan: Plan) => {
     set((state) => {
+      // Ensure plan is marked as unread for highlighting
+      const planWithUnreadStatus = { ...plan, isRead: false };
+      
       // Anonymous plans always go to invitations (since user didn't create them knowingly)
       if (plan.type === 'anonymous') {
         return {
-          invitations: [plan, ...state.invitations], // Add to top
+          invitations: [planWithUnreadStatus, ...state.invitations], // Add to top
           activePlans: state.activePlans,
           completedPlans: state.completedPlans
         };
@@ -161,14 +172,14 @@ const usePlansStore = create<PlansState>((set, get) => ({
       if (plan.creator?.id === 'current') {
         return {
           invitations: state.invitations,
-          activePlans: [plan, ...state.activePlans], // Add to top
+          activePlans: [planWithUnreadStatus, ...state.activePlans], // Add to top
           completedPlans: state.completedPlans
         };
       }
       
-      // Otherwise, add it to invitations
+      // Otherwise (received invitation), add it to invitations
       return {
-        invitations: [plan, ...state.invitations], // Add to top
+        invitations: [planWithUnreadStatus, ...state.invitations], // Add to top
         activePlans: state.activePlans,
         completedPlans: state.completedPlans
       };
@@ -188,34 +199,59 @@ const usePlansStore = create<PlansState>((set, get) => ({
       
       if (conditionalParticipants.length === 0) return state;
       
-      // Check for circular dependencies
       const updatedParticipants = [...plan.participants];
       let hasChanges = false;
       
-      // For each conditional participant
-      conditionalParticipants.forEach(participant => {
-        if (!participant.conditionalFriends) return;
+      // Keep checking until no more changes are made (handles chain reactions)
+      let keepChecking = true;
+      let maxIterations = 10; // Prevent infinite loops
+      let iteration = 0;
+      
+      while (keepChecking && iteration < maxIterations) {
+        keepChecking = false;
+        iteration++;
         
-        // Check if all their conditional friends are either:
-        // 1. Already accepted
-        // 2. Conditional on this participant (circular dependency)
-        const allConditionsMet = participant.conditionalFriends.every(friendId => {
-          const friend = plan.participants.find(p => p.id === friendId);
-          if (!friend) return false;
-          
-          if (friend.status === 'accepted') return true;
-          
-          // Check for circular dependency
-          if (friend.status === 'conditional' && friend.conditionalFriends) {
-            return friend.conditionalFriends.includes(participant.id);
+        // Build a dependency graph
+        const dependencyGraph: Record<string, string[]> = {};
+        const reverseDependencyGraph: Record<string, string[]> = {};
+        
+        // Map all current conditional dependencies
+        updatedParticipants.forEach(participant => {
+          if (participant.status === 'conditional' && participant.conditionalFriends) {
+            dependencyGraph[participant.id] = participant.conditionalFriends;
+            
+            // Build reverse dependency graph
+            participant.conditionalFriends.forEach(friendId => {
+              if (!reverseDependencyGraph[friendId]) {
+                reverseDependencyGraph[friendId] = [];
+              }
+              reverseDependencyGraph[friendId].push(participant.id);
+            });
           }
-          
-          return false;
         });
         
-        // If all conditions are met, update this participant to 'accepted'
-        if (allConditionsMet) {
-          const index = updatedParticipants.findIndex(p => p.id === participant.id);
+        // Check each conditional participant
+        const participantsToUpdate = [];
+        
+        for (const participant of updatedParticipants) {
+          if (participant.status === 'conditional' && participant.conditionalFriends) {
+            const store = get();
+            const canBeAccepted = store.canParticipantBeAccepted(
+              participant, 
+              updatedParticipants, 
+              dependencyGraph,
+              new Set() // visited set for cycle detection
+            );
+            
+            if (canBeAccepted) {
+              participantsToUpdate.push(participant.id);
+            }
+          }
+        }
+        
+        // Update participants who can be accepted
+        participantsToUpdate.forEach(participantId => {
+          const index = updatedParticipants.findIndex(p => p.id === participantId);
           if (index !== -1) {
             updatedParticipants[index] = {
               ...updatedParticipants[index],
@@ -223,24 +259,10 @@ const usePlansStore = create<PlansState>((set, get) => ({
               conditionalFriends: undefined
             };
             hasChanges = true;
-            
-            // Also update any friends who were conditional on this participant
-            participant.conditionalFriends.forEach(friendId => {
-              const friendIndex = updatedParticipants.findIndex(p => p.id === friendId);
-              if (friendIndex !== -1 && updatedParticipants[friendIndex].status === 'conditional') {
-                const friend = updatedParticipants[friendIndex];
-                if (friend.conditionalFriends && friend.conditionalFriends.includes(participant.id)) {
-                  updatedParticipants[friendIndex] = {
-                    ...updatedParticipants[friendIndex],
-                    status: 'accepted',
-                    conditionalFriends: undefined
-                  };
-                }
-              }
-            });
+            keepChecking = true;
           }
-        }
-      });
+        });
+      }
       
       // If there were changes, update the plan
       if (hasChanges) {
@@ -256,6 +278,52 @@ const usePlansStore = create<PlansState>((set, get) => ({
       
       return state;
     });
+  },
+  
+  // Helper function to determine if a participant can be accepted
+  canParticipantBeAccepted: (
+    participant: Participant, 
+    allParticipants: Participant[], 
+    dependencyGraph: Record<string, string[]>,
+    visited: Set<string>
+  ): boolean => {
+    // Prevent infinite recursion in circular dependencies
+    if (visited.has(participant.id)) {
+      return false;
+    }
+    
+    if (!participant.conditionalFriends || participant.conditionalFriends.length === 0) {
+      return false;
+    }
+    
+    visited.add(participant.id);
+    
+    // Check if all conditional friends are satisfied
+    const allFriendsSatisfied = participant.conditionalFriends.every(friendId => {
+      const friend = allParticipants.find(p => p.id === friendId);
+      if (!friend) return false;
+      
+      // If friend is already accepted, condition is met
+      if (friend.status === 'accepted') return true;
+      
+      // If friend is conditional, check if they can be accepted
+      if (friend.status === 'conditional' && friend.conditionalFriends) {
+        // Check for mutual dependency (circular)
+        if (friend.conditionalFriends.includes(participant.id)) {
+          // This is a circular dependency - both can be accepted
+          return true;
+        }
+        
+        // Recursively check if the friend can be accepted
+        const store = get();
+        return store.canParticipantBeAccepted(friend, allParticipants, dependencyGraph, new Set(visited));
+      }
+      
+      return false;
+    });
+    
+    visited.delete(participant.id);
+    return allFriendsSatisfied;
   },
   
   // Poll actions
