@@ -10,6 +10,17 @@ interface InvitationCardProps {
 }
 
 export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
+  const [currentTime, setCurrentTime] = React.useState(Date.now());
+
+  // Update timer every second
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Get participants by status
   const acceptedParticipants = plan.participants.filter(p => 
     p.status === 'accepted' || p.status === 'maybe' || p.status === 'conditional'
@@ -24,11 +35,11 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
   // Calculate response rate
   const responseRate = acceptedParticipants.length / totalParticipants;
   
-  // Check for active invitation polls
+  // Check for active invitation polls (not expired)
   const invitationPolls = plan.polls?.filter(poll => 
     poll.type === 'invitation' && 
     poll.expiresAt && 
-    poll.expiresAt > Date.now()
+    poll.expiresAt > currentTime
   ) || [];
   
   const hasActiveVoting = invitationPolls.length > 0;
@@ -37,7 +48,7 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
   const getTimeLeft = () => {
     if (invitationPolls.length === 0) return 0;
     const firstPoll = invitationPolls[0];
-    return Math.max(0, (firstPoll.expiresAt || 0) - Date.now());
+    return Math.max(0, (firstPoll.expiresAt || 0) - currentTime);
   };
   
   const formatTimeLeft = (ms: number) => {

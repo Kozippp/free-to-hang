@@ -72,6 +72,10 @@ interface PlansState {
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => void;
   removePollOption: (planId: string, pollId: string, optionId: string) => void;
   addPollOption: (planId: string, pollId: string, optionText: string) => void;
+  
+  // Invitation poll actions
+  processExpiredInvitationPolls: () => void;
+  createInvitationPollWithAutoVote: (planId: string, friendIds: string[], friendNames: string[], creatorId: string) => void;
 }
 
 const usePlansStore = create<PlansState>((set, get) => ({
@@ -476,6 +480,117 @@ const usePlansStore = create<PlansState>((set, get) => ({
         invitations: state.invitations.map(updatePlan),
         activePlans: state.activePlans.map(updatePlan),
         completedPlans: state.completedPlans.map(updatePlan)
+      };
+    });
+  },
+  
+  // Invitation poll actions
+  processExpiredInvitationPolls: () => {
+    set((state) => {
+      const currentTime = Date.now();
+      
+      const updatePlan = (plan: Plan): Plan => {
+        if (!plan.polls) return plan;
+        
+        const expiredInvitationPolls = plan.polls.filter(poll => 
+          poll.type === 'invitation' && 
+          poll.expiresAt && 
+          poll.expiresAt <= currentTime
+        );
+        
+        if (expiredInvitationPolls.length === 0) return plan;
+        
+        let updatedParticipants = [...plan.participants];
+        let updatedPolls = plan.polls.filter(poll => 
+          !(poll.type === 'invitation' && poll.expiresAt && poll.expiresAt <= currentTime)
+        );
+        
+        // Process each expired poll
+        expiredInvitationPolls.forEach(poll => {
+          if (!poll.invitedUsers || poll.invitedUsers.length === 0) return;
+          
+          const invitedUserId = poll.invitedUsers[0]; // Each poll has one invited user
+          
+          // Count votes
+          const allowVotes = poll.options.find(opt => opt.text === 'Allow')?.votes.length || 0;
+          const denyVotes = poll.options.find(opt => opt.text === 'Deny')?.votes.length || 0;
+          
+          // If majority voted to allow, add the person to participants
+          if (allowVotes > denyVotes) {
+            // Check if user is not already in participants
+            const existingParticipant = updatedParticipants.find(p => p.id === invitedUserId);
+            if (!existingParticipant) {
+              // Add new participant with pending status
+              updatedParticipants.push({
+                id: invitedUserId,
+                name: `User ${invitedUserId}`, // In real app, get from user store
+                avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`,
+                status: 'pending'
+              });
+            }
+          }
+          // If majority voted to deny or tie, the person just disappears (no action needed)
+        });
+        
+        return {
+          ...plan,
+          participants: updatedParticipants,
+          polls: updatedPolls
+        };
+      };
+      
+      return {
+        invitations: state.invitations.map(updatePlan),
+        activePlans: state.activePlans.map(updatePlan),
+        completedPlans: state.completedPlans
+      };
+    });
+  },
+  
+  createInvitationPollWithAutoVote: (planId: string, friendIds: string[], friendNames: string[], creatorId: string) => {
+    set((state) => {
+      const updatePlan = (plan: Plan): Plan => {
+        if (plan.id !== planId) return plan;
+        
+        const newPolls = [...(plan.polls || [])];
+        
+        // Create individual invitation polls for each person
+        friendIds.forEach((friendId, index) => {
+          const friendName = friendNames[index];
+          
+          const invitationPoll: Poll = {
+            id: `invitation-poll-${Date.now()}-${friendId}`,
+            question: `Should we invite ${friendName} to this plan?`,
+            type: 'invitation',
+            expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
+            invitedUsers: [friendId], // Only one user per poll
+            options: [
+              {
+                id: `allow-${Date.now()}-${friendId}`,
+                text: 'Allow',
+                votes: [creatorId] // Auto-vote for the creator
+              },
+              {
+                id: `deny-${Date.now()}-${friendId}`,
+                text: 'Deny',
+                votes: []
+              }
+            ]
+          };
+          
+          newPolls.push(invitationPoll);
+        });
+        
+        return {
+          ...plan,
+          polls: newPolls
+        };
+      };
+      
+      return {
+        invitations: state.invitations.map(updatePlan),
+        activePlans: state.activePlans.map(updatePlan),
+        completedPlans: state.completedPlans
       };
     });
   }

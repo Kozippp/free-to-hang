@@ -22,7 +22,7 @@ export default function PlanUserStatus({
   const [showConditionalModal, setShowConditionalModal] = useState(false);
 
   const handleStatusChange = (newStatus: ParticipantStatus) => {
-    if (currentStatus === 'accepted' && newStatus !== 'accepted') {
+    if ((currentStatus === 'accepted' || currentStatus === 'maybe') && newStatus !== currentStatus) {
       Alert.alert(
         'Change Status',
         'Changing your status will remove all your votes. Are you sure?',
@@ -217,7 +217,7 @@ export default function PlanUserStatus({
               styles.statusText,
               { color: getStatusStyle('declined').textColor, fontWeight: currentStatus === 'declined' ? '600' : '500' }
             ]}>
-              No
+              Can't go
             </Text>
           </TouchableOpacity>
         </View>
@@ -251,24 +251,15 @@ export default function PlanUserStatus({
         })()}
 
         {/* Enhanced disclaimer based on current status */}
-        {(currentStatus === 'maybe' || currentStatus === 'conditional') && (
+        {(currentStatus === 'maybe' || (currentStatus === 'conditional' && (() => {
+          const currentUser = participants.find(p => p.id === currentUserId);
+          return !currentUser?.conditionalFriends || currentUser.conditionalFriends.length === 0;
+        })())) && (
           <View style={styles.disclaimerContainer}>
             <Text style={styles.disclaimerText}>
               {currentStatus === 'maybe' 
                 ? 'As "Maybe", you can view but not vote or edit this plan until you respond "Going".'
-                : currentStatus === 'conditional'
-                  ? (() => {
-                      const currentUser = participants.find(p => p.id === currentUserId);
-                      if (currentUser?.conditionalFriends && currentUser.conditionalFriends.length > 0) {
-                        const dependsOn = currentUser.conditionalFriends
-                          .map(id => participants.find(p => p.id === id)?.name)
-                          .filter(Boolean)
-                          .join(', ');
-                        return `You'll be marked as "Going" if ${dependsOn} also come. You can view but not vote or edit this plan until then.`;
-                      }
-                      return 'As "If", you can view but not vote or edit this plan until you respond "Going".';
-                    })()
-                  : 'As "If", you can view but not vote or edit this plan until you respond "Going".'}
+                : 'As "If", you can view but not vote or edit this plan until you respond "Going".'}
             </Text>
           </View>
         )}

@@ -52,7 +52,7 @@ interface PlanDetailViewProps {
 }
 
 export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailViewProps) {
-  const { addPoll, voteOnPoll, addPollOption, invitations, activePlans } = usePlansStore();
+  const { addPoll, voteOnPoll, addPollOption, invitations, activePlans, processExpiredInvitationPolls, createInvitationPollWithAutoVote } = usePlansStore();
   const { getUnreadCount } = useChatStore();
   
   // Get the latest plan data from store
@@ -103,6 +103,15 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   // Animation for highlighting new plan
   const highlightAnim = useRef(new Animated.Value(0)).current;
+  
+  // Process expired invitation polls periodically
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      processExpiredInvitationPolls();
+    }, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, [processExpiredInvitationPolls]);
   
   React.useEffect(() => {
     if (highlightNewPlan) {
@@ -210,33 +219,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
 
   const handleCreateInvitationPoll = (friendIds: string[], friendNames: string[]) => {
-    // Create individual invitation polls for each person
-    friendIds.forEach((friendId, index) => {
-      const friendName = friendNames[index];
-      
-      const invitationPoll: Poll = {
-        id: `invitation-poll-${Date.now()}-${friendId}`,
-        question: `Should we invite ${friendName} to this plan?`,
-        type: 'invitation',
-        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
-        invitedUsers: [friendId], // Only one user per poll
-        options: [
-          {
-            id: `allow-${Date.now()}-${friendId}`,
-            text: 'Allow',
-            votes: []
-          },
-          {
-            id: `deny-${Date.now()}-${friendId}`,
-            text: 'Deny',
-            votes: []
-          }
-        ]
-      };
-
-      addPoll(latestPlan.id, invitationPoll);
-    });
-    
+    // Use the new function with auto-vote for the creator
+    createInvitationPollWithAutoVote(latestPlan.id, friendIds, friendNames, 'current');
     setShowInviteModal(false);
   };
   
@@ -432,7 +416,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
               <PollDisplay
                 question={whenPoll.question}
                 options={preparePollForDisplay(whenPoll).options}
-                onChangeVote={() => handleOpenVoting(whenPoll.id)}
+                onVote={(optionId) => voteOnPoll(plan.id, whenPoll.id, [optionId], 'current')}
                 userVotes={getUserVotesForPoll(whenPoll.id)}
                 totalVotes={getTotalVotesForPoll(whenPoll.id)}
                 canVote={isInYesGang}
@@ -472,7 +456,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
               <PollDisplay
                 question={wherePoll.question}
                 options={preparePollForDisplay(wherePoll).options}
-                onChangeVote={() => handleOpenVoting(wherePoll.id)}
+                onVote={(optionId) => voteOnPoll(plan.id, wherePoll.id, [optionId], 'current')}
                 userVotes={getUserVotesForPoll(wherePoll.id)}
                 totalVotes={getTotalVotesForPoll(wherePoll.id)}
                 canVote={isInYesGang}
@@ -502,27 +486,23 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           </View>
           
           {/* Custom Polls Section */}
-          {customPolls.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.headerRow}>
-                <Text style={styles.sectionTitle}>Need to decide something else</Text>
-              </View>
-              
-              {customPolls.map((poll) => (
-                <PollDisplay
-                  key={poll.id}
-                  question={poll.question}
-                  options={preparePollForDisplay(poll).options}
-                  onChangeVote={() => handleOpenVoting(poll.id)}
-                  userVotes={getUserVotesForPoll(poll.id)}
-                  totalVotes={getTotalVotesForPoll(poll.id)}
-                  canVote={isInYesGang}
-                />
-              ))}
+          <View style={styles.section}>
+            <View style={styles.headerRow}>
+              <Text style={styles.sectionTitle}>Need to decide something else?</Text>
             </View>
-          )}
-          
-          <View style={styles.customPollSection}>
+            
+            {customPolls.length > 0 && customPolls.map((poll) => (
+              <PollDisplay
+                key={poll.id}
+                question={poll.question}
+                options={preparePollForDisplay(poll).options}
+                onVote={(optionId) => voteOnPoll(plan.id, poll.id, [optionId], 'current')}
+                userVotes={getUserVotesForPoll(poll.id)}
+                totalVotes={getTotalVotesForPoll(poll.id)}
+                canVote={isInYesGang}
+              />
+            ))}
+            
             <TouchableOpacity 
               style={[
                 styles.createPollButton,
@@ -537,10 +517,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 Create a new poll
               </Text>
             </TouchableOpacity>
-            
-            <Text style={styles.customPollExplanation}>
-              Need to decide something else? Create a custom poll to vote on activities, food preferences, or anything else for your hangout.
-            </Text>
           </View>
           
           {/* Participants Section */}
@@ -660,12 +636,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         visible={showPollCreator}
         onClose={() => setShowPollCreator(false)}
         onSubmit={handlePollSubmit}
-        initialQuestion={
-          pollType === 'when' ? 'When should we meet?' : 
-          pollType === 'where' ? 'Where should we meet?' : 
-          ''
-        }
-        fixedQuestion={pollType !== 'custom'}
+        pollType={pollType}
       />
       
       {/* Poll Voting Modal */}

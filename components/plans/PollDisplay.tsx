@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   Image,
-  Alert
+  Alert,
+  Animated
 } from 'react-native';
+import { Check, Crown } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PollOption {
@@ -23,7 +25,7 @@ interface PollOption {
 interface PollDisplayProps {
   question: string;
   options: PollOption[];
-  onChangeVote: () => void;
+  onVote: (optionId: string) => void;
   userVotes: string[];
   totalVotes: number;
   canVote: boolean;
@@ -32,124 +34,195 @@ interface PollDisplayProps {
 export default function PollDisplay({
   question,
   options,
-  onChangeVote,
+  onVote,
   userVotes,
   totalVotes,
   canVote
 }: PollDisplayProps) {
-  
-  const handleVoteAttempt = () => {
+  const [animatedValues] = useState(
+    options.reduce((acc, option) => {
+      acc[option.id] = new Animated.Value(0);
+      return acc;
+    }, {} as Record<string, Animated.Value>)
+  );
+
+  const handleVote = (optionId: string) => {
     if (!canVote) {
       Alert.alert(
         'Cannot Vote',
         'You need to respond "Going" to the plan to vote in polls and suggest changes.',
-        [
-          { text: 'OK', style: 'default' }
-        ]
+        [{ text: 'OK', style: 'default' }]
       );
       return;
     }
-    onChangeVote();
+
+    // Animate the selection
+    Animated.sequence([
+      Animated.timing(animatedValues[optionId], {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animatedValues[optionId], {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start();
+
+    onVote(optionId);
   };
-  // Calculate percentages
+
+  // Calculate percentages and sort options by votes (highest first)
   const getPercentage = (votes: number) => {
     if (totalVotes === 0) return 0;
     return Math.round((votes / totalVotes) * 100);
   };
 
-  // Find the winning option(s)
+  // Sort options by vote count (descending)
+  const sortedOptions = [...options].sort((a, b) => b.votes - a.votes);
+  
+  // Find the winning option(s) - at least 50% of total participants
   const maxVotes = Math.max(...options.map(option => option.votes));
-  const winningOptions = options.filter(option => option.votes === maxVotes && maxVotes > 0);
+  const totalParticipants = Math.max(totalVotes, 1); // Avoid division by zero
+  const isWinning = (votes: number) => votes === maxVotes && votes > 0 && (votes / totalParticipants) >= 0.5;
 
   return (
     <View style={styles.container}>
       <Text style={styles.question}>{question}</Text>
       
       <View style={styles.optionsContainer}>
-        {options.map((option) => {
+        {sortedOptions.map((option, index) => {
           const percentage = getPercentage(option.votes);
           const isSelected = userVotes.includes(option.id);
-          const isWinning = winningOptions.some(opt => opt.id === option.id) && maxVotes > 0;
+          const isWinningOption = isWinning(option.votes);
+          const isTopChoice = index === 0 && option.votes > 0;
           
           return (
-            <View key={option.id} style={styles.optionContainer}>
-              <View style={styles.optionContent}>
-                <Text style={[
-                  styles.optionText,
-                  isSelected && styles.selectedOptionText
-                ]}>
-                  {option.text}
-                </Text>
+            <Animated.View
+              key={option.id}
+              style={[
+                styles.optionContainer,
+                isSelected && styles.selectedOption,
+                isWinningOption && styles.winningOption,
+                isTopChoice && !isWinningOption && styles.topOption,
+                {
+                  transform: [
+                    {
+                      scale: animatedValues[option.id]?.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 0.95],
+                      }) || 1,
+                    },
+                  ],
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.optionButton}
+                onPress={() => handleVote(option.id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.optionContent}>
+                  <View style={styles.optionLeft}>
+                    {isWinningOption && (
+                      <View style={styles.crownContainer}>
+                        <Crown size={16} color="#FFD700" fill="#FFD700" />
+                      </View>
+                    )}
+                    <Text style={[
+                      styles.optionText,
+                      isSelected && styles.selectedOptionText,
+                      isWinningOption && styles.winningOptionText,
+                      isTopChoice && !isWinningOption && styles.topOptionText
+                    ]}>
+                      {option.text}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.optionRight}>
+                    {isSelected && (
+                      <View style={styles.checkContainer}>
+                        <Check size={16} color="white" />
+                      </View>
+                    )}
+                    
+                    <View style={styles.voteInfo}>
+                      <Text style={[
+                        styles.voteCount,
+                        isSelected && styles.selectedVoteCount,
+                        isWinningOption && styles.winningVoteCount
+                      ]}>
+                        {option.votes}
+                      </Text>
+                      {percentage > 0 && (
+                        <Text style={[
+                          styles.percentage,
+                          isSelected && styles.selectedPercentage,
+                          isWinningOption && styles.winningPercentage
+                        ]}>
+                          {percentage}%
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
                 
-                <View style={styles.optionRight}>
-                  {isSelected && (
-                    <View style={styles.selectedIndicator}>
-                      <View style={styles.selectedDot} />
-                    </View>
-                  )}
-                  
-                  <Text style={styles.percentageText}>{percentage}%</Text>
-                </View>
-              </View>
-              
-              <View style={styles.progressBarContainer}>
-                <View 
-                  style={[
-                    styles.progressBar,
-                    isSelected && styles.selectedProgressBar,
-                    isWinning && styles.winningProgressBar,
-                    { width: `${percentage}%` }
-                  ]} 
-                />
-              </View>
-              
-              {option.voters.length > 0 && (
-                <View style={styles.votersContainer}>
-                  {option.voters.slice(0, 3).map((voter, index) => (
+                {/* Progress bar */}
+                {percentage > 0 && (
+                  <View style={styles.progressContainer}>
                     <View 
-                      key={voter.id} 
                       style={[
-                        styles.voterAvatar,
-                        { marginLeft: index > 0 ? -8 : 0 }
-                      ]}
-                    >
-                      <Image 
-                        source={{ uri: voter.avatar }} 
-                        style={styles.avatarImage} 
-                      />
+                        styles.progressBar,
+                        isSelected && styles.selectedProgressBar,
+                        isWinningOption && styles.winningProgressBar,
+                        isTopChoice && !isWinningOption && styles.topProgressBar,
+                        { width: `${percentage}%` }
+                      ]} 
+                    />
+                  </View>
+                )}
+                
+                {/* Voters avatars */}
+                {option.voters.length > 0 && (
+                  <View style={styles.votersContainer}>
+                    <View style={styles.avatarsRow}>
+                      {option.voters.slice(0, 4).map((voter, voterIndex) => (
+                        <View 
+                          key={voter.id} 
+                          style={[
+                            styles.voterAvatar,
+                            { marginLeft: voterIndex > 0 ? -8 : 0, zIndex: 4 - voterIndex }
+                          ]}
+                        >
+                          <Image 
+                            source={{ uri: voter.avatar }} 
+                            style={styles.avatarImage} 
+                          />
+                        </View>
+                      ))}
+                      
+                      {option.voters.length > 4 && (
+                        <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -8 }]}>
+                          <Text style={styles.moreVotersText}>+{option.voters.length - 4}</Text>
+                        </View>
+                      )}
                     </View>
-                  ))}
-                  
-                  {option.voters.length > 3 && (
-                    <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -8 }]}>
-                      <Text style={styles.moreVotersText}>+{option.voters.length - 3}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
           );
         })}
       </View>
       
-      <View style={styles.footer}>
-        <Text style={styles.totalVotes}>{totalVotes} votes</Text>
-        
-        <TouchableOpacity 
-          style={[
-            styles.changeVoteButton,
-            !canVote && styles.disabledButton
-          ]}
-          onPress={handleVoteAttempt}
-        >
-          <Text style={[
-            styles.changeVoteText,
-            !canVote && styles.disabledButtonText
-          ]}>
-            {canVote ? 'Change vote' : 'Vote'}
+      {totalVotes > 0 && (
+        <View style={styles.footer}>
+          <Text style={styles.totalVotes}>
+            {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
           </Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -159,92 +232,153 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   question: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   optionsContainer: {
-    marginBottom: 8,
+    gap: 8,
   },
   optionContainer: {
-    marginBottom: 12,
-    borderRadius: 8,
-    backgroundColor: Colors.light.buttonBackground,
+    borderRadius: 16,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 2,
+    borderColor: 'transparent',
     overflow: 'hidden',
+  },
+  selectedOption: {
+    borderColor: Colors.light.primary,
+    backgroundColor: `${Colors.light.primary}08`,
+  },
+  winningOption: {
+    borderColor: '#FFD700',
+    backgroundColor: '#FFF9E6',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  topOption: {
+    borderColor: Colors.light.primary,
+    backgroundColor: `${Colors.light.primary}05`,
+  },
+  optionButton: {
+    padding: 0,
   },
   optionContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    zIndex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  optionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  crownContainer: {
+    marginRight: 8,
   },
   optionText: {
-    fontSize: 14,
+    fontSize: 16,
     color: Colors.light.text,
+    fontWeight: '500',
     flex: 1,
   },
   selectedOptionText: {
-    fontWeight: '500',
+    fontWeight: '600',
+    color: Colors.light.primary,
+  },
+  winningOptionText: {
+    fontWeight: '700',
+    color: '#B8860B',
+  },
+  topOptionText: {
+    fontWeight: '600',
+    color: Colors.light.primary,
   },
   optionRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  selectedIndicator: {
-    marginRight: 8,
-  },
-  selectedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.light.primary,
-  },
-  percentageText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    fontWeight: '500',
-    minWidth: 36,
-    textAlign: 'right',
-  },
-  progressBarContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: `${Colors.light.primary}15`,
-  },
-  selectedProgressBar: {
-    backgroundColor: `${Colors.light.primary}25`,
-  },
-  winningProgressBar: {
-    backgroundColor: `${Colors.light.primary}35`,
-  },
-  votersContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  voterAvatar: {
+  checkContainer: {
     width: 24,
     height: 24,
     borderRadius: 12,
+    backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voteInfo: {
+    alignItems: 'center',
+    minWidth: 40,
+  },
+  voteCount: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  selectedVoteCount: {
+    color: Colors.light.primary,
+  },
+  winningVoteCount: {
+    color: '#B8860B',
+  },
+  percentage: {
+    fontSize: 12,
+    color: Colors.light.secondaryText,
+    fontWeight: '500',
+  },
+  selectedPercentage: {
+    color: Colors.light.primary,
+  },
+  winningPercentage: {
+    color: '#B8860B',
+  },
+  progressContainer: {
+    height: 4,
+    backgroundColor: 'transparent',
+    position: 'relative',
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: Colors.light.secondaryText,
+    borderRadius: 2,
+  },
+  selectedProgressBar: {
+    backgroundColor: Colors.light.primary,
+  },
+  winningProgressBar: {
+    backgroundColor: '#FFD700',
+  },
+  topProgressBar: {
+    backgroundColor: Colors.light.primary,
+  },
+  votersContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  avatarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  voterAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
-    borderColor: Colors.light.buttonBackground,
+    borderColor: 'white',
     overflow: 'hidden',
   },
   avatarImage: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   moreVoters: {
     backgroundColor: Colors.light.primary,
@@ -254,31 +388,15 @@ const styles = StyleSheet.create({
   moreVotersText: {
     color: 'white',
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginTop: 12,
     alignItems: 'center',
-    paddingHorizontal: 4,
   },
   totalVotes: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-  },
-  changeVoteButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  changeVoteText: {
     fontSize: 14,
-    color: Colors.light.primary,
-    fontWeight: '500',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  disabledButtonText: {
     color: Colors.light.secondaryText,
+    fontWeight: '500',
   },
 });
