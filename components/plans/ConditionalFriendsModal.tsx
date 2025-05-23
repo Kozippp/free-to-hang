@@ -165,16 +165,12 @@ export default function ConditionalFriendsModal({
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  style={[
-                    styles.confirmButton,
-                    selectedFriends.length === 0 && styles.disabledButton
-                  ]}
+                  style={styles.confirmButton}
                   onPress={handleConfirm}
-                  disabled={selectedFriends.length === 0}
                 >
                   <Text style={styles.confirmButtonText}>
                     {selectedFriends.length === 0 
-                      ? 'Select friends' 
+                      ? 'Just maybe' 
                       : `Depend on ${selectedFriends.length} friend${selectedFriends.length > 1 ? 's' : ''}`
                     }
                   </Text>
@@ -200,7 +196,7 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 400,
     maxHeight: '80%',
-    backgroundColor: Colors.light.modalBackground,
+    backgroundColor: 'white',
     borderRadius: 20,
     padding: 24,
     shadowColor: '#000',
@@ -309,9 +305,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: Colors.light.primary,
     alignItems: 'center',
-  },
-  disabledButton: {
-    opacity: 0.5,
   },
   confirmButtonText: {
     fontSize: 16,

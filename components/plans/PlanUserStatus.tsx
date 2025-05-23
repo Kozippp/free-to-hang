@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, Animated } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, Animated, Image } from 'react-native';
 import { CheckCircle, HelpCircle, Eye, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { ParticipantStatus, Participant } from '@/store/plansStore';
@@ -34,7 +34,7 @@ export default function PlanUserStatus({
           {
             text: 'Change',
             onPress: () => {
-              if (newStatus === 'maybe') {
+              if (newStatus === 'conditional') {
                 setShowConditionalModal(true);
               } else {
                 animateAndChangeStatus(newStatus);
@@ -59,10 +59,11 @@ export default function PlanUserStatus({
           }
         ]
       );
-    } else if (newStatus === 'maybe') {
-      // Show conditional friends modal
+    } else if (newStatus === 'conditional') {
+      // Show conditional friends modal for "If..." button
       setShowConditionalModal(true);
     } else {
+      // For "Maybe" and "Going", just change status directly
       animateAndChangeStatus(newStatus);
     }
   };
@@ -221,6 +222,34 @@ export default function PlanUserStatus({
           </TouchableOpacity>
         </View>
 
+        {/* Show conditional terms clearly if user has conditional status */}
+        {currentStatus === 'conditional' && (() => {
+          const currentUser = participants.find(p => p.id === currentUserId);
+          if (currentUser?.conditionalFriends && currentUser.conditionalFriends.length > 0) {
+            const dependentFriends = currentUser.conditionalFriends
+              .map(id => participants.find(p => p.id === id))
+              .filter(Boolean);
+            
+            return (
+              <View style={styles.conditionalTermsContainer}>
+                <Text style={styles.conditionalTermsTitle}>Your conditions:</Text>
+                <View style={styles.conditionalFriendsList}>
+                  {dependentFriends.map((friend) => (
+                    <View key={friend!.id} style={styles.conditionalFriendItem}>
+                      <Image source={{ uri: friend!.avatar }} style={styles.conditionalAvatar} />
+                      <Text style={styles.conditionalFriendName}>{friend!.name}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.conditionalTermsSubtext}>
+                  You'll be marked as "Going" if {dependentFriends.length === 1 ? 'they come' : 'they all come'} too.
+                </Text>
+              </View>
+            );
+          }
+          return null;
+        })()}
+
         {/* Enhanced disclaimer based on current status */}
         {(currentStatus === 'maybe' || currentStatus === 'conditional') && (
           <View style={styles.disclaimerContainer}>
@@ -311,6 +340,45 @@ const styles = StyleSheet.create({
   disclaimerText: {
     fontSize: 13,
     color: Colors.light.warning,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  conditionalTermsContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: `${Colors.light.warning}15`,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.light.warning,
+  },
+  conditionalTermsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 8,
+  },
+  conditionalFriendsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  conditionalFriendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  conditionalAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  conditionalFriendName: {
+    fontSize: 12,
+    color: Colors.light.text,
+  },
+  conditionalTermsSubtext: {
+    fontSize: 13,
+    color: Colors.light.text,
     fontStyle: 'italic',
     lineHeight: 18,
   },

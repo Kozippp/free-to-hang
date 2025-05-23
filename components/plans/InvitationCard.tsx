@@ -24,6 +24,31 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
   // Calculate response rate
   const responseRate = acceptedParticipants.length / totalParticipants;
   
+  // Check for active invitation polls
+  const invitationPolls = plan.polls?.filter(poll => 
+    poll.type === 'invitation' && 
+    poll.expiresAt && 
+    poll.expiresAt > Date.now()
+  ) || [];
+  
+  const hasActiveVoting = invitationPolls.length > 0;
+  
+  // Get time left for the first active poll
+  const getTimeLeft = () => {
+    if (invitationPolls.length === 0) return 0;
+    const firstPoll = invitationPolls[0];
+    return Math.max(0, (firstPoll.expiresAt || 0) - Date.now());
+  };
+  
+  const formatTimeLeft = (ms: number) => {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  };
+  
   // Get creator's first name only
   const getFirstName = (fullName: string) => {
     return fullName.split(' ')[0];
@@ -94,6 +119,21 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
         </Text>
         <Text style={[styles.title, !plan.isRead && styles.unreadText]}>{plan.title}</Text>
       </View>
+      
+      {/* Active voting banner */}
+      {hasActiveVoting && (
+        <View style={styles.votingBanner}>
+          <View style={styles.votingInfo}>
+            <Clock size={14} color={Colors.light.warning} />
+            <Text style={styles.votingText}>
+              Vote to invite {invitationPolls.length} {invitationPolls.length === 1 ? 'person' : 'people'}
+            </Text>
+          </View>
+          <Text style={styles.votingTimer}>
+            {formatTimeLeft(getTimeLeft())}
+          </Text>
+        </View>
+      )}
       
       <View style={styles.footer}>
         <View style={styles.participantsInfo}>
@@ -299,5 +339,36 @@ const styles = StyleSheet.create({
   },
   conditionalBadge: {
     backgroundColor: Colors.light.primary,
+  },
+  votingBanner: {
+    backgroundColor: `${Colors.light.warning}15`,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.light.warning,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  votingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  votingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.warning,
+    marginLeft: 8,
+  },
+  votingTimer: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.warning,
+    backgroundColor: `${Colors.light.warning}25`,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
 });
