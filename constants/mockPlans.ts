@@ -172,6 +172,55 @@ export const mockActivePlans: Plan[] = [
           {
             id: 'option3',
             text: '9:00 PM',
+            votes: ['current']
+          }
+        ]
+      },
+      {
+        id: 'poll2',
+        question: 'Where should we meet?',
+        type: 'where',
+        options: [
+          {
+            id: 'option4',
+            text: 'Bella Italia Downtown',
+            votes: ['current', 'user9', 'user10']
+          },
+          {
+            id: 'option5',
+            text: 'Luigi\'s Pizzeria',
+            votes: ['user9']
+          },
+          {
+            id: 'option6',
+            text: 'Tony\'s Trattoria',
+            votes: ['current']
+          }
+        ]
+      },
+      {
+        id: 'poll3',
+        question: 'What should we order for dessert?',
+        type: 'custom',
+        options: [
+          {
+            id: 'option7',
+            text: 'Tiramisu',
+            votes: ['current', 'user9']
+          },
+          {
+            id: 'option8',
+            text: 'Gelato',
+            votes: ['user10', 'current']
+          },
+          {
+            id: 'option9',
+            text: 'Cannoli',
+            votes: ['user9']
+          },
+          {
+            id: 'option10',
+            text: 'Skip dessert',
             votes: []
           }
         ]

@@ -314,24 +314,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     return uniqueVoters.size;
   };
   
-  // Helper function to get voters for poll options
-  const getVotersForOption = (pollId: string, optionId: string) => {
-    const poll = polls.find(p => p.id === pollId);
-    if (!poll) return [];
-    
-    const option = poll.options.find(o => o.id === optionId);
-    if (!option) return [];
-    
-    return option.votes.map(voterId => {
-      const participant = latestPlan.participants.find(p => p.id === voterId);
-      return participant ? {
-        id: participant.id,
-        name: participant.name,
-        avatar: participant.avatar
-      } : null;
-    }).filter(Boolean) as { id: string; name: string; avatar: string; }[];
-  };
-  
   // Prepare poll data for display
   const preparePollForDisplay = (poll: Poll) => {
     return {
@@ -339,13 +321,40 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       options: poll.options.map(option => ({
         ...option,
         votes: option.votes.length,
-        voters: getVotersForOption(poll.id, option.id)
+        voters: option.votes.map(voterId => {
+          const participant = latestPlan.participants.find(p => p.id === voterId);
+          return participant ? {
+            id: participant.id,
+            name: participant.name,
+            avatar: participant.avatar
+          } : {
+            id: voterId,
+            name: `User ${voterId}`,
+            avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`
+          };
+        })
       }))
     };
   };
   
   // Get unread message count for this plan
   const unreadCount = getUnreadCount(latestPlan.id, 'current');
+
+  // Helper function to handle poll voting with multiple selections
+  const handlePollVote = (pollId: string, optionId: string) => {
+    const currentVotes = getUserVotesForPoll(pollId);
+    let newVotes: string[];
+    
+    if (currentVotes.includes(optionId)) {
+      // Remove vote if already selected
+      newVotes = currentVotes.filter(id => id !== optionId);
+    } else {
+      // Add vote if not selected
+      newVotes = [...currentVotes, optionId];
+    }
+    
+    voteOnPoll(plan.id, pollId, newVotes, 'current');
+  };
 
   return (
     <Animated.View style={[
@@ -416,7 +425,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
               <PollDisplay
                 question={whenPoll.question}
                 options={preparePollForDisplay(whenPoll).options}
-                onVote={(optionId) => voteOnPoll(plan.id, whenPoll.id, [optionId], 'current')}
+                onVote={(optionId) => handlePollVote(whenPoll.id, optionId)}
                 userVotes={getUserVotesForPoll(whenPoll.id)}
                 totalVotes={getTotalVotesForPoll(whenPoll.id)}
                 canVote={isInYesGang}
@@ -456,7 +465,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
               <PollDisplay
                 question={wherePoll.question}
                 options={preparePollForDisplay(wherePoll).options}
-                onVote={(optionId) => voteOnPoll(plan.id, wherePoll.id, [optionId], 'current')}
+                onVote={(optionId) => handlePollVote(wherePoll.id, optionId)}
                 userVotes={getUserVotesForPoll(wherePoll.id)}
                 totalVotes={getTotalVotesForPoll(wherePoll.id)}
                 canVote={isInYesGang}
@@ -496,7 +505,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 key={poll.id}
                 question={poll.question}
                 options={preparePollForDisplay(poll).options}
-                onVote={(optionId) => voteOnPoll(plan.id, poll.id, [optionId], 'current')}
+                onVote={(optionId) => handlePollVote(poll.id, optionId)}
                 userVotes={getUserVotesForPoll(poll.id)}
                 totalVotes={getTotalVotesForPoll(poll.id)}
                 canVote={isInYesGang}
@@ -562,7 +571,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     onVote={(pollId, optionId) => {
                       // Only allow voting if user is "going"
                       if (isInYesGang) {
-                        voteOnPoll(latestPlan.id, pollId, [optionId], 'current');
+                        handlePollVote(pollId, optionId);
                       }
                     }}
                     userVoted={hasUserVoted}
@@ -645,11 +654,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           visible={showPollVoting}
           onClose={() => setShowPollVoting(false)}
           question={polls.find(p => p.id === currentPollId)?.question || ''}
-          options={polls.find(p => p.id === currentPollId)?.options.map(option => ({
-            ...option,
-            votes: option.votes.length,
-            voters: getVotersForOption(currentPollId, option.id)
-          })) || []}
+          options={(() => {
+            const poll = polls.find(p => p.id === currentPollId);
+            if (!poll) return [];
+            return preparePollForDisplay(poll).options;
+          })()}
           onVote={handleVoteSubmit}
           userVotes={getUserVotesForPoll(currentPollId)}
           currentUserId="current"
