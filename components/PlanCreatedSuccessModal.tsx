@@ -9,7 +9,7 @@ import {
   Animated,
   Dimensions
 } from 'react-native';
-import { CheckCircle, X } from 'lucide-react-native';
+import { CheckCircle, X, UserPlus, Sparkles } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PlanCreatedSuccessModalProps {
@@ -17,6 +17,7 @@ interface PlanCreatedSuccessModalProps {
   onClose: () => void;
   planTitle: string;
   isAnonymous?: boolean;
+  onInviteFriends?: () => void;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -25,10 +26,12 @@ export default function PlanCreatedSuccessModal({
   visible,
   onClose,
   planTitle,
-  isAnonymous = false
+  isAnonymous = false,
+  onInviteFriends
 }: PlanCreatedSuccessModalProps) {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [scaleAnim] = useState(new Animated.Value(0.5));
+  const [bounceAnim] = useState(new Animated.Value(0));
   const [confettiAnims] = useState(
     Array(20).fill(null).map(() => ({
       translateY: new Animated.Value(0),
@@ -43,6 +46,7 @@ export default function PlanCreatedSuccessModal({
       // Reset animations
       fadeAnim.setValue(0);
       scaleAnim.setValue(0.5);
+      bounceAnim.setValue(0);
       confettiAnims.forEach(anim => {
         anim.translateY.setValue(0);
         anim.translateX.setValue(0);
@@ -60,20 +64,33 @@ export default function PlanCreatedSuccessModal({
         Animated.spring(scaleAnim, {
           toValue: 1,
           useNativeDriver: true,
-          damping: 15,
-          stiffness: 150,
+          damping: 12,
+          stiffness: 180,
+          velocity: 8,
         })
-      ]).start();
+      ]).start(() => {
+        // Bounce the modal slightly
+        Animated.sequence([
+          Animated.timing(bounceAnim, {
+            toValue: -10,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.spring(bounceAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            damping: 8,
+            stiffness: 200,
+          })
+        ]).start();
+      });
 
       // Start confetti animation after a short delay
       setTimeout(() => {
         startConfettiAnimation();
       }, 200);
 
-      // Auto close after 4 seconds (longer to enjoy the celebration)
-      setTimeout(() => {
-        handleClose();
-      }, 4000);
+      // Don't auto-close - let user interact with invite button
     }
   }, [visible]);
 
@@ -129,6 +146,15 @@ export default function PlanCreatedSuccessModal({
     });
   };
 
+  const handleInviteFriends = () => {
+    handleClose();
+    if (onInviteFriends) {
+      setTimeout(() => {
+        onInviteFriends();
+      }, 300);
+    }
+  };
+
   const getConfettiColors = () => {
     const colors = [
       '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
@@ -175,7 +201,10 @@ export default function PlanCreatedSuccessModal({
                 styles.modalContainer,
                 { 
                   opacity: fadeAnim,
-                  transform: [{ scale: scaleAnim }]
+                  transform: [
+                    { scale: scaleAnim },
+                    { translateY: bounceAnim }
+                  ]
                 }
               ]}
             >
@@ -183,24 +212,39 @@ export default function PlanCreatedSuccessModal({
                 <X size={20} color={Colors.light.secondaryText} />
               </TouchableOpacity>
               
-              <View style={styles.successIcon}>
-                <CheckCircle size={64} color="#4CAF50" />
+              {/* Success Icon with Sparkles */}
+              <View style={styles.successIconContainer}>
+                <Sparkles size={24} color="#FFD700" style={styles.sparkleLeft} />
+                <View style={styles.successIcon}>
+                  <CheckCircle size={48} color="#4CAF50" />
+                </View>
+                <Sparkles size={24} color="#FFD700" style={styles.sparkleRight} />
               </View>
               
               <Text style={styles.successTitle}>
-                🎉 Plan Created Successfully! 🎉
-              </Text>
-              
-              <Text style={styles.planTitle}>
-                "{planTitle}"
+                Your plan is live! 🎉
               </Text>
               
               <Text style={styles.successText}>
                 {isAnonymous 
-                  ? "Your secret plan is brewing! 🤫\nCheck the Invitations tab to see who's curious enough to join the mystery."
-                  : "Your awesome plan is ready! 🚀\nTime to see who's up for some fun!"
+                  ? "Your secret plan is out there! Want to invite friends outside the app to join the mystery?"
+                  : `"${planTitle}" is ready for action! Want to invite friends outside the app to join?`
                 }
               </Text>
+              
+              {/* Invite Button */}
+              <TouchableOpacity 
+                style={styles.inviteButton}
+                onPress={handleInviteFriends}
+              >
+                <UserPlus size={20} color="white" style={styles.inviteIcon} />
+                <Text style={styles.inviteButtonText}>Invite with Link</Text>
+              </TouchableOpacity>
+              
+              {/* Skip Link */}
+              <TouchableOpacity onPress={handleClose} style={styles.skipButton}>
+                <Text style={styles.skipText}>Maybe later</Text>
+              </TouchableOpacity>
             </Animated.View>
           </TouchableWithoutFeedback>
         </View>
@@ -221,7 +265,7 @@ const styles = StyleSheet.create({
     maxWidth: 350,
     backgroundColor: Colors.light.modalBackground,
     borderRadius: 24,
-    padding: 32,
+    padding: 28,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
@@ -231,48 +275,82 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 12,
-    borderWidth: 3,
-    borderColor: '#4CAF50',
   },
   closeButton: {
     position: 'absolute',
-    top: 16,
-    right: 16,
+    top: 12,
+    right: 12,
     zIndex: 1,
     padding: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
     borderRadius: 20,
   },
-  successIcon: {
+  successIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 20,
+  },
+  successIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: `${Colors.light.primary}10`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 12,
+  },
+  sparkleLeft: {
+    transform: [{ rotate: '-15deg' }],
+  },
+  sparkleRight: {
+    transform: [{ rotate: '15deg' }],
   },
   successTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
-    color: '#4CAF50',
-    marginBottom: 16,
-    textAlign: 'center',
-    textShadowColor: 'rgba(76, 175, 80, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  planTitle: {
-    fontSize: 18,
-    fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 20,
+    marginBottom: 12,
     textAlign: 'center',
-    fontStyle: 'italic',
-    backgroundColor: `${Colors.light.primary}10`,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
   },
   successText: {
     fontSize: 16,
     color: Colors.light.secondaryText,
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 24,
+    paddingHorizontal: 12,
+  },
+  inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 30,
+    shadowColor: Colors.light.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  inviteIcon: {
+    marginRight: 8,
+  },
+  inviteButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  skipButton: {
+    marginTop: 16,
+    padding: 8,
+  },
+  skipText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
     fontWeight: '500',
   },
   confetti: {

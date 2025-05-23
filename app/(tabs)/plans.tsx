@@ -7,6 +7,7 @@ import TabBar from '@/components/plans/TabBar';
 import InvitationCard from '@/components/plans/InvitationCard';
 import PlanDetailModal from '@/components/plans/PlanDetailModal';
 import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
+import InviteShareModal from '@/components/InviteShareModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 
 export default function PlansScreen() {
@@ -14,6 +15,7 @@ export default function PlansScreen() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [newPlanTitle, setNewPlanTitle] = useState('');
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export default function PlansScreen() {
   const translateX = useRef(new Animated.Value(0)).current;
   const newPlanAnimation = useRef(new Animated.Value(0)).current;
   const tabSwitchAnimation = useRef(new Animated.Value(0)).current;
+  const dropInAnimation = useRef(new Animated.Value(-100)).current;
 
   // Check for new plan creation
   useEffect(() => {
@@ -59,10 +62,20 @@ export default function PlansScreen() {
         setIsAnonymousPlan(newestPlan.type === 'anonymous');
         setHighlightedPlanId(newestPlan.id);
         
+        // Start drop-in animation
+        dropInAnimation.setValue(-100);
+        Animated.spring(dropInAnimation, {
+          toValue: 0,
+          useNativeDriver: true,
+          damping: 10,
+          stiffness: 100,
+          velocity: 8,
+        }).start();
+        
         // Show success modal with short delay for smooth transition
         setTimeout(() => {
           setShowSuccessModal(true);
-        }, 200);
+        }, 300);
         
         // Start new plan highlight animation after modal appears
         setTimeout(() => {
@@ -75,11 +88,11 @@ export default function PlansScreen() {
         }, 1000);
       }
     }
-  }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation]);
+  }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation, dropInAnimation]);
 
   const startNewPlanAnimation = () => {
     Animated.sequence([
-      // First, a quick scale up
+      // First, a quick scale up with glow
       Animated.timing(newPlanAnimation, {
         toValue: 1,
         duration: 400,
@@ -99,6 +112,7 @@ export default function PlansScreen() {
       })
     ]).start(() => {
       setHighlightedPlanId(null);
+      dropInAnimation.setValue(0); // Reset drop animation
     });
   };
   
@@ -161,6 +175,10 @@ export default function PlansScreen() {
     respondToPlan(planId, response, conditionalFriends);
   };
   
+  const handleInviteFriends = () => {
+    setShowInviteModal(true);
+  };
+  
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyTitle}>No {activeTab.toLowerCase()} yet</Text>
@@ -178,27 +196,50 @@ export default function PlansScreen() {
   // Count unread invitations
   const unreadCount = invitations.filter(plan => !plan.isRead).length;
   
-  const renderPlanItem = ({ item }: { item: Plan }) => {
+  const renderPlanItem = ({ item, index }: { item: Plan; index: number }) => {
     const isHighlighted = highlightedPlanId === item.id;
+    const isFirst = index === 0 && isHighlighted;
+    
     const highlightStyle = isHighlighted ? {
       backgroundColor: newPlanAnimation.interpolate({
         inputRange: [0, 1],
-        outputRange: ['transparent', 'rgba(76, 175, 80, 0.25)'] // Stronger green highlight
+        outputRange: ['transparent', 'rgba(76, 175, 80, 0.25)']
       }),
-      transform: [{
-        scale: newPlanAnimation.interpolate({
-          inputRange: [0, 0.5, 1],
-          outputRange: [1, 1.08, 1.02] // More pronounced scale effect
-        })
-      }],
+      transform: [
+        {
+          translateY: isFirst ? dropInAnimation : 0
+        },
+        {
+          scale: newPlanAnimation.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [1, 1.08, 1.02]
+          })
+        }
+      ],
       borderRadius: 12,
       borderWidth: newPlanAnimation.interpolate({
         inputRange: [0, 1],
-        outputRange: [0, 2] // Add border during highlight
+        outputRange: [0, 2]
       }),
       borderColor: newPlanAnimation.interpolate({
         inputRange: [0, 1],
-        outputRange: ['transparent', '#4CAF50'] // Green border
+        outputRange: ['transparent', '#4CAF50']
+      }),
+      shadowColor: '#4CAF50',
+      shadowOffset: {
+        width: 0,
+        height: newPlanAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 4]
+        })
+      },
+      shadowOpacity: newPlanAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 0.3]
+      }),
+      shadowRadius: newPlanAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 8]
       }),
     } : {};
 
@@ -281,6 +322,12 @@ export default function PlansScreen() {
           planTitle={newPlanTitle}
           isAnonymous={isAnonymousPlan}
           onClose={() => setShowSuccessModal(false)}
+          onInviteFriends={handleInviteFriends}
+        />
+        
+        <InviteShareModal
+          visible={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
         />
       </SafeAreaView>
     </>
