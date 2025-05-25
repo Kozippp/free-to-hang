@@ -114,10 +114,44 @@ export default function PollDisplay({
   // Sort options by vote count (descending)
   const sortedOptions = [...options].sort((a, b) => b.votes - a.votes);
   
-  // Find the winning option(s) - only if majority of going people have voted
-  const majorityHasVoted = totalVoters >= Math.ceil(goingParticipants * 0.5);
+  // Dynamic threshold algorithm for determining winner
+  const getWinnerThreshold = () => {
+    const participantThreshold = 0.4 * goingParticipants;
+    const voterThreshold = 0.7 * totalVoters;
+    return Math.ceil(Math.min(participantThreshold, voterThreshold));
+  };
+
+  const winnerThreshold = getWinnerThreshold();
   const maxVotes = Math.max(...options.map(option => option.votes));
-  const isWinning = (votes: number) => majorityHasVoted && votes === maxVotes && votes > 0;
+  const minParticipation = Math.min(3, goingParticipants);
+  
+  // Find all options with the maximum votes that meet ALL criteria
+  const topOptions = options.filter(option => 
+    option.votes === maxVotes && 
+    option.votes >= winnerThreshold && 
+    option.votes > 0 &&
+    totalVoters >= minParticipation
+  );
+  
+  // Randomly select one winner from top options to avoid confusion
+  const selectedWinner = React.useMemo(() => {
+    if (topOptions.length === 0) return null;
+    if (topOptions.length === 1) return topOptions[0];
+    
+    // Use a stable random selection based on option IDs to ensure consistency
+    const sortedTopOptions = [...topOptions].sort((a, b) => a.id.localeCompare(b.id));
+    const randomIndex = Math.abs(sortedTopOptions[0].id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % sortedTopOptions.length;
+    return sortedTopOptions[randomIndex];
+  }, [topOptions]);
+  
+  // An option is winning if it's the selected winner
+  const isWinning = (optionId: string) => {
+    return selectedWinner?.id === optionId;
+  };
+
+  // Check if any option qualifies as winner
+  const hasWinner = selectedWinner !== null;
+  const isRandomlySelected = topOptions.length > 1;
 
   // Render voters avatars
   const VotersAvatars = ({ voters }: { voters: PollOption['voters'] }) => {
@@ -193,6 +227,16 @@ export default function PollDisplay({
                 {totalVoters} out of {goingParticipants} voted
               </Text>
             </View>
+            {!hasWinner && totalVoters > 0 && (
+              <Text style={styles.awaitingText}>
+                Awaiting more votes…
+              </Text>
+            )}
+            {hasWinner && isRandomlySelected && (
+              <Text style={styles.randomSelectionText}>
+                Winner selected randomly from top voted options
+              </Text>
+            )}
           </View>
         </>
       )}
@@ -200,11 +244,23 @@ export default function PollDisplay({
       {/* Stats and edit button for hidden question polls */}
       {hideQuestion && (
         <View style={styles.compactHeader}>
-          <View style={styles.statsItem}>
-            <Users size={14} color={Colors.light.secondaryText} />
-            <Text style={styles.statsText}>
-              {totalVoters} out of {goingParticipants} voted
-            </Text>
+          <View style={styles.compactStatsContainer}>
+            <View style={styles.statsItem}>
+              <Users size={14} color={Colors.light.secondaryText} />
+              <Text style={styles.statsText}>
+                {totalVoters} out of {goingParticipants} voted
+              </Text>
+            </View>
+            {!hasWinner && totalVoters > 0 && (
+              <Text style={styles.awaitingText}>
+                Awaiting more votes…
+              </Text>
+            )}
+            {hasWinner && isRandomlySelected && (
+              <Text style={styles.randomSelectionText}>
+                Winner selected randomly from top voted options
+              </Text>
+            )}
           </View>
           {canVote && onEdit && (
             <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
@@ -219,7 +275,7 @@ export default function PollDisplay({
         {sortedOptions.map((option, index) => {
           const percentage = getPercentage(option.votes);
           const isSelected = userVotes.includes(option.id);
-          const isWinningOption = isWinning(option.votes);
+          const isWinningOption = isWinning(option.id);
           
           return (
             <Animated.View
@@ -475,5 +531,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
+  },
+  awaitingText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.light.secondaryText,
+    marginTop: 4,
+  },
+  randomSelectionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.light.secondaryText,
+    marginTop: 4,
+  },
+  compactStatsContainer: {
+    flex: 1,
   },
 });

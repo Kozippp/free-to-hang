@@ -61,8 +61,76 @@ export default function PollCreator({
     }
   }, [visible, pollType, existingPoll]);
 
+  // Get the protected options (locked from editing)
+  const getProtectedOptions = () => {
+    if (!existingPoll) return new Set();
+    
+    // Calculate total voters for this poll
+    const uniqueVoters = new Set<string>();
+    existingPoll.options.forEach(option => {
+      option.votes.forEach(vote => {
+        uniqueVoters.add(vote);
+      });
+    });
+    const totalVoters = uniqueVoters.size;
+    
+    // Don't lock any options if less than 45% of people have voted
+    // Assuming we get totalParticipants from somewhere - for now use a reasonable estimate
+    const estimatedParticipants = Math.max(totalVoters * 2, 4); // Conservative estimate
+    const participationRate = totalVoters / estimatedParticipants;
+    
+    if (participationRate < 0.45) {
+      return new Set();
+    }
+    
+    const sortedOptions = [...existingPoll.options]
+      .sort((a, b) => b.votes.length - a.votes.length);
+    
+    if (sortedOptions.length < 2) return new Set();
+    
+    const topVotes = sortedOptions[0].votes.length;
+    const secondVotes = sortedOptions[1].votes.length;
+    
+    // If we have at least 3 options, check if top 2 both have more votes than others
+    if (sortedOptions.length >= 3) {
+      const thirdVotes = sortedOptions[2].votes.length;
+      
+      // Lock top 2 if they both have more votes than the third
+      if (topVotes > thirdVotes && secondVotes > thirdVotes) {
+        return new Set([sortedOptions[0].text, sortedOptions[1].text]);
+      }
+      
+      // Lock only top if it clearly leads
+      if (topVotes > secondVotes && topVotes > thirdVotes) {
+        return new Set([sortedOptions[0].text]);
+      }
+    } else {
+      // With only 2 options, lock the top one if it has more votes
+      if (topVotes > secondVotes) {
+        return new Set([sortedOptions[0].text]);
+      }
+    }
+    
+    return new Set();
+  };
+
+  const protectedOptions = getProtectedOptions();
+  const hasProtectedOptions = protectedOptions.size > 0;
+
   const handleRemoveOption = (index: number) => {
     if (options.length > 2) {
+      const optionToRemove = options[index];
+      
+      // Don't allow removing protected options
+      if (protectedOptions.has(optionToRemove)) {
+        Alert.alert(
+          'Cannot Remove Option',
+          'This option has received significant votes and cannot be removed to protect the group\'s preference.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
+      
       const newOptions = options.filter((_, i) => i !== index);
       
       // If we removed an option and don't have an empty option at the end,
@@ -77,6 +145,18 @@ export default function PollCreator({
   };
 
   const handleOptionChange = (text: string, index: number) => {
+    const currentOption = options[index];
+    
+    // Don't allow editing protected options
+    if (protectedOptions.has(currentOption) && currentOption !== text) {
+      Alert.alert(
+        'Cannot Edit Option',
+        'This option has received significant votes and cannot be edited to protect the group\'s preference.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+    
     const newOptions = [...options];
     newOptions[index] = text;
     
@@ -171,35 +251,55 @@ export default function PollCreator({
             <View style={styles.optionsSection}>
               <Text style={styles.sectionTitle}>OPTIONS</Text>
               
-              {options.map((option, index) => (
-                <View key={index} style={styles.optionRow}>
-                  <TextInput
-                    style={styles.optionInput}
-                    value={option}
-                    onChangeText={(text) => handleOptionChange(text, index)}
-                    placeholder={
-                      pollType === 'when' 
-                        ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
-                        : pollType === 'where'
-                        ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
-                        : `Option ${index + 1}`
-                    }
-                    placeholderTextColor="#999"
-                    autoFocus={pollType !== 'custom' && index === 0 && !existingPoll}
-                    returnKeyType={index === options.length - 1 ? 'done' : 'next'}
-                    blurOnSubmit={index === options.length - 1}
-                  />
-                  
-                  {options.length > 2 && (
-                    <TouchableOpacity
-                      onPress={() => handleRemoveOption(index)}
-                      style={styles.removeButton}
-                    >
-                      <X size={20} color="#999" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
+              {hasProtectedOptions && (
+                <Text style={styles.protectionWarning}>
+                  Most voted options can't be changed
+                </Text>
+              )}
+              
+              {options.map((option, index) => {
+                const isProtected = protectedOptions.has(option);
+                
+                return (
+                  <View key={index} style={styles.optionRow}>
+                    <TextInput
+                      style={[
+                        styles.optionInput,
+                        isProtected && styles.protectedOptionInput
+                      ]}
+                      value={option}
+                      onChangeText={(text) => handleOptionChange(text, index)}
+                      placeholder={
+                        pollType === 'when' 
+                          ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
+                          : pollType === 'where'
+                          ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
+                          : `Option ${index + 1}`
+                      }
+                      placeholderTextColor="#999"
+                      autoFocus={pollType !== 'custom' && index === 0 && !existingPoll}
+                      returnKeyType={index === options.length - 1 ? 'done' : 'next'}
+                      blurOnSubmit={index === options.length - 1}
+                      editable={!isProtected}
+                    />
+                    
+                    {isProtected && (
+                      <View style={styles.protectedIndicator}>
+                        <Text style={styles.protectedText}>🔒</Text>
+                      </View>
+                    )}
+                    
+                    {options.length > 2 && !isProtected && (
+                      <TouchableOpacity
+                        onPress={() => handleRemoveOption(index)}
+                        style={styles.removeButton}
+                      >
+                        <X size={20} color="#999" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
             </View>
             
             {/* Extra padding for better keyboard handling */}
@@ -346,5 +446,28 @@ const styles = StyleSheet.create({
   },
   disabledCreateButtonText: {
     color: '#8E8E93',
+  },
+  protectedOptionInput: {
+    backgroundColor: '#FFE5E5',
+  },
+  protectedIndicator: {
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFE5E5',
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  protectedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FF3B30',
+  },
+  protectionWarning: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#FF3B30',
+    marginBottom: 8,
   },
 });
