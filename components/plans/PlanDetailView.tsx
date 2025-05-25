@@ -52,7 +52,7 @@ interface PlanDetailViewProps {
 }
 
 export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailViewProps) {
-  const { addPoll, voteOnPoll, addPollOption, invitations, activePlans, processExpiredInvitationPolls, createInvitationPollWithAutoVote } = usePlansStore();
+  const { addPoll, voteOnPoll, addPollOption, invitations, activePlans, processExpiredInvitationPolls, createInvitationPollWithAutoVote, deletePoll } = usePlansStore();
   const { getUnreadCount } = useChatStore();
   
   // Get the latest plan data from store
@@ -73,6 +73,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [showPollVoting, setShowPollVoting] = useState(false);
   const [currentPollId, setCurrentPollId] = useState<string | null>(null);
   const [pollType, setPollType] = useState<'when' | 'where' | 'custom'>('custom');
+  const [editingPoll, setEditingPoll] = useState<Poll | null>(null);
   
   // Decline animation states
   const [isClosing, setIsClosing] = useState(false);
@@ -153,7 +154,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // Only people who are going can edit description
   };
   
-  const handleCreatePoll = (type: 'when' | 'where' | 'custom') => {
+  const handleCreatePoll = (type: 'when' | 'where' | 'custom', existingPoll?: Poll) => {
     if (!isInYesGang) {
       Alert.alert(
         'Cannot Create Poll',
@@ -166,36 +167,49 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     }
     
     setPollType(type);
-    
-    // Set initial question based on type
-    let initialQuestion = '';
-    if (type === 'when') {
-      initialQuestion = 'When should we meet?';
-    } else if (type === 'where') {
-      initialQuestion = 'Where should we meet?';
-    }
-    
+    setEditingPoll(existingPoll || null);
     setShowPollCreator(true);
   };
   
   const handlePollSubmit = (question: string, options: string[]) => {
-    // Create a new poll
-    const newPoll: Poll = {
-      id: `poll-${Date.now()}`,
-      question,
-      type: pollType,
-      options: options.map((text, index) => ({
-        id: `option-${Date.now()}-${index}`,
-        text,
-        votes: []
-      }))
-    };
+    if (editingPoll) {
+      // Update existing poll
+      const updatedPoll: Poll = {
+        ...editingPoll,
+        question,
+        options: options.map((text, index) => {
+          // Keep existing votes if option text hasn't changed
+          const existingOption = editingPoll.options.find(opt => opt.text === text);
+          return {
+            id: existingOption?.id || `option-${Date.now()}-${index}`,
+            text,
+            votes: existingOption?.votes || []
+          };
+        })
+      };
+      
+      // Update the poll in the store
+      addPoll(plan.id, updatedPoll);
+    } else {
+      // Create a new poll
+      const newPoll: Poll = {
+        id: `poll-${Date.now()}`,
+        question,
+        type: pollType,
+        options: options.map((text, index) => ({
+          id: `option-${Date.now()}-${index}`,
+          text,
+          votes: []
+        }))
+      };
+      
+      // Add the new poll to the plan
+      addPoll(plan.id, newPoll);
+    }
     
-    // Add the poll to the plan
-    addPoll(plan.id, newPoll);
-    
-    // Close the poll creator
+    // Close the poll creator and reset state
     setShowPollCreator(false);
+    setEditingPoll(null);
   };
   
   const handleOpenVoting = (pollId: string) => {
@@ -356,6 +370,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     voteOnPoll(plan.id, pollId, newVotes, 'current');
   };
 
+  // Helper function to handle poll deletion
+  const handleDeletePoll = (pollId: string) => {
+    deletePoll(plan.id, pollId);
+  };
+
   return (
     <Animated.View style={[
       styles.container, 
@@ -440,8 +459,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     userVotes={getUserVotesForPoll(whenPoll.id)}
                     totalVotes={getTotalVotesForPoll(whenPoll.id)}
                     canVote={isInYesGang}
-                    onEdit={() => handleCreatePoll('when')}
+                    onEdit={() => handleCreatePoll('when', whenPoll)}
                     totalGoingParticipants={acceptedParticipants.length}
+                    hideQuestion={true}
                   />
                 ) : isInYesGang ? (
                   <View style={styles.emptyPollContainer}>
@@ -481,8 +501,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     userVotes={getUserVotesForPoll(wherePoll.id)}
                     totalVotes={getTotalVotesForPoll(wherePoll.id)}
                     canVote={isInYesGang}
-                    onEdit={() => handleCreatePoll('where')}
+                    onEdit={() => handleCreatePoll('where', wherePoll)}
                     totalGoingParticipants={acceptedParticipants.length}
+                    hideQuestion={true}
                   />
                 ) : isInYesGang ? (
                   <View style={styles.emptyPollContainer}>
@@ -509,25 +530,28 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             </>
           )}
           
-          {/* Custom Polls Section */}
-          <View style={styles.section}>
-            <View style={styles.headerRow}>
-              <Text style={styles.sectionTitle}>Need to decide something else?</Text>
-            </View>
-            
-            {customPolls.length > 0 && customPolls.map((poll) => (
+          {/* Custom Polls Sections */}
+          {customPolls.map((poll) => (
+            <View key={poll.id} style={styles.section}>
               <PollDisplay
-                key={poll.id}
                 question={poll.question}
                 options={preparePollForDisplay(poll).options}
                 onVote={(optionId) => handlePollVote(poll.id, optionId)}
                 userVotes={getUserVotesForPoll(poll.id)}
                 totalVotes={getTotalVotesForPoll(poll.id)}
                 canVote={isInYesGang}
-                onEdit={() => handleCreatePoll('custom')}
+                onEdit={() => handleCreatePoll('custom', poll)}
                 totalGoingParticipants={acceptedParticipants.length}
+                onDelete={() => handleDeletePoll(poll.id)}
               />
-            ))}
+            </View>
+          ))}
+          
+          {/* Create Poll Section */}
+          <View style={styles.section}>
+            <View style={styles.headerRow}>
+              <Text style={styles.sectionTitle}>Need to decide something else?</Text>
+            </View>
             
             <TouchableOpacity 
               style={[
@@ -541,7 +565,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 styles.createPollButtonText,
                 !isInYesGang && styles.disabledCreateButtonText
               ]}>
-                {customPolls.length > 0 ? 'Create another poll' : 'Create a poll'}
+                Create a poll
               </Text>
             </TouchableOpacity>
           </View>
@@ -664,6 +688,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         onClose={() => setShowPollCreator(false)}
         onSubmit={handlePollSubmit}
         pollType={pollType}
+        existingPoll={editingPoll}
       />
       
       {/* Poll Voting Modal */}

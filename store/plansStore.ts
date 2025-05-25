@@ -72,6 +72,7 @@ interface PlansState {
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => void;
   removePollOption: (planId: string, pollId: string, optionId: string) => void;
   addPollOption: (planId: string, pollId: string, optionText: string) => void;
+  deletePoll: (planId: string, pollId: string) => void;
   
   // Invitation poll actions
   processExpiredInvitationPolls: () => void;
@@ -469,6 +470,27 @@ const usePlansStore = create<PlansState>((set, get) => ({
             options: [...poll.options, newOption]
           };
         });
+        
+        return {
+          ...plan,
+          polls: updatedPolls
+        };
+      };
+      
+      return {
+        invitations: state.invitations.map(updatePlan),
+        activePlans: state.activePlans.map(updatePlan),
+        completedPlans: state.completedPlans.map(updatePlan)
+      };
+    });
+  },
+  
+  deletePoll: (planId: string, pollId: string) => {
+    set((state) => {
+      const updatePlan = (plan: Plan): Plan => {
+        if (plan.id !== planId || !plan.polls) return plan;
+        
+        const updatedPolls = plan.polls.filter(poll => poll.id !== pollId);
         
         return {
           ...plan,

@@ -15,36 +15,45 @@ import {
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { Poll } from '@/store/plansStore';
 
 interface PollCreatorProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (question: string, options: string[]) => void;
   pollType: 'when' | 'where' | 'custom';
+  existingPoll?: Poll | null;
 }
 
 export default function PollCreator({
   visible,
   onClose,
   onSubmit,
-  pollType
+  pollType,
+  existingPoll
 }: PollCreatorProps) {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
 
   useEffect(() => {
     if (visible) {
-      // Set default question for when/where polls
-      if (pollType === 'when') {
-        setQuestion('What time works best?');
-      } else if (pollType === 'where') {
-        setQuestion('Where should we meet?');
+      if (existingPoll) {
+        // Editing existing poll
+        setQuestion(existingPoll.question);
+        setOptions([...existingPoll.options.map(opt => opt.text), '']);
       } else {
-        setQuestion('');
+        // Creating new poll
+        if (pollType === 'when') {
+          setQuestion('What time works best?');
+        } else if (pollType === 'where') {
+          setQuestion('Where should we meet?');
+        } else {
+          setQuestion('');
+        }
+        setOptions(['', '']);
       }
-      setOptions(['', '']);
     }
-  }, [visible, pollType]);
+  }, [visible, pollType, existingPoll]);
 
   const handleRemoveOption = (index: number) => {
     if (options.length > 2) {
@@ -103,7 +112,7 @@ export default function PollCreator({
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
           
-          <Text style={styles.title}>Poll</Text>
+          <Text style={styles.title}>{existingPoll ? 'Edit Poll' : 'Poll'}</Text>
           
           <TouchableOpacity 
             onPress={handleSubmit}
@@ -138,7 +147,7 @@ export default function PollCreator({
                 placeholderTextColor="#999"
                 multiline
                 maxLength={100}
-                autoFocus={pollType === 'custom'}
+                autoFocus={pollType === 'custom' && !existingPoll}
                 editable={pollType === 'custom'}
               />
             </View>
@@ -161,7 +170,7 @@ export default function PollCreator({
                         : `Option ${index + 1}`
                     }
                     placeholderTextColor="#999"
-                    autoFocus={pollType !== 'custom' && index === 0}
+                    autoFocus={pollType !== 'custom' && index === 0 && !existingPoll}
                     returnKeyType={index === options.length - 1 ? 'done' : 'next'}
                     blurOnSubmit={index === options.length - 1}
                   />
@@ -191,7 +200,7 @@ export default function PollCreator({
             disabled={!canSubmit()}
           >
             <Text style={[styles.createButtonText, !canSubmit() && styles.disabledCreateButtonText]}>
-              Create Poll
+              {existingPoll ? 'Update Poll' : 'Create Poll'}
             </Text>
           </TouchableOpacity>
         </View>

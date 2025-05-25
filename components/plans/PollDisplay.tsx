@@ -8,7 +8,7 @@ import {
   Alert,
   Animated
 } from 'react-native';
-import { Check, Crown, Edit2, Users } from 'lucide-react-native';
+import { Check, Crown, Edit2, Users, Trash2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PollOption {
@@ -31,6 +31,8 @@ interface PollDisplayProps {
   canVote: boolean;
   onEdit?: () => void;
   totalGoingParticipants?: number; // Total number of people going to the plan
+  hideQuestion?: boolean; // New prop to hide question for preset polls
+  onDelete?: () => void; // New prop for deleting custom polls
 }
 
 export default function PollDisplay({
@@ -41,7 +43,9 @@ export default function PollDisplay({
   totalVotes,
   canVote,
   onEdit,
-  totalGoingParticipants = 0
+  totalGoingParticipants = 0,
+  hideQuestion = false,
+  onDelete
 }: PollDisplayProps) {
   const [animatedValues] = useState(
     options.reduce((acc, option) => {
@@ -117,7 +121,7 @@ export default function PollDisplay({
             key={voter.id} 
             style={[
               styles.voterAvatar,
-              { marginLeft: index > 0 ? -8 : 0, zIndex: 3 - index }
+              { marginLeft: index > 0 ? -10 : 0, zIndex: 3 - index }
             ]}
           >
             <Image 
@@ -128,7 +132,7 @@ export default function PollDisplay({
         ))}
         
         {remainingCount > 0 && (
-          <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -8 }]}>
+          <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
             <Text style={styles.moreVotersText}>+{remainingCount}</Text>
           </View>
         )}
@@ -138,28 +142,51 @@ export default function PollDisplay({
 
   return (
     <View style={styles.container}>
-      {/* Header with question and stats */}
-      <View style={styles.headerContainer}>
-        <Text style={styles.question}>{question}</Text>
-        {canVote && onEdit && (
-          <TouchableOpacity onPress={onEdit} style={styles.editButton}>
-            <Edit2 size={16} color={Colors.light.secondaryText} />
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Header with question and stats - only show if not hidden */}
+      {!hideQuestion && (
+        <>
+          <View style={styles.headerContainer}>
+            <Text style={styles.question}>{question}</Text>
+            <View style={styles.headerActions}>
+              {canVote && onEdit && (
+                <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                  <Edit2 size={16} color={Colors.light.secondaryText} />
+                </TouchableOpacity>
+              )}
+              {canVote && onDelete && (
+                <TouchableOpacity 
+                  onPress={() => {
+                    Alert.alert(
+                      'Delete Poll',
+                      'Are you sure you want to delete this poll? This action cannot be undone.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: onDelete }
+                      ]
+                    );
+                  }} 
+                  style={styles.actionButton}
+                >
+                  <Trash2 size={16} color="#FF3B30" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
 
-      {/* Voting stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statsItem}>
-          <Users size={14} color={Colors.light.secondaryText} />
-          <Text style={styles.statsText}>
-            {totalVoters} out of {goingParticipants} voted
-          </Text>
-        </View>
-      </View>
+          {/* Voting stats */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statsItem}>
+              <Users size={14} color={Colors.light.secondaryText} />
+              <Text style={styles.statsText}>
+                {totalVoters} out of {goingParticipants} voted
+              </Text>
+            </View>
+          </View>
+        </>
+      )}
       
       {/* Vertical options list */}
-      <View style={styles.optionsContainer}>
+      <View style={[styles.optionsContainer, hideQuestion && styles.compactOptionsContainer]}>
         {sortedOptions.map((option, index) => {
           const percentage = getPercentage(option.votes);
           const isSelected = userVotes.includes(option.id);
@@ -216,36 +243,33 @@ export default function PollDisplay({
                       </View>
                     )}
                     
-                    {/* Percentage */}
-                    <Text style={[
-                      styles.percentageText,
-                      isSelected && styles.selectedPercentageText,
-                      isWinningOption && styles.winningPercentageText
-                    ]}>
-                      {percentage}%
-                    </Text>
+                    {/* Percentage and voters in column */}
+                    <View style={styles.rightColumn}>
+                      <Text style={[
+                        styles.percentageText,
+                        isSelected && styles.selectedPercentageText,
+                        isWinningOption && styles.winningPercentageText
+                      ]}>
+                        {percentage}%
+                      </Text>
+                      
+                      {/* Voters avatars under percentage */}
+                      <VotersAvatars voters={option.voters} />
+                    </View>
                   </View>
                 </View>
-
-                {/* Progress bar */}
-                <View style={styles.progressContainer}>
-                  <View 
-                    style={[
-                      styles.progressBar,
-                      isSelected && styles.selectedProgressBar,
-                      isWinningOption && styles.winningProgressBar,
-                      { width: `${Math.max(percentage, 2)}%` }
-                    ]} 
-                  />
-                </View>
-                
-                {/* Voters avatars */}
-                <VotersAvatars voters={option.voters} />
               </TouchableOpacity>
             </Animated.View>
           );
         })}
       </View>
+
+      {/* Edit button for hidden question polls */}
+      {hideQuestion && canVote && onEdit && (
+        <TouchableOpacity onPress={onEdit} style={styles.floatingEditButton}>
+          <Edit2 size={16} color={Colors.light.secondaryText} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -253,6 +277,7 @@ export default function PollDisplay({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
+    position: 'relative',
   },
   headerContainer: {
     flexDirection: 'row',
@@ -266,9 +291,13 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     flex: 1,
   },
-  editButton: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
     padding: 6,
-    marginLeft: 8,
   },
   statsContainer: {
     marginBottom: 16,
@@ -285,6 +314,9 @@ const styles = StyleSheet.create({
   },
   optionsContainer: {
     gap: 8,
+  },
+  compactOptionsContainer: {
+    gap: 6,
   },
   optionRow: {
     backgroundColor: 'white',
@@ -320,7 +352,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   optionLeft: {
     flexDirection: 'row',
@@ -351,7 +383,11 @@ const styles = StyleSheet.create({
   optionRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+  },
+  rightColumn: {
+    alignItems: 'center',
+    gap: 6,
   },
   checkmark: {
     width: 18,
@@ -365,8 +401,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.light.text,
-    minWidth: 35,
-    textAlign: 'right',
+    textAlign: 'center',
   },
   selectedPercentageText: {
     color: Colors.light.primary,
@@ -374,34 +409,16 @@ const styles = StyleSheet.create({
   winningPercentageText: {
     color: '#B8860B',
   },
-  progressContainer: {
-    height: 3,
-    backgroundColor: '#F0F0F0',
-    marginHorizontal: 16,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#D1D5DB',
-    borderRadius: 1.5,
-  },
-  selectedProgressBar: {
-    backgroundColor: Colors.light.primary,
-  },
-  winningProgressBar: {
-    backgroundColor: '#FFD700',
-  },
   votersContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    justifyContent: 'center',
   },
   voterAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
     borderColor: 'white',
     overflow: 'hidden',
   },
@@ -415,8 +432,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   moreVotersText: {
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: '600',
     color: Colors.light.secondaryText,
+  },
+  floatingEditButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 6,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
 });
