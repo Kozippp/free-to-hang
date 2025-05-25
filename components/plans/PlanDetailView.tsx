@@ -181,7 +181,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           // Keep existing votes if option text hasn't changed
           const existingOption = editingPoll.options.find(opt => opt.text === text);
           return {
-            id: existingOption?.id || `option-${Date.now()}-${index}`,
+            id: existingOption?.id || `option-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${index}`,
             text,
             votes: existingOption?.votes || []
           };
@@ -189,7 +189,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       };
       
       // Update the poll in the store
-      addPoll(plan.id, updatedPoll);
+      addPoll(latestPlan.id, updatedPoll);
     } else {
       // Create a new poll
       const newPoll: Poll = {
@@ -197,14 +197,14 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         question,
         type: pollType,
         options: options.map((text, index) => ({
-          id: `option-${Date.now()}-${index}`,
+          id: `option-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${index}`,
           text,
           votes: []
         }))
       };
       
       // Add the new poll to the plan
-      addPoll(plan.id, newPoll);
+      addPoll(latestPlan.id, newPoll);
     }
     
     // Close the poll creator and reset state
@@ -370,6 +370,12 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     voteOnPoll(plan.id, pollId, newVotes, 'current');
   };
 
+  // Helper function to handle invitation poll voting (single selection)
+  const handleInvitationVote = (pollId: string, optionId: string) => {
+    // For invitation polls, only allow one vote (either Allow or Deny)
+    voteOnPoll(plan.id, pollId, [optionId], 'current');
+  };
+
   // Helper function to handle poll deletion
   const handleDeletePoll = (pollId: string) => {
     deletePoll(plan.id, pollId);
@@ -439,7 +445,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             <View style={styles.section}>
               <View style={styles.notSetContainer}>
                 <Text style={styles.notSetText}>Time and location haven't been decided yet</Text>
-                <Text style={styles.notSetSubtext}>The organizer will set up options for everyone to vote on when they're ready</Text>
+                <Text style={styles.notSetSubtext}>Put "Going" to be the first one to suggest when and where to meet!</Text>
               </View>
             </View>
           ) : (
@@ -481,7 +487,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 ) : (
                   <View style={styles.notSetContainer}>
                     <Text style={styles.notSetText}>Time hasn't been decided yet</Text>
-                    <Text style={styles.notSetSubtext}>The organizer will set up time options for everyone to vote on</Text>
+                    <Text style={styles.notSetSubtext}>Put "Going" to be the first one to suggest a time!</Text>
                   </View>
                 )}
               </View>
@@ -523,15 +529,15 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 ) : (
                   <View style={styles.notSetContainer}>
                     <Text style={styles.notSetText}>Location hasn't been decided yet</Text>
-                    <Text style={styles.notSetSubtext}>The organizer will set up location options for everyone to vote on</Text>
+                    <Text style={styles.notSetSubtext}>Put "Going" to be the first one to suggest a location!</Text>
                   </View>
                 )}
               </View>
             </>
           )}
           
-          {/* Custom Polls Sections */}
-          {customPolls.map((poll) => (
+          {/* Custom Polls Sections - Only show if user is going */}
+          {isInYesGang && customPolls.map((poll) => (
             <View key={poll.id} style={styles.section}>
               <PollDisplay
                 question={poll.question}
@@ -547,28 +553,23 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             </View>
           ))}
           
-          {/* Create Poll Section */}
-          <View style={styles.section}>
-            <View style={styles.headerRow}>
-              <Text style={styles.sectionTitle}>Need to decide something else?</Text>
+          {/* Create Poll Section - Only show if user is going */}
+          {isInYesGang && (
+            <View style={styles.section}>
+              <View style={styles.headerRow}>
+                <Text style={styles.sectionTitle}>Need to decide something else?</Text>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.createPollButton}
+                onPress={() => handleCreatePoll('custom')}
+              >
+                <Text style={styles.createPollButtonText}>
+                  Create a poll
+                </Text>
+              </TouchableOpacity>
             </View>
-            
-            <TouchableOpacity 
-              style={[
-                styles.createPollButton,
-                !isInYesGang && styles.disabledCreateButton
-              ]}
-              onPress={() => handleCreatePoll('custom')}
-              disabled={!isInYesGang}
-            >
-              <Text style={[
-                styles.createPollButtonText,
-                !isInYesGang && styles.disabledCreateButtonText
-              ]}>
-                Create a poll
-              </Text>
-            </TouchableOpacity>
-          </View>
+          )}
           
           {/* Participants Section */}
           <PlanParticipants
@@ -587,7 +588,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 <Text style={styles.sectionTitle}>Invitations</Text>
               </View>
               
-              <Text style={styles.invitationDescription}>
+              <Text style={[styles.invitationDescription, { marginTop: -8 }]}>
                 Active vote to invite these people is happening. Cast your vote and majority decides.
               </Text>
               
@@ -613,7 +614,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     onVote={(pollId, optionId) => {
                       // Only allow voting if user is "going"
                       if (isInYesGang) {
-                        handlePollVote(pollId, optionId);
+                        handleInvitationVote(pollId, optionId);
                       }
                     }}
                     userVoted={hasUserVoted}

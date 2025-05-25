@@ -338,10 +338,25 @@ const usePlansStore = create<PlansState>((set, get) => ({
         if (plan.id !== planId) return plan;
         
         const polls = plan.polls || [];
-        return {
-          ...plan,
-          polls: [...polls, poll]
-        };
+        
+        // Check if this is an update to existing poll
+        const existingPollIndex = polls.findIndex(p => p.id === poll.id);
+        
+        if (existingPollIndex !== -1) {
+          // Update existing poll
+          const updatedPolls = [...polls];
+          updatedPolls[existingPollIndex] = poll;
+          return {
+            ...plan,
+            polls: updatedPolls
+          };
+        } else {
+          // Add new poll
+          return {
+            ...plan,
+            polls: [...polls, poll]
+          };
+        }
       };
       
       return {

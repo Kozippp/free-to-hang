@@ -47,12 +47,22 @@ export default function PollDisplay({
   hideQuestion = false,
   onDelete
 }: PollDisplayProps) {
-  const [animatedValues] = useState(
-    options.reduce((acc, option) => {
-      acc[option.id] = new Animated.Value(0);
-      return acc;
-    }, {} as Record<string, Animated.Value>)
-  );
+  const [animatedValues] = useState(() => {
+    const values: Record<string, Animated.Value> = {};
+    options.forEach(option => {
+      values[option.id] = new Animated.Value(0);
+    });
+    return values;
+  });
+
+  // Ensure all options have animation values
+  React.useEffect(() => {
+    options.forEach(option => {
+      if (!animatedValues[option.id]) {
+        animatedValues[option.id] = new Animated.Value(0);
+      }
+    });
+  }, [options, animatedValues]);
 
   const handleVote = (optionId: string) => {
     if (!canVote) {
@@ -64,19 +74,21 @@ export default function PollDisplay({
       return;
     }
 
-    // Animate the selection
-    Animated.sequence([
-      Animated.timing(animatedValues[optionId], {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(animatedValues[optionId], {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      })
-    ]).start();
+    // Animate the selection only if animation value exists
+    if (animatedValues[optionId]) {
+      Animated.sequence([
+        Animated.timing(animatedValues[optionId], {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(animatedValues[optionId], {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }
 
     onVote(optionId);
   };
@@ -185,6 +197,23 @@ export default function PollDisplay({
         </>
       )}
       
+      {/* Stats and edit button for hidden question polls */}
+      {hideQuestion && (
+        <View style={styles.compactHeader}>
+          <View style={styles.statsItem}>
+            <Users size={14} color={Colors.light.secondaryText} />
+            <Text style={styles.statsText}>
+              {totalVoters} out of {goingParticipants} voted
+            </Text>
+          </View>
+          {canVote && onEdit && (
+            <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+              <Edit2 size={16} color={Colors.light.secondaryText} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+      
       {/* Vertical options list */}
       <View style={[styles.optionsContainer, hideQuestion && styles.compactOptionsContainer]}>
         {sortedOptions.map((option, index) => {
@@ -216,6 +245,13 @@ export default function PollDisplay({
                 onPress={() => handleVote(option.id)}
                 activeOpacity={0.8}
               >
+                {/* Check mark for selected - top left corner */}
+                {isSelected && (
+                  <View style={styles.checkmarkTopLeft}>
+                    <Check size={12} color="white" />
+                  </View>
+                )}
+                
                 <View style={styles.optionContent}>
                   <View style={styles.optionLeft}>
                     {/* Crown for winner */}
@@ -236,13 +272,6 @@ export default function PollDisplay({
                   </View>
                   
                   <View style={styles.optionRight}>
-                    {/* Check mark for selected */}
-                    {isSelected && (
-                      <View style={styles.checkmark}>
-                        <Check size={12} color="white" />
-                      </View>
-                    )}
-                    
                     {/* Percentage and voters in column */}
                     <View style={styles.rightColumn}>
                       <Text style={[
@@ -263,13 +292,6 @@ export default function PollDisplay({
           );
         })}
       </View>
-
-      {/* Edit button for hidden question polls */}
-      {hideQuestion && canVote && onEdit && (
-        <TouchableOpacity onPress={onEdit} style={styles.floatingEditButton}>
-          <Edit2 size={16} color={Colors.light.secondaryText} />
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -436,17 +458,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.secondaryText,
   },
-  floatingEditButton: {
+  compactHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  checkmarkTopLeft: {
     position: 'absolute',
     top: 8,
-    right: 8,
-    padding: 6,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    left: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
 });

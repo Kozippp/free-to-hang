@@ -95,6 +95,8 @@ export default function PlanUserStatus({
     }
   };
 
+  const currentUser = participants.find(p => p.id === currentUserId);
+
   const getStatusStyle = (status: ParticipantStatus) => {
     switch (status) {
       case 'accepted':
@@ -224,7 +226,6 @@ export default function PlanUserStatus({
 
         {/* Show conditional terms clearly if user has conditional status */}
         {currentStatus === 'conditional' && (() => {
-          const currentUser = participants.find(p => p.id === currentUserId);
           if (currentUser?.conditionalFriends && currentUser.conditionalFriends.length > 0) {
             const dependentFriends = currentUser.conditionalFriends
               .map(id => participants.find(p => p.id === id))
@@ -251,15 +252,18 @@ export default function PlanUserStatus({
         })()}
 
         {/* Enhanced disclaimer based on current status */}
-        {(currentStatus === 'maybe' || (currentStatus === 'conditional' && (() => {
-          const currentUser = participants.find(p => p.id === currentUserId);
-          return !currentUser?.conditionalFriends || currentUser.conditionalFriends.length === 0;
-        })())) && (
+        {currentStatus === 'maybe' && (
           <View style={styles.disclaimerContainer}>
             <Text style={styles.disclaimerText}>
-              {currentStatus === 'maybe' 
-                ? 'As "Maybe", you can view but not vote or edit this plan until you respond "Going".'
-                : 'As "If", you can view but not vote or edit this plan until you respond "Going".'}
+              As "Maybe", you can view but not vote or edit this plan until you respond "Going".
+            </Text>
+          </View>
+        )}
+        
+        {currentStatus === 'conditional' && (!currentUser?.conditionalFriends || currentUser.conditionalFriends.length === 0) && (
+          <View style={styles.disclaimerContainer}>
+            <Text style={styles.disclaimerText}>
+              As "If", you can view but not vote or edit this plan until you respond "Going".
             </Text>
           </View>
         )}

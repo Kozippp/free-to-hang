@@ -40,7 +40,13 @@ export default function PollCreator({
       if (existingPoll) {
         // Editing existing poll
         setQuestion(existingPoll.question);
-        setOptions([...existingPoll.options.map(opt => opt.text), '']);
+        const existingOptions = existingPoll.options.map(opt => opt.text);
+        // Only add empty option if we have less than 4 options
+        if (existingOptions.length < 4) {
+          setOptions([...existingOptions, '']);
+        } else {
+          setOptions(existingOptions);
+        }
       } else {
         // Creating new poll
         if (pollType === 'when') {
@@ -57,7 +63,16 @@ export default function PollCreator({
 
   const handleRemoveOption = (index: number) => {
     if (options.length > 2) {
-      setOptions(options.filter((_, i) => i !== index));
+      const newOptions = options.filter((_, i) => i !== index);
+      
+      // If we removed an option and don't have an empty option at the end,
+      // and we have less than 4 options, add an empty one
+      const hasEmptyAtEnd = newOptions[newOptions.length - 1] === '';
+      if (!hasEmptyAtEnd && newOptions.length < 4) {
+        newOptions.push('');
+      }
+      
+      setOptions(newOptions);
     }
   };
 
