@@ -117,6 +117,35 @@ export default function PollCreator({
   const protectedOptions = getProtectedOptions();
   const hasProtectedOptions = protectedOptions.size > 0;
 
+  // Check for duplicate options
+  const getDuplicateOptions = () => {
+    const validOptions = options.filter(option => option.trim() !== '');
+    const duplicates = new Set<string>();
+    const seen = new Set<string>();
+    
+    validOptions.forEach(option => {
+      const lowerOption = option.trim().toLowerCase();
+      if (seen.has(lowerOption)) {
+        duplicates.add(lowerOption);
+      } else {
+        seen.add(lowerOption);
+      }
+    });
+    
+    return duplicates;
+  };
+
+  const duplicateOptions = getDuplicateOptions();
+  const hasDuplicates = duplicateOptions.size > 0;
+
+  const handleProtectedOptionTap = () => {
+    Alert.alert(
+      'Cannot Edit Option',
+      'This option has received significant votes and cannot be edited to protect the group\'s preference.',
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
   const handleRemoveOption = (index: number) => {
     if (options.length > 2) {
       const optionToRemove = options[index];
@@ -149,11 +178,7 @@ export default function PollCreator({
     
     // Don't allow editing protected options
     if (protectedOptions.has(currentOption) && currentOption !== text) {
-      Alert.alert(
-        'Cannot Edit Option',
-        'This option has received significant votes and cannot be edited to protect the group\'s preference.',
-        [{ text: 'OK', style: 'default' }]
-      );
+      handleProtectedOptionTap();
       return;
     }
     
@@ -187,8 +212,13 @@ export default function PollCreator({
   };
 
   const canSubmit = () => {
-    const validOptions = options.filter(option => option.trim() !== '').length >= 2;
-    return question.trim() && validOptions;
+    const validOptions = options.filter(option => option.trim() !== '');
+    
+    if (!question.trim() || validOptions.length < 2 || hasDuplicates) {
+      return false;
+    }
+    
+    return true;
   };
 
   return (
@@ -251,43 +281,56 @@ export default function PollCreator({
             <View style={styles.optionsSection}>
               <Text style={styles.sectionTitle}>OPTIONS</Text>
               
-              {hasProtectedOptions && (
-                <Text style={styles.protectionWarning}>
-                  Most voted options can't be changed
+              {hasDuplicates && (
+                <Text style={styles.duplicateError}>
+                  Please remove duplicate options
                 </Text>
               )}
               
               {options.map((option, index) => {
                 const isProtected = protectedOptions.has(option);
+                const isDuplicate = option.trim() !== '' && duplicateOptions.has(option.trim().toLowerCase());
                 
                 return (
                   <View key={index} style={styles.optionRow}>
-                    <TextInput
+                    <TouchableOpacity
                       style={[
-                        styles.optionInput,
-                        isProtected && styles.protectedOptionInput
+                        styles.optionInputContainer,
+                        isDuplicate && styles.duplicateOptionContainer
                       ]}
-                      value={option}
-                      onChangeText={(text) => handleOptionChange(text, index)}
-                      placeholder={
-                        pollType === 'when' 
-                          ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
-                          : pollType === 'where'
-                          ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
-                          : `Option ${index + 1}`
-                      }
-                      placeholderTextColor="#999"
-                      autoFocus={pollType !== 'custom' && index === 0 && !existingPoll}
-                      returnKeyType={index === options.length - 1 ? 'done' : 'next'}
-                      blurOnSubmit={index === options.length - 1}
-                      editable={!isProtected}
-                    />
-                    
-                    {isProtected && (
-                      <View style={styles.protectedIndicator}>
-                        <Text style={styles.protectedText}>🔒</Text>
-                      </View>
-                    )}
+                      onPress={isProtected ? handleProtectedOptionTap : undefined}
+                      disabled={!isProtected}
+                      activeOpacity={isProtected ? 0.7 : 1}
+                    >
+                      <TextInput
+                        style={[
+                          styles.optionInput,
+                          isProtected && styles.protectedOptionInput,
+                          isDuplicate && styles.duplicateOptionInput
+                        ]}
+                        value={option}
+                        onChangeText={(text) => handleOptionChange(text, index)}
+                        placeholder={
+                          pollType === 'when' 
+                            ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
+                            : pollType === 'where'
+                            ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
+                            : `Option ${index + 1}`
+                        }
+                        placeholderTextColor="#999"
+                        autoFocus={pollType !== 'custom' && index === 0 && !existingPoll}
+                        returnKeyType={index === options.length - 1 ? 'done' : 'next'}
+                        blurOnSubmit={index === options.length - 1}
+                        editable={!isProtected}
+                        pointerEvents={isProtected ? 'none' : 'auto'}
+                      />
+                      
+                      {isProtected && (
+                        <View style={styles.protectedIndicator}>
+                          <Text style={styles.protectedText}>🔒</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                     
                     {options.length > 2 && !isProtected && (
                       <TouchableOpacity
@@ -403,14 +446,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  optionInput: {
+  optionInputContainer: {
     flex: 1,
     backgroundColor: 'white',
     borderRadius: 10,
     padding: 16,
+    marginRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  optionInput: {
+    flex: 1,
     fontSize: 16,
     color: '#000',
-    marginRight: 8,
   },
   removeButton: {
     width: 44,
@@ -448,7 +496,7 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
   },
   protectedOptionInput: {
-    backgroundColor: '#FFE5E5',
+    backgroundColor: 'transparent',
   },
   protectedIndicator: {
     width: 20,
@@ -469,5 +517,17 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#FF3B30',
     marginBottom: 8,
+  },
+  duplicateError: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#FF3B30',
+    marginBottom: 8,
+  },
+  duplicateOptionContainer: {
+    backgroundColor: '#FFE5E5',
+  },
+  duplicateOptionInput: {
+    backgroundColor: 'transparent',
   },
 });
