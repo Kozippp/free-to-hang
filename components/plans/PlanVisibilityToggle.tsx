@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, Switch, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, Switch, TouchableOpacity, Alert } from 'react-native';
 import { Users } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
@@ -18,6 +18,31 @@ export default function PlanVisibilityToggle({
   onChangeMode,
   canVote
 }: PlanVisibilityToggleProps) {
+  
+  const handleToggle = () => {
+    if (!canVote) {
+      Alert.alert(
+        'Cannot Change Visibility',
+        'You need to respond "Going" to the plan to change visibility settings.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+    onToggle();
+  };
+
+  const handleModeChange = (mode: string) => {
+    if (!canVote) {
+      Alert.alert(
+        'Cannot Change Mode',
+        'You need to respond "Going" to the plan to change who can join.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+    onChangeMode(mode);
+  };
+
   return (
     <View style={styles.section}>
       <View style={styles.headerRow}>
@@ -25,7 +50,11 @@ export default function PlanVisibilityToggle({
         <Text style={styles.sectionTitle}>Free to Hang Toggle</Text>
       </View>
       
-      <View style={styles.toggleContainer}>
+      <TouchableOpacity 
+        style={styles.toggleContainer}
+        onPress={handleToggle}
+        activeOpacity={0.7}
+      >
         <View style={styles.toggleInfo}>
           <Text style={styles.toggleTitle}>
             Show this plan in Free to Hang
@@ -37,12 +66,12 @@ export default function PlanVisibilityToggle({
         
         <Switch
           value={isVisible}
-          onValueChange={canVote ? onToggle : undefined}
+          onValueChange={handleToggle}
           trackColor={{ false: '#D1D5DB', true: `${Colors.light.primary}80` }}
           thumbColor={isVisible ? Colors.light.primary : '#F3F4F6'}
-          disabled={!canVote}
+          pointerEvents="none"
         />
-      </View>
+      </TouchableOpacity>
       
       {isVisible && (
         <View style={styles.modeContainer}>
@@ -52,11 +81,10 @@ export default function PlanVisibilityToggle({
             <TouchableOpacity
               style={[
                 styles.modeOption,
-                acceptingMode === 'accepting' && styles.selectedModeOption,
-                !canVote && styles.disabledOption
+                acceptingMode === 'accepting' && styles.selectedModeOption
               ]}
-              onPress={() => canVote && onChangeMode('accepting')}
-              disabled={!canVote}
+              onPress={() => handleModeChange('accepting')}
+              activeOpacity={0.7}
             >
               <Text style={[
                 styles.modeOptionText,
@@ -72,11 +100,10 @@ export default function PlanVisibilityToggle({
             <TouchableOpacity
               style={[
                 styles.modeOption,
-                acceptingMode === 'public' && styles.selectedModeOption,
-                !canVote && styles.disabledOption
+                acceptingMode === 'public' && styles.selectedModeOption
               ]}
-              onPress={() => canVote && onChangeMode('public')}
-              disabled={!canVote}
+              onPress={() => handleModeChange('public')}
+              activeOpacity={0.7}
             >
               <Text style={[
                 styles.modeOptionText,
@@ -90,12 +117,6 @@ export default function PlanVisibilityToggle({
             </TouchableOpacity>
           </View>
         </View>
-      )}
-      
-      {!canVote && isVisible && (
-        <Text style={styles.votingInfo}>
-          Only "Going" participants can vote on visibility settings
-        </Text>
       )}
     </View>
   );
@@ -174,9 +195,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.primary,
     backgroundColor: `${Colors.light.primary}10`,
   },
-  disabledOption: {
-    opacity: 0.6,
-  },
   modeOptionText: {
     fontSize: 14,
     fontWeight: '500',
@@ -189,12 +207,5 @@ const styles = StyleSheet.create({
   modeDescription: {
     fontSize: 12,
     color: Colors.light.secondaryText,
-  },
-  votingInfo: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-    fontStyle: 'italic',
-    marginTop: 12,
-    textAlign: 'center',
   },
 });

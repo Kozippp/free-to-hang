@@ -249,25 +249,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
   
   const handleStatusChange = (status: ParticipantStatus, conditionalFriends?: string[]) => {
-    // If changing from Yes to Maybe/If, show warning
-    if (currentUserStatus === 'accepted' && (status === 'maybe' || status === 'conditional')) {
-      Alert.alert(
-        'Change Status',
-        'Changing your status will remove all your votes. Are you sure?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          },
-          {
-            text: 'Change',
-            onPress: () => {
-              onRespond(plan.id, status, conditionalFriends);
-            }
-          }
-        ]
-      );
-    } else if (status === 'declined') {
+    if (status === 'declined') {
       // Start decline animation
       setIsClosing(true);
       
@@ -298,6 +280,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         }, 200);
       });
     } else {
+      // For all other status changes, pass through directly
+      // PlanUserStatus component handles the warnings
       onRespond(plan.id, status, conditionalFriends);
     }
   };

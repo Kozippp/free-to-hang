@@ -69,19 +69,22 @@ export default function PlanUserStatus({
   };
 
   const animateAndChangeStatus = (newStatus: ParticipantStatus, conditionalFriends?: string[]) => {
-    Animated.sequence([
-      Animated.timing(statusAnimation, {
-        toValue: 0.8,
-        duration: 100,
-        useNativeDriver: true
-      }),
-      Animated.timing(statusAnimation, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true
-      })
-    ]).start(() => {
+    // Simple, smooth, and satisfying animation
+    Animated.timing(statusAnimation, {
+      toValue: 0.95,
+      duration: 100,
+      useNativeDriver: true
+    }).start(() => {
+      // Change status immediately after the press feedback
       onStatusChange(newStatus, conditionalFriends);
+      
+      // Smooth bounce back
+      Animated.spring(statusAnimation, {
+        toValue: 1,
+        tension: 400,
+        friction: 10,
+        useNativeDriver: true
+      }).start();
     });
   };
 
@@ -153,6 +156,7 @@ export default function PlanUserStatus({
               }
             ]}
             onPress={() => handleStatusChange('accepted')}
+            activeOpacity={0.8}
           >
             <CheckCircle size={20} color={getStatusStyle('accepted').iconColor} />
             <Text style={[
@@ -173,6 +177,7 @@ export default function PlanUserStatus({
               }
             ]}
             onPress={() => handleStatusChange('maybe')}
+            activeOpacity={0.8}
           >
             <HelpCircle size={20} color={getStatusStyle('maybe').iconColor} />
             <Text style={[
@@ -193,6 +198,7 @@ export default function PlanUserStatus({
               }
             ]}
             onPress={() => handleStatusChange('conditional')}
+            activeOpacity={0.8}
           >
             <Eye size={20} color={getStatusStyle('conditional').iconColor} />
             <Text style={[
@@ -213,6 +219,7 @@ export default function PlanUserStatus({
               }
             ]}
             onPress={() => handleStatusChange('declined')}
+            activeOpacity={0.8}
           >
             <X size={20} color={getStatusStyle('declined').iconColor} />
             <Text style={[
@@ -251,19 +258,15 @@ export default function PlanUserStatus({
           return null;
         })()}
 
-        {/* Enhanced disclaimer based on current status */}
-        {currentStatus === 'maybe' && (
+        {/* Enhanced disclaimer based on current status - show only one */}
+        {(currentStatus === 'maybe' || 
+          (currentStatus === 'conditional' && (!currentUser?.conditionalFriends || currentUser.conditionalFriends.length === 0))) && (
           <View style={styles.disclaimerContainer}>
             <Text style={styles.disclaimerText}>
-              As "Maybe", you can view but not vote or edit this plan until you respond "Going".
-            </Text>
-          </View>
-        )}
-        
-        {currentStatus === 'conditional' && (!currentUser?.conditionalFriends || currentUser.conditionalFriends.length === 0) && (
-          <View style={styles.disclaimerContainer}>
-            <Text style={styles.disclaimerText}>
-              As "If", you can view but not vote or edit this plan until you respond "Going".
+              {currentStatus === 'maybe' 
+                ? 'As "Maybe", you can view but not vote or edit this plan until you respond "Going".'
+                : 'As "If", you can view but not vote or edit this plan until you respond "Going".'
+              }
             </Text>
           </View>
         )}
