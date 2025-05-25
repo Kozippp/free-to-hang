@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
-  KeyboardAvoidingView,
+  SafeAreaView,
+  StatusBar,
+  Alert,
   ScrollView,
-  Animated
+  KeyboardAvoidingView
 } from 'react-native';
-import { X, Plus, Clock, MapPin, HelpCircle } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PollCreatorProps {
@@ -27,408 +29,298 @@ export default function PollCreator({
   onSubmit,
   pollType
 }: PollCreatorProps) {
-  const [customQuestion, setCustomQuestion] = useState('');
+  const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
-  const [focusedInput, setFocusedInput] = useState<number | null>(null);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
-  const slideAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
-      // Reset form when opening
-      setCustomQuestion('');
+      // Set default question for when/where polls
+      if (pollType === 'when') {
+        setQuestion('What time works best?');
+      } else if (pollType === 'where') {
+        setQuestion('Where should we meet?');
+      } else {
+        setQuestion('');
+      }
       setOptions(['', '']);
-      setFocusedInput(null);
-      
-      // Animate in
-      Animated.spring(slideAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 8,
-      }).start();
-    } else {
-      slideAnim.setValue(0);
     }
-  }, [visible]);
-
-  const getTitle = () => {
-    switch (pollType) {
-      case 'when': return 'When should we meet?';
-      case 'where': return 'Where should we meet?';
-      case 'custom': return 'Create a poll';
-      default: return 'Create a poll';
-    }
-  };
-
-  const getIcon = () => {
-    switch (pollType) {
-      case 'when': return <Clock size={24} color={Colors.light.primary} />;
-      case 'where': return <MapPin size={24} color={Colors.light.primary} />;
-      case 'custom': return <HelpCircle size={24} color={Colors.light.primary} />;
-      default: return <HelpCircle size={24} color={Colors.light.primary} />;
-    }
-  };
-
-  const getPlaceholder = (index: number) => {
-    switch (pollType) {
-      case 'when': 
-        return index === 0 ? 'e.g. Today 7pm' : index === 1 ? 'e.g. Tomorrow 6pm' : `Option ${index + 1}`;
-      case 'where': 
-        return index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop downtown' : `Option ${index + 1}`;
-      case 'custom': 
-        return `Option ${index + 1}`;
-      default: 
-        return `Option ${index + 1}`;
-    }
-  };
-
-  const handleAddOption = () => {
-    setOptions([...options, '']);
-    // Focus the new input after a short delay
-    setTimeout(() => {
-      const newIndex = options.length;
-      inputRefs.current[newIndex]?.focus();
-    }, 100);
-  };
+  }, [visible, pollType]);
 
   const handleRemoveOption = (index: number) => {
     if (options.length > 2) {
-      const newOptions = options.filter((_, i) => i !== index);
-      setOptions(newOptions);
+      setOptions(options.filter((_, i) => i !== index));
     }
   };
 
   const handleOptionChange = (text: string, index: number) => {
     const newOptions = [...options];
     newOptions[index] = text;
+    
+    // Auto-create new option if user is typing in the last field and it's not empty
+    // and we haven't reached the max limit of 4 options
+    if (index === options.length - 1 && text.trim() !== '' && options.length < 4) {
+      newOptions.push('');
+    }
+    
     setOptions(newOptions);
   };
 
   const handleSubmit = () => {
     const validOptions = options.filter(option => option.trim() !== '');
     
-    if (pollType === 'custom') {
-      if (customQuestion.trim() && validOptions.length >= 2) {
-        onSubmit(customQuestion.trim(), validOptions);
-        onClose();
-      }
-    } else {
-      if (validOptions.length >= 2) {
-        const question = pollType === 'when' ? 'When should we meet?' : 'Where should we meet?';
-        onSubmit(question, validOptions);
-        onClose();
-      }
+    if (!question.trim()) {
+      Alert.alert('Error', 'Please enter a question');
+      return;
     }
+    
+    if (validOptions.length < 2) {
+      Alert.alert('Error', 'Please add at least 2 options');
+      return;
+    }
+    
+    onSubmit(question.trim(), validOptions);
+    onClose();
   };
 
   const canSubmit = () => {
     const validOptions = options.filter(option => option.trim() !== '').length >= 2;
-    if (pollType === 'custom') {
-      return customQuestion.trim() && validOptions;
-    }
-    return validOptions;
+    return question.trim() && validOptions;
   };
 
   return (
     <Modal
       visible={visible}
-      transparent={true}
-      animationType="none"
+      animationType="slide"
+      presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <Animated.View 
-            style={[
-              styles.modalContainer,
-              {
-                transform: [
-                  {
-                    translateY: slideAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [300, 0],
-                    }),
-                  },
-                  {
-                    scale: slideAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.9, 1],
-                    }),
-                  },
-                ],
-                opacity: slideAnim,
-              }
-            ]}
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          
+          <Text style={styles.title}>Poll</Text>
+          
+          <TouchableOpacity 
+            onPress={handleSubmit}
+            style={[styles.doneButton, !canSubmit() && styles.disabledButton]}
+            disabled={!canSubmit()}
           >
-            {/* Header */}
-            <View style={styles.header}>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <X size={24} color={Colors.light.secondaryText} />
-              </TouchableOpacity>
-              
-              <View style={styles.titleContainer}>
-                {getIcon()}
-                <Text style={styles.title}>{getTitle()}</Text>
-              </View>
+            <Text style={[styles.doneText, !canSubmit() && styles.disabledText]}>
+              Done
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        <KeyboardAvoidingView 
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            style={styles.scrollContent}
+            contentContainerStyle={styles.scrollContentContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Question Input */}
+            <View style={styles.questionSection}>
+              <Text style={styles.sectionTitle}>Poll question</Text>
+              <TextInput
+                style={styles.questionInput}
+                value={question}
+                onChangeText={setQuestion}
+                placeholder="Ask a question..."
+                placeholderTextColor="#999"
+                multiline
+                maxLength={100}
+                autoFocus={pollType === 'custom'}
+                editable={pollType === 'custom'}
+              />
             </View>
             
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-              {/* Custom question input for custom polls only */}
-              {pollType === 'custom' && (
-                <View style={styles.questionSection}>
-                  <Text style={styles.sectionLabel}>Question</Text>
+            {/* Options */}
+            <View style={styles.optionsSection}>
+              <Text style={styles.sectionTitle}>OPTIONS</Text>
+              
+              {options.map((option, index) => (
+                <View key={index} style={styles.optionRow}>
                   <TextInput
-                    style={styles.questionInput}
-                    value={customQuestion}
-                    onChangeText={setCustomQuestion}
-                    placeholder="What do you want to ask?"
-                    placeholderTextColor={Colors.light.secondaryText}
-                    autoFocus={true}
+                    style={styles.optionInput}
+                    value={option}
+                    onChangeText={(text) => handleOptionChange(text, index)}
+                    placeholder={
+                      pollType === 'when' 
+                        ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
+                        : pollType === 'where'
+                        ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
+                        : `Option ${index + 1}`
+                    }
+                    placeholderTextColor="#999"
+                    autoFocus={pollType !== 'custom' && index === 0}
+                    returnKeyType={index === options.length - 1 ? 'done' : 'next'}
+                    blurOnSubmit={index === options.length - 1}
                   />
+                  
+                  {options.length > 2 && (
+                    <TouchableOpacity
+                      onPress={() => handleRemoveOption(index)}
+                      style={styles.removeButton}
+                    >
+                      <X size={20} color="#999" />
+                    </TouchableOpacity>
+                  )}
                 </View>
-              )}
-              
-              {/* Options */}
-              <View style={styles.optionsSection}>
-                <Text style={styles.sectionLabel}>
-                  {pollType === 'when' ? 'Time options' : pollType === 'where' ? 'Location options' : 'Options'}
-                </Text>
-                
-                {options.map((option, index) => (
-                  <View key={index} style={styles.optionContainer}>
-                    <View style={styles.optionNumber}>
-                      <Text style={styles.optionNumberText}>{index + 1}</Text>
-                    </View>
-                    
-                    <TextInput
-                      ref={ref => {
-                        inputRefs.current[index] = ref;
-                      }}
-                      style={[
-                        styles.optionInput,
-                        focusedInput === index && styles.focusedInput
-                      ]}
-                      value={option}
-                      onChangeText={(text) => handleOptionChange(text, index)}
-                      placeholder={getPlaceholder(index)}
-                      placeholderTextColor={Colors.light.secondaryText}
-                      onFocus={() => setFocusedInput(index)}
-                      onBlur={() => setFocusedInput(null)}
-                      autoFocus={pollType !== 'custom' && index === 0}
-                    />
-                    
-                    {options.length > 2 && (
-                      <TouchableOpacity
-                        style={styles.removeButton}
-                        onPress={() => handleRemoveOption(index)}
-                      >
-                        <X size={18} color={Colors.light.secondaryText} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
-                
-                <TouchableOpacity
-                  style={styles.addOptionButton}
-                  onPress={handleAddOption}
-                >
-                  <Plus size={20} color={Colors.light.primary} />
-                  <Text style={styles.addOptionText}>Add another option</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-            
-            {/* Footer */}
-            <View style={styles.footer}>
-              <TouchableOpacity
-                style={[
-                  styles.createButton,
-                  !canSubmit() && styles.disabledButton
-                ]}
-                onPress={handleSubmit}
-                disabled={!canSubmit()}
-              >
-                <Text style={[
-                  styles.createButtonText,
-                  !canSubmit() && styles.disabledButtonText
-                ]}>
-                  Create Poll
-                </Text>
-              </TouchableOpacity>
+              ))}
             </View>
-          </Animated.View>
+            
+            {/* Extra padding for better keyboard handling */}
+            <View style={styles.bottomPadding} />
+          </ScrollView>
         </KeyboardAvoidingView>
-      </View>
+        
+        {/* Bottom Action */}
+        <View style={styles.bottomSection}>
+          <TouchableOpacity 
+            onPress={handleSubmit}
+            style={[styles.createButton, !canSubmit() && styles.disabledCreateButton]}
+            disabled={!canSubmit()}
+          >
+            <Text style={[styles.createButtonText, !canSubmit() && styles.disabledCreateButtonText]}>
+              Create Poll
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  container: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'flex-end',
-  },
-  keyboardAvoidingView: {
-    width: '100%',
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    maxHeight: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 20,
+    backgroundColor: '#F2F2F7',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#C6C6C8',
   },
-  closeButton: {
+  cancelButton: {
     padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#F8F9FA',
   },
-  titleContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 40, // Compensate for close button
+  cancelText: {
+    fontSize: 17,
+    color: '#007AFF',
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginLeft: 8,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#000',
   },
-  content: {
+  doneButton: {
+    padding: 8,
+  },
+  doneText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  disabledButton: {
+    opacity: 0.3,
+  },
+  disabledText: {
+    color: '#999',
+  },
+  keyboardContainer: {
     flex: 1,
-    paddingHorizontal: 20,
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    padding: 16,
+    paddingBottom: 80, // Extra space for keyboard
   },
   questionSection: {
-    marginTop: 20,
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  sectionLabel: {
-    fontSize: 16,
-    color: Colors.light.text,
-    marginBottom: 12,
-    fontWeight: '600',
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#8E8E93',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   questionInput: {
-    fontSize: 16,
-    color: Colors.light.text,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
+    backgroundColor: 'white',
+    borderRadius: 10,
     padding: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    fontSize: 16,
+    color: '#000',
+    minHeight: 50,
+    textAlignVertical: 'top',
   },
   optionsSection: {
-    marginTop: 20,
     flex: 1,
   },
-  optionContainer: {
+  optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  optionNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  optionNumberText: {
-    fontSize: 14,
-    color: 'white',
-    fontWeight: '700',
+    marginBottom: 8,
   },
   optionInput: {
     flex: 1,
-    fontSize: 16,
-    color: Colors.light.text,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  focusedInput: {
-    borderColor: Colors.light.primary,
     backgroundColor: 'white',
-    shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 10,
+    padding: 16,
+    fontSize: 16,
+    color: '#000',
+    marginRight: 8,
   },
   removeButton: {
-    padding: 8,
-    marginLeft: 8,
-    borderRadius: 16,
-    backgroundColor: '#F8F9FA',
-  },
-  addOptionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    width: 44,
+    height: 44,
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 22,
+  },
+  bottomPadding: {
+    height: 100, // Extra space for keyboard
+  },
+  bottomSection: {
     padding: 16,
-    marginTop: 8,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.light.primary,
-    borderStyle: 'dashed',
-    backgroundColor: `${Colors.light.primary}05`,
-  },
-  addOptionText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: Colors.light.primary,
-    fontWeight: '600',
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    backgroundColor: '#F2F2F7',
+    borderTopWidth: 0.5,
+    borderTopColor: '#C6C6C8',
   },
   createButton: {
-    backgroundColor: Colors.light.primary,
-    borderRadius: 16,
-    padding: 18,
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   createButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
   },
-  disabledButton: {
-    opacity: 0.5,
-    shadowOpacity: 0,
-    elevation: 0,
+  disabledCreateButton: {
+    backgroundColor: '#E5E5EA',
   },
-  disabledButtonText: {
-    color: Colors.light.secondaryText,
+  disabledCreateButtonText: {
+    color: '#8E8E93',
   },
 });

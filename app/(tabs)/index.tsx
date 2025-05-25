@@ -292,7 +292,6 @@ const styles = StyleSheet.create({
   friendsDescription: {
     fontSize: 14,
     color: Colors.light.secondaryText,
-    textAlign: 'center',
     marginBottom: 20,
   },
   friendsList: {

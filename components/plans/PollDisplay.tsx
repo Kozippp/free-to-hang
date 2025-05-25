@@ -8,7 +8,7 @@ import {
   Alert,
   Animated
 } from 'react-native';
-import { Check, Crown, Users } from 'lucide-react-native';
+import { Check, Crown, Edit2, Users } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PollOption {
@@ -29,6 +29,8 @@ interface PollDisplayProps {
   userVotes: string[];
   totalVotes: number;
   canVote: boolean;
+  onEdit?: () => void;
+  totalGoingParticipants?: number; // Total number of people going to the plan
 }
 
 export default function PollDisplay({
@@ -37,7 +39,9 @@ export default function PollDisplay({
   onVote,
   userVotes,
   totalVotes,
-  canVote
+  canVote,
+  onEdit,
+  totalGoingParticipants = 0
 }: PollDisplayProps) {
   const [animatedValues] = useState(
     options.reduce((acc, option) => {
@@ -60,12 +64,12 @@ export default function PollDisplay({
     Animated.sequence([
       Animated.timing(animatedValues[optionId], {
         toValue: 1,
-        duration: 100,
+        duration: 150,
         useNativeDriver: true,
       }),
       Animated.timing(animatedValues[optionId], {
         toValue: 0,
-        duration: 100,
+        duration: 150,
         useNativeDriver: true,
       })
     ]).start();
@@ -74,63 +78,100 @@ export default function PollDisplay({
   };
 
   // Calculate statistics
-  const getTotalParticipants = () => {
-    // Count unique voters across all options
+  const getTotalVoters = () => {
     const uniqueVoters = new Set<string>();
     options.forEach(option => {
       option.voters.forEach(voter => {
         uniqueVoters.add(voter.id);
       });
     });
-    return Math.max(uniqueVoters.size, 1); // Avoid division by zero
+    return uniqueVoters.size;
   };
 
-  const totalParticipants = getTotalParticipants();
+  const totalVoters = getTotalVoters();
+  const goingParticipants = Math.max(totalGoingParticipants, totalVoters);
 
   const getPercentage = (votes: number) => {
-    return Math.round((votes / totalParticipants) * 100);
+    return totalVoters > 0 ? Math.round((votes / totalVoters) * 100) : 0;
   };
 
   // Sort options by vote count (descending)
   const sortedOptions = [...options].sort((a, b) => b.votes - a.votes);
   
-  // Find the winning option(s) - highest vote count
+  // Find the winning option(s) - only if majority of going people have voted
+  const majorityHasVoted = totalVoters >= Math.ceil(goingParticipants * 0.5);
   const maxVotes = Math.max(...options.map(option => option.votes));
-  const isWinning = (votes: number) => votes === maxVotes && votes > 0;
+  const isWinning = (votes: number) => majorityHasVoted && votes === maxVotes && votes > 0;
+
+  // Render voters avatars
+  const VotersAvatars = ({ voters }: { voters: PollOption['voters'] }) => {
+    const displayVoters = voters.slice(0, 3);
+    const remainingCount = voters.length - 3;
+
+    if (voters.length === 0) return null;
+
+    return (
+      <View style={styles.votersContainer}>
+        {displayVoters.map((voter, index) => (
+          <View 
+            key={voter.id} 
+            style={[
+              styles.voterAvatar,
+              { marginLeft: index > 0 ? -8 : 0, zIndex: 3 - index }
+            ]}
+          >
+            <Image 
+              source={{ uri: voter.avatar }} 
+              style={styles.avatarImage} 
+            />
+          </View>
+        ))}
+        
+        {remainingCount > 0 && (
+          <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -8 }]}>
+            <Text style={styles.moreVotersText}>+{remainingCount}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.question}>{question}</Text>
-      
-      {/* Statistics header */}
-      <View style={styles.statsHeader}>
-        <View style={styles.statsItem}>
-          <Users size={16} color={Colors.light.secondaryText} />
-          <Text style={styles.statsText}>
-            {totalParticipants} {totalParticipants === 1 ? 'person' : 'people'} voted
-          </Text>
-        </View>
-        {userVotes.length > 0 && (
-          <Text style={styles.userVotesText}>
-            You voted for {userVotes.length} option{userVotes.length > 1 ? 's' : ''}
-          </Text>
+      {/* Header with question and stats */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.question}>{question}</Text>
+        {canVote && onEdit && (
+          <TouchableOpacity onPress={onEdit} style={styles.editButton}>
+            <Edit2 size={16} color={Colors.light.secondaryText} />
+          </TouchableOpacity>
         )}
       </View>
+
+      {/* Voting stats */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statsItem}>
+          <Users size={14} color={Colors.light.secondaryText} />
+          <Text style={styles.statsText}>
+            {totalVoters} out of {goingParticipants} voted
+          </Text>
+        </View>
+      </View>
       
+      {/* Vertical options list */}
       <View style={styles.optionsContainer}>
         {sortedOptions.map((option, index) => {
           const percentage = getPercentage(option.votes);
           const isSelected = userVotes.includes(option.id);
           const isWinningOption = isWinning(option.votes);
-          const isTopChoice = index === 0 && option.votes > 0;
           
           return (
             <Animated.View
               key={option.id}
               style={[
-                styles.optionContainer,
-                isSelected && styles.selectedOption,
-                isWinningOption && styles.winningOption,
+                styles.optionRow,
+                isSelected && styles.selectedOptionRow,
+                isWinningOption && styles.winningOptionRow,
                 {
                   transform: [
                     {
@@ -148,13 +189,16 @@ export default function PollDisplay({
                 onPress={() => handleVote(option.id)}
                 activeOpacity={0.8}
               >
-                <View style={styles.optionHeader}>
+                <View style={styles.optionContent}>
                   <View style={styles.optionLeft}>
+                    {/* Crown for winner */}
                     {isWinningOption && (
                       <View style={styles.crownContainer}>
-                        <Crown size={16} color="#FFD700" fill="#FFD700" />
+                        <Crown size={14} color="#FFD700" fill="#FFD700" />
                       </View>
                     )}
+                    
+                    {/* Option text */}
                     <Text style={[
                       styles.optionText,
                       isSelected && styles.selectedOptionText,
@@ -165,31 +209,24 @@ export default function PollDisplay({
                   </View>
                   
                   <View style={styles.optionRight}>
+                    {/* Check mark for selected */}
                     {isSelected && (
-                      <View style={styles.checkContainer}>
-                        <Check size={14} color="white" />
+                      <View style={styles.checkmark}>
+                        <Check size={12} color="white" />
                       </View>
                     )}
                     
-                    <View style={styles.voteStats}>
-                      <Text style={[
-                        styles.voteCount,
-                        isSelected && styles.selectedVoteCount,
-                        isWinningOption && styles.winningVoteCount
-                      ]}>
-                        {option.votes}
-                      </Text>
-                      <Text style={[
-                        styles.percentage,
-                        isSelected && styles.selectedPercentage,
-                        isWinningOption && styles.winningPercentage
-                      ]}>
-                        {percentage}%
-                      </Text>
-                    </View>
+                    {/* Percentage */}
+                    <Text style={[
+                      styles.percentageText,
+                      isSelected && styles.selectedPercentageText,
+                      isWinningOption && styles.winningPercentageText
+                    ]}>
+                      {percentage}%
+                    </Text>
                   </View>
                 </View>
-                
+
                 {/* Progress bar */}
                 <View style={styles.progressContainer}>
                   <View 
@@ -197,56 +234,17 @@ export default function PollDisplay({
                       styles.progressBar,
                       isSelected && styles.selectedProgressBar,
                       isWinningOption && styles.winningProgressBar,
-                      { width: `${Math.max(percentage, 2)}%` } // Minimum 2% for visibility
+                      { width: `${Math.max(percentage, 2)}%` }
                     ]} 
                   />
                 </View>
                 
                 {/* Voters avatars */}
-                {option.voters.length > 0 && (
-                  <View style={styles.votersContainer}>
-                    <View style={styles.avatarsRow}>
-                      {option.voters.slice(0, 5).map((voter, voterIndex) => (
-                        <View 
-                          key={voter.id} 
-                          style={[
-                            styles.voterAvatar,
-                            { marginLeft: voterIndex > 0 ? -6 : 0, zIndex: 5 - voterIndex }
-                          ]}
-                        >
-                          <Image 
-                            source={{ uri: voter.avatar }} 
-                            style={styles.avatarImage} 
-                          />
-                        </View>
-                      ))}
-                      
-                      {option.voters.length > 5 && (
-                        <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -6 }]}>
-                          <Text style={styles.moreVotersText}>+{option.voters.length - 5}</Text>
-                        </View>
-                      )}
-                    </View>
-                    
-                    {option.voters.length > 0 && (
-                      <Text style={styles.votersLabel}>
-                        {option.voters.slice(0, 2).map(v => v.name.split(' ')[0]).join(', ')}
-                        {option.voters.length > 2 && ` and ${option.voters.length - 2} more`}
-                      </Text>
-                    )}
-                  </View>
-                )}
+                <VotersAvatars voters={option.voters} />
               </TouchableOpacity>
             </Animated.View>
           );
         })}
-      </View>
-      
-      {/* Voting instructions */}
-      <View style={styles.instructions}>
-        <Text style={styles.instructionsText}>
-          Tap options that work for you • You can select multiple options
-        </Text>
       </View>
     </View>
   );
@@ -254,76 +252,75 @@ export default function PollDisplay({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.light.cardBackground,
-    borderRadius: 12,
-    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   question: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
-    padding: 16,
-    paddingBottom: 8,
+    flex: 1,
   },
-  statsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+  editButton: {
+    padding: 6,
+    marginLeft: 8,
+  },
+  statsContainer: {
+    marginBottom: 16,
   },
   statsItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   statsText: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.secondaryText,
     fontWeight: '500',
   },
-  userVotesText: {
-    fontSize: 14,
-    color: Colors.light.primary,
-    fontWeight: '600',
-  },
   optionsContainer: {
     gap: 8,
-    paddingHorizontal: 16,
   },
-  optionContainer: {
-    backgroundColor: Colors.light.background,
+  optionRow: {
+    backgroundColor: 'white',
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.light.border,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
     overflow: 'hidden',
-    elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
+    elevation: 1,
   },
-  selectedOption: {
+  selectedOptionRow: {
     borderColor: Colors.light.primary,
-    backgroundColor: `${Colors.light.primary}08`,
-    elevation: 3,
+    backgroundColor: `${Colors.light.primary}05`,
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  winningOption: {
+  winningOptionRow: {
     borderColor: '#FFD700',
     backgroundColor: '#FFF9E6',
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   optionButton: {
     padding: 0,
   },
-  optionHeader: {
+  optionContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   optionLeft: {
     flexDirection: 'row',
@@ -332,13 +329,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   crownContainer: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   optionText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
     color: Colors.light.text,
     flex: 1,
@@ -354,49 +351,38 @@ const styles = StyleSheet.create({
   optionRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
-  checkContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  checkmark: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  voteStats: {
-    alignItems: 'center',
-    minWidth: 40,
-  },
-  voteCount: {
-    fontSize: 18,
+  percentageText: {
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.light.text,
+    minWidth: 35,
+    textAlign: 'right',
   },
-  selectedVoteCount: {
+  selectedPercentageText: {
     color: Colors.light.primary,
   },
-  winningVoteCount: {
-    color: '#B8860B',
-  },
-  percentage: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
-  },
-  selectedPercentage: {
-    color: Colors.light.primary,
-  },
-  winningPercentage: {
+  winningPercentageText: {
     color: '#B8860B',
   },
   progressContainer: {
-    height: 4,
-    backgroundColor: Colors.light.border,
+    height: 3,
+    backgroundColor: '#F0F0F0',
+    marginHorizontal: 16,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: Colors.light.secondaryText,
+    backgroundColor: '#D1D5DB',
+    borderRadius: 1.5,
   },
   selectedProgressBar: {
     backgroundColor: Colors.light.primary,
@@ -405,19 +391,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFD700',
   },
   votersContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  avatarsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   voterAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.light.background,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: 'white',
     overflow: 'hidden',
   },
   avatarImage: {
@@ -425,28 +410,13 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   moreVoters: {
-    backgroundColor: Colors.light.buttonBackground,
+    backgroundColor: '#E5E5EA',
     justifyContent: 'center',
     alignItems: 'center',
   },
   moreVotersText: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: '600',
     color: Colors.light.secondaryText,
-  },
-  votersLabel: {
-    marginTop: 8,
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-    fontWeight: '500',
-  },
-  instructions: {
-    padding: 16,
-  },
-  instructionsText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    fontStyle: 'italic',
   },
 });

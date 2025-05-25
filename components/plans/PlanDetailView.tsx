@@ -414,85 +414,100 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             canEdit={isInYesGang}
           />
           
-          {/* When Section */}
-          <View style={styles.section}>
-            <View style={styles.headerRow}>
-              <Clock size={20} color={Colors.light.text} style={styles.headerIcon} />
-              <Text style={styles.sectionTitle}>When</Text>
-            </View>
-            
-            {whenPoll ? (
-              <PollDisplay
-                question={whenPoll.question}
-                options={preparePollForDisplay(whenPoll).options}
-                onVote={(optionId) => handlePollVote(whenPoll.id, optionId)}
-                userVotes={getUserVotesForPoll(whenPoll.id)}
-                totalVotes={getTotalVotesForPoll(whenPoll.id)}
-                canVote={isInYesGang}
-              />
-            ) : (
-              <View style={styles.emptyPollContainer}>
-                <Text style={styles.emptyPollText}>
-                  No time has been set yet
-                </Text>
-                
-                <TouchableOpacity 
-                  style={[
-                    styles.createPollButton,
-                    !isInYesGang && styles.disabledCreateButton
-                  ]}
-                  onPress={() => handleCreatePoll('when')}
-                >
-                  <Text style={[
-                    styles.createPollButtonText,
-                    !isInYesGang && styles.disabledCreateButtonText
-                  ]}>
-                    Suggest a time
-                  </Text>
-                </TouchableOpacity>
+          {/* Time and Location Sections */}
+          {!whenPoll && !wherePoll && !isInYesGang ? (
+            /* Combined view when both are not set for invitees */
+            <View style={styles.section}>
+              <View style={styles.notSetContainer}>
+                <Text style={styles.notSetText}>Time and location haven't been decided yet</Text>
+                <Text style={styles.notSetSubtext}>The organizer will set up options for everyone to vote on when they're ready</Text>
               </View>
-            )}
-          </View>
-          
-          {/* Where Section */}
-          <View style={styles.section}>
-            <View style={styles.headerRow}>
-              <MapPin size={20} color={Colors.light.text} style={styles.headerIcon} />
-              <Text style={styles.sectionTitle}>Where</Text>
             </View>
-            
-            {wherePoll ? (
-              <PollDisplay
-                question={wherePoll.question}
-                options={preparePollForDisplay(wherePoll).options}
-                onVote={(optionId) => handlePollVote(wherePoll.id, optionId)}
-                userVotes={getUserVotesForPoll(wherePoll.id)}
-                totalVotes={getTotalVotesForPoll(wherePoll.id)}
-                canVote={isInYesGang}
-              />
-            ) : (
-              <View style={styles.emptyPollContainer}>
-                <Text style={styles.emptyPollText}>
-                  No location has been set yet
-                </Text>
+          ) : (
+            <>
+              {/* When Section */}
+              <View style={styles.section}>
+                <View style={styles.headerRow}>
+                  <Clock size={20} color={Colors.light.text} style={styles.headerIcon} />
+                  <Text style={styles.sectionTitle}>What time works best?</Text>
+                </View>
                 
-                <TouchableOpacity 
-                  style={[
-                    styles.createPollButton,
-                    !isInYesGang && styles.disabledCreateButton
-                  ]}
-                  onPress={() => handleCreatePoll('where')}
-                >
-                  <Text style={[
-                    styles.createPollButtonText,
-                    !isInYesGang && styles.disabledCreateButtonText
-                  ]}>
-                    Suggest a location
-                  </Text>
-                </TouchableOpacity>
+                {whenPoll ? (
+                  <PollDisplay
+                    question={whenPoll.question}
+                    options={preparePollForDisplay(whenPoll).options}
+                    onVote={(optionId) => handlePollVote(whenPoll.id, optionId)}
+                    userVotes={getUserVotesForPoll(whenPoll.id)}
+                    totalVotes={getTotalVotesForPoll(whenPoll.id)}
+                    canVote={isInYesGang}
+                    onEdit={() => handleCreatePoll('when')}
+                    totalGoingParticipants={acceptedParticipants.length}
+                  />
+                ) : isInYesGang ? (
+                  <View style={styles.emptyPollContainer}>
+                    <Text style={styles.emptyPollText}>
+                      No time has been set yet
+                    </Text>
+                    
+                    <TouchableOpacity 
+                      style={styles.createPollButton}
+                      onPress={() => handleCreatePoll('when')}
+                    >
+                      <Text style={styles.createPollButtonText}>
+                        Suggest a time
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.notSetContainer}>
+                    <Text style={styles.notSetText}>Time hasn't been decided yet</Text>
+                    <Text style={styles.notSetSubtext}>The organizer will set up time options for everyone to vote on</Text>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
+              
+              {/* Where Section */}
+              <View style={styles.section}>
+                <View style={styles.headerRow}>
+                  <MapPin size={20} color={Colors.light.text} style={styles.headerIcon} />
+                  <Text style={styles.sectionTitle}>Where should we meet?</Text>
+                </View>
+                
+                {wherePoll ? (
+                  <PollDisplay
+                    question={wherePoll.question}
+                    options={preparePollForDisplay(wherePoll).options}
+                    onVote={(optionId) => handlePollVote(wherePoll.id, optionId)}
+                    userVotes={getUserVotesForPoll(wherePoll.id)}
+                    totalVotes={getTotalVotesForPoll(wherePoll.id)}
+                    canVote={isInYesGang}
+                    onEdit={() => handleCreatePoll('where')}
+                    totalGoingParticipants={acceptedParticipants.length}
+                  />
+                ) : isInYesGang ? (
+                  <View style={styles.emptyPollContainer}>
+                    <Text style={styles.emptyPollText}>
+                      No location has been set yet
+                    </Text>
+                    
+                    <TouchableOpacity 
+                      style={styles.createPollButton}
+                      onPress={() => handleCreatePoll('where')}
+                    >
+                      <Text style={styles.createPollButtonText}>
+                        Suggest a location
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.notSetContainer}>
+                    <Text style={styles.notSetText}>Location hasn't been decided yet</Text>
+                    <Text style={styles.notSetSubtext}>The organizer will set up location options for everyone to vote on</Text>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
           
           {/* Custom Polls Section */}
           <View style={styles.section}>
@@ -509,6 +524,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 userVotes={getUserVotesForPoll(poll.id)}
                 totalVotes={getTotalVotesForPoll(poll.id)}
                 canVote={isInYesGang}
+                onEdit={() => handleCreatePoll('custom')}
+                totalGoingParticipants={acceptedParticipants.length}
               />
             ))}
             
@@ -518,12 +535,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 !isInYesGang && styles.disabledCreateButton
               ]}
               onPress={() => handleCreatePoll('custom')}
+              disabled={!isInYesGang}
             >
               <Text style={[
                 styles.createPollButtonText,
                 !isInYesGang && styles.disabledCreateButtonText
               ]}>
-                Create a new poll
+                {customPolls.length > 0 ? 'Create another poll' : 'Create a poll'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -818,5 +836,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 14,
     marginLeft: 8,
+  },
+  notSetContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  notSetText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.light.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  notSetSubtext: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
