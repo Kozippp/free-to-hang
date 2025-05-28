@@ -121,7 +121,6 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
         )}
         
         <ChatMessage
-          key={item.id}
           message={item}
           planId={plan.id}
           currentUserId={currentUserId}

@@ -292,7 +292,7 @@ export default function PollCreator({
                 const isDuplicate = option.trim() !== '' && duplicateOptions.has(option.trim().toLowerCase());
                 
                 return (
-                  <View key={index} style={styles.optionRow}>
+                  <View key={`option-${index}-${option.slice(0, 10)}`} style={styles.optionRow}>
                     <TouchableOpacity
                       style={[
                         styles.optionInputContainer,

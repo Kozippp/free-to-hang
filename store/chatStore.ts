@@ -185,7 +185,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
   // New plan "sõnumid" for testing chat
   '3': [
     {
-      id: 'chat-1',
+      id: 'chat-3-1',
       planId: '3',
       userId: 'user1',
       userName: 'Alex Johnson',
@@ -197,7 +197,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: true,
     },
     {
-      id: 'chat-2',
+      id: 'chat-3-2',
       planId: '3',
       userId: 'current',
       userName: 'You',
@@ -209,7 +209,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: true,
     },
     {
-      id: 'chat-3',
+      id: 'chat-3-3',
       planId: '3',
       userId: 'user2',
       userName: 'Emma Wilson',
@@ -221,7 +221,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: true,
     },
     {
-      id: 'chat-4',
+      id: 'chat-3-4',
       planId: '3',
       userId: 'user3',
       userName: 'Michael Chen',
@@ -234,7 +234,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: true,
     },
     {
-      id: 'chat-5',
+      id: 'chat-3-5',
       planId: '3',
       userId: 'current',
       userName: 'You',
@@ -246,7 +246,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: true,
     },
     {
-      id: 'chat-6',
+      id: 'chat-3-6',
       planId: '3',
       userId: 'user2',
       userName: 'Emma Wilson',
@@ -260,7 +260,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: false,
     },
     {
-      id: 'chat-7',
+      id: 'chat-3-7',
       planId: '3',
       userId: 'user1',
       userName: 'Alex Johnson',
@@ -272,7 +272,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: false,
     },
     {
-      id: 'chat-8',
+      id: 'chat-3-8',
       planId: '3',
       userId: 'current',
       userName: 'You',
@@ -284,7 +284,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: false,
     },
     {
-      id: 'chat-9',
+      id: 'chat-3-9',
       planId: '3',
       userId: 'user3',
       userName: 'Michael Chen',
@@ -296,7 +296,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       isRead: false,
     },
     {
-      id: 'chat-10',
+      id: 'chat-3-10',
       planId: '3',
       userId: 'user2',
       userName: 'Emma Wilson',
