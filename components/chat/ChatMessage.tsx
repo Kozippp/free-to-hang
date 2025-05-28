@@ -307,8 +307,8 @@ export default function ChatMessage({
         styles.replyPreviewContainer,
         isOwnMessage ? styles.ownReplyContainer : styles.otherReplyContainer
       ]}>
-        {/* Reply indicator text - single line */}
-        <Text style={styles.replyIndicatorText} numberOfLines={1}>
+        {/* Reply indicator text - remove line limitation */}
+        <Text style={styles.replyIndicatorText}>
           <Reply size={12} color={Colors.light.secondaryText} />
           {' '}{senderFirstName} replied to {replyToFirstName}
         </Text>
@@ -769,15 +769,17 @@ export default function ChatMessage({
 const styles = StyleSheet.create({
   messageContainer: {
     flexDirection: 'row',
-    marginVertical: 1,
+    marginVertical: 2,
     paddingHorizontal: 16,
     maxWidth: '100%',
   },
   ownMessageContainer: {
     justifyContent: 'flex-end',
+    marginBottom: 6,
   },
   otherMessageContainer: {
     justifyContent: 'flex-start',
+    marginBottom: 4,
   },
   avatar: {
     width: 28,
@@ -1111,13 +1113,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 8,
     backgroundColor: 'transparent',
-    maxWidth: '80%',
+    maxWidth: '90%',
+    minWidth: '50%',
   },
   replyIndicatorText: {
     fontSize: 11,
     color: Colors.light.secondaryText,
     marginBottom: 4,
     backgroundColor: 'transparent',
+    flexWrap: 'wrap',
   },
   originalMessageBubble: {
     backgroundColor: '#F0F0F0',
@@ -1126,6 +1130,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderLeftWidth: 3,
     borderLeftColor: Colors.light.primary,
+    maxWidth: '100%',
+    minWidth: '50%',
   },
   originalMessageText: {
     fontSize: 12,

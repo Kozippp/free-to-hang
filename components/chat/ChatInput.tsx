@@ -44,6 +44,9 @@ export default function ChatInput({
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(40).fill(0));
   
+  // TextInput ref for auto-focusing on reply
+  const textInputRef = useRef<TextInput>(null);
+  
   // Get current reply state
   const replyingTo = getReplyingTo(planId);
   
@@ -55,6 +58,16 @@ export default function ChatInput({
   // Timer for recording duration and audio levels
   const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioLevelTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Auto-focus when replying
+  useEffect(() => {
+    if (replyingTo && textInputRef.current) {
+      // Small delay to ensure the reply preview is rendered
+      setTimeout(() => {
+        textInputRef.current?.focus();
+      }, 100);
+    }
+  }, [replyingTo]);
 
   useEffect(() => {
     // Animate send button and mic button based on message content
@@ -375,6 +388,7 @@ export default function ChatInput({
             returnKeyType="send"
             onSubmitEditing={handleSendMessage}
             blurOnSubmit={false}
+            ref={textInputRef}
           />
           
           {message.trim() && (
