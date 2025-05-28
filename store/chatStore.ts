@@ -26,10 +26,20 @@ export interface ChatMessage {
   timestamp: number;
   isRead: boolean;
   edited?: boolean;
+  // Reply functionality
+  replyTo?: {
+    messageId: string;
+    userId: string;
+    userName: string;
+    content: string;
+    type: 'text' | 'image' | 'voice' | 'poll';
+  };
 }
 
 export interface ChatState {
   messages: { [planId: string]: ChatMessage[] };
+  // Reply state
+  replyingTo: { [planId: string]: ChatMessage | null };
   
   // Actions
   sendMessage: (planId: string, message: Omit<ChatMessage, 'id' | 'timestamp' | 'reactions' | 'isRead' | 'edited'>) => void;
@@ -40,6 +50,9 @@ export interface ChatState {
   getUnreadCount: (planId: string, userId: string) => number;
   deleteMessage: (planId: string, messageId: string) => void;
   editMessage: (planId: string, messageId: string, newContent: string) => void;
+  // Reply actions
+  setReplyingTo: (planId: string, message: ChatMessage | null) => void;
+  getReplyingTo: (planId: string) => ChatMessage | null;
 }
 
 // Demo messages for testing
@@ -306,6 +319,45 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       reactions: { 'current': '👍', 'user3': '✅' },
       timestamp: Date.now() - 30000, // 30 seconds ago
       isRead: false,
+    },
+    // Add some reply examples
+    {
+      id: 'chat-3-11',
+      planId: '3',
+      userId: 'current',
+      userName: 'You',
+      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+      type: 'text',
+      content: 'Tõesti hea idee! 💡',
+      replyTo: {
+        messageId: 'chat-3-10',
+        userId: 'user2',
+        userName: 'Emma Wilson',
+        content: 'Võib-olla 19:00? 🤷‍♀️',
+        type: 'text',
+      },
+      reactions: {},
+      timestamp: Date.now() - 20000, // 20 seconds ago
+      isRead: false,
+    },
+    {
+      id: 'chat-3-12',
+      planId: '3',
+      userId: 'user1',
+      userName: 'Alex Johnson',
+      userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+      type: 'text',
+      content: 'Ma olen nõus! 🙋‍♂️',
+      replyTo: {
+        messageId: 'chat-3-11',
+        userId: 'current',
+        userName: 'You',
+        content: 'Tõesti hea idee! 💡',
+        type: 'text',
+      },
+      reactions: { 'current': '❤️' },
+      timestamp: Date.now() - 10000, // 10 seconds ago
+      isRead: false,
     }
   ],
   // You can add more plan IDs here for testing different conversations
@@ -341,20 +393,37 @@ const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
       messages: demoMessages,
+      replyingTo: {},
       
       sendMessage: (planId, messageData) => {
+        const state = get();
+        const replyingToMessage = state.replyingTo[planId];
+        
         const newMessage: ChatMessage = {
           ...messageData,
           id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           timestamp: Date.now(),
           reactions: {},
           isRead: false,
+          // Add reply data if replying
+          replyTo: replyingToMessage ? {
+            messageId: replyingToMessage.id,
+            userId: replyingToMessage.userId,
+            userName: replyingToMessage.userName,
+            content: replyingToMessage.content,
+            type: replyingToMessage.type,
+          } : undefined,
         };
         
         set(state => ({
           messages: {
             ...state.messages,
             [planId]: [...(state.messages[planId] || []), newMessage]
+          },
+          // Clear reply state after sending
+          replyingTo: {
+            ...state.replyingTo,
+            [planId]: null
           }
         }));
       },
@@ -451,6 +520,19 @@ const useChatStore = create<ChatState>()(
             ) || []
           }
         }));
+      },
+      
+      setReplyingTo: (planId, message) => {
+        set(state => ({
+          replyingTo: {
+            ...state.replyingTo,
+            [planId]: message
+          }
+        }));
+      },
+      
+      getReplyingTo: (planId) => {
+        return get().replyingTo[planId] || null;
       },
     }),
     {
