@@ -35,7 +35,8 @@ export default function PlanCreatedSuccessModal({
   const [bounceAnim] = useState(new Animated.Value(0));
   const [copied, setCopied] = useState(false);
   const [confettiAnims] = useState(
-    Array(20).fill(null).map(() => ({
+    Array(20).fill(null).map((_, index) => ({
+      id: `confetti-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
       translateY: new Animated.Value(0),
       translateX: new Animated.Value(0),
       rotate: new Animated.Value(0),
@@ -194,7 +195,7 @@ export default function PlanCreatedSuccessModal({
           {/* Confetti */}
           {confettiAnims.map((anim, index) => (
             <Animated.View
-              key={index}
+              key={anim.id}
               style={[
                 styles.confetti,
                 {

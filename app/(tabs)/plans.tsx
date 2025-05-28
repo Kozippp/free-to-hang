@@ -245,7 +245,7 @@ export default function PlansScreen() {
               <FlatList
                 data={invitations}
                 renderItem={renderPlanItem}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => `invitations-${item.id}`}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={renderEmptyState}
               />
@@ -257,7 +257,7 @@ export default function PlansScreen() {
                   <FlatList
                     data={activePlans}
                     renderItem={renderPlanItem}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={(item) => `activePlans-${item.id}`}
                     contentContainerStyle={styles.listContent}
                     ListEmptyComponent={renderEmptyState}
                   />

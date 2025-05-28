@@ -269,7 +269,7 @@ export const mockActivePlans: Plan[] = [
     ]
   },
   {
-    id: '5',
+    id: '8',
     title: 'Game Night',
     description: 'Board games and snacks at my place.',
     type: 'normal' as const,

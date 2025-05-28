@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import React, { useState, useRef, useEffect } from 'react';
-=======
 import React, { useState, useRef } from 'react';
->>>>>>> d2395da (28.05 23:42)
 import {
   StyleSheet,
   View,
@@ -12,32 +8,17 @@ import {
   Alert,
   Dimensions,
   Animated,
-<<<<<<< HEAD
-  Platform
-=======
   PanResponder,
   Modal,
   TextInput,
   Vibration
->>>>>>> d2395da (28.05 23:42)
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { 
-<<<<<<< HEAD
-  Heart, 
-  ThumbsUp, 
-  Laugh, 
-  Angry, 
-  Play,
-  Pause,
-  MoreHorizontal,
-  Waveform
-=======
   Reply,
   Edit3,
   Trash2,
   Copy
->>>>>>> d2395da (28.05 23:42)
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { ChatMessage as ChatMessageType } from '@/store/chatStore';
@@ -75,41 +56,6 @@ export default function ChatMessage({
   const [isUnsending, setIsUnsending] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlayingVoice, setIsPlayingVoice] = useState(false);
-<<<<<<< HEAD
-  const [playbackProgress, setPlaybackProgress] = useState(0);
-  const playbackAnimation = useRef(new Animated.Value(0)).current;
-  const waveformAnimation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (isPlayingVoice) {
-      Animated.parallel([
-        Animated.timing(playbackAnimation, {
-          toValue: 1,
-          duration: (message.voiceDuration || 0) * 1000,
-          useNativeDriver: false
-        }),
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(waveformAnimation, {
-              toValue: 1,
-              duration: 500,
-              useNativeDriver: false
-            }),
-            Animated.timing(waveformAnimation, {
-              toValue: 0,
-              duration: 500,
-              useNativeDriver: false
-            })
-          ])
-        )
-      ]).start();
-    } else {
-      playbackAnimation.setValue(0);
-      waveformAnimation.stopAnimation();
-      waveformAnimation.setValue(0);
-    }
-  }, [isPlayingVoice]);
-=======
   const [messageLayout, setMessageLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   
   // Swipe animation for timestamp
@@ -156,14 +102,13 @@ export default function ChatMessage({
       },
     })
   ).current;
->>>>>>> d2395da (28.05 23:42)
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', { 
       hour: '2-digit', 
       minute: '2-digit',
-      hour12: true 
+      hour12: false 
     });
   };
 
@@ -194,6 +139,9 @@ export default function ChatMessage({
   };
 
   const closeModal = () => {
+    // Close modal immediately to avoid useInsertionEffect warning
+    setShowActions(false);
+    
     // Scale back to normal and hide modal
     Animated.parallel([
       Animated.spring(messageScale, {
@@ -207,9 +155,7 @@ export default function ChatMessage({
         duration: 150,
         useNativeDriver: true
       })
-    ]).start(() => {
-      setShowActions(false);
-    });
+    ]).start();
   };
 
   const handleReaction = (emoji: string) => {
@@ -243,16 +189,6 @@ export default function ChatMessage({
     });
   };
 
-<<<<<<< HEAD
-  const playVoiceMessage = () => {
-    setIsPlayingVoice(!isPlayingVoice);
-    if (!isPlayingVoice) {
-      // Simulate voice playback
-      setTimeout(() => {
-        setIsPlayingVoice(false);
-        playbackAnimation.setValue(0);
-      }, (message.voiceDuration || 0) * 1000);
-=======
   const handleEdit = () => {
     closeModal();
     setIsEditing(true);
@@ -308,7 +244,6 @@ export default function ChatMessage({
     } catch (error) {
       console.error('Error playing voice message:', error);
       Alert.alert('Error', 'Could not play voice message');
->>>>>>> d2395da (28.05 23:42)
     }
   };
 
@@ -363,24 +298,6 @@ export default function ChatMessage({
 
       case 'image':
         return (
-<<<<<<< HEAD
-          <View style={styles.imageContainer}>
-            {message.content && (
-              <Text style={[
-                styles.messageText,
-                isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
-                styles.imageCaption
-              ]}>
-                {message.content}
-              </Text>
-            )}
-            <Image 
-              source={{ uri: message.imageUrl }} 
-              style={styles.messageImage}
-              resizeMode="cover"
-            />
-          </View>
-=======
           <TouchableOpacity activeOpacity={0.9}>
             <View style={styles.imageContainer}>
               <Image 
@@ -399,63 +316,15 @@ export default function ChatMessage({
               )}
             </View>
           </TouchableOpacity>
->>>>>>> d2395da (28.05 23:42)
         );
 
       case 'voice':
-        const duration = message.voiceDuration || 0;
-        const progress = playbackAnimation.interpolate({
-          inputRange: [0, 1],
-          outputRange: ['0%', '100%']
-        });
-        
         return (
           <TouchableOpacity 
-            style={[
-              styles.voiceContainer,
-              isOwnMessage ? styles.ownVoiceContainer : styles.otherVoiceContainer
-            ]}
+            style={styles.voiceContainer}
             onPress={playVoiceMessage}
             activeOpacity={0.8}
           >
-<<<<<<< HEAD
-            <View style={styles.voiceControls}>
-              {isPlayingVoice ? (
-                <Pause size={20} color={isOwnMessage ? 'white' : Colors.light.primary} />
-              ) : (
-                <Play size={20} color={isOwnMessage ? 'white' : Colors.light.primary} />
-              )}
-              
-              <View style={styles.voiceWaveform}>
-                <Animated.View style={[
-                  styles.voiceProgress,
-                  { width: progress },
-                  isOwnMessage ? styles.ownVoiceProgress : styles.otherVoiceProgress
-                ]} />
-                
-                {Array.from({ length: 27 }).map((_, i) => {
-                  const barHeight = Math.sin((i / 27) * Math.PI) * 15 + 5;
-                  return (
-                    <Animated.View 
-                      key={i}
-                      style={[
-                        styles.waveformBar,
-                        {
-                          height: barHeight,
-                          opacity: waveformAnimation.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.4, 1]
-                          })
-                        },
-                        isOwnMessage ? styles.ownWaveformBar : styles.otherWaveformBar
-                      ]}
-                    />
-                  );
-                })}
-              </View>
-            </View>
-            
-=======
             <View style={[
               styles.voicePlayButton,
               isOwnMessage ? styles.ownVoiceButton : styles.otherVoiceButton
@@ -470,7 +339,7 @@ export default function ChatMessage({
                 const height = Math.sin(i * 0.8) * 8 + 12;
                 return (
                   <View 
-                    key={i}
+                    key={`waveform-${message.id}-${i}`}
                     style={[
                       styles.waveformBar,
                       { 
@@ -484,83 +353,15 @@ export default function ChatMessage({
               )}
             </View>
             
->>>>>>> d2395da (28.05 23:42)
             <Text style={[
               styles.voiceDuration,
-              isOwnMessage ? styles.ownVoiceDuration : styles.otherVoiceDuration
+              isOwnMessage ? styles.ownMessageText : styles.otherMessageText
             ]}>
-              {duration}s
+              {message.voiceDuration || 5}s
             </Text>
           </TouchableOpacity>
         );
 
-<<<<<<< HEAD
-      case 'poll':
-        return (
-          <View style={styles.pollContainer}>
-            <Text style={[
-              styles.pollQuestion,
-              isOwnMessage ? styles.ownMessageText : styles.otherMessageText
-            ]}>
-              {message.pollData?.question}
-            </Text>
-            
-            {message.pollData?.options.map((option) => {
-              const totalVotes = message.pollData?.options.reduce((sum, opt) => sum + opt.votes.length, 0) || 0;
-              const percentage = totalVotes > 0 ? Math.round((option.votes.length / totalVotes) * 100) : 0;
-              const hasVoted = option.votes.includes(currentUserId);
-              
-              return (
-                <TouchableOpacity
-                  key={option.id}
-                  style={[
-                    styles.pollOption,
-                    hasVoted && styles.votedPollOption,
-                    isOwnMessage ? styles.ownPollOption : styles.otherPollOption
-                  ]}
-                  onPress={() => handlePollVote(option.id)}
-                >
-                  <View style={styles.pollOptionContent}>
-                    <Text style={[
-                      styles.pollOptionText,
-                      isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
-                      hasVoted && styles.votedOptionText
-                    ]}>
-                      {option.text}
-                    </Text>
-                    
-                    <View style={styles.pollPercentageContainer}>
-                      <Text style={[
-                        styles.pollPercentage,
-                        isOwnMessage ? styles.ownMessageText : styles.otherMessageText
-                      ]}>
-                        {percentage}%
-                      </Text>
-                      
-                      {hasVoted && (
-                        <View style={[
-                          styles.votedIndicator,
-                          isOwnMessage ? styles.ownVotedIndicator : styles.otherVotedIndicator
-                        ]}>
-                          <Check size={12} color="white" />
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                  
-                  <View style={[
-                    styles.pollProgress,
-                    isOwnMessage ? styles.ownPollProgress : styles.otherPollProgress,
-                    { width: `${percentage}%` }
-                  ]} />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        );
-
-=======
->>>>>>> d2395da (28.05 23:42)
       default:
         return null;
     }
@@ -579,20 +380,12 @@ export default function ChatMessage({
         styles.reactionsContainer,
         isOwnMessage ? styles.ownReactions : styles.otherReactions
       ]}>
-        {Object.entries(reactionCounts).map(([emoji, count]) => (
-<<<<<<< HEAD
-          <TouchableOpacity
-            key={emoji}
-            style={[
-              styles.reactionBubble,
-              message.reactions[currentUserId] === emoji && styles.selectedReaction
-=======
+        {Object.entries(reactionCounts).map(([emoji, count], index) => (
           <TouchableOpacity 
-            key={emoji} 
+            key={`reaction-${index}-${emoji}`} 
             style={[
               styles.reactionBubble,
               message.reactions[currentUserId] === emoji && styles.myReactionBubble
->>>>>>> d2395da (28.05 23:42)
             ]}
             onPress={() => handleReaction(emoji)}
           >
@@ -680,20 +473,10 @@ export default function ChatMessage({
         )}
         
         <TouchableOpacity
-<<<<<<< HEAD
-          style={[
-            styles.messageBubble,
-            isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
-            message.type === 'voice' && styles.voiceMessageBubble
-          ]}
-          onLongPress={() => setShowReactions(true)}
-          activeOpacity={0.8}
-=======
           style={getBubbleStyle()}
           onLongPress={handleLongPress}
           activeOpacity={0.8}
           onLayout={onMessageLayout}
->>>>>>> d2395da (28.05 23:42)
         >
           {renderMessageContent()}
         </TouchableOpacity>
@@ -701,28 +484,6 @@ export default function ChatMessage({
         {renderReactions()}
       </View>
 
-<<<<<<< HEAD
-      {showReactions && (
-        <View style={[
-          styles.reactionPicker,
-          isOwnMessage ? styles.ownReactionPicker : styles.otherReactionPicker
-        ]}>
-          {REACTIONS.map((emoji) => (
-            <TouchableOpacity
-              key={emoji}
-              style={[
-                styles.reactionButton,
-                message.reactions[currentUserId] === emoji && styles.selectedReactionButton
-              ]}
-              onPress={() => handleReaction(emoji)}
-            >
-              <Text style={styles.reactionPickerEmoji}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity
-            style={styles.closeReactionButton}
-            onPress={() => setShowReactions(false)}
-=======
       {/* Message Actions Modal - Two Floating Menus */}
       <Modal
         visible={showActions}
@@ -755,7 +516,6 @@ export default function ChatMessage({
                 opacity: modalOpacity,
               }
             ]}
->>>>>>> d2395da (28.05 23:42)
           >
             <View style={getBubbleStyle()}>
               {renderMessageContent()}
@@ -785,9 +545,9 @@ export default function ChatMessage({
             ]}
           >
             <View style={[styles.emojiRow, isOwnMessage && styles.ownEmojiRow]}>
-              {QUICK_REACTIONS.map((emoji) => (
+              {QUICK_REACTIONS.map((emoji, index) => (
                 <TouchableOpacity
-                  key={emoji}
+                  key={`emoji-${index}-${emoji}`}
                   style={[
                     styles.emojiButton,
                     message.reactions[currentUserId] === emoji && styles.selectedEmojiButton
@@ -919,10 +679,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  voiceMessageBubble: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
@@ -956,23 +712,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   voiceContainer: {
-    minWidth: 160,
-    maxWidth: 240,
-    borderRadius: 20,
-    padding: 12,
-  },
-  ownVoiceContainer: {
-    backgroundColor: Colors.light.primary,
-  },
-  otherVoiceContainer: {
-    backgroundColor: Colors.light.cardBackground,
-  },
-  voiceControls: {
     flexDirection: 'row',
     alignItems: 'center',
-<<<<<<< HEAD
-    gap: 12,
-=======
     minWidth: 160,
     paddingVertical: 2,
   },
@@ -992,142 +733,27 @@ const styles = StyleSheet.create({
   },
   voicePlayIcon: {
     fontSize: 12,
->>>>>>> d2395da (28.05 23:42)
   },
   voiceWaveform: {
-    flex: 1,
-    height: 24,
     flexDirection: 'row',
     alignItems: 'center',
-<<<<<<< HEAD
-    position: 'relative',
-    marginLeft: 8,
-  },
-  voiceProgress: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    height: '100%',
-    borderRadius: 4,
-    opacity: 0.3,
-  },
-  ownVoiceProgress: {
-    backgroundColor: 'white',
-  },
-  otherVoiceProgress: {
-    backgroundColor: Colors.light.primary,
-=======
     marginHorizontal: 6,
     flex: 1,
->>>>>>> d2395da (28.05 23:42)
   },
   waveformBar: {
     width: 2,
     marginHorizontal: 1,
     borderRadius: 1,
-<<<<<<< HEAD
-  },
-  ownWaveformBar: {
-    backgroundColor: 'white',
-  },
-  otherWaveformBar: {
-    backgroundColor: Colors.light.primary,
-  },
-  voiceDuration: {
-    fontSize: 12,
-    marginTop: 8,
-    textAlign: 'right',
-  },
-  ownVoiceDuration: {
-    color: 'white',
-  },
-  otherVoiceDuration: {
-    color: Colors.light.text,
-  },
-  pollContainer: {
-    minWidth: 200,
-    maxWidth: 300,
-  },
-  pollQuestion: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  pollOption: {
-    marginBottom: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  ownPollOption: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  otherPollOption: {
-    backgroundColor: Colors.light.buttonBackground,
-  },
-  votedPollOption: {
-    borderWidth: 1,
-  },
-  pollOptionContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    zIndex: 1,
-  },
-  pollOptionText: {
-    fontSize: 14,
-    flex: 1,
-  },
-  votedOptionText: {
-    fontWeight: '600',
-  },
-  pollPercentageContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  pollPercentage: {
-    fontSize: 12,
-=======
   },
   voiceDuration: {
     fontSize: 11,
->>>>>>> d2395da (28.05 23:42)
     opacity: 0.8,
     marginLeft: 6,
-  },
-  votedIndicator: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  ownVotedIndicator: {
-    backgroundColor: 'white',
-  },
-  otherVotedIndicator: {
-    backgroundColor: Colors.light.primary,
-  },
-  pollProgress: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    height: '100%',
-    opacity: 0.15,
-  },
-  ownPollProgress: {
-    backgroundColor: 'white',
-  },
-  otherPollProgress: {
-    backgroundColor: Colors.light.primary,
   },
   reactionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: 4,
-    gap: 4,
   },
   ownReactions: {
     justifyContent: 'flex-end',
@@ -1138,16 +764,6 @@ const styles = StyleSheet.create({
   reactionBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-<<<<<<< HEAD
-    backgroundColor: Colors.light.cardBackground,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
-  },
-  selectedReaction: {
-    backgroundColor: `${Colors.light.primary}20`,
-=======
     backgroundColor: 'white',
     borderRadius: 12,
     paddingHorizontal: 6,
@@ -1160,7 +776,6 @@ const styles = StyleSheet.create({
   myReactionBubble: {
     backgroundColor: Colors.light.primary,
     borderColor: Colors.light.primary,
->>>>>>> d2395da (28.05 23:42)
   },
   reactionEmoji: {
     fontSize: 20,
@@ -1168,14 +783,6 @@ const styles = StyleSheet.create({
   reactionCount: {
     fontSize: 10,
     color: Colors.light.secondaryText,
-<<<<<<< HEAD
-  },
-  messageInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 4,
-=======
     marginLeft: 2,
     fontWeight: '500',
   },
@@ -1185,7 +792,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     paddingHorizontal: 16,
->>>>>>> d2395da (28.05 23:42)
   },
   swipeTimestampLeft: {
     left: -80,
@@ -1200,31 +806,18 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     fontWeight: '500',
   },
-<<<<<<< HEAD
-  unreadDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.light.primary,
-=======
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
->>>>>>> d2395da (28.05 23:42)
   },
   highlightedMessageWrapper: {
     position: 'absolute',
-<<<<<<< HEAD
-    backgroundColor: 'white',
-    borderRadius: 24,
-=======
     zIndex: 1,
   },
   emojiMenu: {
     position: 'absolute',
     zIndex: 2,
->>>>>>> d2395da (28.05 23:42)
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1240,27 +833,6 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: 'rgba(0,0,0,0.1)',
   },
-<<<<<<< HEAD
-  ownReactionPicker: {
-    right: 0,
-    bottom: '100%',
-    marginBottom: 8,
-  },
-  otherReactionPicker: {
-    left: 40,
-    bottom: '100%',
-    marginBottom: 8,
-  },
-  reactionButton: {
-    padding: 8,
-    borderRadius: 20,
-  },
-  selectedReactionButton: {
-    backgroundColor: `${Colors.light.primary}20`,
-  },
-  reactionPickerEmoji: {
-    fontSize: 20,
-=======
   emojiButton: {
     width: 36,
     height: 36,
@@ -1369,11 +941,5 @@ const styles = StyleSheet.create({
   ownEmojiRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
->>>>>>> d2395da (28.05 23:42)
-  },
-  closeReactionButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.light.buttonBackground,
   },
 });
