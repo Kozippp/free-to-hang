@@ -13,6 +13,7 @@ import {
   TextInput,
   Vibration
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { BlurView } from 'expo-blur';
 import { 
   Reply,
@@ -33,6 +34,7 @@ interface ChatMessageProps {
   showAvatar?: boolean;
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
+  scrollToMessage?: (messageId: string) => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -47,9 +49,10 @@ export default function ChatMessage({
   isOwnMessage,
   showAvatar = true,
   isFirstInGroup = true,
-  isLastInGroup = true
+  isLastInGroup = true,
+  scrollToMessage
 }: ChatMessageProps) {
-  const { addReaction, removeReaction, deleteMessage, editMessage } = useChatStore();
+  const { addReaction, removeReaction, deleteMessage, editMessage, setReplyingTo } = useChatStore();
   const [showActions, setShowActions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content);
@@ -208,11 +211,31 @@ export default function ChatMessage({
 
   const handleReply = () => {
     closeModal();
-    Alert.alert('Reply', 'Reply functionality would be implemented here');
+    setReplyingTo(planId, message);
   };
 
   const handleCopy = () => {
     closeModal();
+    let textToCopy = '';
+    
+    switch (message.type) {
+      case 'text':
+        textToCopy = message.content;
+        break;
+      case 'image':
+        textToCopy = message.content || 'Image';
+        break;
+      case 'voice':
+        textToCopy = 'Voice message';
+        break;
+      case 'poll':
+        textToCopy = message.pollData?.question || 'Poll';
+        break;
+      default:
+        textToCopy = message.content;
+    }
+    
+    Clipboard.setStringAsync(textToCopy);
     Alert.alert('Copied', 'Message copied to clipboard');
   };
 
@@ -245,6 +268,64 @@ export default function ChatMessage({
       console.error('Error playing voice message:', error);
       Alert.alert('Error', 'Could not play voice message');
     }
+  };
+
+  const renderReplyPreview = () => {
+    if (!message.replyTo) return null;
+
+    const { userName, content, type } = message.replyTo;
+    const isReplyToSelf = message.replyTo.userId === currentUserId;
+    
+    // Get first name only
+    const getFirstName = (fullName: string) => fullName.split(' ')[0];
+    const senderFirstName = getFirstName(isOwnMessage ? 'You' : message.userName);
+    const replyToFirstName = isReplyToSelf ? 'yourself' : getFirstName(userName);
+    
+    // Truncate content if too long (over 3 lines, roughly 150 characters)
+    const truncatedContent = content.length > 150 ? content.substring(0, 147) + '...' : content;
+    
+    const getContentPreview = () => {
+      switch (type) {
+        case 'image':
+          return '📷 Photo';
+        case 'voice':
+          return '🎵 Voice message';
+        case 'poll':
+          return '📊 Poll';
+        default:
+          return truncatedContent;
+      }
+    };
+
+    const handleReplyBubblePress = () => {
+      if (scrollToMessage && message.replyTo?.messageId) {
+        scrollToMessage(message.replyTo.messageId);
+      }
+    };
+    
+    return (
+      <View style={[
+        styles.replyPreviewContainer,
+        isOwnMessage ? styles.ownReplyContainer : styles.otherReplyContainer
+      ]}>
+        {/* Reply indicator text - single line */}
+        <Text style={styles.replyIndicatorText} numberOfLines={1}>
+          <Reply size={12} color={Colors.light.secondaryText} />
+          {' '}{senderFirstName} replied to {replyToFirstName}
+        </Text>
+        
+        {/* Original message bubble (gray) */}
+        <TouchableOpacity 
+          style={styles.originalMessageBubble}
+          onPress={handleReplyBubblePress}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.originalMessageText}>
+            {getContentPreview()}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   const renderMessageContent = () => {
@@ -298,24 +379,37 @@ export default function ChatMessage({
 
       case 'image':
         return (
-          <TouchableOpacity activeOpacity={0.9}>
-            <View style={styles.imageContainer}>
+          <View>
+            <TouchableOpacity 
+              activeOpacity={0.9} 
+              style={styles.imageMessageContainer}
+              onPress={() => {
+                // TODO: Open image in full screen
+                console.log('Open image in full screen');
+              }}
+              onLongPress={handleLongPress}
+            >
               <Image 
                 source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
                 style={styles.messageImage}
                 resizeMode="cover"
               />
-              {message.content && (
+            </TouchableOpacity>
+            {message.content && (
+              <View style={[
+                styles.imageCaptionBubble,
+                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+                { marginTop: 4 }
+              ]}>
                 <Text style={[
                   styles.messageText,
-                  styles.imageCaption,
                   isOwnMessage ? styles.ownMessageText : styles.otherMessageText
                 ]}>
                   {message.content}
                 </Text>
-              )}
-            </View>
-          </TouchableOpacity>
+              </View>
+            )}
+          </View>
         );
 
       case 'voice':
@@ -380,19 +474,21 @@ export default function ChatMessage({
         styles.reactionsContainer,
         isOwnMessage ? styles.ownReactions : styles.otherReactions
       ]}>
-        {Object.entries(reactionCounts).map(([emoji, count], index) => (
-          <TouchableOpacity 
-            key={`reaction-${index}-${emoji}`} 
-            style={[
-              styles.reactionBubble,
-              message.reactions[currentUserId] === emoji && styles.myReactionBubble
-            ]}
-            onPress={() => handleReaction(emoji)}
-          >
-            <Text style={styles.reactionEmoji}>{emoji}</Text>
-            {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
-          </TouchableOpacity>
-        ))}
+        <View style={styles.reactionsGroup}>
+          {Object.entries(reactionCounts).map(([emoji, count], index) => (
+            <TouchableOpacity 
+              key={`reaction-${index}-${emoji}`} 
+              style={[
+                styles.reactionItem,
+                message.reactions[currentUserId] === emoji && styles.myReactionItem
+              ]}
+              onPress={() => handleReaction(emoji)}
+            >
+              <Text style={styles.reactionEmoji}>{emoji}</Text>
+              {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     );
   };
@@ -472,14 +568,24 @@ export default function ChatMessage({
           <Text style={styles.userName}>{message.userName}</Text>
         )}
         
-        <TouchableOpacity
-          style={getBubbleStyle()}
-          onLongPress={handleLongPress}
-          activeOpacity={0.8}
-          onLayout={onMessageLayout}
-        >
-          {renderMessageContent()}
-        </TouchableOpacity>
+        {/* Reply preview outside the bubble */}
+        {renderReplyPreview()}
+        
+        {/* Image messages are displayed outside the bubble */}
+        {message.type === 'image' ? (
+          <View style={styles.imageMessageWrapper}>
+            {renderMessageContent()}
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={getBubbleStyle()}
+            onLongPress={handleLongPress}
+            activeOpacity={0.8}
+            onLayout={onMessageLayout}
+          >
+            {renderMessageContent()}
+          </TouchableOpacity>
+        )}
         
         {renderReactions()}
       </View>
@@ -701,14 +807,26 @@ const styles = StyleSheet.create({
     color: 'rgba(0,0,0,0.5)',
   },
   imageContainer: {
-    maxWidth: 200,
+    maxWidth: 250,
   },
   imageCaption: {
     marginTop: 8,
   },
   messageImage: {
-    width: 200,
-    height: 200,
+    maxWidth: 280,
+    maxHeight: 350,
+    minWidth: 200,
+    minHeight: 150,
+    borderRadius: 16,
+    marginVertical: 2,
+  },
+  imageMessageContainer: {
+    maxWidth: '100%',
+  },
+  imageCaptionBubble: {
+    maxWidth: '100%',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 12,
   },
   voiceContainer: {
@@ -753,38 +871,52 @@ const styles = StyleSheet.create({
   reactionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 4,
+    marginTop: 2,
+    marginBottom: 2,
+    position: 'relative',
   },
   ownReactions: {
     justifyContent: 'flex-end',
+    marginRight: 12,
   },
   otherReactions: {
     justifyContent: 'flex-start',
+    marginLeft: 12,
   },
-  reactionBubble: {
+  reactionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginRight: 4,
-    marginBottom: 2,
+    paddingVertical: 3,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: 'rgba(0,0,0,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  myReactionBubble: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
+  reactionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    marginHorizontal: 1,
+  },
+  myReactionItem: {
+    opacity: 1,
   },
   reactionEmoji: {
-    fontSize: 20,
+    fontSize: 14,
   },
   reactionCount: {
-    fontSize: 10,
+    fontSize: 9,
     color: Colors.light.secondaryText,
     marginLeft: 2,
-    fontWeight: '500',
+    fontWeight: '600',
+    minWidth: 8,
   },
   swipeTimestamp: {
     position: 'absolute',
@@ -941,5 +1073,40 @@ const styles = StyleSheet.create({
   ownEmojiRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
+  },
+  replyPreviewContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    backgroundColor: 'transparent',
+    maxWidth: '80%',
+  },
+  replyIndicatorText: {
+    fontSize: 11,
+    color: Colors.light.secondaryText,
+    marginBottom: 4,
+    backgroundColor: 'transparent',
+  },
+  originalMessageBubble: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.light.primary,
+  },
+  originalMessageText: {
+    fontSize: 12,
+    color: '#666666',
+    lineHeight: 16,
+  },
+  ownReplyContainer: {
+    alignItems: 'flex-end',
+  },
+  otherReplyContainer: {
+    alignItems: 'flex-start',
+  },
+  imageMessageWrapper: {
+    maxWidth: MESSAGE_MAX_WIDTH,
   },
 });

@@ -37,12 +37,15 @@ export default function ChatInput({
   currentUserName,
   currentUserAvatar
 }: ChatInputProps) {
-  const { sendMessage } = useChatStore();
+  const { sendMessage, getReplyingTo, setReplyingTo } = useChatStore();
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(40).fill(0));
+  
+  // Get current reply state
+  const replyingTo = getReplyingTo(planId);
   
   // Animations
   const recordingAnimation = useRef(new Animated.Value(1)).current;
@@ -95,8 +98,7 @@ export default function ChatInput({
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
-      allowsEditing: true,
-      aspect: [4, 3],
+      allowsEditing: false,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -122,8 +124,7 @@ export default function ChatInput({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
-      allowsEditing: true,
-      aspect: [4, 3],
+      allowsEditing: false,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -274,6 +275,39 @@ export default function ChatInput({
     }
   };
 
+  const renderReplyPreview = () => {
+    if (!replyingTo) return null;
+
+    const isReplyToSelf = replyingTo.userId === currentUserId;
+    
+    return (
+      <View style={styles.replyPreviewContainer}>
+        <View style={styles.replyPreviewContent}>
+          <View style={styles.replyPreviewIndicator} />
+          <View style={styles.replyPreviewText}>
+            <Text style={styles.replyPreviewTitle}>
+              Replying to {isReplyToSelf ? 'yourself' : replyingTo.userName}
+            </Text>
+            <Text 
+              style={styles.replyPreviewMessage} 
+              numberOfLines={1}
+            >
+              {replyingTo.type === 'image' ? '📷 Photo' : 
+               replyingTo.type === 'voice' ? '🎵 Voice message' :
+               replyingTo.type === 'poll' ? '📊 Poll' : replyingTo.content}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity 
+          style={styles.replyPreviewClose} 
+          onPress={() => setReplyingTo(planId, null)}
+        >
+          <X size={16} color={Colors.light.secondaryText} />
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -319,6 +353,7 @@ export default function ChatInput({
 
   return (
     <View style={styles.container}>
+      {renderReplyPreview()}
       <View style={styles.inputRow}>
         <TouchableOpacity style={styles.actionButton} onPress={handleGallery}>
           <ImageIcon size={22} color={Colors.light.primary} />
@@ -510,6 +545,49 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  replyPreviewContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  replyPreviewContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  replyPreviewIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.light.secondary,
+    marginRight: 8,
+  },
+  replyPreviewText: {
+    flex: 1,
+  },
+  replyPreviewTitle: {
+    fontSize: 14,
+    color: Colors.light.text,
+    fontWeight: '500',
+  },
+  replyPreviewMessage: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+  },
+  replyPreviewClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },

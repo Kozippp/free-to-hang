@@ -28,6 +28,8 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
   const { messages, markMessagesAsRead } = useChatStore();
   const flatListRef = useRef<FlatList>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const highlightAnim = useRef(new Animated.Value(1)).current;
   
   const planMessages = messages[plan.id] || [];
   
@@ -91,6 +93,7 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
     const previousMessage = index > 0 ? planMessages[index - 1] : null;
     const nextMessage = index < planMessages.length - 1 ? planMessages[index + 1] : null;
     const showDateSeparator = shouldShowDateSeparator(item, previousMessage);
+    const isHighlighted = highlightedMessageId === item.id;
     
     // Check if we should show avatar (first message from user or after someone else)
     const showAvatar = !isOwnMessage && (
@@ -120,15 +123,22 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
           </View>
         )}
         
-        <ChatMessage
-          message={item}
-          planId={plan.id}
-          currentUserId={currentUserId}
-          isOwnMessage={isOwnMessage}
-          showAvatar={showAvatar}
-          isFirstInGroup={isFirstInGroup}
-          isLastInGroup={isLastInGroup}
-        />
+        <Animated.View style={[
+          isHighlighted && {
+            transform: [{ scale: highlightAnim }]
+          }
+        ]}>
+          <ChatMessage
+            message={item}
+            planId={plan.id}
+            currentUserId={currentUserId}
+            isOwnMessage={isOwnMessage}
+            showAvatar={showAvatar}
+            isFirstInGroup={isFirstInGroup}
+            isLastInGroup={isLastInGroup}
+            scrollToMessage={scrollToMessage}
+          />
+        </Animated.View>
       </View>
     );
   };
@@ -142,6 +152,42 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
   const scrollToBottom = () => {
     flatListRef.current?.scrollToEnd({ animated: true });
   };
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const messageIndex = planMessages.findIndex(msg => msg.id === messageId);
+    if (messageIndex !== -1 && flatListRef.current) {
+      // Scroll to message
+      flatListRef.current.scrollToIndex({
+        index: messageIndex,
+        animated: true,
+        viewPosition: 0.5, // Center the message
+      });
+      
+      // Highlight animation
+      setHighlightedMessageId(messageId);
+      
+      // Start highlight animation after a short delay
+      setTimeout(() => {
+        Animated.sequence([
+          Animated.timing(highlightAnim, {
+            toValue: 1.1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(highlightAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          // Clear highlight after animation
+          setTimeout(() => {
+            setHighlightedMessageId(null);
+          }, 500);
+        });
+      }, 300);
+    }
+  }, [planMessages, highlightAnim]);
 
   return (
     <KeyboardAvoidingView 
@@ -174,6 +220,18 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
         windowSize={10}
         initialNumToRender={20}
         inverted={false}
+        onScrollToIndexFailed={(info) => {
+          // Fallback: try to scroll after a short delay
+          setTimeout(() => {
+            if (flatListRef.current && info.index < planMessages.length) {
+              flatListRef.current.scrollToIndex({
+                index: info.index,
+                animated: true,
+                viewPosition: 0.5,
+              });
+            }
+          }, 100);
+        }}
       />
       
       {showScrollToBottom && (
