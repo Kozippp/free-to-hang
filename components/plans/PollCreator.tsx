@@ -253,13 +253,14 @@ export default function PollCreator({
         <KeyboardAvoidingView 
           style={styles.keyboardContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
         >
           <ScrollView 
             style={styles.scrollContent}
             contentContainerStyle={styles.scrollContentContainer}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            keyboardDismissMode="none"
           >
             {/* Question Input */}
             <View style={styles.questionSection}>
@@ -318,11 +319,14 @@ export default function PollCreator({
                             : `Option ${index + 1}`
                         }
                         placeholderTextColor="#999"
-                        autoFocus={pollType !== 'custom' && index === 0 && !existingPoll}
+                        autoFocus={false}
                         returnKeyType={index === options.length - 1 ? 'done' : 'next'}
                         blurOnSubmit={index === options.length - 1}
                         editable={!isProtected}
                         pointerEvents={isProtected ? 'none' : 'auto'}
+                        keyboardType="default"
+                        enablesReturnKeyAutomatically={false}
+                        clearButtonMode="never"
                       />
                       
                       {isProtected && (
