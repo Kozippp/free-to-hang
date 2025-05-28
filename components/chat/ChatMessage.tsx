@@ -19,7 +19,8 @@ import {
   Reply,
   Edit3,
   Trash2,
-  Copy
+  Copy,
+  X
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { ChatMessage as ChatMessageType } from '@/store/chatStore';
@@ -60,6 +61,7 @@ export default function ChatMessage({
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlayingVoice, setIsPlayingVoice] = useState(false);
   const [messageLayout, setMessageLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [showImageViewer, setShowImageViewer] = useState(false);
   
   // Swipe animation for timestamp
   const swipeAnim = useRef(new Animated.Value(0)).current;
@@ -281,9 +283,6 @@ export default function ChatMessage({
     const senderFirstName = getFirstName(isOwnMessage ? 'You' : message.userName);
     const replyToFirstName = isReplyToSelf ? 'yourself' : getFirstName(userName);
     
-    // Truncate content if too long (over 3 lines, roughly 150 characters)
-    const truncatedContent = content.length > 150 ? content.substring(0, 147) + '...' : content;
-    
     const getContentPreview = () => {
       switch (type) {
         case 'image':
@@ -293,7 +292,7 @@ export default function ChatMessage({
         case 'poll':
           return '📊 Poll';
         default:
-          return truncatedContent;
+          return content; // Don't truncate - let it be full length
       }
     };
 
@@ -384,8 +383,7 @@ export default function ChatMessage({
               activeOpacity={0.9} 
               style={styles.imageMessageContainer}
               onPress={() => {
-                // TODO: Open image in full screen
-                console.log('Open image in full screen');
+                setShowImageViewer(true);
               }}
               onLongPress={handleLongPress}
             >
@@ -573,9 +571,14 @@ export default function ChatMessage({
         
         {/* Image messages are displayed outside the bubble */}
         {message.type === 'image' ? (
-          <View style={styles.imageMessageWrapper}>
+          <TouchableOpacity
+            style={styles.imageMessageWrapper}
+            onLongPress={handleLongPress}
+            activeOpacity={1}
+            onLayout={onMessageLayout}
+          >
             {renderMessageContent()}
-          </View>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={getBubbleStyle()}
@@ -587,7 +590,36 @@ export default function ChatMessage({
           </TouchableOpacity>
         )}
         
-        {renderReactions()}
+        {/* Image Viewer Modal */}
+        {showImageViewer && (
+          <Modal
+            visible={showImageViewer}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowImageViewer(false)}
+          >
+            <View style={styles.imageViewerOverlay}>
+              <TouchableOpacity 
+                style={styles.imageViewerClose}
+                onPress={() => setShowImageViewer(false)}
+              >
+                <X size={24} color="white" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.imageViewerContainer}
+                activeOpacity={1}
+                onPress={() => setShowImageViewer(false)}
+              >
+                <Image 
+                  source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
+                  style={styles.fullScreenImage}
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
+            </View>
+          </Modal>
+        )}
       </View>
 
       {/* Message Actions Modal - Two Floating Menus */}
@@ -1108,5 +1140,26 @@ const styles = StyleSheet.create({
   },
   imageMessageWrapper: {
     maxWidth: MESSAGE_MAX_WIDTH,
+  },
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'black',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerClose: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 8,
+  },
+  imageViewerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImage: {
+    width: '100%',
+    height: '100%',
   },
 });
