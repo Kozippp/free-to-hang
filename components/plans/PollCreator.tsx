@@ -225,7 +225,7 @@ export default function PollCreator({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
       <SafeAreaView style={styles.container}>
@@ -250,122 +250,108 @@ export default function PollCreator({
           </TouchableOpacity>
         </View>
         
-        <KeyboardAvoidingView 
-          style={styles.keyboardContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+        <ScrollView 
+          style={styles.scrollContent}
+          contentContainerStyle={styles.scrollContentContainer}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
         >
-          <ScrollView 
-            style={styles.scrollContent}
-            contentContainerStyle={styles.scrollContentContainer}
-            keyboardShouldPersistTaps="always"
-            showsVerticalScrollIndicator={false}
-            keyboardDismissMode="none"
-            scrollEnabled={true}
-            nestedScrollEnabled={false}
-          >
-            {/* Question Input */}
-            <View style={styles.questionSection}>
-              <Text style={styles.sectionTitle}>Poll question</Text>
-              <TextInput
-                style={styles.questionInput}
-                value={question}
-                onChangeText={setQuestion}
-                placeholder="Ask a question..."
-                placeholderTextColor="#999"
-                multiline
-                maxLength={100}
-                autoFocus={pollType === 'custom' && !existingPoll}
-                editable={pollType === 'custom'}
-              />
-            </View>
+          {/* Question Input */}
+          <View style={styles.questionSection}>
+            <Text style={styles.sectionTitle}>Poll question</Text>
+            <TextInput
+              style={styles.questionInput}
+              value={question}
+              onChangeText={setQuestion}
+              placeholder="Ask a question..."
+              placeholderTextColor="#999"
+              multiline
+              maxLength={100}
+              autoFocus={pollType === 'custom' && !existingPoll}
+              editable={pollType === 'custom'}
+            />
+          </View>
+          
+          {/* Options */}
+          <View style={styles.optionsSection}>
+            <Text style={styles.sectionTitle}>OPTIONS</Text>
             
-            {/* Options */}
-            <View style={styles.optionsSection}>
-              <Text style={styles.sectionTitle}>OPTIONS</Text>
+            {hasDuplicates && (
+              <Text style={styles.duplicateError}>
+                Please remove duplicate options
+              </Text>
+            )}
+            
+            {options.map((option, index) => {
+              const isProtected = protectedOptions.has(option);
+              const isDuplicate = option.trim() !== '' && duplicateOptions.has(option.trim().toLowerCase());
               
-              {hasDuplicates && (
-                <Text style={styles.duplicateError}>
-                  Please remove duplicate options
-                </Text>
-              )}
-              
-              {options.map((option, index) => {
-                const isProtected = protectedOptions.has(option);
-                const isDuplicate = option.trim() !== '' && duplicateOptions.has(option.trim().toLowerCase());
-                
-                return (
-                  <View key={`option-${index}-${option.slice(0, 10)}`} style={styles.optionRow}>
-                    <View
+              return (
+                <View key={`option-${index}`} style={styles.optionRow}>
+                  <View
+                    style={[
+                      styles.optionInputContainer,
+                      isDuplicate && styles.duplicateOptionContainer,
+                      isProtected && styles.protectedOptionContainer
+                    ]}
+                  >
+                    <TextInput
                       style={[
-                        styles.optionInputContainer,
-                        isDuplicate && styles.duplicateOptionContainer,
-                        isProtected && styles.protectedOptionContainer
+                        styles.optionInput,
+                        isProtected && styles.protectedOptionInput,
+                        isDuplicate && styles.duplicateOptionInput
                       ]}
-                    >
-                      <TextInput
-                        style={[
-                          styles.optionInput,
-                          isProtected && styles.protectedOptionInput,
-                          isDuplicate && styles.duplicateOptionInput
-                        ]}
-                        value={option}
-                        onChangeText={(text) => handleOptionChange(text, index)}
-                        placeholder={
-                          pollType === 'when' 
-                            ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
-                            : pollType === 'where'
-                            ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
-                            : `Option ${index + 1}`
-                        }
-                        placeholderTextColor="#999"
-                        autoFocus={false}
-                        returnKeyType={index === options.length - 1 ? 'done' : 'next'}
-                        blurOnSubmit={index === options.length - 1}
-                        editable={!isProtected}
-                        keyboardType="default"
-                        enablesReturnKeyAutomatically={false}
-                        clearButtonMode="never"
-                        onFocus={isProtected ? handleProtectedOptionTap : undefined}
-                      />
-                      
-                      {isProtected && (
-                        <View style={styles.protectedIndicator}>
-                          <Text style={styles.protectedText}>🔒</Text>
-                        </View>
-                      )}
-                    </View>
+                      value={option}
+                      onChangeText={(text) => handleOptionChange(text, index)}
+                      placeholder={
+                        pollType === 'when' 
+                          ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
+                          : pollType === 'where'
+                          ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
+                          : `Option ${index + 1}`
+                      }
+                      placeholderTextColor="#999"
+                      editable={!isProtected}
+                    />
                     
-                    {options.length > 2 && !isProtected && (
-                      <TouchableOpacity
-                        onPress={() => handleRemoveOption(index)}
-                        style={styles.removeButton}
-                      >
-                        <X size={20} color="#999" />
-                      </TouchableOpacity>
+                    {isProtected && (
+                      <View style={styles.protectedIndicator}>
+                        <Text style={styles.protectedText}>🔒</Text>
+                      </View>
                     )}
                   </View>
-                );
-              })}
-            </View>
-            
-            {/* Extra padding for better keyboard handling */}
-            <View style={styles.bottomPadding} />
-          </ScrollView>
-        </KeyboardAvoidingView>
-        
-        {/* Bottom Action */}
-        <View style={styles.bottomSection}>
-          <TouchableOpacity 
-            onPress={handleSubmit}
-            style={[styles.createButton, !canSubmit() && styles.disabledCreateButton]}
-            disabled={!canSubmit()}
-          >
-            <Text style={[styles.createButtonText, !canSubmit() && styles.disabledCreateButtonText]}>
-              {existingPoll ? 'Update Poll' : 'Create Poll'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+                  
+                  {options.length > 2 && !isProtected && (
+                    <TouchableOpacity
+                      onPress={() => handleRemoveOption(index)}
+                      style={styles.removeButton}
+                    >
+                      <X size={20} color="#999" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+          
+          {/* Extra padding for better keyboard handling */}
+          <View style={styles.bottomPadding} />
+          
+          {/* Bottom Action inside ScrollView */}
+          <View style={styles.bottomSection}>
+            <TouchableOpacity 
+              onPress={handleSubmit}
+              style={[styles.createButton, !canSubmit() && styles.disabledCreateButton]}
+              disabled={!canSubmit()}
+            >
+              <Text style={[styles.createButtonText, !canSubmit() && styles.disabledCreateButtonText]}>
+                {existingPoll ? 'Update Poll' : 'Create Poll'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
@@ -411,9 +397,6 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: '#999',
-  },
-  keyboardContainer: {
-    flex: 1,
   },
   scrollContent: {
     flex: 1,
