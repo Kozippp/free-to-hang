@@ -75,7 +75,7 @@ export const mockInvitations: Plan[] = [
     createdAt: '2023-05-21T10:15:00Z'
   },
   {
-    id: '3',
+    id: '4',
     title: 'Beach Day',
     description: 'Let\'s go to the beach and enjoy the sun!',
     type: 'normal' as const,
@@ -120,7 +120,48 @@ export const mockInvitations: Plan[] = [
 // Mock active plans (plans you've accepted)
 export const mockActivePlans: Plan[] = [
   {
-    id: '4',
+    id: '3',
+    title: 'sõnumid',
+    description: 'Testimiseks chat sõnumite vaatamiseks ja reageerimiseks.',
+    type: 'normal' as const,
+    creator: {
+      id: 'user1',
+      name: 'Alex Johnson',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
+    },
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user1',
+        name: 'Alex Johnson',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user2',
+        name: 'Emma Wilson',
+        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user3',
+        name: 'Michael Chen',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      }
+    ],
+    date: 'Today, 7:00 PM',
+    location: 'Test Location',
+    isRead: false,
+    createdAt: '2023-05-21T14:30:00Z'
+  },
+  {
+    id: '5',
     title: 'Dinner at Italian Restaurant',
     description: 'Let\'s try the new Italian place downtown.',
     type: 'normal' as const,
@@ -308,3 +349,46 @@ export const mockCompletedPlans: Plan[] = [
     createdAt: '2023-05-19T08:00:00Z'
   }
 ];
+
+// Updated Beach Day plan
+export const mockUpdatedBeachDay: Plan = {
+  id: '7',
+  title: 'Beach Day',
+  description: 'Let\'s go to the beach and enjoy the sun!',
+  type: 'normal' as const,
+  creator: {
+    id: 'user6',
+    name: 'Emma Watson',
+    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=634&q=80'
+  },
+  participants: [
+    {
+      id: 'current',
+      name: 'You',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1350&q=80',
+      status: 'pending'
+    },
+    {
+      id: 'user6',
+      name: 'Emma Watson',
+      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=634&q=80',
+      status: 'accepted'
+    },
+    {
+      id: 'user7',
+      name: 'Tom Holland',
+      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=634&q=80',
+      status: 'maybe'
+    },
+    {
+      id: 'user8',
+      name: 'Zendaya',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=700&q=80',
+      status: 'accepted'
+    }
+  ],
+  date: 'Today, 12:00 PM',
+  location: 'Venice Beach',
+  isRead: false,
+  createdAt: '2023-05-21T08:45:00Z'
+};
