@@ -22,7 +22,9 @@ export default function PlanUserStatus({
   const [showConditionalModal, setShowConditionalModal] = useState(false);
 
   const handleStatusChange = (newStatus: ParticipantStatus) => {
-    if ((currentStatus === 'accepted' || currentStatus === 'maybe') && newStatus !== currentStatus) {
+    // Show warning only when going FROM 'accepted' (going) TO maybe/conditional
+    // because only when you're "going" you can actually vote and have votes to lose
+    if (currentStatus === 'accepted' && (newStatus === 'maybe' || newStatus === 'conditional')) {
       Alert.alert(
         'Change Status',
         'Changing your status will remove all your votes. Are you sure?',
@@ -63,7 +65,7 @@ export default function PlanUserStatus({
       // Show conditional friends modal for "If..." button
       setShowConditionalModal(true);
     } else {
-      // For "Maybe" and "Going", just change status directly
+      // For all other status changes (maybe->going, maybe->if, if->going, if->maybe), just change directly
       animateAndChangeStatus(newStatus);
     }
   };

@@ -258,9 +258,11 @@ export default function PollCreator({
           <ScrollView 
             style={styles.scrollContent}
             contentContainerStyle={styles.scrollContentContainer}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="none"
+            scrollEnabled={true}
+            nestedScrollEnabled={false}
           >
             {/* Question Input */}
             <View style={styles.questionSection}>
@@ -294,14 +296,12 @@ export default function PollCreator({
                 
                 return (
                   <View key={`option-${index}-${option.slice(0, 10)}`} style={styles.optionRow}>
-                    <TouchableOpacity
+                    <View
                       style={[
                         styles.optionInputContainer,
-                        isDuplicate && styles.duplicateOptionContainer
+                        isDuplicate && styles.duplicateOptionContainer,
+                        isProtected && styles.protectedOptionContainer
                       ]}
-                      onPress={isProtected ? handleProtectedOptionTap : undefined}
-                      disabled={!isProtected}
-                      activeOpacity={isProtected ? 0.7 : 1}
                     >
                       <TextInput
                         style={[
@@ -323,10 +323,10 @@ export default function PollCreator({
                         returnKeyType={index === options.length - 1 ? 'done' : 'next'}
                         blurOnSubmit={index === options.length - 1}
                         editable={!isProtected}
-                        pointerEvents={isProtected ? 'none' : 'auto'}
                         keyboardType="default"
                         enablesReturnKeyAutomatically={false}
                         clearButtonMode="never"
+                        onFocus={isProtected ? handleProtectedOptionTap : undefined}
                       />
                       
                       {isProtected && (
@@ -334,7 +334,7 @@ export default function PollCreator({
                           <Text style={styles.protectedText}>🔒</Text>
                         </View>
                       )}
-                    </TouchableOpacity>
+                    </View>
                     
                     {options.length > 2 && !isProtected && (
                       <TouchableOpacity
@@ -532,6 +532,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFE5E5',
   },
   duplicateOptionInput: {
+    backgroundColor: 'transparent',
+  },
+  protectedOptionContainer: {
     backgroundColor: 'transparent',
   },
 });
