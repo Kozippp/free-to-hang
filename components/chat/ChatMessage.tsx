@@ -11,7 +11,8 @@ import {
   PanResponder,
   Modal,
   TextInput,
-  Vibration
+  Vibration,
+  TouchableWithoutFeedback
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { BlurView } from 'expo-blur';
@@ -411,20 +412,20 @@ export default function ChatMessage({
       case 'image':
         return (
           <View>
-            <TouchableOpacity 
-              activeOpacity={0.9} 
-              style={styles.imageMessageContainer}
+            <TouchableWithoutFeedback 
               onPress={() => {
                 setShowImageViewer(true);
               }}
               onLongPress={handleLongPress}
             >
-              <Image 
-                source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
-                style={styles.messageImage}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
+              <View style={styles.imageMessageContainer}>
+                <Image 
+                  source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
+                  style={styles.messageImage}
+                  resizeMode="cover"
+                />
+              </View>
+            </TouchableWithoutFeedback>
             {message.content && (
               <View style={[
                 styles.imageCaptionBubble,
@@ -667,14 +668,16 @@ export default function ChatMessage({
           
           {/* Image messages are displayed outside the bubble */}
           {message.type === 'image' ? (
-            <TouchableOpacity
-              style={styles.imageMessageWrapper}
+            <TouchableWithoutFeedback
               onLongPress={handleLongPress}
-              activeOpacity={1}
-              onLayout={onMessageLayout}
             >
-              {renderMessageContent()}
-            </TouchableOpacity>
+              <View 
+                style={styles.imageMessageWrapper}
+                onLayout={onMessageLayout}
+              >
+                {renderMessageContent()}
+              </View>
+            </TouchableWithoutFeedback>
           ) : message.type === 'voice' ? (
             /* Voice messages need special handling for interactive waveform */
             <View onLayout={onMessageLayout}>
@@ -756,9 +759,15 @@ export default function ChatMessage({
                 }
               ]}
             >
-              <View style={getBubbleStyle()}>
-                {renderMessageContent()}
-              </View>
+              {message.type === 'image' ? (
+                <View>
+                  {renderMessageContent()}
+                </View>
+              ) : (
+                <View style={getBubbleStyle()}>
+                  {renderMessageContent()}
+                </View>
+              )}
             </Animated.View>
             
             {/* Timestamp next to highlighted message */}
