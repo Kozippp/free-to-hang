@@ -41,6 +41,8 @@ interface PlanSuggestionSheetProps {
   availableFriends: Friend[];
   isAnonymous: boolean;
   onPlanSubmitted: () => void;
+  prefilledTitle?: string;
+  prefilledDescription?: string;
 }
 
 export default function PlanSuggestionSheet({
@@ -50,13 +52,15 @@ export default function PlanSuggestionSheet({
   availableFriends,
   isAnonymous,
   onPlanSubmitted,
+  prefilledTitle,
+  prefilledDescription,
 }: PlanSuggestionSheetProps) {
   const { user, clearSelectedFriends } = useHangStore();
   const { addPlan } = usePlansStore();
   const router = useRouter();
   
-  const [planTitle, setPlanTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
+  const [description, setDescription] = useState(prefilledDescription || '');
   const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [additionalFriends, setAdditionalFriends] = useState<string[]>([]);
   const [pingedFriends, setPingedFriends] = useState<string[]>([]);
@@ -104,6 +108,10 @@ export default function PlanSuggestionSheet({
       // Reset states when modal closes
       resetStates();
     } else {
+      // Initialize with prefilled data when modal opens
+      setPlanTitle(prefilledTitle || '');
+      setDescription(prefilledDescription || '');
+      
       Animated.spring(slideAnim, {
         toValue: 1,
         useNativeDriver: true,
@@ -112,7 +120,7 @@ export default function PlanSuggestionSheet({
         velocity: 3,
       }).start();
     }
-  }, [visible, slideAnim]);
+  }, [visible, slideAnim, prefilledTitle, prefilledDescription]);
   
   const resetStates = () => {
     setPlanTitle('');

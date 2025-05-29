@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import TabBar from '@/components/plans/TabBar';
 import InvitationCard from '@/components/plans/InvitationCard';
+import CompletedPlanCard from '@/components/plans/CompletedPlanCard';
 import PlanDetailModal from '@/components/plans/PlanDetailModal';
+import CompletedPlanDetailView from '@/components/plans/CompletedPlanDetailView';
 import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 
@@ -18,7 +20,7 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
-  const { invitations, activePlans, completedPlans, markAsRead, respondToPlan } = usePlansStore();
+  const { invitations, activePlans, completedPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -87,6 +89,19 @@ export default function PlansScreen() {
       }
     }
   }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation, dropInAnimation]);
+
+  // Check for completed plans periodically
+  useEffect(() => {
+    // Initial check
+    processCompletedPlans();
+    
+    // Set up periodic check every 30 seconds
+    const interval = setInterval(() => {
+      processCompletedPlans();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [processCompletedPlans]);
 
   const startNewPlanAnimation = () => {
     // Use only transform animations with native driver
@@ -171,12 +186,20 @@ export default function PlansScreen() {
       <Text style={styles.emptyTitle}>No {activeTab.toLowerCase()} yet</Text>
       <Text style={styles.emptyDescription}>
         {activeTab === 'Invitations' 
-          ? "When someone invites you to hang out, you'll see it here."
+          ? 'When friends invite you to hang out, they\'ll appear here.'
           : activeTab === 'Plan'
-            ? "Plans you've accepted will appear here."
-            : "Your past hangouts will be shown here."
+          ? 'Plans you\'ve accepted will show up here.'
+          : 'Completed hangouts will be saved here as memories.'
         }
       </Text>
+      {activeTab === 'Completed' && (
+        <TouchableOpacity 
+          style={styles.demoButton}
+          onPress={addDemoCompletedPlan}
+        >
+          <Text style={styles.demoButtonText}>Add Demo Completed Plan</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
   
@@ -268,19 +291,35 @@ export default function PlansScreen() {
             {activeTab === 'Completed' && (
               <View style={styles.tabContent}>
                 {completedPlans.length === 0 ? renderEmptyState() : (
-                  <Text style={styles.comingSoonText}>Completed plans will be shown here</Text>
+                  <FlatList
+                    data={completedPlans}
+                    renderItem={({ item }) => (
+                      <CompletedPlanCard 
+                        plan={item} 
+                        onPress={handlePlanPress}
+                      />
+                    )}
+                    keyExtractor={(item) => `completedPlans-${item.id}`}
+                    contentContainerStyle={styles.listContent}
+                    ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+                    ListEmptyComponent={renderEmptyState}
+                  />
                 )}
               </View>
             )}
           </Animated.View>
         </PanGestureHandler>
         
-        <PlanDetailModal
-          visible={modalVisible}
-          plan={selectedPlan}
-          onClose={handleCloseModal}
-          onRespond={handleRespondToPlan}
-        />
+        {/* Plan Detail Modal */}
+        {selectedPlan && modalVisible && (
+          <PlanDetailModal
+            visible={modalVisible}
+            plan={selectedPlan}
+            onClose={handleCloseModal}
+            onRespond={activeTab === 'Completed' ? () => {} : handleRespondToPlan}
+            isCompleted={activeTab === 'Completed'}
+          />
+        )}
         
         <PlanCreatedSuccessModal
           visible={showSuccessModal}
@@ -329,6 +368,18 @@ const styles = StyleSheet.create({
   comingSoonText: {
     fontSize: 16,
     color: Colors.light.secondaryText,
+    textAlign: 'center',
+  },
+  demoButton: {
+    backgroundColor: Colors.light.primary,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  demoButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.light.background,
     textAlign: 'center',
   },
 });

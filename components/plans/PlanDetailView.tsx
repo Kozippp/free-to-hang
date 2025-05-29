@@ -52,7 +52,24 @@ interface PlanDetailViewProps {
 }
 
 export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailViewProps) {
-  const { addPoll, voteOnPoll, addPollOption, invitations, activePlans, processExpiredInvitationPolls, createInvitationPollWithAutoVote, deletePoll } = usePlansStore();
+  const { 
+    markAsRead, 
+    addPoll, 
+    voteOnPoll, 
+    updatePollOption, 
+    removePollOption, 
+    addPollOption, 
+    deletePoll,
+    createInvitationPollWithAutoVote, 
+    markPlanAsCompleted, 
+    canMarkAsCompleted,
+    voteForCompletion,
+    removeCompletionVote,
+    getCompletionVotingStatus,
+    invitations,
+    activePlans,
+    processExpiredInvitationPolls
+  } = usePlansStore();
   const { getUnreadCount } = useChatStore();
   
   // Get the latest plan data from store
@@ -365,6 +382,54 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     deletePoll(plan.id, pollId);
   };
 
+  // Helper function to handle marking plan as completed
+  const handleMarkAsCompleted = () => {
+    const votingStatus = getCompletionVotingStatus(latestPlan);
+    
+    if (votingStatus.hasUserVoted) {
+      // User wants to remove their vote
+      Alert.alert(
+        'Remove Completion Vote',
+        'Do you want to remove your vote for completion?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Remove Vote', 
+            style: 'destructive',
+            onPress: () => {
+              removeCompletionVote(plan.id, 'current');
+            }
+          }
+        ]
+      );
+    } else {
+      // User wants to vote for completion
+      const remainingVotes = votingStatus.requiredVotes - votingStatus.votedUsers.length;
+      Alert.alert(
+        'Vote for Completion',
+        `Vote to mark this plan as completed. ${remainingVotes} more vote${remainingVotes === 1 ? '' : 's'} needed to automatically complete.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Vote to Complete', 
+            style: 'default',
+            onPress: () => {
+              voteForCompletion(plan.id, 'current');
+              
+              // Check if this vote will complete the plan
+              if (remainingVotes === 1) {
+                // This will be the last vote needed, close modal after short delay
+                setTimeout(() => {
+                  onClose();
+                }, 1000);
+              }
+            }
+          }
+        ]
+      );
+    }
+  };
+
   return (
     <Animated.View style={[
       styles.container, 
@@ -650,6 +715,64 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             canVote={isInYesGang}
           />
           
+          {/* Mark as Completed Section - Only show if eligible */}
+          {canMarkAsCompleted(latestPlan) && (
+            <View style={styles.section}>
+              <View style={styles.headerRow}>
+                <CheckCircle size={20} color={Colors.light.text} style={styles.headerIcon} />
+                <Text style={styles.sectionTitle}>Plan Complete?</Text>
+              </View>
+              
+              {(() => {
+                const votingStatus = getCompletionVotingStatus(latestPlan);
+                const remainingVotes = votingStatus.requiredVotes - votingStatus.votedUsers.length;
+                
+                return (
+                  <>
+                    <Text style={styles.completionDescription}>
+                      Vote to mark this plan as completed. Needs {votingStatus.requiredVotes} out of {latestPlan.participants.filter(p => p.status === 'accepted').length} people to agree (50%).
+                    </Text>
+                    
+                    {votingStatus.votedUsers.length > 0 && (
+                      <View style={styles.votingStatus}>
+                        <Text style={styles.votingStatusText}>
+                          {votingStatus.votedUsers.length} voted to complete • {remainingVotes} more needed
+                        </Text>
+                        
+                        <View style={styles.votingProgress}>
+                          <View style={[
+                            styles.votingProgressBar,
+                            { width: `${(votingStatus.votedUsers.length / votingStatus.requiredVotes) * 100}%` }
+                          ]} />
+                        </View>
+                      </View>
+                    )}
+                    
+                    <TouchableOpacity 
+                      style={[
+                        styles.markCompletedButton,
+                        votingStatus.hasUserVoted && styles.markCompletedButtonVoted
+                      ]}
+                      onPress={handleMarkAsCompleted}
+                    >
+                      <CheckCircle 
+                        size={16} 
+                        color={votingStatus.hasUserVoted ? Colors.light.background : Colors.light.onlineGreen} 
+                        style={styles.markCompletedIcon} 
+                      />
+                      <Text style={[
+                        styles.markCompletedText,
+                        votingStatus.hasUserVoted && styles.markCompletedTextVoted
+                      ]}>
+                        {votingStatus.hasUserVoted ? 'Remove Vote' : 'Vote to Complete'}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                );
+              })()}
+            </View>
+          )}
+          
           {/* User Status Section */}
           <PlanUserStatus
             currentStatus={currentUserStatus}
@@ -741,7 +864,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 12,
   },
   emptyPollContainer: {
     alignItems: 'center',
@@ -864,5 +986,56 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  completionDescription: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginBottom: 16,
+  },
+  markCompletedButton: {
+    flexDirection: 'row',
+    backgroundColor: `${Colors.light.onlineGreen}15`,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  markCompletedIcon: {
+    marginRight: 8,
+  },
+  markCompletedText: {
+    color: Colors.light.onlineGreen,
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  votingStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  votingStatusText: {
+    fontSize: 14,
+    color: Colors.light.text,
+    marginRight: 8,
+  },
+  votingProgress: {
+    height: 12,
+    backgroundColor: Colors.light.border,
+    borderRadius: 6,
+    flex: 1,
+  },
+  votingProgressBar: {
+    height: '100%',
+    backgroundColor: Colors.light.onlineGreen,
+    borderRadius: 6,
+  },
+  markCompletedButtonVoted: {
+    backgroundColor: `${Colors.light.onlineGreen}15`,
+  },
+  markCompletedTextVoted: {
+    color: Colors.light.onlineGreen,
+    fontWeight: '500',
   },
 });

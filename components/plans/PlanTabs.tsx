@@ -6,10 +6,11 @@ interface PlanTabsProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   unreadCount?: number;
+  customTabs?: string[];
 }
 
-export default function PlanTabs({ activeTab, onTabChange, unreadCount = 0 }: PlanTabsProps) {
-  const tabs = ['Control Panel', 'Chat'];
+export default function PlanTabs({ activeTab, onTabChange, unreadCount = 0, customTabs }: PlanTabsProps) {
+  const tabs = customTabs || ['Control Panel', 'Chat'];
   
   return (
     <View style={styles.container}>

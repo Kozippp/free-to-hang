@@ -16,19 +16,22 @@ import { X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan, ParticipantStatus } from '@/store/plansStore';
 import PlanDetailView from './PlanDetailView';
+import CompletedPlanDetailView from './CompletedPlanDetailView';
 
 interface PlanDetailModalProps {
   visible: boolean;
   plan: Plan | null;
   onClose: () => void;
   onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => void;
+  isCompleted?: boolean;
 }
 
 export default function PlanDetailModal({
   visible,
   plan,
   onClose,
-  onRespond
+  onRespond,
+  isCompleted
 }: PlanDetailModalProps) {
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
@@ -129,11 +132,18 @@ export default function PlanDetailModal({
               <X size={24} color={Colors.light.secondaryText} />
             </TouchableOpacity>
             
-            <PlanDetailView 
-              plan={plan} 
-              onClose={handleClose} 
-              onRespond={onRespond} 
-            />
+            {isCompleted ? (
+              <CompletedPlanDetailView 
+                plan={plan} 
+                onClose={handleClose} 
+              />
+            ) : (
+              <PlanDetailView 
+                plan={plan} 
+                onClose={handleClose} 
+                onRespond={onRespond} 
+              />
+            )}
           </SafeAreaView>
         </Animated.View>
       </View>

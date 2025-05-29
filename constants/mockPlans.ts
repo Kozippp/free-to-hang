@@ -41,7 +41,8 @@ export const mockInvitations: Plan[] = [
     date: 'Today, 7:00 PM',
     location: 'AMC Theater',
     isRead: false,
-    createdAt: '2023-05-21T14:30:00Z'
+    createdAt: '2023-05-21T14:30:00Z',
+    completionVotes: []
   },
   {
     id: '2',
@@ -72,7 +73,8 @@ export const mockInvitations: Plan[] = [
     date: 'Today, 3:00 PM',
     location: 'Starbucks Downtown',
     isRead: true,
-    createdAt: '2023-05-21T10:15:00Z'
+    createdAt: '2023-05-21T10:15:00Z',
+    completionVotes: []
   },
   {
     id: '4',
@@ -113,7 +115,8 @@ export const mockInvitations: Plan[] = [
     date: 'Today, 12:00 PM',
     location: 'Venice Beach',
     isRead: false,
-    createdAt: '2023-05-21T08:45:00Z'
+    createdAt: '2023-05-21T08:45:00Z',
+    completionVotes: []
   }
 ];
 
@@ -158,7 +161,8 @@ export const mockActivePlans: Plan[] = [
     date: 'Today, 7:00 PM',
     location: 'Test Location',
     isRead: false,
-    createdAt: '2023-05-21T14:30:00Z'
+    createdAt: '2023-05-21T14:30:00Z',
+    completionVotes: []
   },
   {
     id: '5',
@@ -194,6 +198,7 @@ export const mockActivePlans: Plan[] = [
     location: 'Bella Italia',
     isRead: true,
     createdAt: '2023-05-20T19:30:00Z',
+    completionVotes: [],
     polls: [
       {
         id: 'poll1',
@@ -307,7 +312,8 @@ export const mockActivePlans: Plan[] = [
     date: 'Today, 6:00 PM',
     location: 'Chris\'s Apartment',
     isRead: true,
-    createdAt: '2023-05-20T15:00:00Z'
+    createdAt: '2023-05-20T15:00:00Z',
+    completionVotes: []
   }
 ];
 
@@ -346,7 +352,8 @@ export const mockCompletedPlans: Plan[] = [
     date: 'Yesterday, 10:00 AM',
     location: 'Yellowstone National Park',
     isRead: true,
-    createdAt: '2023-05-19T08:00:00Z'
+    createdAt: '2023-05-19T08:00:00Z',
+    completionVotes: ['current', 'user14', 'user15']
   }
 ];
 
@@ -390,5 +397,6 @@ export const mockUpdatedBeachDay: Plan = {
   date: 'Today, 12:00 PM',
   location: 'Venice Beach',
   isRead: false,
-  createdAt: '2023-05-21T08:45:00Z'
+  createdAt: '2023-05-21T08:45:00Z',
+  completionVotes: []
 };
