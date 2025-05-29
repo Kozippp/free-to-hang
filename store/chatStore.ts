@@ -12,6 +12,7 @@ export interface ChatMessage {
   imageUrl?: string;
   voiceUrl?: string;
   voiceDuration?: number;
+  waveformData?: number[]; // Audio waveform data for voice messages
   pollData?: {
     question: string;
     options: {
@@ -142,6 +143,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       content: 'Voice message',
       voiceUrl: 'voice://demo-voice',
       voiceDuration: 8,
+      waveformData: [0.2, 0.3, 0.5, 0.8, 0.6, 0.4, 0.7, 0.9, 0.5, 0.3, 0.6, 0.8, 0.4, 0.5, 0.7, 0.3, 0.8, 0.6, 0.4, 0.7, 0.5, 0.9, 0.3, 0.6, 0.8, 0.4, 0.7, 0.5, 0.6, 0.3, 0.4, 0.5, 0.7, 0.2, 0.8, 0.6, 0.3, 0.9, 0.4, 0.5],
       reactions: {},
       timestamp: Date.now() - 300000, // 5 minutes ago
       isRead: false,
@@ -268,6 +270,7 @@ const demoMessages: { [planId: string]: ChatMessage[] } = {
       content: 'Voice message',
       voiceUrl: 'voice://demo-voice-estonian',
       voiceDuration: 12,
+      waveformData: [0.1, 0.3, 0.4, 0.7, 0.5, 0.6, 0.2, 0.8, 0.4, 0.5, 0.7, 0.3, 0.9, 0.6, 0.4, 0.5, 0.8, 0.2, 0.7, 0.4, 0.6, 0.3, 0.9, 0.5, 0.7, 0.4, 0.6, 0.3, 0.8, 0.5, 0.4, 0.6, 0.7, 0.2, 0.9, 0.5, 0.3, 0.7, 0.6, 0.4, 0.8, 0.3, 0.5, 0.6, 0.4, 0.7, 0.5, 0.8, 0.3, 0.6],
       reactions: {},
       timestamp: Date.now() - 600000, // 10 minutes ago
       isRead: false,
