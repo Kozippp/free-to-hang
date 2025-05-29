@@ -45,6 +45,7 @@ export interface Plan {
   isRead: boolean;
   createdAt: string;
   polls?: Poll[];
+  completionVotes?: string[]; // Array of participant IDs who voted for completion
 }
 
 interface PlansState {
@@ -77,6 +78,25 @@ interface PlansState {
   // Invitation poll actions
   processExpiredInvitationPolls: () => void;
   createInvitationPollWithAutoVote: (planId: string, friendIds: string[], friendNames: string[], creatorId: string) => void;
+  
+  // Completion actions
+  processCompletedPlans: () => void;
+  markPlanAsCompleted: (planId: string) => void;
+  canMarkAsCompleted: (plan: Plan) => boolean;
+  restartPlan: (completedPlan: Plan) => Plan;
+  
+  // New completion voting functions
+  voteForCompletion: (planId: string, userId: string) => void;
+  removeCompletionVote: (planId: string, userId: string) => void;
+  getCompletionVotingStatus: (plan: Plan) => {
+    votedUsers: string[];
+    requiredVotes: number;
+    hasUserVoted: boolean;
+    isCompleted: boolean;
+  };
+  
+  // Demo function to add a completed plan for testing
+  addDemoCompletedPlan: () => void;
 }
 
 const usePlansStore = create<PlansState>((set, get) => ({
@@ -161,13 +181,17 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   addPlan: (plan: Plan) => {
     set((state) => {
-      // Ensure plan is marked as unread for highlighting
-      const planWithUnreadStatus = { ...plan, isRead: false };
+      // Ensure plan is marked as unread for highlighting and has completionVotes initialized
+      const planWithDefaults = { 
+        ...plan, 
+        isRead: false,
+        completionVotes: []
+      };
       
       // Anonymous plans always go to invitations (since user didn't create them knowingly)
       if (plan.type === 'anonymous') {
         return {
-          invitations: [planWithUnreadStatus, ...state.invitations], // Add to top
+          invitations: [planWithDefaults, ...state.invitations], // Add to top
           activePlans: state.activePlans,
           completedPlans: state.completedPlans
         };
@@ -177,14 +201,14 @@ const usePlansStore = create<PlansState>((set, get) => ({
       if (plan.creator?.id === 'current') {
         return {
           invitations: state.invitations,
-          activePlans: [planWithUnreadStatus, ...state.activePlans], // Add to top
+          activePlans: [planWithDefaults, ...state.activePlans], // Add to top
           completedPlans: state.completedPlans
         };
       }
       
       // Otherwise (received invitation), add it to invitations
       return {
-        invitations: [planWithUnreadStatus, ...state.invitations], // Add to top
+        invitations: [planWithDefaults, ...state.invitations], // Add to top
         activePlans: state.activePlans,
         completedPlans: state.completedPlans
       };
@@ -630,6 +654,235 @@ const usePlansStore = create<PlansState>((set, get) => ({
         completedPlans: state.completedPlans
       };
     });
+  },
+  
+  // Completion actions
+  processCompletedPlans: () => {
+    const now = new Date();
+    const today6AM = new Date();
+    today6AM.setHours(6, 0, 0, 0);
+    
+    // If it's past 6 AM today, check for plans from yesterday that should be completed
+    const cutoffTime = now >= today6AM ? today6AM : new Date(today6AM.getTime() - 24 * 60 * 60 * 1000);
+    
+    set((state) => {
+      const plansToComplete: Plan[] = [];
+      const remainingActivePlans: Plan[] = [];
+      
+      state.activePlans.forEach(plan => {
+        const planCreatedAt = new Date(plan.createdAt);
+        
+        // Plan should be completed if created before the cutoff time
+        if (planCreatedAt < cutoffTime) {
+          plansToComplete.push({
+            ...plan,
+            // Mark final participation status
+          });
+        } else {
+          remainingActivePlans.push(plan);
+        }
+      });
+      
+      return {
+        invitations: state.invitations,
+        activePlans: remainingActivePlans,
+        completedPlans: [...plansToComplete, ...state.completedPlans]
+      };
+    });
+  },
+  
+  markPlanAsCompleted: (planId: string) => {
+    set((state) => {
+      const planIndex = state.activePlans.findIndex(p => p.id === planId);
+      if (planIndex === -1) return state;
+      
+      const planToComplete = state.activePlans[planIndex];
+      const updatedActivePlans = state.activePlans.filter(p => p.id !== planId);
+      
+      return {
+        invitations: state.invitations,
+        activePlans: updatedActivePlans,
+        completedPlans: [planToComplete, ...state.completedPlans]
+      };
+    });
+  },
+  
+  canMarkAsCompleted: (plan: Plan) => {
+    const now = new Date();
+    const planCreatedAt = new Date(plan.createdAt);
+    const fourHoursLater = new Date(planCreatedAt.getTime() + 4 * 60 * 60 * 1000);
+    
+    // Plan can be marked as completed if it's been 4+ hours AND 50% haven't voted yet
+    const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
+    const votedUsers = plan.completionVotes || [];
+    const requiredVotes = Math.ceil(acceptedParticipants.length * 0.5);
+    const isAlreadyCompleted = votedUsers.length >= requiredVotes;
+    
+    return now >= fourHoursLater && !isAlreadyCompleted;
+  },
+  
+  restartPlan: (completedPlan: Plan) => {
+    const newPlan: Plan = {
+      ...completedPlan,
+      id: `plan-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      isRead: false,
+      completionVotes: [], // Reset completion votes
+      // Reset all participants to pending status
+      participants: completedPlan.participants.map(participant => ({
+        ...participant,
+        status: participant.id === 'current' ? 'pending' : 'pending' as ParticipantStatus,
+        conditionalFriends: undefined
+      })),
+      // Clear all polls
+      polls: []
+    };
+    
+    // Add the new plan to the store
+    get().addPlan(newPlan);
+    
+    return newPlan;
+  },
+  
+  // New completion voting functions
+  voteForCompletion: (planId: string, userId: string) => {
+    set((state) => {
+      const updatePlan = (plan: Plan): Plan => {
+        if (plan.id !== planId) return plan;
+        
+        const currentVotes = plan.completionVotes || [];
+        
+        // Don't add vote if user already voted
+        if (currentVotes.includes(userId)) return plan;
+        
+        const updatedCompletionVotes = [...currentVotes, userId];
+        const updatedPlan = {
+          ...plan,
+          completionVotes: updatedCompletionVotes
+        };
+        
+        // Check if we've reached 50% threshold
+        const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
+        const requiredVotes = Math.ceil(acceptedParticipants.length * 0.5);
+        
+        // If 50% threshold reached, automatically complete the plan
+        if (updatedCompletionVotes.length >= requiredVotes) {
+          // Move to completed plans immediately
+          setTimeout(() => {
+            get().markPlanAsCompleted(planId);
+          }, 0);
+        }
+        
+        return updatedPlan;
+      };
+      
+      return {
+        invitations: state.invitations.map(updatePlan),
+        activePlans: state.activePlans.map(updatePlan),
+        completedPlans: state.completedPlans
+      };
+    });
+  },
+  
+  removeCompletionVote: (planId: string, userId: string) => {
+    set((state) => {
+      const updatePlan = (plan: Plan): Plan => {
+        if (plan.id !== planId) return plan;
+        
+        const currentVotes = plan.completionVotes || [];
+        const updatedCompletionVotes = currentVotes.filter(id => id !== userId);
+        
+        return {
+          ...plan,
+          completionVotes: updatedCompletionVotes
+        };
+      };
+      
+      return {
+        invitations: state.invitations.map(updatePlan),
+        activePlans: state.activePlans.map(updatePlan),
+        completedPlans: state.completedPlans
+      };
+    });
+  },
+  
+  getCompletionVotingStatus: (plan: Plan) => {
+    const votedUsers = plan.completionVotes || [];
+    const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
+    const requiredVotes = Math.ceil(acceptedParticipants.length * 0.5);
+    const hasUserVoted = votedUsers.includes('current');
+    const isCompleted = votedUsers.length >= requiredVotes;
+    
+    return {
+      votedUsers,
+      requiredVotes,
+      hasUserVoted,
+      isCompleted
+    };
+  },
+  
+  // Demo function to add a completed plan for testing
+  addDemoCompletedPlan: () => {
+    const demoPlan: Plan = {
+      id: `completed-demo-${Date.now()}`,
+      title: 'Demo Completed Plan',
+      description: 'This is a demo completed plan for testing.',
+      type: 'normal' as const,
+      creator: {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
+      },
+      participants: [
+        {
+          id: 'current',
+          name: 'You',
+          avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+          status: 'accepted'
+        },
+        {
+          id: 'demo1',
+          name: 'Demo Friend 1',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+          status: 'accepted'
+        },
+        {
+          id: 'demo2',
+          name: 'Demo Friend 2',
+          avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+          status: 'accepted'
+        }
+      ],
+      date: 'Yesterday, 7:00 PM',
+      location: 'Demo Location',
+      isRead: true,
+      createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), // 25 hours ago
+      completionVotes: ['current', 'demo1'], // 2 out of 3 voted for completion
+      polls: [
+        {
+          id: 'demo-poll-1',
+          question: 'What time worked best?',
+          type: 'when',
+          options: [
+            {
+              id: 'demo-option-1',
+              text: '7:00 PM',
+              votes: ['current', 'demo1', 'demo2']
+            },
+            {
+              id: 'demo-option-2',
+              text: '8:00 PM',
+              votes: ['demo1']
+            }
+          ]
+        }
+      ]
+    };
+    
+    set((state) => ({
+      ...state,
+      completedPlans: [demoPlan, ...state.completedPlans]
+    }));
   }
 }));
 
