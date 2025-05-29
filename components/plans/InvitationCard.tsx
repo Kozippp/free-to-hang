@@ -101,24 +101,16 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
   
   return (
     <TouchableOpacity
-      style={[
-        styles.card,
-        !plan.isRead && styles.unreadCard,
-        isAnonymous && !plan.isRead && styles.unreadAnonymousCard,
-        !isAnonymous && !plan.isRead && styles.unreadRegularCard
-      ]}
+      style={styles.card}
       onPress={() => onPress(plan)}
       activeOpacity={0.7}
     >
-      {!plan.isRead && <View style={styles.unreadIndicator} />}
-      
       {/* User status badge */}
       {currentUserStatus !== 'pending' && getUserStatusBadge()}
       
       <View style={styles.header}>
         <Text style={[
           styles.invitedBy,
-          !plan.isRead && styles.unreadText,
           isCreatedByCurrentUser ? styles.createdByYouText : 
           isAnonymous ? styles.anonymousText : styles.invitedText
         ]}>
@@ -128,7 +120,7 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
               ? "Anonymous invitation to" 
               : `${getFirstName(plan.creator?.name || '')} invited you to`}
         </Text>
-        <Text style={[styles.title, !plan.isRead && styles.unreadText]}>{plan.title}</Text>
+        <Text style={styles.title}>{plan.title}</Text>
       </View>
       
       {/* Active voting banner */}
@@ -211,28 +203,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderWidth: 1,
     borderColor: '#EEEEEE',
-  },
-  unreadCard: {
-    borderWidth: 2,
-    backgroundColor: `${Colors.light.primary}05`, // Very light tint of primary color
-  },
-  unreadRegularCard: {
-    borderColor: '#FFC107', // Yellow border for regular unread invitations
-  },
-  unreadAnonymousCard: {
-    borderColor: Colors.light.secondary, // Red border for anonymous unread invitations
-  },
-  unreadIndicator: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFCC00', // Yellow dot for unread
-  },
-  unreadText: {
-    fontWeight: '700', // Make text bold for unread items
   },
   header: {
     marginBottom: 12,

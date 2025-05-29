@@ -16,7 +16,6 @@ export default function PlansScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [newPlanTitle, setNewPlanTitle] = useState('');
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
-  const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
   const { invitations, activePlans, completedPlans, markAsRead, respondToPlan } = usePlansStore();
   const params = useLocalSearchParams();
@@ -25,9 +24,6 @@ export default function PlansScreen() {
   const tabs = ['Invitations', 'Plan', 'Completed'];
   const screenWidth = Dimensions.get('window').width;
   const translateX = useRef(new Animated.Value(0)).current;
-  const newPlanAnimation = useRef(new Animated.Value(0)).current;
-  const tabSwitchAnimation = useRef(new Animated.Value(0)).current;
-  const dropInAnimation = useRef(new Animated.Value(-100)).current;
 
   // Check for new plan creation
   useEffect(() => {
@@ -44,41 +40,15 @@ export default function PlansScreen() {
           ? 'Invitations' 
           : 'Plan';
         
-        // Animate tab switch for visual feedback
-        Animated.timing(tabSwitchAnimation, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => {
-          // Reset animation
-          tabSwitchAnimation.setValue(0);
-        });
-        
         // Immediately switch to the correct tab
         setActiveTab(targetTab);
         setNewPlanTitle(newestPlan.title);
         setIsAnonymousPlan(newestPlan.type === 'anonymous');
-        setHighlightedPlanId(newestPlan.id);
-        
-        // Start drop-in animation
-        dropInAnimation.setValue(-100);
-        Animated.spring(dropInAnimation, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 10,
-          stiffness: 100,
-          velocity: 8,
-        }).start();
         
         // Show success modal with short delay for smooth transition
         setTimeout(() => {
           setShowSuccessModal(true);
         }, 300);
-        
-        // Start new plan highlight animation after modal appears
-        setTimeout(() => {
-          startNewPlanAnimation();
-        }, 400);
         
         // Clear the URL parameter after handling
         setTimeout(() => {
@@ -86,27 +56,8 @@ export default function PlansScreen() {
         }, 1000);
       }
     }
-  }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation, dropInAnimation]);
+  }, [params.newPlan, invitations, activePlans, router]);
 
-  const startNewPlanAnimation = () => {
-    // Use only transform animations with native driver
-    Animated.timing(newPlanAnimation, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start(() => {
-      // Fade out after highlighting
-      Animated.timing(newPlanAnimation, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }).start(() => {
-        setHighlightedPlanId(null);
-        dropInAnimation.setValue(0); // Reset drop animation
-      });
-    });
-  };
-  
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
   };
@@ -184,34 +135,8 @@ export default function PlansScreen() {
   const unreadCount = invitations.filter(plan => !plan.isRead).length;
   
   const renderPlanItem = ({ item, index }: { item: Plan; index: number }) => {
-    const isHighlighted = highlightedPlanId === item.id;
-    const isFirst = index === 0 && isHighlighted;
-    
-    const highlightStyle = isHighlighted ? {
-      transform: [
-        {
-          translateY: isFirst ? dropInAnimation : 0
-        },
-        {
-          scale: newPlanAnimation.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [1, 1.08, 1.02]
-          })
-        }
-      ],
-      // Remove backgroundColor animation to avoid native driver conflicts
-    } : {};
-
     return (
-      <Animated.View style={[
-        highlightStyle,
-        isHighlighted && { 
-          backgroundColor: 'rgba(76, 175, 80, 0.25)',
-          borderRadius: 12,
-        }
-      ]}>
-        <InvitationCard plan={item} onPress={handlePlanPress} />
-      </Animated.View>
+      <InvitationCard plan={item} onPress={handlePlanPress} />
     );
   };
   
