@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -8,6 +8,7 @@ import InvitationCard from '@/components/plans/InvitationCard';
 import PlanDetailModal from '@/components/plans/PlanDetailModal';
 import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
+import useNotificationsStore from '@/store/notificationsStore';
 
 export default function PlansScreen() {
   const [activeTab, setActiveTab] = useState('Invitations');
@@ -18,6 +19,7 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   
   const { invitations, activePlans, completedPlans, markAsRead, respondToPlan } = usePlansStore();
+  const { addDemoNotifications } = useNotificationsStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -131,9 +133,6 @@ export default function PlansScreen() {
     </View>
   );
   
-  // Count unread invitations
-  const unreadCount = invitations.filter(plan => !plan.isRead).length;
-  
   const renderPlanItem = ({ item, index }: { item: Plan; index: number }) => {
     return (
       <InvitationCard plan={item} onPress={handlePlanPress} />
@@ -158,8 +157,15 @@ export default function PlansScreen() {
           tabs={tabs} 
           activeTab={activeTab} 
           onTabChange={handleTabChange}
-          unreadCount={unreadCount}
         />
+        
+        {/* Demo test nupp - eemalda hiljem */}
+        <TouchableOpacity 
+          style={styles.demoButton}
+          onPress={addDemoNotifications}
+        >
+          <Text style={styles.demoButtonText}>Lisa Demo Teavitused</Text>
+        </TouchableOpacity>
         
         <PanGestureHandler
           onGestureEvent={onGestureEvent}
@@ -255,5 +261,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.secondaryText,
     textAlign: 'center',
+  },
+  demoButton: {
+    backgroundColor: Colors.light.primary,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  demoButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.light.background,
   },
 });

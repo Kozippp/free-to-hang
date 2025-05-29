@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { Check, Crown, Edit2, Users, Trash2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import useNotificationsStore from '@/store/notificationsStore';
+import NotificationDot from '@/components/NotificationDot';
 
 interface PollOption {
   id: string;
@@ -33,6 +35,8 @@ interface PollDisplayProps {
   totalGoingParticipants?: number; // Total number of people going to the plan
   hideQuestion?: boolean; // New prop to hide question for preset polls
   onDelete?: () => void; // New prop for deleting custom polls
+  pollId?: string; // Poll ID for notifications
+  planId?: string; // Plan ID for notifications
 }
 
 export default function PollDisplay({
@@ -45,8 +49,11 @@ export default function PollDisplay({
   onEdit,
   totalGoingParticipants = 0,
   hideQuestion = false,
-  onDelete
+  onDelete,
+  pollId,
+  planId
 }: PollDisplayProps) {
+  const { getNotificationCounts } = useNotificationsStore();
   const [animatedValues] = useState(() => {
     const values: Record<string, Animated.Value> = {};
     options.forEach(option => {
@@ -186,8 +193,33 @@ export default function PollDisplay({
     );
   };
 
+  // Get notification count for this specific poll
+  const getPollNotificationCount = () => {
+    if (!pollId || !planId) return 0;
+    const { notifications } = useNotificationsStore.getState();
+    return notifications.filter(n => 
+      !n.isRead && 
+      n.planId === planId && 
+      n.pollId === pollId
+    ).length;
+  };
+
   return (
     <View style={styles.container}>
+      {/* Notification dot for this poll */}
+      {pollId && planId && (
+        <NotificationDot 
+          count={getPollNotificationCount()}
+          size="small"
+          style={{
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            zIndex: 10,
+          }}
+        />
+      )}
+      
       {/* Header with question and stats - only show if not hidden */}
       {!hideQuestion && (
         <>

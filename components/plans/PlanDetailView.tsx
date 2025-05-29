@@ -381,7 +381,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       <PlanTabs 
         activeTab={activeTab} 
         onTabChange={handleTabChange}
-        unreadCount={unreadCount}
+        planId={latestPlan.id}
       />
       
       {activeTab === 'Control Panel' && (
@@ -439,6 +439,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     onEdit={() => handleCreatePoll('when', whenPoll)}
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
+                    pollId={whenPoll.id}
+                    planId={latestPlan.id}
                   />
                 ) : isInYesGang ? (
                   <View style={styles.emptyPollContainer}>
@@ -481,6 +483,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     onEdit={() => handleCreatePoll('where', wherePoll)}
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
+                    pollId={wherePoll.id}
+                    planId={latestPlan.id}
                   />
                 ) : isInYesGang ? (
                   <View style={styles.emptyPollContainer}>
@@ -520,6 +524,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 onEdit={() => handleCreatePoll('custom', poll)}
                 totalGoingParticipants={acceptedParticipants.length}
                 onDelete={() => handleDeletePoll(poll.id)}
+                pollId={poll.id}
+                planId={latestPlan.id}
               />
             </View>
           ))}

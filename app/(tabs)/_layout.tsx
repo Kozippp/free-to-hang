@@ -4,17 +4,28 @@ import { Calendar, ToggleLeft, User } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { StatusBar } from "expo-status-bar";
 import { Platform, View, Text } from "react-native";
-import usePlansStore from "@/store/plansStore";
+import useNotificationsStore from "@/store/notificationsStore";
+import NotificationDot from "@/components/NotificationDot";
 
 export default function TabLayout() {
-  const { invitations } = usePlansStore();
-  const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
+  const { getNotificationCounts } = useNotificationsStore();
+  const [notificationCounts, setNotificationCounts] = useState({ hang: 0, plans: 0, profile: 0 });
   
-  // Check for unread invitations
+  // Uuenda teavituste loendureid
   useEffect(() => {
-    const unreadCount = invitations.filter(plan => !plan.isRead).length;
-    setHasUnreadInvitations(unreadCount > 0);
-  }, [invitations]);
+    const updateCounts = () => {
+      const counts = getNotificationCounts();
+      setNotificationCounts(counts.byTab);
+    };
+    
+    // Uuenda kohe
+    updateCounts();
+    
+    // Uuenda iga sekund (võib hiljem optimeerida)
+    const interval = setInterval(updateCounts, 1000);
+    
+    return () => clearInterval(interval);
+  }, [getNotificationCounts]);
   
   return (
     <>
@@ -50,7 +61,17 @@ export default function TabLayout() {
           options={{
             title: "Hang",
             tabBarIcon: ({ color, size }) => (
-              <ToggleLeft size={size} color={color} />
+              <View style={{ position: 'relative' }}>
+                <ToggleLeft size={size} color={color} />
+                <NotificationDot 
+                  count={notificationCounts.hang}
+                  size="small"
+                  style={{
+                    top: -2,
+                    right: -6,
+                  }}
+                />
+              </View>
             ),
           }}
         />
@@ -59,22 +80,16 @@ export default function TabLayout() {
           options={{
             title: "Plans",
             tabBarIcon: ({ color, size }) => (
-              <View>
+              <View style={{ position: 'relative' }}>
                 <Calendar size={size} color={color} />
-                {hasUnreadInvitations && (
-                  <View style={{
-                    position: 'absolute',
+                <NotificationDot 
+                  count={notificationCounts.plans}
+                  size="small"
+                  style={{
                     top: -2,
                     right: -6,
-                    backgroundColor: '#FF3B30', // Instagram-style red
-                    borderRadius: 3.5,
-                    width: 7, // 15% smaller than before
-                    height: 7,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}>
-                  </View>
-                )}
+                  }}
+                />
               </View>
             ),
           }}
@@ -84,7 +99,17 @@ export default function TabLayout() {
           options={{
             title: "Profile",
             tabBarIcon: ({ color, size }) => (
-              <User size={size} color={color} />
+              <View style={{ position: 'relative' }}>
+                <User size={size} color={color} />
+                <NotificationDot 
+                  count={notificationCounts.profile}
+                  size="small"
+                  style={{
+                    top: -2,
+                    right: -6,
+                  }}
+                />
+              </View>
             ),
           }}
         />

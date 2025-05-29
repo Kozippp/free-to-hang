@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { mockInvitations, mockActivePlans, mockCompletedPlans } from '@/constants/mockPlans';
 import { useRouter } from 'expo-router';
+import useNotificationsStore from './notificationsStore';
 
 export type ParticipantStatus = 'pending' | 'accepted' | 'maybe' | 'conditional' | 'declined';
 
@@ -164,8 +165,23 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // Ensure plan is marked as unread for highlighting
       const planWithUnreadStatus = { ...plan, isRead: false };
       
+      // Lisa teavitus uue plaani kohta
+      const notificationsStore = useNotificationsStore.getState();
+      
       // Anonymous plans always go to invitations (since user didn't create them knowingly)
       if (plan.type === 'anonymous') {
+        // Lisa teavitus uue anonüümse kutse kohta
+        notificationsStore.addNotification({
+          type: 'new_invitation',
+          planId: plan.id,
+          title: 'Uus anonüümne kutse',
+          description: `Uus anonüümne kutse: "${plan.title}"`,
+          location: {
+            tab: 'plans',
+            section: 'invitations',
+          }
+        });
+        
         return {
           invitations: [planWithUnreadStatus, ...state.invitations], // Add to top
           activePlans: state.activePlans,
@@ -183,6 +199,18 @@ const usePlansStore = create<PlansState>((set, get) => ({
       }
       
       // Otherwise (received invitation), add it to invitations
+      // Lisa teavitus uue kutse kohta
+      notificationsStore.addNotification({
+        type: 'new_invitation',
+        planId: plan.id,
+        title: 'Uus kutse',
+        description: `${plan.creator?.name || 'Keegi'} kutsus teid: "${plan.title}"`,
+        location: {
+          tab: 'plans',
+          section: 'invitations',
+        }
+      });
+      
       return {
         invitations: [planWithUnreadStatus, ...state.invitations], // Add to top
         activePlans: state.activePlans,
@@ -334,6 +362,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
   // Poll actions
   addPoll: (planId: string, poll: Poll) => {
     set((state) => {
+      // Lisa teavitus uue küsitluse kohta
+      const notificationsStore = useNotificationsStore.getState();
+      
       const updatePlan = (plan: Plan): Plan => {
         if (plan.id !== planId) return plan;
         
@@ -351,7 +382,21 @@ const usePlansStore = create<PlansState>((set, get) => ({
             polls: updatedPolls
           };
         } else {
-          // Add new poll
+          // Add new poll - lisa teavitus ainult uue küsitluse puhul
+          notificationsStore.addNotification({
+            type: 'new_poll',
+            planId: plan.id,
+            pollId: poll.id,
+            title: 'Uus küsitlus',
+            description: `Uus küsitlus: "${poll.question}"`,
+            location: {
+              tab: 'plans',
+              section: state.invitations.find(p => p.id === planId) ? 'invitations' : 'active',
+              subsection: 'control_panel',
+              itemId: poll.id
+            }
+          });
+          
           return {
             ...plan,
             polls: [...polls, poll]
@@ -525,6 +570,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
   processExpiredInvitationPolls: () => {
     set((state) => {
       const currentTime = Date.now();
+      const notificationsStore = useNotificationsStore.getState();
       
       const updatePlan = (plan: Plan): Plan => {
         if (!plan.polls) return plan;
@@ -552,7 +598,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
           const allowVotes = poll.options.find(opt => opt.text === 'Allow')?.votes.length || 0;
           const denyVotes = poll.options.find(opt => opt.text === 'Deny')?.votes.length || 0;
           
-          // If majority voted to allow, add the person to participants
+          // Lisa teavitus kutse küsitluse tulemuse kohta
           if (allowVotes > denyVotes) {
             // Check if user is not already in participants
             const existingParticipant = updatedParticipants.find(p => p.id === invitedUserId);
@@ -564,7 +610,37 @@ const usePlansStore = create<PlansState>((set, get) => ({
                 avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`,
                 status: 'pending'
               });
+              
+              // Lisa teavitus uue liikme lisamise kohta
+              notificationsStore.addNotification({
+                type: 'invitation_poll_expired',
+                planId: plan.id,
+                pollId: poll.id,
+                title: 'Kutse küsitlus lõppes',
+                description: `Uus liige lisati plaanile "${plan.title}"`,
+                location: {
+                  tab: 'plans',
+                  section: state.invitations.find(p => p.id === plan.id) ? 'invitations' : 'active',
+                  subsection: 'control_panel',
+                  itemId: poll.id
+                }
+              });
             }
+          } else {
+            // Lisa teavitus tagasilükatud kutse kohta
+            notificationsStore.addNotification({
+              type: 'invitation_poll_expired',
+              planId: plan.id,
+              pollId: poll.id,
+              title: 'Kutse küsitlus lõppes',
+              description: `Kutse tagasi lükatud plaanile "${plan.title}"`,
+              location: {
+                tab: 'plans',
+                section: state.invitations.find(p => p.id === plan.id) ? 'invitations' : 'active',
+                subsection: 'control_panel',
+                itemId: poll.id
+              }
+            });
           }
           // If majority voted to deny or tie, the person just disappears (no action needed)
         });
@@ -586,6 +662,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   createInvitationPollWithAutoVote: (planId: string, friendIds: string[], friendNames: string[], creatorId: string) => {
     set((state) => {
+      const notificationsStore = useNotificationsStore.getState();
+      
       const updatePlan = (plan: Plan): Plan => {
         if (plan.id !== planId) return plan;
         
@@ -616,6 +694,21 @@ const usePlansStore = create<PlansState>((set, get) => ({
           };
           
           newPolls.push(invitationPoll);
+          
+          // Lisa teavitus uue kutse küsitluse kohta
+          notificationsStore.addNotification({
+            type: 'new_poll',
+            planId: plan.id,
+            pollId: invitationPoll.id,
+            title: 'Uus kutse küsitlus',
+            description: `Küsitlus ${friendName} kutsumise kohta`,
+            location: {
+              tab: 'plans',
+              section: state.invitations.find(p => p.id === planId) ? 'invitations' : 'active',
+              subsection: 'control_panel',
+              itemId: invitationPoll.id
+            }
+          });
         });
         
         return {

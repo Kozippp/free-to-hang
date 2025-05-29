@@ -1,15 +1,32 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import Colors from '@/constants/colors';
+import useNotificationsStore from '@/store/notificationsStore';
+import NotificationDot from '@/components/NotificationDot';
 
 interface TabBarProps {
   tabs: string[];
   activeTab: string;
   onTabChange: (tab: string) => void;
-  unreadCount?: number;
 }
 
-export default function TabBar({ tabs, activeTab, onTabChange, unreadCount = 0 }: TabBarProps) {
+export default function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
+  const { getNotificationCounts } = useNotificationsStore();
+  const notificationCounts = getNotificationCounts();
+  
+  const getTabNotificationCount = (tab: string): number => {
+    switch(tab) {
+      case 'Invitations':
+        return notificationCounts.bySection.invitations;
+      case 'Plan':
+        return notificationCounts.bySection.active;
+      case 'Completed':
+        return notificationCounts.bySection.completed;
+      default:
+        return 0;
+    }
+  };
+  
   return (
     <View style={styles.container}>
       {tabs.map((tab) => (
@@ -31,10 +48,17 @@ export default function TabBar({ tabs, activeTab, onTabChange, unreadCount = 0 }
               {tab}
             </Text>
             
-            {/* Show red dot for unread invitations */}
-            {tab === 'Invitations' && unreadCount > 0 && (
-              <View style={styles.unreadDot} />
-            )}
+            {/* Näita punast punkti, kui on teavitusi */}
+            <NotificationDot 
+              count={getTabNotificationCount(tab)}
+              size="small"
+              style={{
+                position: 'relative',
+                marginLeft: 4,
+                top: 0,
+                right: 0,
+              }}
+            />
           </View>
           
           {activeTab === tab && <View style={styles.indicator} />}
@@ -80,12 +104,5 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     backgroundColor: Colors.light.primary,
-  },
-  unreadDot: {
-    width: 7, // 15% smaller than before
-    height: 7, // 15% smaller than before
-    borderRadius: 3.5,
-    backgroundColor: '#FF3B30', // Instagram-style red
-    marginLeft: 4,
   },
 });

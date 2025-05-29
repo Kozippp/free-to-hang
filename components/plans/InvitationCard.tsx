@@ -3,6 +3,8 @@ import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Users, CheckCircle, HelpCircle, Clock, Eye, EyeOff, Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan } from '@/store/plansStore';
+import useNotificationsStore from '@/store/notificationsStore';
+import NotificationDot from '@/components/NotificationDot';
 
 interface InvitationCardProps {
   plan: Plan;
@@ -11,6 +13,7 @@ interface InvitationCardProps {
 
 export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
   const [currentTime, setCurrentTime] = React.useState(Date.now());
+  const { getNotificationCounts } = useNotificationsStore();
 
   // Update timer every second
   React.useEffect(() => {
@@ -20,6 +23,10 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Get notification count for this plan
+  const notificationCounts = getNotificationCounts();
+  const planNotificationCount = notificationCounts.byPlan[plan.id]?.total || 0;
 
   // Get participants by status
   const acceptedParticipants = plan.participants.filter(p => 
@@ -105,6 +112,17 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
       onPress={() => onPress(plan)}
       activeOpacity={0.7}
     >
+      {/* Notification dot for this plan */}
+      <NotificationDot 
+        count={planNotificationCount}
+        size="small"
+        style={{
+          top: 8,
+          right: 8,
+          zIndex: 10,
+        }}
+      />
+      
       {/* User status badge */}
       {currentUserStatus !== 'pending' && getUserStatusBadge()}
       

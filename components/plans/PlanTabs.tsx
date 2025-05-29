@@ -1,47 +1,61 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import Colors from '@/constants/colors';
+import useNotificationsStore from '@/store/notificationsStore';
+import NotificationDot from '@/components/NotificationDot';
 
 interface PlanTabsProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  unreadCount?: number;
+  planId: string;
 }
 
-export default function PlanTabs({ activeTab, onTabChange, unreadCount = 0 }: PlanTabsProps) {
-  const tabs = ['Control Panel', 'Chat'];
+export default function PlanTabs({ activeTab, onTabChange, planId }: PlanTabsProps) {
+  const { getNotificationCounts } = useNotificationsStore();
+  const notificationCounts = getNotificationCounts();
+  
+  const controlPanelCount = notificationCounts.byPlan[planId]?.controlPanel || 0;
+  const chatCount = notificationCounts.byPlan[planId]?.chat || 0;
+  
+  const tabs = [
+    { name: 'Control Panel', count: controlPanelCount },
+    { name: 'Chat', count: chatCount }
+  ];
   
   return (
     <View style={styles.container}>
       {tabs.map((tab) => (
         <TouchableOpacity
-          key={tab}
+          key={tab.name}
           style={[
             styles.tab,
-            activeTab === tab && styles.activeTab
+            activeTab === tab.name && styles.activeTab
           ]}
-          onPress={() => onTabChange(tab)}
+          onPress={() => onTabChange(tab.name)}
         >
           <View style={styles.tabContent}>
             <Text
               style={[
                 styles.tabText,
-                activeTab === tab && styles.activeTabText
+                activeTab === tab.name && styles.activeTabText
               ]}
             >
-              {tab}
+              {tab.name}
             </Text>
             
-            {tab === 'Chat' && unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
-              </View>
-            )}
+            <NotificationDot 
+              count={tab.count}
+              size="medium"
+              showCount={true}
+              style={{
+                position: 'absolute',
+                top: -8,
+                right: -12,
+              }}
+            />
           </View>
           
-          {activeTab === tab && <View style={styles.indicator} />}
+          {activeTab === tab.name && <View style={styles.indicator} />}
         </TouchableOpacity>
       ))}
     </View>
@@ -85,22 +99,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     position: 'relative',
-  },
-  badge: {
-    position: 'absolute',
-    top: -8,
-    right: -12,
-    backgroundColor: Colors.light.secondary,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
   },
 });
