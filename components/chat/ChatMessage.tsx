@@ -36,12 +36,71 @@ interface ChatMessageProps {
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
   scrollToMessage?: (messageId: string) => void;
+  previousMessage?: ChatMessageType; // For time separator logic
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MESSAGE_MAX_WIDTH = SCREEN_WIDTH * 0.7;
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+
+// Helper function to check if we need a time separator
+const shouldShowTimeSeparator = (currentMessage: ChatMessageType, previousMessage?: ChatMessageType): boolean => {
+  if (!previousMessage) return false; // Don't show for first message
+  
+  const currentDate = new Date(currentMessage.timestamp);
+  const previousDate = new Date(previousMessage.timestamp);
+  
+  // Check if it's a different day
+  const isDifferentDay = currentDate.getDate() !== previousDate.getDate() ||
+                        currentDate.getMonth() !== previousDate.getMonth() ||
+                        currentDate.getFullYear() !== previousDate.getFullYear();
+  
+  if (isDifferentDay) return true;
+  
+  // Check if more than 30 minutes have passed
+  const timeDiff = currentMessage.timestamp - previousMessage.timestamp;
+  const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+  
+  return timeDiff > thirtyMinutes;
+};
+
+// Helper function to format time separator
+const formatTimeSeparator = (timestamp: number): string => {
+  const now = new Date();
+  const messageDate = new Date(timestamp);
+  
+  // Check if it's today
+  if (
+    messageDate.getDate() === now.getDate() &&
+    messageDate.getMonth() === now.getMonth() &&
+    messageDate.getFullYear() === now.getFullYear()
+  ) {
+    return messageDate.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
+  }
+  
+  // Check if it's yesterday
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  
+  if (
+    messageDate.getDate() === yesterday.getDate() &&
+    messageDate.getMonth() === yesterday.getMonth() &&
+    messageDate.getFullYear() === yesterday.getFullYear()
+  ) {
+    return 'Yesterday';
+  }
+  
+  // For older dates, show just date
+  return messageDate.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric' 
+  });
+};
 
 export default function ChatMessage({ 
   message, 
@@ -51,7 +110,8 @@ export default function ChatMessage({
   showAvatar = true,
   isFirstInGroup = true,
   isLastInGroup = true,
-  scrollToMessage
+  scrollToMessage,
+  previousMessage
 }: ChatMessageProps) {
   const { addReaction, removeReaction, deleteMessage, editMessage, setReplyingTo } = useChatStore();
   const [showActions, setShowActions] = useState(false);
@@ -60,53 +120,14 @@ export default function ChatMessage({
   const [isUnsending, setIsUnsending] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlayingVoice, setIsPlayingVoice] = useState(false);
+  const [voicePlayPosition, setVoicePlayPosition] = useState(0); // Current position in seconds
   const [messageLayout, setMessageLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [showImageViewer, setShowImageViewer] = useState(false);
   
-  // Swipe animation for timestamp
-  const swipeAnim = useRef(new Animated.Value(0)).current;
-  const timestampOpacity = useRef(new Animated.Value(0)).current;
+  // Animation for unsending and long press
   const unsendAnim = useRef(new Animated.Value(1)).current;
-  
-  // Message scale animation for long press
   const messageScale = useRef(new Animated.Value(1)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (evt, gestureState) => {
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 15;
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        const maxSwipe = 60;
-        if (isOwnMessage && gestureState.dx < 0) {
-          const swipeValue = Math.max(gestureState.dx, -maxSwipe);
-          swipeAnim.setValue(swipeValue);
-          timestampOpacity.setValue(Math.min(Math.abs(swipeValue) / maxSwipe, 1));
-        } else if (!isOwnMessage && gestureState.dx > 0) {
-          const swipeValue = Math.min(gestureState.dx, maxSwipe);
-          swipeAnim.setValue(swipeValue);
-          timestampOpacity.setValue(Math.min(swipeValue / maxSwipe, 1));
-        }
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        // Always return to original position
-        Animated.parallel([
-          Animated.spring(swipeAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 150,
-            friction: 8
-          }),
-          Animated.timing(timestampOpacity, {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: true
-          })
-        ]).start();
-      },
-    })
-  ).current;
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -241,12 +262,13 @@ export default function ChatMessage({
     Alert.alert('Copied', 'Message copied to clipboard');
   };
 
-  const playVoiceMessage = async () => {
+  const playVoiceMessage = async (startPosition?: number) => {
     try {
       if (sound) {
         await sound.unloadAsync();
         setSound(null);
         setIsPlayingVoice(false);
+        setVoicePlayPosition(0);
         return;
       }
 
@@ -256,13 +278,23 @@ export default function ChatMessage({
           { shouldPlay: true }
         );
         
+        // If starting from specific position, seek to it
+        if (startPosition) {
+          await newSound.setPositionAsync(startPosition * 1000); // Convert to milliseconds
+        }
+        
         setSound(newSound);
         setIsPlayingVoice(true);
 
         newSound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded && status.didJustFinish) {
-            setIsPlayingVoice(false);
-            setSound(null);
+          if (status.isLoaded) {
+            if (status.didJustFinish) {
+              setIsPlayingVoice(false);
+              setSound(null);
+              setVoicePlayPosition(0);
+            } else if (status.positionMillis !== undefined) {
+              setVoicePlayPosition(status.positionMillis / 1000); // Convert to seconds
+            }
           }
         });
       }
@@ -411,45 +443,112 @@ export default function ChatMessage({
         );
 
       case 'voice':
+        // Generate better waveform data for all messages
+        const waveformData = message.waveformData || [
+          0.4, 0.8, 0.6, 0.9, 0.5, 0.7, 0.8, 0.3, 0.9, 0.6, 
+          0.5, 0.8, 0.7, 0.4, 0.9, 0.6, 0.8, 0.5, 0.7, 0.9,
+          0.6, 0.4, 0.8, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 0.7
+        ];
+        const duration = message.voiceDuration || 5;
+        const progress = duration > 0 ? voicePlayPosition / duration : 0;
+        
+        const formatVoiceTime = (seconds: number) => {
+          const mins = Math.floor(seconds / 60);
+          const secs = Math.floor(seconds % 60);
+          return `${mins}:${secs.toString().padStart(2, '0')}`;
+        };
+
+        const handleWaveformBarPress = (barIndex: number) => {
+          const totalBars = waveformData.length;
+          const seekProgress = barIndex / totalBars;
+          const seekPosition = seekProgress * duration;
+          
+          if (isPlayingVoice && sound) {
+            // If already playing, seek to new position
+            sound.setPositionAsync(seekPosition * 1000);
+            setVoicePlayPosition(seekPosition);
+          } else {
+            // If not playing, start from that position
+            playVoiceMessage(seekPosition);
+          }
+        };
+        
         return (
-          <TouchableOpacity 
-            style={styles.voiceContainer}
-            onPress={playVoiceMessage}
-            activeOpacity={0.8}
+          <TouchableOpacity
+            style={[
+              styles.voiceContainer,
+              isOwnMessage ? {
+                backgroundColor: Colors.light.primary,
+              } : {
+                backgroundColor: '#F0F0F0',
+              }
+            ]}
+            onLongPress={handleLongPress}
+            activeOpacity={1}
+            delayLongPress={500}
           >
-            <View style={[
-              styles.voicePlayButton,
-              isOwnMessage ? styles.ownVoiceButton : styles.otherVoiceButton
-            ]}>
-              <Text style={styles.voicePlayIcon}>
-                {isPlayingVoice ? '⏸' : '▶️'}
-              </Text>
-            </View>
-            
-            <View style={styles.voiceWaveform}>
-              {Array.from({ length: 15 }).map((_, i) => {
-                const height = Math.sin(i * 0.8) * 8 + 12;
-                return (
-                  <View 
-                    key={`waveform-${message.id}-${i}`}
-                    style={[
-                      styles.waveformBar,
-                      { 
-                        height,
-                        backgroundColor: isOwnMessage ? 'rgba(255,255,255,0.7)' : Colors.light.primary,
-                        opacity: isPlayingVoice ? 0.8 + Math.sin(Date.now() / 100 + i) * 0.2 : 0.6
-                      }
-                    ]} 
-                  />
-                )}
+            {/* Play/Pause Button */}
+            <TouchableOpacity 
+              style={styles.voicePlayButton}
+              onPress={() => playVoiceMessage()}
+              activeOpacity={0.8}
+            >
+              {isPlayingVoice ? (
+                <View style={styles.pauseIconContainer}>
+                  <View style={[
+                    styles.pauseBar,
+                    { backgroundColor: isOwnMessage ? 'white' : Colors.light.primary }
+                  ]} />
+                  <View style={[
+                    styles.pauseBar,
+                    { backgroundColor: isOwnMessage ? 'white' : Colors.light.primary }
+                  ]} />
+                </View>
+              ) : (
+                <View style={[
+                  styles.playTriangleIcon,
+                  { borderLeftColor: isOwnMessage ? 'white' : Colors.light.primary }
+                ]} />
               )}
+            </TouchableOpacity>
+            
+            {/* Interactive Waveform - fixed width container */}
+            <View style={styles.waveformContainer}>
+              {waveformData.slice(0, 25).map((level, i) => {
+                const barProgress = i / 25;
+                const isPlayed = barProgress <= progress;
+                
+                return (
+                  <TouchableOpacity
+                    key={`voice-waveform-${message.id}-${i}`}
+                    style={[
+                      styles.simpleWaveformBar,
+                      { 
+                        height: Math.max(8, level * 32),
+                        backgroundColor: isPlayed 
+                          ? (isOwnMessage ? 'rgba(255,255,255,0.9)' : Colors.light.primary)
+                          : (isOwnMessage ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)'),
+                      }
+                    ]}
+                    onPress={() => {
+                      console.log('Waveform bar pressed:', i);
+                      handleWaveformBarPress(i);
+                    }}
+                    activeOpacity={0.7}
+                  />
+                );
+              })}
             </View>
             
+            {/* Time Display - Larger and context-aware */}
             <Text style={[
-              styles.voiceDuration,
-              isOwnMessage ? styles.ownMessageText : styles.otherMessageText
+              styles.voiceTime,
+              isOwnMessage ? styles.ownVoiceTime : styles.otherVoiceTime
             ]}>
-              {message.voiceDuration || 5}s
+              {isPlayingVoice ? 
+                formatVoiceTime(Math.max(0, duration - voicePlayPosition)) :
+                formatVoiceTime(duration)
+              }
             </Text>
           </TouchableOpacity>
         );
@@ -530,239 +629,260 @@ export default function ChatMessage({
   }
 
   return (
-    <Animated.View 
-      style={[
-        styles.messageContainer,
-        isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer,
-        { transform: [{ translateX: swipeAnim }] }
-      ]}
-      {...panResponder.panHandlers}
-    >
-      {/* Timestamp revealed on swipe */}
-      <Animated.View 
-        style={[
-          styles.swipeTimestamp,
-          isOwnMessage ? styles.swipeTimestampLeft : styles.swipeTimestampRight,
-          { opacity: timestampOpacity }
-        ]}
-      >
-        <Text style={styles.swipeTimestampText}>{formatTime(message.timestamp)}</Text>
-      </Animated.View>
-      
-      {!isOwnMessage && showAvatar && (
-        <Image 
-          source={{ uri: message.userAvatar }} 
-          style={styles.avatar}
-        />
+    <>
+      {/* Time Separator */}
+      {shouldShowTimeSeparator(message, previousMessage) && (
+        <View style={styles.timeSeparatorWrapper}>
+          <Text style={styles.timeSeparatorText}>
+            {formatTimeSeparator(message.timestamp)}
+          </Text>
+        </View>
       )}
       
-      {!isOwnMessage && !showAvatar && <View style={styles.avatarPlaceholder} />}
-      
-      <View style={[
-        styles.messageWrapper,
-        isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
-      ]}>
-        {!isOwnMessage && isFirstInGroup && (
-          <Text style={styles.userName}>{message.userName}</Text>
-        )}
-        
-        {/* Reply preview outside the bubble */}
-        {renderReplyPreview()}
-        
-        {/* Image messages are displayed outside the bubble */}
-        {message.type === 'image' ? (
-          <TouchableOpacity
-            style={styles.imageMessageWrapper}
-            onLongPress={handleLongPress}
-            activeOpacity={1}
-            onLayout={onMessageLayout}
-          >
-            {renderMessageContent()}
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={getBubbleStyle()}
-            onLongPress={handleLongPress}
-            activeOpacity={0.8}
-            onLayout={onMessageLayout}
-          >
-            {renderMessageContent()}
-          </TouchableOpacity>
-        )}
-        
-        {/* Image Viewer Modal */}
-        {showImageViewer && (
-          <Modal
-            visible={showImageViewer}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setShowImageViewer(false)}
-          >
-            <View style={styles.imageViewerOverlay}>
-              <TouchableOpacity 
-                style={styles.imageViewerClose}
-                onPress={() => setShowImageViewer(false)}
-              >
-                <X size={24} color="white" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.imageViewerContainer}
-                activeOpacity={1}
-                onPress={() => setShowImageViewer(false)}
-              >
-                <Image 
-                  source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
-                  style={styles.fullScreenImage}
-                  resizeMode="contain"
-                />
-              </TouchableOpacity>
-            </View>
-          </Modal>
-        )}
-      </View>
-
-      {/* Message Actions Modal - Two Floating Menus */}
-      <Modal
-        visible={showActions}
-        transparent
-        animationType="none"
-        onRequestClose={closeModal}
+      <Animated.View 
+        style={[
+          styles.messageContainer,
+          isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer,
+        ]}
       >
-        <View style={styles.modalOverlay}>
-          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-          
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={closeModal}
+        {!isOwnMessage && showAvatar && (
+          <Image 
+            source={{ uri: message.userAvatar }} 
+            style={styles.avatar}
           />
+        )}
+        
+        {!isOwnMessage && !showAvatar && <View style={styles.avatarPlaceholder} />}
+        
+        <View style={[
+          styles.messageWrapper,
+          isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
+        ]}>
+          {!isOwnMessage && isFirstInGroup && (
+            <Text style={styles.userName}>{message.userName}</Text>
+          )}
           
-          {/* Highlighted Message - Different positioning for own vs other messages */}
-          <Animated.View 
-            style={[
-              styles.highlightedMessageWrapper,
-              {
-                // Different horizontal positioning for own vs other messages
-                left: isOwnMessage 
-                  ? SCREEN_WIDTH - messageLayout.width - 16
-                  : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)),
-                top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2),
-                width: messageLayout.width,
-                height: messageLayout.height,
-                transform: [{ scale: messageScale }],
-                opacity: modalOpacity,
-              }
-            ]}
-          >
-            <View style={getBubbleStyle()}>
+          {/* Reply preview outside the bubble */}
+          {renderReplyPreview()}
+          
+          {/* Image messages are displayed outside the bubble */}
+          {message.type === 'image' ? (
+            <TouchableOpacity
+              style={styles.imageMessageWrapper}
+              onLongPress={handleLongPress}
+              activeOpacity={1}
+              onLayout={onMessageLayout}
+            >
+              {renderMessageContent()}
+            </TouchableOpacity>
+          ) : message.type === 'voice' ? (
+            /* Voice messages need special handling for interactive waveform */
+            <View onLayout={onMessageLayout}>
               {renderMessageContent()}
             </View>
-          </Animated.View>
+          ) : (
+            <TouchableOpacity
+              style={getBubbleStyle()}
+              onLongPress={handleLongPress}
+              activeOpacity={0.8}
+              onLayout={onMessageLayout}
+            >
+              {renderMessageContent()}
+            </TouchableOpacity>
+          )}
           
-          {/* Top Emoji Menu - Position according to message type */}
-          <Animated.View 
-            style={[
-              styles.emojiMenu,
-              {
-                // Position emoji menu based on message alignment
-                left: isOwnMessage
-                  ? SCREEN_WIDTH - 280 - 16
-                  : Math.max(16, Math.min(SCREEN_WIDTH - 280 - 16, messageLayout.x + (messageLayout.width / 2) - 140)),
-                top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2) - 60,
-                opacity: modalOpacity,
-                transform: [
-                  {
-                    translateY: modalOpacity.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-10, 0]
-                    })
-                  }
-                ]
-              }
-            ]}
-          >
-            <View style={[styles.emojiRow, isOwnMessage && styles.ownEmojiRow]}>
-              {QUICK_REACTIONS.map((emoji, index) => (
-                <TouchableOpacity
-                  key={`emoji-${index}-${emoji}`}
-                  style={[
-                    styles.emojiButton,
-                    message.reactions[currentUserId] === emoji && styles.selectedEmojiButton
-                  ]}
-                  onPress={() => handleReaction(emoji)}
+          {/* Image Viewer Modal */}
+          {showImageViewer && (
+            <Modal
+              visible={showImageViewer}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => setShowImageViewer(false)}
+            >
+              <View style={styles.imageViewerOverlay}>
+                <TouchableOpacity 
+                  style={styles.imageViewerClose}
+                  onPress={() => setShowImageViewer(false)}
                 >
-                  <Text style={styles.emojiText}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </Animated.View>
-          
-          {/* Bottom Action Menu - Position according to message type */}
-          <Animated.View 
-            style={[
-              styles.actionMenu,
-              {
-                // Position action menu based on message alignment
-                left: isOwnMessage
-                  ? SCREEN_WIDTH - 180 - 16
-                  : Math.max(16, Math.min(SCREEN_WIDTH - 180 - 16, messageLayout.x + (messageLayout.width / 2) - 90)),
-                top: Dimensions.get('window').height * 0.3 + (messageLayout.height / 2) + 20,
-                opacity: modalOpacity,
-                transform: [
-                  {
-                    translateY: modalOpacity.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [10, 0]
-                    })
-                  }
-                ]
-              }
-            ]}
-          >
-            {/* Different menu order for own vs other messages */}
-            {isOwnMessage ? (
-              // Own message: Unsend first (right to left order)
-              <>
-                <TouchableOpacity style={styles.actionMenuItem} onPress={handleUnsend}>
-                  <Trash2 size={24} color={Colors.light.secondary} />
-                  <Text style={[styles.actionMenuText, styles.unsendMenuText]}>Unsend</Text>
+                  <X size={24} color="white" />
                 </TouchableOpacity>
                 
-                <View style={styles.actionMenuSeparator} />
-                
-                <TouchableOpacity style={styles.actionMenuItem} onPress={handleCopy}>
-                  <Copy size={24} color={Colors.light.text} />
-                  <Text style={styles.actionMenuText}>Copy</Text>
+                <TouchableOpacity
+                  style={styles.imageViewerContainer}
+                  activeOpacity={1}
+                  onPress={() => setShowImageViewer(false)}
+                >
+                  <Image 
+                    source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
+                    style={styles.fullScreenImage}
+                    resizeMode="contain"
+                  />
                 </TouchableOpacity>
-                
-                <View style={styles.actionMenuSeparator} />
-                
-                <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
-                  <Reply size={24} color={Colors.light.text} />
-                  <Text style={styles.actionMenuText}>Reply</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              // Other message: Reply first (left to right order)
-              <>
-                <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
-                  <Reply size={24} color={Colors.light.text} />
-                  <Text style={styles.actionMenuText}>Reply</Text>
-                </TouchableOpacity>
-                
-                <View style={styles.actionMenuSeparator} />
-                
-                <TouchableOpacity style={styles.actionMenuItem} onPress={handleCopy}>
-                  <Copy size={24} color={Colors.light.text} />
-                  <Text style={styles.actionMenuText}>Copy</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </Animated.View>
+              </View>
+            </Modal>
+          )}
         </View>
-      </Modal>
-    </Animated.View>
+
+        {/* Message Actions Modal - Two Floating Menus */}
+        <Modal
+          visible={showActions}
+          transparent
+          animationType="none"
+          onRequestClose={closeModal}
+        >
+          <View style={styles.modalOverlay}>
+            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+            
+            <TouchableOpacity 
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={closeModal}
+            />
+            
+            {/* Highlighted Message - Different positioning for own vs other messages */}
+            <Animated.View 
+              style={[
+                styles.highlightedMessageWrapper,
+                {
+                  // Different horizontal positioning for own vs other messages
+                  left: isOwnMessage 
+                    ? SCREEN_WIDTH - messageLayout.width - 16
+                    : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)),
+                  top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2),
+                  width: messageLayout.width,
+                  height: messageLayout.height,
+                  transform: [{ scale: messageScale }],
+                  opacity: modalOpacity,
+                }
+              ]}
+            >
+              <View style={getBubbleStyle()}>
+                {renderMessageContent()}
+              </View>
+            </Animated.View>
+            
+            {/* Timestamp next to highlighted message */}
+            <Animated.View 
+              style={[
+                styles.highlightedTimestamp,
+                {
+                  left: isOwnMessage 
+                    ? SCREEN_WIDTH - messageLayout.width - 16 - 60
+                    : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)) + messageLayout.width + 8,
+                  top: Dimensions.get('window').height * 0.3 - 10,
+                  opacity: modalOpacity,
+                }
+              ]}
+            >
+              <Text style={styles.highlightedTimestampText}>
+                {formatTime(message.timestamp)}
+              </Text>
+            </Animated.View>
+            
+            {/* Top Emoji Menu - Position according to message type */}
+            <Animated.View 
+              style={[
+                styles.emojiMenu,
+                {
+                  // Position emoji menu based on message alignment
+                  left: isOwnMessage
+                    ? SCREEN_WIDTH - 280 - 16
+                    : Math.max(16, Math.min(SCREEN_WIDTH - 280 - 16, messageLayout.x + (messageLayout.width / 2) - 140)),
+                  top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2) - 60,
+                  opacity: modalOpacity,
+                  transform: [
+                    {
+                      translateY: modalOpacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-10, 0]
+                      })
+                    }
+                  ]
+                }
+              ]}
+            >
+              <View style={[styles.emojiRow, isOwnMessage && styles.ownEmojiRow]}>
+                {QUICK_REACTIONS.map((emoji, index) => (
+                  <TouchableOpacity
+                    key={`emoji-${index}-${emoji}`}
+                    style={[
+                      styles.emojiButton,
+                      message.reactions[currentUserId] === emoji && styles.selectedEmojiButton
+                    ]}
+                    onPress={() => handleReaction(emoji)}
+                  >
+                    <Text style={styles.emojiText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Animated.View>
+            
+            {/* Bottom Action Menu - Position according to message type */}
+            <Animated.View 
+              style={[
+                styles.actionMenu,
+                {
+                  // Position action menu based on message alignment
+                  left: isOwnMessage
+                    ? SCREEN_WIDTH - 180 - 16
+                    : Math.max(16, Math.min(SCREEN_WIDTH - 180 - 16, messageLayout.x + (messageLayout.width / 2) - 90)),
+                  top: Dimensions.get('window').height * 0.3 + (messageLayout.height / 2) + 20,
+                  opacity: modalOpacity,
+                  transform: [
+                    {
+                      translateY: modalOpacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [10, 0]
+                      })
+                    }
+                  ]
+                }
+              ]}
+            >
+              {/* Different menu order for own vs other messages */}
+              {isOwnMessage ? (
+                // Own message: Unsend first (right to left order)
+                <>
+                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleUnsend}>
+                    <Trash2 size={24} color={Colors.light.secondary} />
+                    <Text style={[styles.actionMenuText, styles.unsendMenuText]}>Unsend</Text>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.actionMenuSeparator} />
+                  
+                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleCopy}>
+                    <Copy size={24} color={Colors.light.text} />
+                    <Text style={styles.actionMenuText}>Copy</Text>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.actionMenuSeparator} />
+                  
+                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
+                    <Reply size={24} color={Colors.light.text} />
+                    <Text style={styles.actionMenuText}>Reply</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // Other message: Reply first (left to right order)
+                <>
+                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
+                    <Reply size={24} color={Colors.light.text} />
+                    <Text style={styles.actionMenuText}>Reply</Text>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.actionMenuSeparator} />
+                  
+                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleCopy}>
+                    <Copy size={24} color={Colors.light.text} />
+                    <Text style={styles.actionMenuText}>Copy</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </Animated.View>
+          </View>
+        </Modal>
+      </Animated.View>
+    </>
   );
 }
 
@@ -866,41 +986,60 @@ const styles = StyleSheet.create({
   voiceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 160,
-    paddingVertical: 2,
+    width: 240,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    gap: 8,
+    borderRadius: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   voicePlayButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    borderRadius: 16,
   },
-  ownVoiceButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  otherVoiceButton: {
-    backgroundColor: Colors.light.primary,
-  },
-  voicePlayIcon: {
-    fontSize: 12,
-  },
-  voiceWaveform: {
+  pauseIconContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 6,
-    flex: 1,
+    justifyContent: 'center',
+    gap: 2,
   },
-  waveformBar: {
-    width: 2,
-    marginHorizontal: 1,
-    borderRadius: 1,
+  pauseBar: {
+    width: 3,
+    height: 12,
+    borderRadius: 1.5,
   },
-  voiceDuration: {
-    fontSize: 11,
-    opacity: 0.8,
-    marginLeft: 6,
+  playTriangleIcon: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 0,
+    borderBottomWidth: 7,
+    borderTopWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderTopColor: 'transparent',
+    marginLeft: 2,
+  },
+  waveformContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 120,
+    height: 28,
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  simpleWaveformBar: {
+    width: 3,
+    borderRadius: 1.5,
+    marginHorizontal: 0.5,
   },
   reactionsContainer: {
     flexDirection: 'row',
@@ -951,26 +1090,6 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     fontWeight: '600',
     minWidth: 8,
-  },
-  swipeTimestamp: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  swipeTimestampLeft: {
-    left: -80,
-    alignItems: 'flex-end',
-  },
-  swipeTimestampRight: {
-    right: -80,
-    alignItems: 'flex-start',
-  },
-  swipeTimestampText: {
-    fontSize: 11,
-    color: Colors.light.secondaryText,
-    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
@@ -1113,15 +1232,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 8,
     backgroundColor: 'transparent',
-    maxWidth: '90%',
-    minWidth: '50%',
+    maxWidth: '100%',
+    minWidth: '60%',
   },
   replyIndicatorText: {
     fontSize: 11,
     color: Colors.light.secondaryText,
     marginBottom: 4,
     backgroundColor: 'transparent',
-    flexWrap: 'wrap',
+    flexShrink: 0,
   },
   originalMessageBubble: {
     backgroundColor: '#F0F0F0',
@@ -1167,5 +1286,62 @@ const styles = StyleSheet.create({
   fullScreenImage: {
     width: '100%',
     height: '100%',
+  },
+  voiceMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 160,
+    paddingVertical: 2,
+  },
+  voiceUIContainer: {
+    flex: 1,
+    flexDirection: 'column',
+    minWidth: 140,
+  },
+  ownVoiceUI: {
+    alignItems: 'flex-end',
+  },
+  otherVoiceUI: {
+    alignItems: 'flex-start',
+  },
+  voiceTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  voiceTime: {
+    fontSize: 11,
+    opacity: 0.9,
+    fontWeight: '600',
+    width: 36,
+    textAlign: 'center',
+    fontFamily: 'System',
+    letterSpacing: 0.3,
+  },
+  ownVoiceTime: {
+    color: 'rgba(255,255,255,0.8)',
+  },
+  otherVoiceTime: {
+    color: 'rgba(0,0,0,0.6)',
+  },
+  highlightedTimestamp: {
+    position: 'absolute',
+    zIndex: 1,
+  },
+  highlightedTimestampText: {
+    fontSize: 10,
+    color: Colors.light.secondaryText,
+    fontWeight: '500',
+  },
+  timeSeparatorWrapper: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  timeSeparatorText: {
+    fontSize: 10,
+    color: Colors.light.secondaryText,
+    marginHorizontal: 8,
+    fontWeight: '500',
   },
 });

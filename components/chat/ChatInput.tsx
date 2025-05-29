@@ -8,7 +8,9 @@ import {
   Platform,
   Animated,
   Text,
-  Dimensions
+  Dimensions,
+  Modal,
+  Image
 } from 'react-native';
 import { 
   Send, 
@@ -43,6 +45,10 @@ export default function ChatInput({
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(40).fill(0));
+  const [recordedWaveform, setRecordedWaveform] = useState<number[]>([]);
+  const [currentAmplitude, setCurrentAmplitude] = useState(0);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [showImageConfirmation, setShowImageConfirmation] = useState(false);
   
   // TextInput ref for auto-focusing on reply
   const textInputRef = useRef<TextInput>(null);
@@ -54,6 +60,7 @@ export default function ChatInput({
   const recordingAnimation = useRef(new Animated.Value(1)).current;
   const sendButtonAnimation = useRef(new Animated.Value(0)).current;
   const micButtonAnimation = useRef(new Animated.Value(1)).current;
+  const amplitudeAnimation = useRef(new Animated.Value(0)).current;
   
   // Timer for recording duration and audio levels
   const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -141,6 +148,13 @@ export default function ChatInput({
     });
 
     if (!result.canceled && result.assets[0]) {
+      setSelectedImage(result.assets[0].uri);
+      setShowImageConfirmation(true);
+    }
+  };
+
+  const handleSendImage = () => {
+    if (selectedImage) {
       sendMessage(planId, {
         planId,
         userId: currentUserId,
@@ -148,20 +162,50 @@ export default function ChatInput({
         userAvatar: currentUserAvatar,
         type: 'image',
         content: '',
-        imageUrl: result.assets[0].uri,
+        imageUrl: selectedImage,
       });
     }
+    setSelectedImage(null);
+    setShowImageConfirmation(false);
+  };
+
+  const handleCancelImage = () => {
+    setSelectedImage(null);
+    setShowImageConfirmation(false);
   };
 
   const simulateAudioLevels = () => {
-    // Simulate real-time audio level detection
+    // Simulate more realistic audio level patterns with better variation
+    const time = Date.now() / 1000;
+    const baseLevel = 0.2 + Math.sin(time * 0.8) * 0.15; // Base oscillation
+    const speechPattern = Math.sin(time * 2.5) * 0.2; // Speech-like pattern
+    const noise = (Math.random() - 0.5) * 0.3; // Random variation
+    const spike = Math.random() < 0.15 ? Math.random() * 0.4 : 0; // Occasional spikes
+    
+    const newLevel = Math.max(0.05, Math.min(1.0, baseLevel + speechPattern + noise + spike));
+    
+    // Update current amplitude for live animation
+    setCurrentAmplitude(newLevel);
+    
+    // Animate the amplitude value
+    Animated.timing(amplitudeAnimation, {
+      toValue: newLevel,
+      duration: 50,
+      useNativeDriver: false,
+    }).start();
+    
     setAudioLevels(prev => {
       const newLevels = [...prev];
-      // Shift array left and add new level
-      newLevels.shift();
-      newLevels.push(Math.random() * 0.8 + 0.2); // Random level between 0.2 and 1
+      // Keep only last 60 bars for performance
+      if (newLevels.length >= 60) {
+        newLevels.shift();
+      }
+      newLevels.push(newLevel);
       return newLevels;
     });
+    
+    // Store complete waveform for final message
+    setRecordedWaveform(prev => [...prev, newLevel]);
   };
 
   const startRecording = async () => {
@@ -175,27 +219,36 @@ export default function ChatInput({
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      // Configure recording with metering enabled for amplitude capture
+      const recordingOptions = {
+        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        isMeteringEnabled: true, // Enable audio level monitoring
+      };
+
+      const { recording } = await Audio.Recording.createAsync(recordingOptions);
       
       setRecording(recording);
       setIsRecording(true);
       setRecordingDuration(0);
+      setRecordedWaveform([]);
+      setAudioLevels(Array(40).fill(0));
+      setCurrentAmplitude(0);
 
-      // Start recording animation
+      // Start recording animation (breathing effect)
       Animated.loop(
         Animated.sequence([
           Animated.timing(recordingAnimation, {
-            toValue: 1.3,
-            duration: 800,
+            toValue: 1.2,
+            duration: 1000,
             useNativeDriver: true,
           }),
           Animated.timing(recordingAnimation, {
             toValue: 1,
-            duration: 800,
+            duration: 1000,
             useNativeDriver: true,
           }),
         ])
@@ -206,8 +259,8 @@ export default function ChatInput({
         setRecordingDuration(prev => prev + 1);
       }, 1000);
 
-      // Start audio level simulation (in real app, get from recording)
-      audioLevelTimer.current = setInterval(simulateAudioLevels, 100);
+      // Start real-time audio level monitoring (faster for smoother animation)
+      audioLevelTimer.current = setInterval(simulateAudioLevels, 80);
 
     } catch (err) {
       console.error('Failed to start recording', err);
@@ -232,6 +285,7 @@ export default function ChatInput({
           content: 'Voice message',
           voiceUrl: uri,
           voiceDuration: recordingDuration,
+          waveformData: recordedWaveform,
         });
       }
 
@@ -239,6 +293,7 @@ export default function ChatInput({
       setIsRecording(false);
       setRecordingDuration(0);
       setAudioLevels(Array(40).fill(0));
+      setRecordedWaveform([]);
       
       // Stop animations
       recordingAnimation.stopAnimation();
@@ -269,6 +324,7 @@ export default function ChatInput({
       setIsRecording(false);
       setRecordingDuration(0);
       setAudioLevels(Array(40).fill(0));
+      setRecordedWaveform([]);
       
       // Stop animations
       recordingAnimation.stopAnimation();
@@ -342,18 +398,29 @@ export default function ChatInput({
           <Text style={styles.recordingDuration}>{formatDuration(recordingDuration)}</Text>
           
           <View style={styles.liveWaveformContainer}>
-            {audioLevels.map((level, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.liveWaveformBar,
-                  {
-                    height: Math.max(3, level * 30),
-                    opacity: 0.3 + (level * 0.7)
-                  }
-                ]}
-              />
-            ))}
+            <View style={styles.liveWaveformBg}>
+              {audioLevels.map((level, i) => (
+                <Animated.View
+                  key={`live-wave-${i}`}
+                  style={[
+                    styles.liveWaveformBar,
+                    {
+                      height: Math.max(4, level * 32),
+                      opacity: 0.4 + (level * 0.6),
+                      transform: [{
+                        scaleY: i === audioLevels.length - 1 
+                          ? amplitudeAnimation.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.5, 1.2],
+                              extrapolate: 'clamp',
+                            })
+                          : 1
+                      }]
+                    }
+                  ]}
+                />
+              ))}
+            </View>
           </View>
         </View>
         
@@ -367,6 +434,40 @@ export default function ChatInput({
   return (
     <View style={styles.container}>
       {renderReplyPreview()}
+      
+      {/* Image Confirmation Modal */}
+      {showImageConfirmation && selectedImage && (
+        <Modal
+          visible={showImageConfirmation}
+          transparent={false}
+          animationType="slide"
+          onRequestClose={handleCancelImage}
+        >
+          <View style={styles.imageConfirmationFullscreen}>
+            <Image 
+              source={{ uri: selectedImage }} 
+              style={styles.fullscreenConfirmationImage}
+              resizeMode="contain"
+            />
+            <View style={styles.fullscreenImageActions}>
+              <TouchableOpacity 
+                style={styles.fullscreenCancelButton} 
+                onPress={handleCancelImage}
+              >
+                <Text style={styles.fullscreenCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.fullscreenSendButton} 
+                onPress={handleSendImage}
+              >
+                <Send size={20} color="white" />
+                <Text style={styles.fullscreenSendText}>Send</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+      
       <View style={styles.inputRow}>
         <TouchableOpacity style={styles.actionButton} onPress={handleGallery}>
           <ImageIcon size={22} color={Colors.light.primary} />
@@ -548,6 +649,16 @@ const styles = StyleSheet.create({
     height: 30,
     gap: 2,
   },
+  liveWaveformBg: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    height: 32,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    justifyContent: 'space-around',
+  },
   liveWaveformBar: {
     width: 3,
     backgroundColor: Colors.light.primary,
@@ -604,5 +715,51 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  imageConfirmationFullscreen: {
+    flex: 1,
+    backgroundColor: 'black',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenConfirmationImage: {
+    width: '100%',
+    height: '100%',
+  },
+  fullscreenImageActions: {
+    position: 'absolute',
+    bottom: 60,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fullscreenCancelButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  fullscreenCancelText: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: '500',
+  },
+  fullscreenSendButton: {
+    backgroundColor: Colors.light.primary,
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    alignItems: 'center',
+    gap: 8,
+  },
+  fullscreenSendText: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: '500',
   },
 }); 
