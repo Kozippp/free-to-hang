@@ -34,7 +34,6 @@ import PlanTabs from './PlanTabs';
 import PlanTitle from './PlanTitle';
 import PlanDescription from './PlanDescription';
 import PlanParticipants from './PlanParticipants';
-import PlanVisibilityToggle from './PlanVisibilityToggle';
 import PlanUserStatus from './PlanUserStatus';
 import InviteFriendsModal from './InviteFriendsModal';
 import PollCreator from './PollCreator';
@@ -64,8 +63,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [description, setDescription] = useState(plan.description);
   const [editingDescription, setEditingDescription] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [isGroupVisible, setIsGroupVisible] = useState(false);
-  const [acceptingMode, setAcceptingMode] = useState('accepting'); // 'public' or 'accepting'
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
   
   // Poll states
@@ -236,16 +233,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // Use the new function with auto-vote for the creator
     createInvitationPollWithAutoVote(latestPlan.id, friendIds, friendNames, 'current');
     setShowInviteModal(false);
-  };
-  
-  const handleToggleGroupVisibility = () => {
-    // In a real app, this would trigger a vote
-    setIsGroupVisible(!isGroupVisible);
-  };
-  
-  const handleChangeAcceptingMode = (mode: string) => {
-    // In a real app, this would trigger a vote
-    setAcceptingMode(mode);
   };
   
   const handleStatusChange = (status: ParticipantStatus, conditionalFriends?: string[]) => {
@@ -640,15 +627,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
               </TouchableOpacity>
             )
           )}
-          
-          {/* Group Visibility Section */}
-          <PlanVisibilityToggle
-            isVisible={isGroupVisible}
-            acceptingMode={acceptingMode}
-            onToggle={handleToggleGroupVisibility}
-            onChangeMode={handleChangeAcceptingMode}
-            canVote={isInYesGang}
-          />
           
           {/* User Status Section */}
           <PlanUserStatus
