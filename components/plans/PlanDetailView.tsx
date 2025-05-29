@@ -34,7 +34,6 @@ import PlanTabs from './PlanTabs';
 import PlanTitle from './PlanTitle';
 import PlanDescription from './PlanDescription';
 import PlanParticipants from './PlanParticipants';
-import PlanVisibilityToggle from './PlanVisibilityToggle';
 import PlanUserStatus from './PlanUserStatus';
 import InviteFriendsModal from './InviteFriendsModal';
 import PollCreator from './PollCreator';
@@ -81,8 +80,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [description, setDescription] = useState(plan.description);
   const [editingDescription, setEditingDescription] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [isGroupVisible, setIsGroupVisible] = useState(false);
-  const [acceptingMode, setAcceptingMode] = useState('accepting'); // 'public' or 'accepting'
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
   
   // Poll states
@@ -253,16 +250,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // Use the new function with auto-vote for the creator
     createInvitationPollWithAutoVote(latestPlan.id, friendIds, friendNames, 'current');
     setShowInviteModal(false);
-  };
-  
-  const handleToggleGroupVisibility = () => {
-    // In a real app, this would trigger a vote
-    setIsGroupVisible(!isGroupVisible);
-  };
-  
-  const handleChangeAcceptingMode = (mode: string) => {
-    // In a real app, this would trigger a vote
-    setAcceptingMode(mode);
   };
   
   const handleStatusChange = (status: ParticipantStatus, conditionalFriends?: string[]) => {
@@ -706,17 +693,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             )
           )}
           
-          {/* Group Visibility Section */}
-          <PlanVisibilityToggle
-            isVisible={isGroupVisible}
-            acceptingMode={acceptingMode}
-            onToggle={handleToggleGroupVisibility}
-            onChangeMode={handleChangeAcceptingMode}
-            canVote={isInYesGang}
-          />
-          
-          {/* Mark as Completed Section - Only show if eligible */}
-          {canMarkAsCompleted(latestPlan) && (
+          {/* Mark as Completed Section - Show to going AND maybe participants */}
+          {canMarkAsCompleted(latestPlan) && (isInYesGang || currentUserStatus === 'maybe') && (
             <View style={styles.section}>
               <View style={styles.headerRow}>
                 <CheckCircle size={20} color={Colors.light.text} style={styles.headerIcon} />
@@ -730,7 +708,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 return (
                   <>
                     <Text style={styles.completionDescription}>
-                      Vote to mark this plan as completed. Needs {votingStatus.requiredVotes} out of {latestPlan.participants.filter(p => p.status === 'accepted').length} people to agree (50%).
+                      Mark this hangout as completed. {remainingVotes} more vote{remainingVotes === 1 ? '' : 's'} needed.
                     </Text>
                     
                     {votingStatus.votedUsers.length > 0 && (
@@ -742,31 +720,81 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                         <View style={styles.votingProgress}>
                           <View style={[
                             styles.votingProgressBar,
-                            { width: `${(votingStatus.votedUsers.length / votingStatus.requiredVotes) * 100}%` }
+                            { width: `${Math.min((votingStatus.votedUsers.length / votingStatus.requiredVotes) * 100, 100)}%` }
                           ]} />
                         </View>
                       </View>
                     )}
                     
-                    <TouchableOpacity 
-                      style={[
-                        styles.markCompletedButton,
-                        votingStatus.hasUserVoted && styles.markCompletedButtonVoted
-                      ]}
-                      onPress={handleMarkAsCompleted}
-                    >
-                      <CheckCircle 
-                        size={16} 
-                        color={votingStatus.hasUserVoted ? Colors.light.background : Colors.light.onlineGreen} 
-                        style={styles.markCompletedIcon} 
-                      />
-                      <Text style={[
-                        styles.markCompletedText,
-                        votingStatus.hasUserVoted && styles.markCompletedTextVoted
-                      ]}>
-                        {votingStatus.hasUserVoted ? 'Remove Vote' : 'Vote to Complete'}
-                      </Text>
-                    </TouchableOpacity>
+                    {/* Show voting buttons for Going users, info for Maybe users */}
+                    {isInYesGang ? (
+                      <View style={styles.completionVotingContainer}>
+                        <TouchableOpacity 
+                          style={[
+                            styles.completionVoteButton,
+                            styles.completeButton,
+                            votingStatus.hasUserVoted && styles.completionVoteButtonActive
+                          ]}
+                          onPress={() => {
+                            if (!votingStatus.hasUserVoted) {
+                              voteForCompletion(plan.id, 'current');
+                              
+                              // Check if this vote will complete the plan
+                              if (remainingVotes === 1) {
+                                setTimeout(() => {
+                                  onClose();
+                                }, 1000);
+                              }
+                            }
+                          }}
+                        >
+                          <CheckCircle 
+                            size={18} 
+                            color="white"
+                          />
+                          <Text style={styles.completionVoteButtonText}>
+                            Yes, Complete
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={[
+                            styles.completionVoteButton,
+                            styles.notCompleteButton,
+                            !votingStatus.hasUserVoted && styles.completionVoteButtonActiveGray
+                          ]}
+                          onPress={() => {
+                            if (votingStatus.hasUserVoted) {
+                              removeCompletionVote(plan.id, 'current');
+                            }
+                          }}
+                        >
+                          <X 
+                            size={18} 
+                            color="white"
+                          />
+                          <Text style={styles.completionVoteButtonText}>
+                            Not Yet
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      /* For maybe participants - show info only */
+                      <TouchableOpacity 
+                        style={styles.maybeUserInfoContainer}
+                        onPress={() => {
+                          Alert.alert(
+                            'Cannot Vote',
+                            'Only participants marked as "Going" can vote to complete the plan.',
+                            [{ text: 'OK', style: 'default' }]
+                          );
+                        }}
+                      >
+                        <Text style={styles.maybeUserInfoText}>
+                          Only "Going" participants can vote to complete this plan
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </>
                 );
               })()}
@@ -992,24 +1020,6 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     marginBottom: 16,
   },
-  markCompletedButton: {
-    flexDirection: 'row',
-    backgroundColor: `${Colors.light.onlineGreen}15`,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  markCompletedIcon: {
-    marginRight: 8,
-  },
-  markCompletedText: {
-    color: Colors.light.onlineGreen,
-    fontWeight: '500',
-    fontSize: 14,
-  },
   votingStatus: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1031,11 +1041,58 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.onlineGreen,
     borderRadius: 6,
   },
-  markCompletedButtonVoted: {
-    backgroundColor: `${Colors.light.onlineGreen}15`,
+  completionVotingContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
   },
-  markCompletedTextVoted: {
-    color: Colors.light.onlineGreen,
+  completionVoteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  completeButton: {
+    backgroundColor: Colors.light.onlineGreen,
+  },
+  notCompleteButton: {
+    backgroundColor: Colors.light.secondaryText,
+  },
+  completionVoteButtonActive: {
+    backgroundColor: Colors.light.onlineGreen,
+    shadowOpacity: 0.15,
+  },
+  completionVoteButtonActiveGray: {
+    backgroundColor: Colors.light.secondaryText,
+    shadowOpacity: 0.15,
+  },
+  completionVoteButtonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  maybeUserInfoContainer: {
+    backgroundColor: `${Colors.light.border}15`,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  maybeUserInfoText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
     fontWeight: '500',
   },
 });

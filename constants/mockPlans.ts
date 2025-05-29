@@ -161,7 +161,7 @@ export const mockActivePlans: Plan[] = [
     date: 'Today, 7:00 PM',
     location: 'Test Location',
     isRead: false,
-    createdAt: '2023-05-21T14:30:00Z',
+    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago - can be completed
     completionVotes: []
   },
   {
@@ -314,6 +314,233 @@ export const mockActivePlans: Plan[] = [
     isRead: true,
     createdAt: '2023-05-20T15:00:00Z',
     completionVotes: []
+  },
+  {
+    id: 'plan-weekend-hike',
+    title: 'Weekend Mountain Hike',
+    description: 'Early morning hike to catch the sunrise from the peak!',
+    type: 'normal' as const,
+    creator: {
+      id: 'user20',
+      name: 'Sarah Adventure',
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face'
+    },
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user20',
+        name: 'Sarah Adventure',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user21',
+        name: 'Mike Trail',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user22',
+        name: 'Jenny Fit',
+        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+        status: 'maybe'
+      },
+      {
+        id: 'user23',
+        name: 'Alex Outdoors',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        status: 'pending'
+      }
+    ],
+    date: 'Saturday, 6:00 AM',
+    location: 'Mountain Trail Head',
+    isRead: true,
+    createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago - can be completed
+    completionVotes: [], // No votes yet - will show completion section
+    polls: [
+      {
+        id: 'hike-time-poll',
+        question: 'What time should we start?',
+        type: 'when',
+        options: [
+          {
+            id: 'time-6am',
+            text: '6:00 AM (Watch sunrise)',
+            votes: ['current', 'user20', 'user21']
+          },
+          {
+            id: 'time-8am',
+            text: '8:00 AM (More comfortable)',
+            votes: ['user22']
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'plan-study-group',
+    title: 'Exam Study Session',
+    description: 'Final prep for the big exam. Bring notes and snacks!',
+    type: 'normal' as const,
+    creator: {
+      id: 'current',
+      name: 'You',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face'
+    },
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user30',
+        name: 'Emma Study',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user31',
+        name: 'David Focus',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user32',
+        name: 'Lisa Smart',
+        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+        status: 'conditional',
+        conditionalFriends: ['user33'] // Will join if user33 joins
+      },
+      {
+        id: 'user33',
+        name: 'Tom Learn',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        status: 'maybe'
+      }
+    ],
+    date: 'Tonight, 7:00 PM',
+    location: 'University Library',
+    isRead: false,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago - too fresh to complete
+    completionVotes: [],
+    polls: [
+      {
+        id: 'study-location-poll',
+        question: 'Where should we study?',
+        type: 'where',
+        options: [
+          {
+            id: 'library-main',
+            text: 'Main Library (Quiet)',
+            votes: ['current', 'user30', 'user31']
+          },
+          {
+            id: 'library-group',
+            text: 'Group Study Room',
+            votes: ['user32']
+          },
+          {
+            id: 'campus-cafe',
+            text: 'Campus Café',
+            votes: ['user33']
+          }
+        ]
+      },
+      {
+        id: 'study-snacks-poll',
+        question: 'What snacks should we bring?',
+        type: 'custom',
+        options: [
+          {
+            id: 'snack-coffee',
+            text: 'Coffee & Energy drinks',
+            votes: ['current', 'user30']
+          },
+          {
+            id: 'snack-healthy',
+            text: 'Nuts & Fruits',
+            votes: ['user31', 'user32']
+          },
+          {
+            id: 'snack-sweet',
+            text: 'Cookies & Chocolate',
+            votes: ['user33', 'current']
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'plan-volleyball',
+    title: 'Beach Volleyball',
+    description: 'Fun volleyball game by the beach. All skill levels welcome!',
+    type: 'anonymous' as const,
+    creator: null, // Anonymous plan
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user40',
+        name: 'Beach Lover',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user41',
+        name: 'Volleyball Pro',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user42',
+        name: 'Sandy Player',
+        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user43',
+        name: 'Net Jumper',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        status: 'maybe'
+      }
+    ],
+    date: 'Tomorrow, 4:00 PM',
+    location: 'Santa Monica Beach',
+    isRead: true,
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago - can be completed
+    completionVotes: [], // No votes yet - will show completion section
+    polls: [
+      {
+        id: 'invite-poll-beach-1',
+        question: 'Should we invite Anna Beach to this plan?',
+        type: 'invitation',
+        expiresAt: Date.now() + 5 * 60 * 1000, // Expires in 5 minutes
+        invitedUsers: ['user44'],
+        options: [
+          {
+            id: 'allow-anna',
+            text: 'Allow',
+            votes: ['current', 'user40']
+          },
+          {
+            id: 'deny-anna',
+            text: 'Deny',
+            votes: ['user41']
+          }
+        ]
+      }
+    ]
   }
 ];
 
