@@ -91,6 +91,9 @@ interface PlansState {
   getCompletionVotingStatus: (plan: Plan) => {
     votedUsers: string[];
     requiredVotes: number;
+    requiredVoteWeight: number;
+    requiredMinimumPeople: number;
+    totalVoteWeight: number;
     hasUserVoted: boolean;
     isCompleted: boolean;
   };
@@ -712,11 +715,19 @@ const usePlansStore = create<PlansState>((set, get) => ({
     const planCreatedAt = new Date(plan.createdAt);
     const fourHoursLater = new Date(planCreatedAt.getTime() + 4 * 60 * 60 * 1000);
     
-    // Plan can be marked as completed if it's been 4+ hours AND 50% haven't voted yet
-    const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
+    // Plan can be marked as completed if it's been 4+ hours AND not already completed
     const votedUsers = plan.completionVotes || [];
-    const requiredVotes = Math.ceil(acceptedParticipants.length * 0.5);
-    const isAlreadyCompleted = votedUsers.length >= requiredVotes;
+    const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
+    const maybeParticipants = plan.participants.filter(p => p.status === 'maybe');
+    
+    // Use new completion logic
+    const totalVoteWeight = acceptedParticipants.length * 1 + maybeParticipants.length * 0.25;
+    const requiredVoteWeight = Math.ceil(totalVoteWeight * 0.5);
+    const requiredMinimumPeople = 2;
+    
+    const hasEnoughVotes = votedUsers.length >= requiredVoteWeight;
+    const hasEnoughPeople = votedUsers.length >= requiredMinimumPeople;
+    const isAlreadyCompleted = hasEnoughVotes && hasEnoughPeople;
     
     return now >= fourHoursLater && !isAlreadyCompleted;
   },
@@ -761,12 +772,19 @@ const usePlansStore = create<PlansState>((set, get) => ({
           completionVotes: updatedCompletionVotes
         };
         
-        // Check if we've reached 50% threshold
+        // Use new voting logic to check completion
         const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
-        const requiredVotes = Math.ceil(acceptedParticipants.length * 0.5);
+        const maybeParticipants = plan.participants.filter(p => p.status === 'maybe');
+        const totalVoteWeight = acceptedParticipants.length * 1 + maybeParticipants.length * 0.25;
+        const requiredVoteWeight = Math.ceil(totalVoteWeight * 0.5);
+        const requiredMinimumPeople = 2;
         
-        // If 50% threshold reached, automatically complete the plan
-        if (updatedCompletionVotes.length >= requiredVotes) {
+        // Check both conditions for completion
+        const hasEnoughVotes = updatedCompletionVotes.length >= requiredVoteWeight;
+        const hasEnoughPeople = updatedCompletionVotes.length >= requiredMinimumPeople;
+        
+        // If both conditions met, automatically complete the plan
+        if (hasEnoughVotes && hasEnoughPeople) {
           // Move to completed plans immediately
           setTimeout(() => {
             get().markPlanAsCompleted(planId);
@@ -809,13 +827,26 @@ const usePlansStore = create<PlansState>((set, get) => ({
   getCompletionVotingStatus: (plan: Plan) => {
     const votedUsers = plan.completionVotes || [];
     const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
-    const requiredVotes = Math.ceil(acceptedParticipants.length * 0.5);
+    const maybeParticipants = plan.participants.filter(p => p.status === 'maybe');
+    
+    // Calculate weighted votes
+    const totalVoteWeight = acceptedParticipants.length * 1 + maybeParticipants.length * 0.25;
+    const requiredVoteWeight = Math.ceil(totalVoteWeight * 0.5);
+    const requiredMinimumPeople = 2;
+    
     const hasUserVoted = votedUsers.includes('current');
-    const isCompleted = votedUsers.length >= requiredVotes;
+    
+    // Check if plan is completed (both conditions must be met)
+    const hasEnoughVotes = votedUsers.length >= requiredVoteWeight;
+    const hasEnoughPeople = votedUsers.length >= requiredMinimumPeople;
+    const isCompleted = hasEnoughVotes && hasEnoughPeople;
     
     return {
       votedUsers,
-      requiredVotes,
+      requiredVotes: Math.max(requiredVoteWeight, requiredMinimumPeople), // Show the higher requirement
+      requiredVoteWeight,
+      requiredMinimumPeople,
+      totalVoteWeight,
       hasUserVoted,
       isCompleted
     };

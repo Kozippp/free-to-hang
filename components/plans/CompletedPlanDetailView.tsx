@@ -36,6 +36,7 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
   const [activeTab, setActiveTab] = useState('Details');
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
+  const [userAttended, setUserAttended] = useState<boolean | null>(null); // null = not answered yet
   
   // Group participants by status
   const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
@@ -80,19 +81,25 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
 
   // Plan creation handlers
   const handleOpenPlanBuilder = (anonymous: boolean = false) => {
-    setIsAnonymousPlan(anonymous);
-    setShowPlanSheet(true);
+    setTimeout(() => {
+      setIsAnonymousPlan(anonymous);
+      setShowPlanSheet(true);
+    }, 0);
   };
   
   const handleClosePlanSheet = () => {
-    setShowPlanSheet(false);
-    setIsAnonymousPlan(false);
+    setTimeout(() => {
+      setShowPlanSheet(false);
+      setIsAnonymousPlan(false);
+    }, 0);
   };
 
   const handlePlanSubmitted = () => {
-    handleClosePlanSheet();
-    // Optionally close the detail view and navigate to the new plan
-    onClose();
+    setTimeout(() => {
+      handleClosePlanSheet();
+      // Optionally close the detail view and navigate to the new plan
+      onClose();
+    }, 0);
   };
 
   // Convert plan participants to the format expected by PlanSuggestionSheet
@@ -141,7 +148,6 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
     
     return (
       <View key={poll.id} style={styles.pollResultsContainer}>
-        <Text style={styles.pollQuestion}>{poll.question}</Text>
         <Text style={styles.pollStats}>
           {results.totalVotes} {results.totalVotes === 1 ? 'vote' : 'votes'}
           {results.totalVotes > 0 && (
@@ -280,64 +286,114 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
           <View style={styles.section}>
             <View style={styles.headerRow}>
               <Users size={20} color={Colors.light.text} style={styles.headerIcon} />
-              <Text style={styles.sectionTitle}>Who Joined</Text>
+              <Text style={styles.sectionTitle}>Who Attended</Text>
             </View>
             
-            {acceptedParticipants.length > 0 && (
+            {/* Attended Section */}
+            {(userAttended === true || acceptedParticipants.filter(p => p.id !== 'current').length > 0) && (
               <View style={styles.participantGroup}>
-                <Text style={styles.groupTitle}>Joined ({acceptedParticipants.length})</Text>
+                <Text style={styles.groupTitle}>
+                  Attended ({(userAttended === true ? 1 : 0) + acceptedParticipants.filter(p => p.id !== 'current').length})
+                </Text>
                 <View style={styles.participantsList}>
-                  {acceptedParticipants.map(renderParticipant)}
+                  {/* Show current user first if they attended */}
+                  {userAttended === true && (
+                    <View style={styles.participantItem}>
+                      <Image 
+                        source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
+                        style={styles.participantAvatar} 
+                      />
+                      <Text style={styles.participantName}>You</Text>
+                    </View>
+                  )}
+                  {/* Then show others who attended */}
+                  {acceptedParticipants.filter(p => p.id !== 'current').map(renderParticipant)}
                 </View>
               </View>
             )}
             
-            {maybeParticipants.length > 0 && (
+            {/* Haven't Responded Section */}
+            {(userAttended === null || maybeParticipants.length > 0 || pendingParticipants.length > 0) && (
               <View style={styles.participantGroup}>
-                <Text style={styles.groupTitle}>Maybe/Conditional ({maybeParticipants.length})</Text>
+                <Text style={styles.groupTitle}>
+                  Haven't Responded ({(userAttended === null ? 1 : 0) + maybeParticipants.length + pendingParticipants.length})
+                </Text>
                 <View style={styles.participantsList}>
+                  {/* Show current user if they haven't responded */}
+                  {userAttended === null && (
+                    <View style={styles.participantItem}>
+                      <Image 
+                        source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
+                        style={styles.participantAvatar} 
+                      />
+                      <Text style={styles.participantName}>You</Text>
+                    </View>
+                  )}
+                  {/* Show maybe and pending participants */}
                   {maybeParticipants.map(renderParticipant)}
-                </View>
-              </View>
-            )}
-            
-            {pendingParticipants.length > 0 && (
-              <View style={styles.participantGroup}>
-                <Text style={styles.groupTitle}>Never Responded ({pendingParticipants.length})</Text>
-                <View style={styles.participantsList}>
                   {pendingParticipants.map(renderParticipant)}
                 </View>
               </View>
             )}
             
-            {declinedParticipants.length > 0 && (
+            {/* Did Not Attend Section */}
+            {(userAttended === false || declinedParticipants.length > 0) && (
               <View style={styles.participantGroup}>
-                <Text style={styles.groupTitle}>Declined ({declinedParticipants.length})</Text>
+                <Text style={styles.groupTitle}>
+                  Did Not Attend ({(userAttended === false ? 1 : 0) + declinedParticipants.length})
+                </Text>
                 <View style={styles.participantsList}>
+                  {/* Show current user if they didn't attend */}
+                  {userAttended === false && (
+                    <View style={styles.participantItem}>
+                      <Image 
+                        source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
+                        style={styles.participantAvatar} 
+                      />
+                      <Text style={styles.participantName}>You</Text>
+                    </View>
+                  )}
+                  {/* Show declined participants */}
                   {declinedParticipants.map(renderParticipant)}
                 </View>
               </View>
             )}
-
-            {/* Your Attendance Status */}
+            
+            {/* Your Attendance Status Toggle */}
             <View style={styles.attendanceStatusContainer}>
-              <Text style={styles.attendanceStatusLabel}>Did you actually join this hangout?</Text>
+              <Text style={styles.attendanceStatusLabel}>Did you actually attend this hangout?</Text>
               <View style={styles.attendanceToggleContainer}>
                 <TouchableOpacity 
                   style={[
                     styles.attendanceToggleButton,
-                    true && styles.attendanceToggleButtonActive // For now, defaulting to joined
+                    userAttended === true && styles.attendanceToggleButtonActive
                   ]}
                   onPress={() => {
-                    // TODO: Implement attendance status update
-                    console.log('Toggle attendance status');
+                    setUserAttended(true);
                   }}
                 >
                   <Text style={[
                     styles.attendanceToggleText,
-                    true && styles.attendanceToggleTextActive
+                    userAttended === true && styles.attendanceToggleTextActive
                   ]}>
-                    {true ? 'Yes, I joined' : 'No, I didn\'t join'}
+                    Yes, I attended
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.attendanceToggleButton,
+                    userAttended === false && styles.attendanceToggleButtonActive
+                  ]}
+                  onPress={() => {
+                    setUserAttended(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.attendanceToggleText,
+                    userAttended === false && styles.attendanceToggleTextActive
+                  ]}>
+                    No, I didn't attend
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -460,12 +516,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
   },
-  pollQuestion: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
   pollStats: {
     fontSize: 13,
     color: Colors.light.secondaryText,
@@ -582,38 +632,6 @@ const styles = StyleSheet.create({
   planButtonIcon: {
     // No marginRight needed since text has marginLeft
   },
-  attendanceStatusContainer: {
-    marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  attendanceStatusLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginRight: 12,
-  },
-  attendanceToggleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  attendanceToggleButton: {
-    padding: 8,
-    borderWidth: 1,
-    borderColor: Colors.light.text,
-    borderRadius: 8,
-  },
-  attendanceToggleButtonActive: {
-    borderColor: Colors.light.primary,
-  },
-  attendanceToggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  attendanceToggleTextActive: {
-    color: Colors.light.primary,
-  },
   chatContainer: {
     flex: 1,
   },
@@ -627,5 +645,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.light.warning,
+  },
+  attendanceStatusContainer: {
+    marginTop: 16,
+  },
+  attendanceStatusLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 12,
+  },
+  attendanceToggleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  attendanceToggleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: Colors.light.background,
+  },
+  attendanceToggleButtonActive: {
+    borderColor: Colors.light.primary,
+    backgroundColor: `${Colors.light.primary}15`,
+  },
+  attendanceToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+  },
+  attendanceToggleTextActive: {
+    color: Colors.light.primary,
   },
 }); 

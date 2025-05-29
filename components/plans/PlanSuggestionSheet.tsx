@@ -106,11 +106,15 @@ export default function PlanSuggestionSheet({
   useEffect(() => {
     if (!visible) {
       // Reset states when modal closes
-      resetStates();
+      setTimeout(() => {
+        resetStates();
+      }, 0);
     } else {
       // Initialize with prefilled data when modal opens
-      setPlanTitle(prefilledTitle || '');
-      setDescription(prefilledDescription || '');
+      setTimeout(() => {
+        setPlanTitle(prefilledTitle || '');
+        setDescription(prefilledDescription || '');
+      }, 0);
       
       Animated.spring(slideAnim, {
         toValue: 1,
@@ -123,12 +127,14 @@ export default function PlanSuggestionSheet({
   }, [visible, slideAnim, prefilledTitle, prefilledDescription]);
   
   const resetStates = () => {
-    setPlanTitle('');
-    setDescription('');
-    setShowInvitePanel(false);
-    setAdditionalFriends([]);
-    setPingedFriends([]);
-    setRemovedFriends([]);
+    setTimeout(() => {
+      setPlanTitle('');
+      setDescription('');
+      setShowInvitePanel(false);
+      setAdditionalFriends([]);
+      setPingedFriends([]);
+      setRemovedFriends([]);
+    }, 0);
   };
   
   const translateY = slideAnim.interpolate({
