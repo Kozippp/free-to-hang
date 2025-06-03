@@ -693,8 +693,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             )
           )}
           
-          {/* Mark as Completed Section - Show to going AND maybe participants */}
-          {canMarkAsCompleted(latestPlan) && (isInYesGang || currentUserStatus === 'maybe') && (
+          {/* Mark as Completed Section - Show to going users always, maybe users only if voting started */}
+          {canMarkAsCompleted(latestPlan) && (
+            isInYesGang || 
+            (currentUserStatus === 'maybe' && getCompletionVotingStatus(latestPlan).votedUsers.length > 0)
+          ) && (
             <View style={styles.section}>
               <View style={styles.headerRow}>
                 <CheckCircle size={20} color={Colors.light.text} style={styles.headerIcon} />
@@ -708,13 +711,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                 return (
                   <>
                     <Text style={styles.completionDescription}>
-                      Mark this hangout as completed. {remainingVotes} more vote{remainingVotes === 1 ? '' : 's'} needed.
+                      Mark this hangout as completed.
                     </Text>
                     
                     {votingStatus.votedUsers.length > 0 && (
                       <View style={styles.votingStatus}>
                         <Text style={styles.votingStatusText}>
-                          {votingStatus.votedUsers.length} voted to complete • {remainingVotes} more needed
+                          {remainingVotes} more vote{remainingVotes === 1 ? '' : 's'} needed to confirm the completion
                         </Text>
                         
                         <View style={styles.votingProgress}>
@@ -728,72 +731,132 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     
                     {/* Show voting buttons for Going users, info for Maybe users */}
                     {isInYesGang ? (
-                      <View style={styles.completionVotingContainer}>
+                      votingStatus.votedUsers.length === 0 ? (
+                        /* Minimalistic single button when no votes */
                         <TouchableOpacity 
                           style={[
-                            styles.completionVoteButton,
-                            styles.completeButton,
-                            votingStatus.hasUserVoted && styles.completionVoteButtonActive
+                            styles.singleCompleteButton,
+                            votingStatus.hasUserVoted && styles.singleCompleteButtonPressed
                           ]}
                           onPress={() => {
-                            if (!votingStatus.hasUserVoted) {
-                              voteForCompletion(plan.id, 'current');
-                              
-                              // Check if this vote will complete the plan
-                              if (remainingVotes === 1) {
-                                setTimeout(() => {
-                                  onClose();
-                                }, 1000);
+                            voteForCompletion(plan.id, 'current');
+                            
+                            // Check if this vote will complete the plan
+                            if (remainingVotes === 1) {
+                              setTimeout(() => {
+                                onClose();
+                              }, 1000);
+                            }
+                          }}
+                        >
+                          <Text style={styles.singleCompleteButtonText}>
+                            Complete
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        /* Two button layout when voting has started */
+                        <View style={styles.completionVotingContainer}>
+                          <TouchableOpacity 
+                            style={[
+                              styles.completionVoteButton,
+                              styles.completeButton,
+                              !votingStatus.hasUserVoted && styles.completionVoteButtonActive
+                            ]}
+                            onPress={() => {
+                              if (!votingStatus.hasUserVoted) {
+                                voteForCompletion(plan.id, 'current');
+                                
+                                // Check if this vote will complete the plan
+                                if (remainingVotes === 1) {
+                                  setTimeout(() => {
+                                    onClose();
+                                  }, 1000);
+                                }
                               }
-                            }
-                          }}
-                        >
-                          <CheckCircle 
-                            size={18} 
-                            color="white"
-                          />
-                          <Text style={styles.completionVoteButtonText}>
-                            Yes, Complete
-                          </Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity 
-                          style={[
-                            styles.completionVoteButton,
-                            styles.notCompleteButton,
-                            !votingStatus.hasUserVoted && styles.completionVoteButtonActiveGray
-                          ]}
-                          onPress={() => {
-                            if (votingStatus.hasUserVoted) {
-                              removeCompletionVote(plan.id, 'current');
-                            }
-                          }}
-                        >
-                          <X 
-                            size={18} 
-                            color="white"
-                          />
-                          <Text style={styles.completionVoteButtonText}>
-                            Not Yet
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
+                            }}
+                          >
+                            <Text style={[
+                              styles.completionVoteButtonText,
+                              { color: !votingStatus.hasUserVoted ? Colors.light.onlineGreen : Colors.light.text }
+                            ]}>
+                              Complete
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity 
+                            style={[
+                              styles.completionVoteButton,
+                              styles.notCompleteButton,
+                              votingStatus.hasUserVoted && styles.completionVoteButtonActiveWhite
+                            ]}
+                            onPress={() => {
+                              if (votingStatus.hasUserVoted) {
+                                removeCompletionVote(plan.id, 'current');
+                              }
+                            }}
+                          >
+                            <Text style={[
+                              styles.completionVoteButtonText,
+                              { color: votingStatus.hasUserVoted ? Colors.light.text : Colors.light.secondaryText }
+                            ]}>
+                              Not Yet
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )
                     ) : (
-                      /* For maybe participants - show info only */
-                      <TouchableOpacity 
-                        style={styles.maybeUserInfoContainer}
-                        onPress={() => {
-                          Alert.alert(
-                            'Cannot Vote',
-                            'Only participants marked as "Going" can vote to complete the plan.',
-                            [{ text: 'OK', style: 'default' }]
-                          );
-                        }}
-                      >
-                        <Text style={styles.maybeUserInfoText}>
-                          Only "Going" participants can vote to complete this plan
-                        </Text>
-                      </TouchableOpacity>
+                      /* For maybe participants - show same buttons but alert when clicked */
+                      votingStatus.votedUsers.length === 0 ? (
+                        /* Show nothing to maybe users when no one has voted */
+                        null
+                      ) : (
+                        /* Show buttons to maybe users when voting has started, but they can't vote */
+                        <View style={styles.completionVotingContainer}>
+                          <TouchableOpacity 
+                            style={[
+                              styles.completionVoteButton,
+                              styles.completeButton,
+                              !votingStatus.hasUserVoted && styles.completionVoteButtonActive
+                            ]}
+                            onPress={() => {
+                              Alert.alert(
+                                'Cannot Vote',
+                                'Only participants marked as "Going" can vote to complete the plan.',
+                                [{ text: 'OK', style: 'default' }]
+                              );
+                            }}
+                          >
+                            <Text style={[
+                              styles.completionVoteButtonText,
+                              { color: !votingStatus.hasUserVoted ? Colors.light.onlineGreen : Colors.light.text }
+                            ]}>
+                              Complete
+                            </Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity 
+                            style={[
+                              styles.completionVoteButton,
+                              styles.notCompleteButton,
+                              votingStatus.hasUserVoted && styles.completionVoteButtonActiveWhite
+                            ]}
+                            onPress={() => {
+                              Alert.alert(
+                                'Cannot Vote',
+                                'Only participants marked as "Going" can vote to complete the plan.',
+                                [{ text: 'OK', style: 'default' }]
+                              );
+                            }}
+                          >
+                            <Text style={[
+                              styles.completionVoteButtonText,
+                              { color: votingStatus.hasUserVoted ? Colors.light.text : Colors.light.secondaryText }
+                            ]}>
+                              Not Yet
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )
                     )}
                   </>
                 );
@@ -951,6 +1014,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
+    zIndex: 1000,
   },
   declineText: {
     fontSize: 24,
@@ -1043,56 +1107,61 @@ const styles = StyleSheet.create({
   },
   completionVotingContainer: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     marginTop: 16,
   },
   completionVoteButton: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  completeButton: {
-    backgroundColor: Colors.light.onlineGreen,
-  },
-  notCompleteButton: {
-    backgroundColor: Colors.light.secondaryText,
-  },
-  completionVoteButtonActive: {
-    backgroundColor: Colors.light.onlineGreen,
-    shadowOpacity: 0.15,
-  },
-  completionVoteButtonActiveGray: {
-    backgroundColor: Colors.light.secondaryText,
-    shadowOpacity: 0.15,
-  },
-  completionVoteButtonText: {
-    color: 'white',
-    fontWeight: '700',
-    fontSize: 16,
-    marginLeft: 8,
-  },
-  maybeUserInfoContainer: {
-    backgroundColor: `${Colors.light.border}15`,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     borderWidth: 1,
+    backgroundColor: `${Colors.light.border}30`,
     borderColor: Colors.light.border,
   },
-  maybeUserInfoText: {
+  completeButton: {
+    // Base styles - will be overridden by active state
+  },
+  notCompleteButton: {
+    // Base styles - will be overridden by active state
+  },
+  completionVoteButtonActive: {
+    backgroundColor: `${Colors.light.onlineGreen}20`,
+    borderColor: Colors.light.onlineGreen,
+  },
+  completionVoteButtonActiveWhite: {
+    backgroundColor: 'white',
+    borderColor: Colors.light.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  completionVoteButtonText: {
+    fontWeight: '600',
     fontSize: 14,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    fontWeight: '500',
+    color: Colors.light.text,
+  },
+  singleCompleteButton: {
+    backgroundColor: Colors.light.onlineGreen,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.onlineGreen,
+  },
+  singleCompleteButtonPressed: {
+    backgroundColor: `${Colors.light.onlineGreen}60`,
+    borderColor: `${Colors.light.onlineGreen}30`,
+  },
+  singleCompleteButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

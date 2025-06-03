@@ -123,6 +123,67 @@ export const mockInvitations: Plan[] = [
 // Mock active plans (plans you've accepted)
 export const mockActivePlans: Plan[] = [
   {
+    id: 'plan-test-completion',
+    title: '✅ Test Plan (Others Voted!)',
+    description: 'This plan has completion votes for testing the voting system.',
+    type: 'normal' as const,
+    creator: {
+      id: 'user70',
+      name: 'Test Creator',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
+    },
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user70',
+        name: 'Test Creator',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user71',
+        name: 'Test Friend 1',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user72',
+        name: 'Test Friend 2',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      }
+    ],
+    date: 'Today, 5:00 PM',
+    location: 'Test Location',
+    isRead: false,
+    createdAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(), // 10 hours ago - can be completed
+    completionVotes: ['user70'], // Only 1 person has voted - user can test both buttons (need 2 total)
+    polls: [
+      {
+        id: 'test-when-poll',
+        question: 'What time worked best?',
+        type: 'when',
+        options: [
+          {
+            id: 'test-time-5pm',
+            text: '5:00 PM',
+            votes: ['current', 'user70', 'user71']
+          },
+          {
+            id: 'test-time-6pm',
+            text: '6:00 PM',
+            votes: ['user72']
+          }
+        ]
+      }
+    ]
+  },
+  {
     id: '3',
     title: 'sõnumid',
     description: 'Testimiseks chat sõnumite vaatamiseks ja reageerimiseks.',
@@ -317,7 +378,7 @@ export const mockActivePlans: Plan[] = [
   },
   {
     id: 'plan-weekend-hike',
-    title: 'Weekend Mountain Hike',
+    title: '🔥 Mountain Hike (2 votes to complete!)',
     description: 'Early morning hike to catch the sunrise from the peak!',
     type: 'normal' as const,
     creator: {
@@ -361,7 +422,7 @@ export const mockActivePlans: Plan[] = [
     location: 'Mountain Trail Head',
     isRead: true,
     createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago - can be completed
-    completionVotes: [], // No votes yet - will show completion section
+    completionVotes: ['user20'], // Only 1 person has voted - shows two button interface
     polls: [
       {
         id: 'hike-time-poll',
@@ -541,11 +602,247 @@ export const mockActivePlans: Plan[] = [
         ]
       }
     ]
+  },
+  {
+    id: 'plan-game-night-test',
+    title: 'Board Game Evening',
+    description: 'Let\'s play some board games and have fun!',
+    type: 'normal' as const,
+    creator: {
+      id: 'user60',
+      name: 'Game Master',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face'
+    },
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user60',
+        name: 'Game Master',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user61',
+        name: 'Strategy Player',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      }
+    ],
+    date: 'Tonight, 8:00 PM',
+    location: 'Community Center',
+    isRead: true,
+    createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago - can be completed
+    completionVotes: [], // No votes yet - will show single button
+    polls: [
+      {
+        id: 'game-choice-poll',
+        question: 'What games should we play?',
+        type: 'custom',
+        options: [
+          {
+            id: 'monopoly',
+            text: 'Monopoly',
+            votes: ['current', 'user60']
+          },
+          {
+            id: 'scrabble',
+            text: 'Scrabble',
+            votes: ['user61']
+          },
+          {
+            id: 'chess',
+            text: 'Chess',
+            votes: ['current']
+          }
+        ]
+      }
+    ]
   }
 ];
 
 // Mock completed plans (past plans)
 export const mockCompletedPlans: Plan[] = [
+  {
+    id: 'completed-recent-1',
+    title: 'Coffee & Study Session',
+    description: 'Quick coffee break and study session at the library café.',
+    type: 'normal' as const,
+    creator: {
+      id: 'current',
+      name: 'You',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
+    },
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user50',
+        name: 'Study Buddy',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user51',
+        name: 'Library Friend',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      }
+    ],
+    date: 'Yesterday, 2:00 PM',
+    location: 'University Library Café',
+    isRead: true,
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+    completionVotes: ['current', 'user50', 'user51'],
+    polls: [
+      {
+        id: 'coffee-time-poll',
+        question: 'What time worked best?',
+        type: 'when',
+        options: [
+          {
+            id: 'time-2pm',
+            text: '2:00 PM',
+            votes: ['current', 'user50', 'user51']
+          },
+          {
+            id: 'time-3pm',
+            text: '3:00 PM',
+            votes: ['user50']
+          }
+        ]
+      },
+      {
+        id: 'coffee-location-poll',
+        question: 'Where you met',
+        type: 'where',
+        options: [
+          {
+            id: 'library-cafe',
+            text: 'Library Café',
+            votes: ['current', 'user50', 'user51']
+          },
+          {
+            id: 'starbucks',
+            text: 'Starbucks',
+            votes: []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'completed-recent-2',
+    title: 'Quick Lunch Meet',
+    description: 'Fast lunch break together between classes.',
+    type: 'normal' as const,
+    creator: {
+      id: 'user52',
+      name: 'Lunch Buddy',
+      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face'
+    },
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user52',
+        name: 'Lunch Buddy',
+        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user53',
+        name: 'Food Lover',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'maybe'
+      }
+    ],
+    date: 'Today, 12:30 PM',
+    location: 'Campus Food Court',
+    isRead: true,
+    createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
+    completionVotes: ['current', 'user52'],
+    polls: [
+      {
+        id: 'lunch-location-poll',
+        question: 'Where you met',
+        type: 'where',
+        options: [
+          {
+            id: 'food-court',
+            text: 'Campus Food Court',
+            votes: ['current', 'user52']
+          },
+          {
+            id: 'subway',
+            text: 'Subway',
+            votes: ['user53']
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'completed-recent-3',
+    title: 'Morning Jog',
+    description: 'Early morning run around the park.',
+    type: 'normal' as const,
+    creator: {
+      id: 'user54',
+      name: 'Running Partner',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face'
+    },
+    participants: [
+      {
+        id: 'current',
+        name: 'You',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      },
+      {
+        id: 'user54',
+        name: 'Running Partner',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        status: 'accepted'
+      }
+    ],
+    date: 'Today, 7:00 AM',
+    location: 'Central Park',
+    isRead: true,
+    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+    completionVotes: ['current', 'user54'],
+    polls: [
+      {
+        id: 'run-time-poll',
+        question: 'What time worked best?',
+        type: 'when',
+        options: [
+          {
+            id: 'time-7am',
+            text: '7:00 AM',
+            votes: ['current', 'user54']
+          },
+          {
+            id: 'time-8am',
+            text: '8:00 AM',
+            votes: []
+          }
+        ]
+      }
+    ]
+  },
   {
     id: '6',
     title: 'Hiking Trip',
@@ -576,10 +873,10 @@ export const mockCompletedPlans: Plan[] = [
         status: 'accepted'
       }
     ],
-    date: 'Yesterday, 10:00 AM',
+    date: 'Last Week, 10:00 AM',
     location: 'Yellowstone National Park',
     isRead: true,
-    createdAt: '2023-05-19T08:00:00Z',
+    createdAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(), // 9 days ago
     completionVotes: ['current', 'user14', 'user15']
   }
 ];
