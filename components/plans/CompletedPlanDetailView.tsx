@@ -6,7 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Platform
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import { 
   Clock, 
@@ -406,7 +407,11 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
       )}
       
       {activeTab === 'Chat' && (
-        <View style={styles.chatContainer}>
+        <KeyboardAvoidingView 
+          style={styles.chatContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
           {/* Chat Deletion Warning */}
           <View style={styles.chatWarning}>
             <Text style={styles.chatWarningText}>
@@ -414,7 +419,7 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
             </Text>
           </View>
           <ChatView plan={plan} currentUserId="current" />
-        </View>
+        </KeyboardAvoidingView>
       )}
       
       {/* Plan Creation Modal */}
