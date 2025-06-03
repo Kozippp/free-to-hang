@@ -72,12 +72,10 @@ export default function PlanDetailModal({
     if (visible) {
       // Ensure the modal opens fully
       slideAnim.setValue(0);
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 1,
+        duration: 300,
         useNativeDriver: true,
-        friction: 6,
-        tension: 65,
-        velocity: 3,
       }).start();
     } else {
       Animated.timing(slideAnim, {

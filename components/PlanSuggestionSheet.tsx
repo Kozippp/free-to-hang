@@ -105,12 +105,10 @@ export default function PlanSuggestionSheet({
       // Reset states when modal closes
       resetStates();
     } else {
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 1,
+        duration: 300,
         useNativeDriver: true,
-        friction: 6,
-        tension: 65,
-        velocity: 3,
       }).start();
     }
   }, [visible, slideAnim]);

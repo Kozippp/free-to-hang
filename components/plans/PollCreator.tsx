@@ -250,108 +250,107 @@ export default function PollCreator({
           </TouchableOpacity>
         </View>
         
-        <ScrollView 
-          style={styles.scrollContent}
-          contentContainerStyle={styles.scrollContentContainer}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          automaticallyAdjustContentInsets={false}
-          contentInsetAdjustmentBehavior="never"
+        <KeyboardAvoidingView 
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          {/* Question Input */}
-          <View style={styles.questionSection}>
-            <Text style={styles.sectionTitle}>Poll question</Text>
-            <TextInput
-              style={styles.questionInput}
-              value={question}
-              onChangeText={setQuestion}
-              placeholder="Ask a question..."
-              placeholderTextColor="#999"
-              multiline
-              maxLength={100}
-              autoFocus={pollType === 'custom' && !existingPoll}
-              editable={pollType === 'custom'}
-            />
-          </View>
-          
-          {/* Options */}
-          <View style={styles.optionsSection}>
-            <Text style={styles.sectionTitle}>OPTIONS</Text>
+          <ScrollView 
+            style={styles.scrollContent}
+            contentContainerStyle={styles.scrollContentContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Question Input */}
+            <View style={styles.questionSection}>
+              <Text style={styles.sectionTitle}>Poll question</Text>
+              <TextInput
+                style={styles.questionInput}
+                value={question}
+                onChangeText={setQuestion}
+                placeholder="Ask a question..."
+                placeholderTextColor="#999"
+                multiline
+                maxLength={100}
+                autoFocus={pollType === 'custom' && !existingPoll}
+                editable={pollType === 'custom'}
+              />
+            </View>
             
-            {hasDuplicates && (
-              <Text style={styles.duplicateError}>
-                Please remove duplicate options
-              </Text>
-            )}
-            
-            {options.map((option, index) => {
-              const isProtected = protectedOptions.has(option);
-              const isDuplicate = option.trim() !== '' && duplicateOptions.has(option.trim().toLowerCase());
+            {/* Options */}
+            <View style={styles.optionsSection}>
+              <Text style={styles.sectionTitle}>OPTIONS</Text>
               
-              return (
-                <View key={`option-${index}`} style={styles.optionRow}>
-                  <View
-                    style={[
-                      styles.optionInputContainer,
-                      isDuplicate && styles.duplicateOptionContainer,
-                      isProtected && styles.protectedOptionContainer
-                    ]}
-                  >
-                    <TextInput
+              {hasDuplicates && (
+                <Text style={styles.duplicateError}>
+                  Please remove duplicate options
+                </Text>
+              )}
+              
+              {options.map((option, index) => {
+                const isProtected = protectedOptions.has(option);
+                const isDuplicate = option.trim() !== '' && duplicateOptions.has(option.trim().toLowerCase());
+                
+                return (
+                  <View key={`option-${index}`} style={styles.optionRow}>
+                    <View
                       style={[
-                        styles.optionInput,
-                        isProtected && styles.protectedOptionInput,
-                        isDuplicate && styles.duplicateOptionInput
+                        styles.optionInputContainer,
+                        isDuplicate && styles.duplicateOptionContainer,
+                        isProtected && styles.protectedOptionContainer
                       ]}
-                      value={option}
-                      onChangeText={(text) => handleOptionChange(text, index)}
-                      placeholder={
-                        pollType === 'when' 
-                          ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
-                          : pollType === 'where'
-                          ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
-                          : `Option ${index + 1}`
-                      }
-                      placeholderTextColor="#999"
-                      editable={!isProtected}
-                    />
+                    >
+                      <TextInput
+                        style={[
+                          styles.optionInput,
+                          isProtected && styles.protectedOptionInput,
+                          isDuplicate && styles.duplicateOptionInput
+                        ]}
+                        value={option}
+                        onChangeText={(text) => handleOptionChange(text, index)}
+                        placeholder={
+                          pollType === 'when' 
+                            ? (index === 0 ? 'e.g. 7:00 PM' : index === 1 ? 'e.g. 8:00 PM' : 'Another time...')
+                            : pollType === 'where'
+                            ? (index === 0 ? 'e.g. Central Park' : index === 1 ? 'e.g. Coffee shop' : 'Another place...')
+                            : `Option ${index + 1}`
+                        }
+                        placeholderTextColor="#999"
+                        editable={!isProtected}
+                      />
+                      
+                      {isProtected && (
+                        <View style={styles.protectedIndicator}>
+                          <Text style={styles.protectedText}>🔒</Text>
+                        </View>
+                      )}
+                    </View>
                     
-                    {isProtected && (
-                      <View style={styles.protectedIndicator}>
-                        <Text style={styles.protectedText}>🔒</Text>
-                      </View>
+                    {options.length > 2 && !isProtected && (
+                      <TouchableOpacity
+                        onPress={() => handleRemoveOption(index)}
+                        style={styles.removeButton}
+                      >
+                        <X size={20} color="#999" />
+                      </TouchableOpacity>
                     )}
                   </View>
-                  
-                  {options.length > 2 && !isProtected && (
-                    <TouchableOpacity
-                      onPress={() => handleRemoveOption(index)}
-                      style={styles.removeButton}
-                    >
-                      <X size={20} color="#999" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-          
-          {/* Extra padding for better keyboard handling */}
-          <View style={styles.bottomPadding} />
-          
-          {/* Bottom Action inside ScrollView */}
-          <View style={styles.bottomSection}>
-            <TouchableOpacity 
-              onPress={handleSubmit}
-              style={[styles.createButton, !canSubmit() && styles.disabledCreateButton]}
-              disabled={!canSubmit()}
-            >
-              <Text style={[styles.createButtonText, !canSubmit() && styles.disabledCreateButtonText]}>
-                {existingPoll ? 'Update Poll' : 'Create Poll'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+                );
+              })}
+              
+              {/* Create Poll button inline with options */}
+              <TouchableOpacity 
+                onPress={handleSubmit}
+                style={[styles.inlineCreateButton, !canSubmit() && styles.disabledCreateButton]}
+                disabled={!canSubmit()}
+              >
+                <Text style={[styles.createButtonText, !canSubmit() && styles.disabledCreateButtonText]}>
+                  {existingPoll ? 'Update Poll' : 'Create Poll'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
@@ -361,6 +360,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+    position: 'relative',
   },
   header: {
     flexDirection: 'row',
@@ -371,6 +371,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 0.5,
     borderBottomColor: '#C6C6C8',
+    zIndex: 1,
   },
   cancelButton: {
     padding: 8,
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
   },
   scrollContentContainer: {
     padding: 16,
-    paddingBottom: 80, // Extra space for keyboard
+    paddingBottom: 20,
   },
   questionSection: {
     marginBottom: 32,
@@ -455,22 +456,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 22,
   },
-  bottomPadding: {
-    height: 100, // Extra space for keyboard
-  },
-  bottomSection: {
-    padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    backgroundColor: '#F2F2F7',
-    borderTopWidth: 0.5,
-    borderTopColor: '#C6C6C8',
-  },
-  createButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
   createButtonText: {
     color: 'white',
     fontSize: 17,
@@ -519,5 +504,16 @@ const styles = StyleSheet.create({
   },
   protectedOptionContainer: {
     backgroundColor: 'transparent',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+    position: 'relative',
+  },
+  inlineCreateButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 16,
   },
 });

@@ -129,6 +129,46 @@ export default function ChatMessage({
   const unsendAnim = useRef(new Animated.Value(1)).current;
   const messageScale = useRef(new Animated.Value(1)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
+  
+  // Image viewer animations
+  const imageViewerOpacity = useRef(new Animated.Value(0)).current;
+  const imageViewerScale = useRef(new Animated.Value(0.5)).current;
+  const imageViewerTranslateY = useRef(new Animated.Value(0)).current;
+  
+  // Pan responder for swipe to close image
+  const imageViewerPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        return Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        if (gestureState.dy > 0) {
+          imageViewerTranslateY.setValue(gestureState.dy);
+          const opacity = Math.max(0.3, 1 - gestureState.dy / 300);
+          imageViewerOpacity.setValue(opacity);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dy > 150) {
+          // Close if swipe down is significant
+          closeImageViewer();
+        } else {
+          // Spring back
+          Animated.parallel([
+            Animated.spring(imageViewerTranslateY, {
+              toValue: 0,
+              useNativeDriver: true,
+            }),
+            Animated.timing(imageViewerOpacity, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            })
+          ]).start();
+        }
+      },
+    })
+  ).current;
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -136,6 +176,53 @@ export default function ChatMessage({
       hour: '2-digit', 
       minute: '2-digit',
       hour12: false 
+    });
+  };
+
+  const openImageViewer = () => {
+    setShowImageViewer(true);
+    
+    // Reset animations
+    imageViewerOpacity.setValue(0);
+    imageViewerScale.setValue(0.5);
+    imageViewerTranslateY.setValue(0);
+    
+    // Animate in
+    Animated.parallel([
+      Animated.timing(imageViewerOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(imageViewerScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 100,
+        friction: 8,
+      })
+    ]).start();
+  };
+
+  const closeImageViewer = () => {
+    Animated.parallel([
+      Animated.timing(imageViewerOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(imageViewerScale, {
+        toValue: 0.5,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(imageViewerTranslateY, {
+        toValue: 50,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setShowImageViewer(false);
+      imageViewerTranslateY.setValue(0);
     });
   };
 
@@ -414,7 +501,7 @@ export default function ChatMessage({
           <View>
             <TouchableWithoutFeedback 
               onPress={() => {
-                setShowImageViewer(true);
+                openImageViewer();
               }}
               onLongPress={handleLongPress}
             >
@@ -479,7 +566,7 @@ export default function ChatMessage({
             style={[
               styles.voiceContainer,
               isOwnMessage ? {
-                backgroundColor: Colors.light.primary,
+                backgroundColor: '#E3F2FD',
               } : {
                 backgroundColor: '#F0F0F0',
               }
@@ -498,17 +585,17 @@ export default function ChatMessage({
                 <View style={styles.pauseIconContainer}>
                   <View style={[
                     styles.pauseBar,
-                    { backgroundColor: isOwnMessage ? 'white' : Colors.light.primary }
+                    { backgroundColor: isOwnMessage ? '#1976D2' : Colors.light.primary }
                   ]} />
                   <View style={[
                     styles.pauseBar,
-                    { backgroundColor: isOwnMessage ? 'white' : Colors.light.primary }
+                    { backgroundColor: isOwnMessage ? '#1976D2' : Colors.light.primary }
                   ]} />
                 </View>
               ) : (
                 <View style={[
                   styles.playTriangleIcon,
-                  { borderLeftColor: isOwnMessage ? 'white' : Colors.light.primary }
+                  { borderLeftColor: isOwnMessage ? '#1976D2' : Colors.light.primary }
                 ]} />
               )}
             </TouchableOpacity>
@@ -527,8 +614,8 @@ export default function ChatMessage({
                       { 
                         height: Math.max(8, level * 32),
                         backgroundColor: isPlayed 
-                          ? (isOwnMessage ? 'rgba(255,255,255,0.9)' : Colors.light.primary)
-                          : (isOwnMessage ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)'),
+                          ? (isOwnMessage ? '#1976D2' : Colors.light.primary)
+                          : (isOwnMessage ? 'rgba(25, 118, 210, 0.3)' : 'rgba(0,0,0,0.3)'),
                       }
                     ]}
                     onPress={() => {
@@ -699,29 +786,53 @@ export default function ChatMessage({
             <Modal
               visible={showImageViewer}
               transparent={true}
-              animationType="fade"
-              onRequestClose={() => setShowImageViewer(false)}
+              animationType="none"
+              onRequestClose={closeImageViewer}
             >
-              <View style={styles.imageViewerOverlay}>
+              <Animated.View 
+                style={[
+                  styles.imageViewerOverlay,
+                  { opacity: imageViewerOpacity }
+                ]}
+              >
+                {/* Blurred background */}
+                <BlurView intensity={80} style={StyleSheet.absoluteFill} />
+                
+                {/* Close button positioned over the image */}
                 <TouchableOpacity 
                   style={styles.imageViewerClose}
-                  onPress={() => setShowImageViewer(false)}
+                  onPress={closeImageViewer}
                 >
-                  <X size={24} color="white" />
+                  <View style={styles.closeButtonBackground}>
+                    <X size={20} color="white" />
+                  </View>
                 </TouchableOpacity>
                 
-                <TouchableOpacity
-                  style={styles.imageViewerContainer}
-                  activeOpacity={1}
-                  onPress={() => setShowImageViewer(false)}
+                {/* Image container with pan responder */}
+                <Animated.View
+                  style={[
+                    styles.imageViewerContainer,
+                    {
+                      transform: [
+                        { scale: imageViewerScale },
+                        { translateY: imageViewerTranslateY }
+                      ]
+                    }
+                  ]}
+                  {...imageViewerPanResponder.panHandlers}
                 >
                   <Image 
                     source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
                     style={styles.fullScreenImage}
                     resizeMode="contain"
                   />
-                </TouchableOpacity>
-              </View>
+                </Animated.View>
+                
+                {/* Tap outside to close */}
+                <TouchableWithoutFeedback onPress={closeImageViewer}>
+                  <View style={StyleSheet.absoluteFill} />
+                </TouchableWithoutFeedback>
+              </Animated.View>
             </Modal>
           )}
         </View>
@@ -939,7 +1050,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   ownMessageBubble: {
-    backgroundColor: Colors.light.primary,
+    backgroundColor: '#E3F2FD',
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -953,7 +1064,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   ownMessageText: {
-    color: 'white',
+    color: '#000000',
   },
   otherMessageText: {
     color: '#000000',
@@ -964,7 +1075,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   ownEditedIndicator: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(0,0,0,0.5)',
   },
   otherEditedIndicator: {
     color: 'rgba(0,0,0,0.5)',
@@ -1188,7 +1299,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ownEditInput: {
-    color: 'white',
+    color: '#000000',
     borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   otherEditInput: {
@@ -1277,20 +1388,23 @@ const styles = StyleSheet.create({
   },
   imageViewerOverlay: {
     flex: 1,
-    backgroundColor: 'black',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   imageViewerClose: {
     position: 'absolute',
-    top: 16,
-    right: 16,
-    padding: 8,
+    top: 40,
+    right: 20,
+    zIndex: 10,
+    padding: 12,
   },
   imageViewerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
+    height: '100%',
   },
   fullScreenImage: {
     width: '100%',
@@ -1328,7 +1442,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   ownVoiceTime: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(0,0,0,0.6)',
   },
   otherVoiceTime: {
     color: 'rgba(0,0,0,0.6)',
@@ -1352,5 +1466,13 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     marginHorizontal: 8,
     fontWeight: '500',
+  },
+  closeButtonBackground: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

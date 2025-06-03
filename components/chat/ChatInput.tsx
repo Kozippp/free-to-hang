@@ -736,16 +736,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fullscreenCancelButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'white',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 25,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   fullscreenCancelText: {
     fontSize: 16,
-    color: 'white',
+    color: 'black',
     fontWeight: '500',
   },
   fullscreenSendButton: {

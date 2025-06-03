@@ -120,26 +120,30 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   respondToPlan: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
     set((state) => {
-      // Find the plan in invitations or active plans
-      const invitationPlan = state.invitations.find(p => p.id === planId);
+      // Find the plan in either invitations or activePlans
+      const invitation = state.invitations.find(p => p.id === planId);
       const activePlan = state.activePlans.find(p => p.id === planId);
-      const plan = invitationPlan || activePlan;
+      const plan = invitation || activePlan;
       
       if (!plan) return state;
       
-      // Update the current user's status in the plan
-      const updatedPlan = {
+      const updatedPlan: Plan = {
         ...plan,
-        participants: plan.participants.map(participant => 
-          participant.id === 'current' 
+        participants: plan.participants.map(participant =>
+          participant.id === 'current'
             ? { 
                 ...participant, 
                 status: response,
-                conditionalFriends: conditionalFriends || undefined
-              } 
+                conditionalFriends: response === 'conditional' ? conditionalFriends : undefined
+              }
             : participant
         )
       };
+      
+      // Remove completion vote if user is no longer "accepted"
+      if (response !== 'accepted' && updatedPlan.completionVotes?.includes('current')) {
+        updatedPlan.completionVotes = updatedPlan.completionVotes.filter(id => id !== 'current');
+      }
       
       // If the plan is already in activePlans, just update it there
       if (activePlan) {

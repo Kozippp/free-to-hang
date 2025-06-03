@@ -116,12 +116,10 @@ export default function PlanSuggestionSheet({
         setDescription(prefilledDescription || '');
       }, 0);
       
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 1,
+        duration: 300,
         useNativeDriver: true,
-        friction: 6,
-        tension: 65,
-        velocity: 3,
       }).start();
     }
   }, [visible, slideAnim, prefilledTitle, prefilledDescription]);
