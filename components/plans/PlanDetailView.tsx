@@ -935,17 +935,18 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#000000',
   },
   content: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
   },
   contentContainer: {
-    padding: 16,
+    padding: 0,
   },
   section: {
-    marginBottom: 24,
-    backgroundColor: Colors.light.cardBackground,
+    marginBottom: 16,
+    backgroundColor: Colors.light.background,
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
