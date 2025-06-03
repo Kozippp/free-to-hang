@@ -110,8 +110,6 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
       onPress={() => onPress(plan)}
       activeOpacity={0.7}
     >
-      {!plan.isRead && <View style={styles.unreadIndicator} />}
-      
       {/* Update notification badge */}
       {plan.hasUnreadUpdates && (
         <View style={styles.updateBadge}>
@@ -228,15 +226,6 @@ const styles = StyleSheet.create({
   },
   unreadAnonymousCard: {
     borderColor: Colors.light.secondary, // Red border for anonymous unread invitations
-  },
-  unreadIndicator: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFCC00', // Yellow dot for unread
   },
   unreadText: {
     fontWeight: '700', // Make text bold for unread items

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { mockInvitations, mockActivePlans, mockCompletedPlans } from '@/constants/mockPlans';
 import { useRouter } from 'expo-router';
+import { notifyPlanUpdate } from '@/utils/notifications';
 
 export type ParticipantStatus = 'pending' | 'accepted' | 'maybe' | 'conditional' | 'declined';
 
@@ -991,6 +992,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
     set((state) => {
       const updatePlan = (plan: Plan): Plan => {
         if (plan.id === planId) {
+          // Saada teavitus kui see pole kasutaja enda tegevus
+          if (plan.creator?.id !== 'current') {
+            notifyPlanUpdate(plan.title, updateType);
+          }
+          
           return {
             ...plan,
             lastUpdatedAt: now,
