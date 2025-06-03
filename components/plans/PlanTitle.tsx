@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity } from 'react-native';
-import { Edit2, Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PlanTitleProps {
@@ -46,14 +45,13 @@ export default function PlanTitle({
           />
         </View>
       ) : (
-        <View style={styles.titleContainer}>
+        <TouchableOpacity 
+          style={styles.titleContainer}
+          onPress={canEdit ? onEditTitle : undefined}
+          activeOpacity={canEdit ? 0.7 : 1}
+        >
           <Text style={styles.title}>{title}</Text>
-          {canEdit && (
-            <TouchableOpacity style={styles.editButton} onPress={onEditTitle}>
-              <Edit2 size={16} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
-          )}
-        </View>
+        </TouchableOpacity>
       )}
 
       {/* Description */}
@@ -72,23 +70,21 @@ export default function PlanTitle({
           />
         </View>
       ) : (
-        <View style={styles.descriptionContainer}>
+        <TouchableOpacity 
+          style={styles.descriptionContainer}
+          onPress={canEdit ? onEditDescription : undefined}
+          activeOpacity={canEdit ? 0.7 : 1}
+        >
           {description ? (
             <Text style={styles.description}>{description}</Text>
           ) : (
             <Text style={styles.emptyDescription}>
               {canEdit 
-                ? "Add a description of the plan." 
+                ? "There is no description" 
                 : "No description yet"}
             </Text>
           )}
-          
-          {canEdit && (
-            <TouchableOpacity style={styles.editButton} onPress={onEditDescription}>
-              <Edit2 size={16} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
-          )}
-        </View>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -117,9 +113,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.text,
     flex: 1,
-  },
-  editButton: {
-    padding: 8,
   },
   editContainer: {
     flexDirection: 'row',

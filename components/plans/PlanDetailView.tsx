@@ -252,6 +252,18 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
   
   const handleStatusChange = (status: ParticipantStatus, conditionalFriends?: string[]) => {
+    // If changing from 'accepted' to 'maybe' or 'conditional', remove all votes first
+    if (currentUserStatus === 'accepted' && (status === 'maybe' || status === 'conditional')) {
+      // Remove user votes from all polls
+      polls.forEach(poll => {
+        const userVotes = getUserVotesForPoll(poll.id);
+        if (userVotes.length > 0) {
+          // Remove all votes by voting for empty array
+          voteOnPoll(plan.id, poll.id, [], 'current');
+        }
+      });
+    }
+
     if (status === 'declined') {
       // Start decline animation
       setIsClosing(true);
@@ -469,25 +481,20 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             canEdit={isInYesGang}
           />
           
-          {/* Time and Location Sections */}
-          {!whenPoll && !wherePoll && !isInYesGang ? (
-            /* Combined view when both are not set for invitees */
+          {/* Combined Voting Section */}
+          {(isInYesGang || whenPoll || wherePoll || customPolls.length > 0) && (
             <View style={styles.section}>
-              <View style={styles.notSetContainer}>
-                <Text style={styles.notSetText}>Time and location haven't been decided yet</Text>
-                <Text style={styles.notSetSubtext}>Put "Going" to be the first one to suggest when and where to meet!</Text>
+              <View style={styles.headerRow}>
+                <Text style={styles.sectionTitle}>Voting & Decisions</Text>
               </View>
-            </View>
-          ) : (
-            <>
-              {/* When Section */}
-              <View style={styles.section}>
-                <View style={styles.headerRow}>
-                  <Clock size={20} color={Colors.light.text} style={styles.headerIcon} />
-                  <Text style={styles.sectionTitle}>What time works best?</Text>
-                </View>
-                
-                {whenPoll ? (
+              
+              {/* When Poll */}
+              {whenPoll ? (
+                <View style={styles.pollContainer}>
+                  <View style={styles.pollHeader}>
+                    <Clock size={18} color={Colors.light.text} style={styles.pollIcon} />
+                    <Text style={styles.pollTitle}>What time works best?</Text>
+                  </View>
                   <PollDisplay
                     question={whenPoll.question}
                     options={preparePollForDisplay(whenPoll).options}
@@ -499,37 +506,32 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
                   />
-                ) : isInYesGang ? (
+                </View>
+              ) : isInYesGang ? (
+                <View style={styles.pollContainer}>
+                  <View style={styles.pollHeader}>
+                    <Clock size={18} color={Colors.light.text} style={styles.pollIcon} />
+                    <Text style={styles.pollTitle}>What time works best?</Text>
+                  </View>
                   <View style={styles.emptyPollContainer}>
-                    <Text style={styles.emptyPollText}>
-                      No time has been set yet
-                    </Text>
-                    
+                    <Text style={styles.emptyPollText}>No time has been set yet</Text>
                     <TouchableOpacity 
                       style={styles.createPollButton}
                       onPress={() => handleCreatePoll('when')}
                     >
-                      <Text style={styles.createPollButtonText}>
-                        Suggest a time
-                      </Text>
+                      <Text style={styles.createPollButtonText}>Suggest a time</Text>
                     </TouchableOpacity>
                   </View>
-                ) : (
-                  <View style={styles.notSetContainer}>
-                    <Text style={styles.notSetText}>Time hasn't been decided yet</Text>
-                    <Text style={styles.notSetSubtext}>Put "Going" to be the first one to suggest a time!</Text>
-                  </View>
-                )}
-              </View>
-              
-              {/* Where Section */}
-              <View style={styles.section}>
-                <View style={styles.headerRow}>
-                  <MapPin size={20} color={Colors.light.text} style={styles.headerIcon} />
-                  <Text style={styles.sectionTitle}>Where should we meet?</Text>
                 </View>
-                
-                {wherePoll ? (
+              ) : null}
+              
+              {/* Where Poll */}
+              {wherePoll ? (
+                <View style={styles.pollContainer}>
+                  <View style={styles.pollHeader}>
+                    <MapPin size={18} color={Colors.light.text} style={styles.pollIcon} />
+                    <Text style={styles.pollTitle}>Where should we meet?</Text>
+                  </View>
                   <PollDisplay
                     question={wherePoll.question}
                     options={preparePollForDisplay(wherePoll).options}
@@ -541,63 +543,62 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
                   />
-                ) : isInYesGang ? (
+                </View>
+              ) : isInYesGang ? (
+                <View style={styles.pollContainer}>
+                  <View style={styles.pollHeader}>
+                    <MapPin size={18} color={Colors.light.text} style={styles.pollIcon} />
+                    <Text style={styles.pollTitle}>Where should we meet?</Text>
+                  </View>
                   <View style={styles.emptyPollContainer}>
-                    <Text style={styles.emptyPollText}>
-                      No location has been set yet
-                    </Text>
-                    
+                    <Text style={styles.emptyPollText}>No location has been set yet</Text>
                     <TouchableOpacity 
                       style={styles.createPollButton}
                       onPress={() => handleCreatePoll('where')}
                     >
-                      <Text style={styles.createPollButtonText}>
-                        Suggest a location
-                      </Text>
+                      <Text style={styles.createPollButtonText}>Suggest a location</Text>
                     </TouchableOpacity>
                   </View>
-                ) : (
-                  <View style={styles.notSetContainer}>
-                    <Text style={styles.notSetText}>Location hasn't been decided yet</Text>
-                    <Text style={styles.notSetSubtext}>Put "Going" to be the first one to suggest a location!</Text>
-                  </View>
-                )}
-              </View>
-            </>
-          )}
-          
-          {/* Custom Polls Sections - Only show if user is going */}
-          {isInYesGang && customPolls.map((poll) => (
-            <View key={poll.id} style={styles.section}>
-              <PollDisplay
-                question={poll.question}
-                options={preparePollForDisplay(poll).options}
-                onVote={(optionId) => handlePollVote(poll.id, optionId)}
-                userVotes={getUserVotesForPoll(poll.id)}
-                totalVotes={getTotalVotesForPoll(poll.id)}
-                canVote={isInYesGang}
-                onEdit={() => handleCreatePoll('custom', poll)}
-                totalGoingParticipants={acceptedParticipants.length}
-                onDelete={() => handleDeletePoll(poll.id)}
-              />
-            </View>
-          ))}
-          
-          {/* Create Poll Section - Only show if user is going */}
-          {isInYesGang && (
-            <View style={styles.section}>
-              <View style={styles.headerRow}>
-                <Text style={styles.sectionTitle}>Need to decide something else?</Text>
-              </View>
+                </View>
+              ) : null}
               
-              <TouchableOpacity 
-                style={styles.createPollButton}
-                onPress={() => handleCreatePoll('custom')}
-              >
-                <Text style={styles.createPollButtonText}>
-                  Create a poll
-                </Text>
-              </TouchableOpacity>
+              {/* Custom Polls */}
+              {customPolls.map((poll) => (
+                <View key={poll.id} style={styles.pollContainer}>
+                  <PollDisplay
+                    question={poll.question}
+                    options={preparePollForDisplay(poll).options}
+                    onVote={(optionId) => handlePollVote(poll.id, optionId)}
+                    userVotes={getUserVotesForPoll(poll.id)}
+                    totalVotes={getTotalVotesForPoll(poll.id)}
+                    canVote={isInYesGang}
+                    onEdit={() => handleCreatePoll('custom', poll)}
+                    totalGoingParticipants={acceptedParticipants.length}
+                    onDelete={() => handleDeletePoll(poll.id)}
+                  />
+                </View>
+              ))}
+              
+              {/* Create Poll Button */}
+              {isInYesGang && (
+                <View style={styles.pollContainer}>
+                  <Text style={styles.createPollSectionTitle}>Need to decide something else?</Text>
+                  <TouchableOpacity 
+                    style={styles.createPollButton}
+                    onPress={() => handleCreatePoll('custom')}
+                  >
+                    <Text style={styles.createPollButtonText}>Create a poll</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {/* Message for non-going users when no polls exist */}
+              {!isInYesGang && !whenPoll && !wherePoll && customPolls.length === 0 && (
+                <View style={styles.notSetContainer}>
+                  <Text style={styles.notSetText}>Time and location haven't been decided yet</Text>
+                  <Text style={styles.notSetSubtext}>Put "Going" to be the first one to suggest when and where to meet!</Text>
+                </View>
+              )}
             </View>
           )}
           
@@ -1058,5 +1059,27 @@ const styles = StyleSheet.create({
   },
   chatContainer: {
     flex: 1,
+  },
+  pollContainer: {
+    marginBottom: 16,
+  },
+  pollHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pollIcon: {
+    marginRight: 8,
+  },
+  pollTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  createPollSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 8,
   },
 });
