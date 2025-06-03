@@ -1,23 +1,30 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, FlatList } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, FlatList, Alert } from 'react-native';
 import { UserPlus, X, Check, Clock } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { Participant } from '@/store/plansStore';
+import { Participant, Poll } from '@/store/plansStore';
+import InvitationVotingPoll from './InvitationVotingPoll';
 
 interface PlanParticipantsProps {
   acceptedParticipants: Participant[];
   maybeParticipants: Participant[];
   pendingParticipants: Participant[];
+  invitationPolls: Poll[];
   onInvite: () => void;
+  onInvitationVote: (pollId: string, optionId: string) => void;
   canInvite: boolean;
+  isInYesGang: boolean;
 }
 
 export default function PlanParticipants({ 
   acceptedParticipants, 
   maybeParticipants, 
   pendingParticipants,
+  invitationPolls,
   onInvite,
-  canInvite
+  onInvitationVote,
+  canInvite,
+  isInYesGang
 }: PlanParticipantsProps) {
   const renderParticipant = (participant: Participant) => {
     return (
@@ -88,15 +95,82 @@ export default function PlanParticipants({
           </View>
         )}
       </View>
-      
-      {canInvite && (
-        <TouchableOpacity 
-          style={styles.inviteButton}
-          onPress={onInvite}
-        >
-          <UserPlus size={16} color={Colors.light.primary} style={styles.inviteIcon} />
-          <Text style={styles.inviteText}>Invite more people</Text>
-        </TouchableOpacity>
+
+      {/* Invitations Section - Exact same as before */}
+      {invitationPolls.length > 0 ? (
+        <View style={styles.invitationsSection}>
+          <View style={styles.headerRow}>
+            <UserPlus size={20} color={Colors.light.text} style={styles.headerIcon} />
+            <Text style={styles.sectionTitle}>Invitations</Text>
+          </View>
+          
+          <Text style={[styles.invitationDescription, { marginTop: -8 }]}>
+            Active vote to invite these people is happening. Cast your vote and majority decides.
+          </Text>
+          
+          {/* Active invitation votes - using exact same component as before */}
+          {invitationPolls.map((poll) => {
+            const invitedUsers = poll.invitedUsers?.map(userId => {
+              // Mock data for invited users - in real app this would come from user store
+              return {
+                id: userId,
+                name: `User ${userId}`,
+                avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`
+              };
+            }) || [];
+
+            const hasUserVoted = poll.options.some(option => 
+              option.votes.includes('current')
+            );
+
+            return (
+              <InvitationVotingPoll
+                key={poll.id}
+                poll={poll}
+                onVote={(pollId, optionId) => {
+                  // Only allow voting if user is "going"
+                  if (isInYesGang) {
+                    onInvitationVote(pollId, optionId);
+                  }
+                }}
+                userVoted={hasUserVoted}
+                invitedUsers={invitedUsers}
+                canVote={isInYesGang}
+              />
+            );
+          })}
+          
+          {/* Invite more people button at bottom */}
+          <TouchableOpacity 
+            style={[
+              styles.inviteMoreButton,
+              !isInYesGang && styles.disabledCreateButton
+            ]}
+            onPress={onInvite}
+            disabled={!isInYesGang}
+          >
+            <UserPlus size={16} color={isInYesGang ? Colors.light.primary : Colors.light.secondaryText} />
+            <Text style={[
+              styles.inviteMoreButtonText,
+              !isInYesGang && styles.disabledCreateButtonText
+            ]}>
+              Invite more people
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        /* Simple invite button when no active votes */
+        isInYesGang && (
+          <TouchableOpacity 
+            style={styles.simpleInviteButton}
+            onPress={onInvite}
+          >
+            <UserPlus size={16} color={Colors.light.primary} />
+            <Text style={styles.simpleInviteButtonText}>
+              Invite more people
+            </Text>
+          </TouchableOpacity>
+        )
       )}
     </View>
   );
@@ -201,7 +275,22 @@ const styles = StyleSheet.create({
   removeButton: {
     padding: 8,
   },
-  inviteButton: {
+  invitationsSection: {
+    marginBottom: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  headerIcon: {
+    marginRight: 8,
+  },
+  invitationDescription: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+  },
+  inviteMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -209,12 +298,30 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
   },
-  inviteIcon: {
-    marginRight: 8,
-  },
-  inviteText: {
+  inviteMoreButtonText: {
     fontSize: 14,
     color: Colors.light.primary,
     fontWeight: '500',
+    marginLeft: 8,
+  },
+  disabledCreateButton: {
+    backgroundColor: Colors.light.buttonBackground,
+  },
+  disabledCreateButtonText: {
+    color: Colors.light.secondaryText,
+  },
+  simpleInviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  simpleInviteButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '500',
+    marginLeft: 8,
   },
 });

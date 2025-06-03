@@ -33,14 +33,12 @@ import Colors from '@/constants/colors';
 import { Plan, ParticipantStatus, Poll } from '@/store/plansStore';
 import PlanTabs from './PlanTabs';
 import PlanTitle from './PlanTitle';
-import PlanDescription from './PlanDescription';
 import PlanParticipants from './PlanParticipants';
 import PlanUserStatus from './PlanUserStatus';
 import InviteFriendsModal from './InviteFriendsModal';
 import PollCreator from './PollCreator';
 import PollVoting from './PollVoting';
 import PollDisplay from './PollDisplay';
-import InvitationVotingPoll from './InvitationVotingPoll';
 import ChatView from '../chat/ChatView';
 import usePlansStore from '@/store/plansStore';
 import useChatStore from '@/store/chatStore';
@@ -456,23 +454,18 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={Platform.OS === 'web'}
         >
-          {/* Title Section */}
+          {/* Combined Title and Description Section */}
           <PlanTitle 
-            title={title} 
-            isEditing={editingTitle}
-            onEdit={() => isInYesGang && setEditingTitle(true)}
-            onSave={handleTitleSave}
-            onChange={setTitle}
-            canEdit={isInYesGang}
-          />
-          
-          {/* Description Section */}
-          <PlanDescription
+            title={title}
             description={description}
-            isEditing={editingDescription}
-            onEdit={() => isInYesGang && setEditingDescription(true)}
-            onSave={handleDescriptionSave}
-            onChange={setDescription}
+            isEditingTitle={editingTitle}
+            isEditingDescription={editingDescription}
+            onEditTitle={() => isInYesGang && setEditingTitle(true)}
+            onEditDescription={() => isInYesGang && setEditingDescription(true)}
+            onSaveTitle={handleTitleSave}
+            onSaveDescription={handleDescriptionSave}
+            onChangeTitle={setTitle}
+            onChangeDescription={setDescription}
             canEdit={isInYesGang}
           />
           
@@ -608,91 +601,17 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             </View>
           )}
           
-          {/* Participants Section */}
+          {/* Participants Section with Invitations */}
           <PlanParticipants
             acceptedParticipants={acceptedParticipants}
             maybeParticipants={maybeParticipants}
             pendingParticipants={pendingParticipants}
-            onInvite={() => {}}
-            canInvite={false}
+            invitationPolls={invitationPolls}
+            onInvite={handleInviteFriends}
+            onInvitationVote={handleInvitationVote}
+            canInvite={isInYesGang}
+            isInYesGang={isInYesGang}
           />
-
-          {/* Invitations Section - Improved structure */}
-          {invitationPolls.length > 0 ? (
-            <View style={styles.section}>
-              <View style={styles.headerRow}>
-                <UserPlus size={20} color={Colors.light.text} style={styles.headerIcon} />
-                <Text style={styles.sectionTitle}>Invitations</Text>
-              </View>
-              
-              <Text style={[styles.invitationDescription, { marginTop: -8 }]}>
-                Active vote to invite these people is happening. Cast your vote and majority decides.
-              </Text>
-              
-              {/* Active invitation votes */}
-              {invitationPolls.map((poll) => {
-                const invitedUsers = poll.invitedUsers?.map(userId => {
-                  // Mock data for invited users - in real app this would come from user store
-                  return {
-                    id: userId,
-                    name: `User ${userId}`,
-                    avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`
-                  };
-                }) || [];
-
-                const hasUserVoted = poll.options.some(option => 
-                  option.votes.includes('current')
-                );
-
-                return (
-                  <InvitationVotingPoll
-                    key={poll.id}
-                    poll={poll}
-                    onVote={(pollId, optionId) => {
-                      // Only allow voting if user is "going"
-                      if (isInYesGang) {
-                        handleInvitationVote(pollId, optionId);
-                      }
-                    }}
-                    userVoted={hasUserVoted}
-                    invitedUsers={invitedUsers}
-                    canVote={isInYesGang}
-                  />
-                );
-              })}
-              
-              {/* Invite more people button at bottom */}
-              <TouchableOpacity 
-                style={[
-                  styles.inviteMoreButton,
-                  !isInYesGang && styles.disabledCreateButton
-                ]}
-                onPress={handleInviteFriends}
-                disabled={!isInYesGang}
-              >
-                <UserPlus size={16} color={isInYesGang ? Colors.light.primary : Colors.light.secondaryText} />
-                <Text style={[
-                  styles.inviteMoreButtonText,
-                  !isInYesGang && styles.disabledCreateButtonText
-                ]}>
-                  Invite more people
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            /* Simple invite button when no active votes */
-            isInYesGang && (
-              <TouchableOpacity 
-                style={styles.simpleInviteButton}
-                onPress={handleInviteFriends}
-              >
-                <UserPlus size={16} color={Colors.light.primary} />
-                <Text style={styles.simpleInviteButtonText}>
-                  Invite more people
-                </Text>
-              </TouchableOpacity>
-            )
-          )}
           
           {/* Mark as Completed Section - Show to going users always, maybe users only if voting started */}
           {canMarkAsCompleted(latestPlan) && (
@@ -1033,45 +952,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
     textAlign: 'center',
-  },
-  invitationDescription: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    marginBottom: 16,
-  },
-  inviteMoreButton: {
-    flexDirection: 'row',
-    backgroundColor: `${Colors.light.primary}15`,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginTop: 12,
-  },
-  inviteMoreButtonText: {
-    color: Colors.light.primary,
-    fontWeight: '500',
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  simpleInviteButton: {
-    flexDirection: 'row',
-    backgroundColor: `${Colors.light.primary}15`,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginBottom: 16,
-  },
-  simpleInviteButtonText: {
-    color: Colors.light.primary,
-    fontWeight: '500',
-    fontSize: 14,
-    marginLeft: 8,
   },
   notSetContainer: {
     alignItems: 'center',

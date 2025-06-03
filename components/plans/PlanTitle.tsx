@@ -5,40 +5,86 @@ import Colors from '@/constants/colors';
 
 interface PlanTitleProps {
   title: string;
-  isEditing: boolean;
-  onEdit: () => void;
-  onSave: () => void;
-  onChange: (text: string) => void;
+  description: string;
+  isEditingTitle: boolean;
+  isEditingDescription: boolean;
+  onEditTitle: () => void;
+  onEditDescription: () => void;
+  onSaveTitle: () => void;
+  onSaveDescription: () => void;
+  onChangeTitle: (text: string) => void;
+  onChangeDescription: (text: string) => void;
   canEdit: boolean;
 }
 
 export default function PlanTitle({ 
   title, 
-  isEditing, 
-  onEdit, 
-  onSave, 
-  onChange,
+  description,
+  isEditingTitle, 
+  isEditingDescription,
+  onEditTitle, 
+  onEditDescription,
+  onSaveTitle, 
+  onSaveDescription,
+  onChangeTitle,
+  onChangeDescription,
   canEdit
 }: PlanTitleProps) {
   return (
     <View style={styles.section}>
-      {isEditing ? (
+      {/* Title */}
+      {isEditingTitle ? (
         <View style={styles.editContainer}>
           <TextInput
             style={styles.titleInput}
             value={title}
-            onChangeText={onChange}
+            onChangeText={onChangeTitle}
             placeholder="Enter plan title"
             autoFocus
-            onBlur={onSave}
-            onSubmitEditing={onSave}
+            onBlur={onSaveTitle}
+            onSubmitEditing={onSaveTitle}
           />
         </View>
       ) : (
         <View style={styles.titleContainer}>
           <Text style={styles.title}>{title}</Text>
           {canEdit && (
-            <TouchableOpacity style={styles.editButton} onPress={onEdit}>
+            <TouchableOpacity style={styles.editButton} onPress={onEditTitle}>
+              <Edit2 size={16} color={Colors.light.secondaryText} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Description */}
+      {isEditingDescription ? (
+        <View style={styles.editContainer}>
+          <TextInput
+            style={styles.descriptionInput}
+            value={description}
+            onChangeText={onChangeDescription}
+            placeholder="Add a description of the plan"
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            autoFocus
+            onBlur={onSaveDescription}
+          />
+        </View>
+      ) : (
+        <View style={styles.descriptionContainer}>
+          {description ? (
+            <Text style={styles.description}>{description}</Text>
+          ) : (
+            <Text style={styles.emptyDescription}>
+              {canEdit 
+                ? "Add a description of the plan." 
+                : "No description yet"}
+            </Text>
+          )}
+          
+          {canEdit && (
+            <TouchableOpacity style={styles.editButton} onPress={onEditDescription}>
               <Edit2 size={16} color={Colors.light.secondaryText} />
             </TouchableOpacity>
           )}
@@ -64,6 +110,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
   },
   title: {
     fontSize: 22,
@@ -77,6 +124,7 @@ const styles = StyleSheet.create({
   editContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
   titleInput: {
     flex: 1,
@@ -85,7 +133,31 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     padding: 0,
   },
-  saveButton: {
-    padding: 8,
+  descriptionContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  description: {
+    fontSize: 16,
+    color: Colors.light.text,
+    lineHeight: 22,
+    flex: 1,
+  },
+  emptyDescription: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  descriptionInput: {
+    flex: 1,
+    fontSize: 16,
+    color: Colors.light.text,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 100,
   },
 });
