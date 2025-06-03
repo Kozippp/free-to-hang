@@ -20,11 +20,12 @@ import { Plan } from '@/store/plansStore';
 interface ChatViewProps {
   plan: Plan;
   currentUserId?: string;
+  disableKeyboardAvoidance?: boolean;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function ChatView({ plan, currentUserId = 'current' }: ChatViewProps) {
+export default function ChatView({ plan, currentUserId = 'current', disableKeyboardAvoidance = false }: ChatViewProps) {
   const { messages, markMessagesAsRead } = useChatStore();
   const flatListRef = useRef<FlatList>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -190,11 +191,7 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
   }, [planMessages, highlightAnim]);
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-    >
+    <View style={styles.container}>
       <FlatList
         ref={flatListRef}
         data={planMessages}
@@ -250,7 +247,7 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
         currentUserName={currentUserName}
         currentUserAvatar={currentUserAvatar}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
