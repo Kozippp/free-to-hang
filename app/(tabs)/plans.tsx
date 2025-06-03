@@ -10,6 +10,7 @@ import PlanDetailModal from '@/components/plans/PlanDetailModal';
 import CompletedPlanDetailView from '@/components/plans/CompletedPlanDetailView';
 import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
+import { testNotifications } from '@/utils/notifications';
 
 export default function PlansScreen() {
   const [activeTab, setActiveTab] = useState('Invitations');
@@ -211,15 +212,27 @@ export default function PlansScreen() {
   
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyTitle}>No {activeTab.toLowerCase()} yet</Text>
-      <Text style={styles.emptyDescription}>
-        {activeTab === 'Invitations' 
-          ? 'When friends invite you to hang out, they\'ll appear here.'
-          : activeTab === 'Plan'
-          ? 'Plans you\'ve accepted will show up here.'
-          : 'Completed hangouts will be saved here as memories.'
-        }
+      <Text style={styles.emptyTitle}>
+        {activeTab === 'Invitations' && 'No invitations'}
+        {activeTab === 'Plan' && 'No active plans'}
+        {activeTab === 'Completed' && 'No completed plans'}
       </Text>
+      <Text style={styles.emptySubtitle}>
+        {activeTab === 'Invitations' && 'When someone invites you to hang out, it will appear here.'}
+        {activeTab === 'Plan' && 'Create a plan or accept an invitation to get started.'}
+        {activeTab === 'Completed' && 'Completed plans will appear here.'}
+      </Text>
+      
+      {/* Test notifications button */}
+      {activeTab === 'Invitations' && (
+        <TouchableOpacity 
+          style={styles.testButton}
+          onPress={testNotifications}
+        >
+          <Text style={styles.testButtonText}>Test Notifications</Text>
+        </TouchableOpacity>
+      )}
+      
       {activeTab === 'Completed' && (
         <TouchableOpacity 
           style={styles.demoButton}
@@ -393,7 +406,7 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: 8,
   },
-  emptyDescription: {
+  emptySubtitle: {
     fontSize: 14,
     color: Colors.light.secondaryText,
     textAlign: 'center',
@@ -419,5 +432,17 @@ const styles = StyleSheet.create({
   finalSeparator: {
     height: 1,
     backgroundColor: '#EEEEEE',
+  },
+  testButton: {
+    backgroundColor: Colors.light.primary,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  testButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.light.background,
+    textAlign: 'center',
   },
 });
