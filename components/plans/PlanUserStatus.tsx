@@ -287,7 +287,7 @@ export default function PlanUserStatus({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.light.cardBackground,
+    backgroundColor: Colors.light.background,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,

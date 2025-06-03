@@ -50,8 +50,8 @@ export default function PlanTitle({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 24,
-    backgroundColor: Colors.light.cardBackground,
+    marginBottom: 16,
+    backgroundColor: Colors.light.background,
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',

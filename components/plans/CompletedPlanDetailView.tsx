@@ -17,7 +17,9 @@ import {
   X,
   Calendar,
   RotateCcw,
-  UserPlus
+  UserPlus,
+  Check,
+  HelpCircle
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan, Poll } from '@/store/plansStore';
@@ -260,26 +262,34 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={Platform.OS === 'web'}
         >
-          {/* Header Info */}
+          {/* Plan Summary */}
           <View style={styles.section}>
-            <View style={styles.headerRow}>
-              <Calendar size={20} color={Colors.light.text} style={styles.headerIcon} />
-              <Text style={styles.sectionTitle}>Plan Summary</Text>
+            {/* Status and Date Row */}
+            <View style={styles.statusRow}>
+              <View style={styles.statusIcon}>
+                {currentUserAttended === true ? (
+                  <Check size={16} color={Colors.light.onlineGreen} />
+                ) : currentUserAttended === false ? (
+                  <X size={16} color="#FF6B6B" />
+                ) : (
+                  <HelpCircle size={16} color={Colors.light.secondaryText} />
+                )}
+              </View>
+              <Text style={styles.dateText}>
+                {completionInfo.date}
+              </Text>
             </View>
             
+            {/* Plan Title */}
             <Text style={styles.planTitle}>{latestPlan.title}</Text>
+            
+            {/* Plan Description */}
             {latestPlan.description && (
               <Text style={styles.planDescription}>{latestPlan.description}</Text>
             )}
-            
-            <View style={styles.completionInfo}>
-              <Text style={styles.completionLabel}>Completed on</Text>
-              <Text style={styles.completionDate}>{completionInfo.date}</Text>
-              <Text style={styles.completionTime}>Started at {completionInfo.time}</Text>
-            </View>
           </View>
 
-          {/* Want to do this again? Section - Moved up */}
+          {/* Want to do this again? Section */}
           <View style={styles.section}>
             <View style={styles.headerRow}>
               <RotateCcw size={20} color={Colors.light.text} style={styles.headerIcon} />
@@ -503,17 +513,17 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#F5F5F5',
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
+    padding: 0,
   },
   section: {
-    marginBottom: 24,
-    backgroundColor: Colors.light.cardBackground,
+    marginBottom: 16,
+    backgroundColor: Colors.light.background,
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -545,30 +555,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.secondaryText,
     lineHeight: 22,
-    marginBottom: 16,
-  },
-  completionInfo: {
-    backgroundColor: `${Colors.light.onlineGreen}15`,
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.light.onlineGreen,
-  },
-  completionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.onlineGreen,
-    marginBottom: 4,
-  },
-  completionDate: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  completionTime: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    marginTop: 2,
+    marginBottom: 0,
   },
   decisionContainer: {
     marginBottom: 16,
@@ -580,7 +567,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   pollResultsContainer: {
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#FAFAFA',
     borderRadius: 8,
     padding: 12,
   },
@@ -735,7 +722,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#FAFAFA',
   },
   attendanceToggleButtonActive: {
     borderColor: Colors.light.primary,
@@ -751,5 +738,18 @@ const styles = StyleSheet.create({
   },
   chatKeyboardView: {
     flex: 1,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statusIcon: {
+    marginRight: 8,
+  },
+  dateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
   },
 }); 

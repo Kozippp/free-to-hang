@@ -104,8 +104,8 @@ export default function PlanParticipants({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 24,
-    backgroundColor: Colors.light.cardBackground,
+    marginBottom: 16,
+    backgroundColor: Colors.light.background,
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.light.cardBackground,
+    borderColor: Colors.light.background,
   },
   acceptedIndicator: {
     backgroundColor: Colors.light.onlineGreen,
