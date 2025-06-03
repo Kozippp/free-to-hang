@@ -1,54 +1,81 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
-import { Users } from 'lucide-react-native';
+import { Users, Check, X, Clock, HelpCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan } from '@/store/plansStore';
 
 interface CompletedPlanCardProps {
   plan: Plan;
   onPress: (plan: Plan) => void;
+  userAttended?: boolean | null; // null = not answered, true = attended, false = didn't attend
 }
 
-export default function CompletedPlanCard({ plan, onPress }: CompletedPlanCardProps) {
+export default function CompletedPlanCard({ plan, onPress, userAttended }: CompletedPlanCardProps) {
   // Get participants who actually joined (accepted status)
   const joinedParticipants = plan.participants.filter(p => p.status === 'accepted');
   
-  // Format creation date
-  const formatCreationDate = (createdAt: string) => {
+  // Format creation date to short format
+  const formatDate = (createdAt: string) => {
     const date = new Date(createdAt);
-    return date.toLocaleDateString('en-GB', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric' 
-    });
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return 'Today';
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString('en-GB', { 
+        day: 'numeric', 
+        month: 'short'
+      });
+    }
   };
-  
+
+  // Get status icon based on user's participation
+  const getStatusIcon = () => {
+    if (userAttended === true) {
+      return <Check size={16} color={Colors.light.onlineGreen} />;
+    } else if (userAttended === false) {
+      return <X size={16} color="#FF6B6B" />;
+    } else {
+      return <HelpCircle size={16} color={Colors.light.secondaryText} />;
+    }
+  };
+
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => onPress(plan)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardContent}>
-        <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>{plan.title}</Text>
-            <Text style={styles.dateLabel}>
-              {formatCreationDate(plan.createdAt)}
-            </Text>
+    <View style={styles.container}>
+      {/* Top Separator */}
+      <View style={styles.separator} />
+      
+      <TouchableOpacity
+        style={styles.activeArea}
+        onPress={() => onPress(plan)}
+        activeOpacity={0.7}
+      >
+        {/* Status and Date Row */}
+        <View style={styles.statusRow}>
+          <View style={styles.statusIcon}>
+            {getStatusIcon()}
           </View>
-          {plan.description && (
-            <Text style={styles.description} numberOfLines={2}>
-              {plan.description}
-            </Text>
-          )}
+          <Text style={styles.dateText}>
+            {formatDate(plan.createdAt)}
+          </Text>
         </View>
         
-        <View style={styles.footer}>
+        {/* Plan Title */}
+        <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+          {plan.title}
+        </Text>
+        
+        {/* Participants Info */}
+        <View style={styles.participantsRow}>
           <View style={styles.participantsInfo}>
-            <Users size={16} color={Colors.light.secondaryText} style={styles.icon} />
+            <Users size={14} color={Colors.light.secondaryText} style={styles.participantsIcon} />
             <Text style={styles.participantsText}>
-              {joinedParticipants.length} {joinedParticipants.length === 1 ? 'person' : 'people'} joined
+              {joinedParticipants.length} joined
             </Text>
           </View>
           
@@ -58,7 +85,7 @@ export default function CompletedPlanCard({ plan, onPress }: CompletedPlanCardPr
                 key={participant.id} 
                 style={[
                   styles.avatarWrapper,
-                  { zIndex: 3 - index, marginLeft: index > 0 ? -12 : 0 }
+                  { zIndex: 3 - index, marginLeft: index > 0 ? -8 : 0 }
                 ]}
               >
                 <Image source={{ uri: participant.avatar }} style={styles.avatar} />
@@ -66,61 +93,50 @@ export default function CompletedPlanCard({ plan, onPress }: CompletedPlanCardPr
             ))}
             
             {joinedParticipants.length > 3 && (
-              <View style={[styles.avatarWrapper, styles.moreAvatars, { marginLeft: -12 }]}>
+              <View style={[styles.avatarWrapper, styles.moreAvatars, { marginLeft: -8 }]}>
                 <Text style={styles.moreAvatarsText}>+{joinedParticipants.length - 3}</Text>
               </View>
             )}
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 0,
   },
-  card: {
+  separator: {
+    height: 1,
+    backgroundColor: '#EEEEEE',
+  },
+  activeArea: {
     backgroundColor: Colors.light.background,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
-  cardContent: {
-    flexDirection: 'column',
-  },
-  header: {
-    marginBottom: 12,
-  },
-  titleContainer: {
+  statusRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
+  },
+  statusIcon: {
+    marginRight: 8,
+  },
+  dateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  dateLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
-  },
-  description: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    lineHeight: 20,
-  },
-  footer: {
+  participantsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -129,7 +145,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  icon: {
+  participantsIcon: {
     marginRight: 8,
   },
   participantsText: {
@@ -141,17 +157,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarWrapper: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: Colors.light.background,
     position: 'relative',
   },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
   },
   moreAvatars: {
     backgroundColor: Colors.light.buttonBackground,
@@ -159,7 +175,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   moreAvatarsText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
     color: Colors.light.secondaryText,
   },

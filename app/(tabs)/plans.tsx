@@ -20,7 +20,7 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
-  const { invitations, activePlans, completedPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan } = usePlansStore();
+  const { invitations, activePlans, completedPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -297,12 +297,17 @@ export default function PlansScreen() {
                       <CompletedPlanCard 
                         plan={item} 
                         onPress={handlePlanPress}
+                        userAttended={item.attendanceRecord?.['current']}
                       />
                     )}
                     keyExtractor={(item) => `completedPlans-${item.id}`}
                     contentContainerStyle={styles.listContent}
-                    ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
                     ListEmptyComponent={renderEmptyState}
+                    ListFooterComponent={() => (
+                      completedPlans.length > 0 ? (
+                        <View style={styles.finalSeparator} />
+                      ) : null
+                    )}
                   />
                 )}
               </View>
@@ -318,6 +323,7 @@ export default function PlansScreen() {
             onClose={handleCloseModal}
             onRespond={activeTab === 'Completed' ? () => {} : handleRespondToPlan}
             isCompleted={activeTab === 'Completed'}
+            onAttendanceUpdate={activeTab === 'Completed' ? updateAttendance : undefined}
           />
         )}
         
@@ -381,5 +387,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.light.background,
     textAlign: 'center',
+  },
+  finalSeparator: {
+    height: 1,
+    backgroundColor: '#EEEEEE',
   },
 });

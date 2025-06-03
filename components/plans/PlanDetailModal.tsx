@@ -24,6 +24,7 @@ interface PlanDetailModalProps {
   onClose: () => void;
   onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => void;
   isCompleted?: boolean;
+  onAttendanceUpdate?: (planId: string, userId: string, attended: boolean) => void;
 }
 
 export default function PlanDetailModal({
@@ -31,7 +32,8 @@ export default function PlanDetailModal({
   plan,
   onClose,
   onRespond,
-  isCompleted
+  isCompleted,
+  onAttendanceUpdate
 }: PlanDetailModalProps) {
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
@@ -134,6 +136,7 @@ export default function PlanDetailModal({
               <CompletedPlanDetailView 
                 plan={plan} 
                 onClose={handleClose} 
+                onAttendanceUpdate={onAttendanceUpdate} 
               />
             ) : (
               <PlanDetailView 

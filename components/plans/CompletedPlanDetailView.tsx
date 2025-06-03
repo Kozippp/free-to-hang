@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Image,
   Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Alert
 } from 'react-native';
 import { 
   Clock, 
@@ -25,30 +26,38 @@ import ChatView from '../chat/ChatView';
 import PlanSuggestionSheet from './PlanSuggestionSheet';
 import useChatStore from '@/store/chatStore';
 import useHangStore from '@/store/hangStore';
+import usePlansStore from '@/store/plansStore';
 
 interface CompletedPlanDetailViewProps {
   plan: Plan;
   onClose: () => void;
+  onAttendanceUpdate?: (planId: string, userId: string, attended: boolean) => void;
 }
 
-export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlanDetailViewProps) {
+export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpdate }: CompletedPlanDetailViewProps) {
   const { getUnreadCount } = useChatStore();
   const { user } = useHangStore();
+  const { completedPlans } = usePlansStore();
   const [activeTab, setActiveTab] = useState('Details');
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
-  const [userAttended, setUserAttended] = useState<boolean | null>(null); // null = not answered yet
+  
+  // Get the latest plan data from store to reflect attendance updates
+  const latestPlan = completedPlans.find(p => p.id === plan.id) || plan;
+  
+  // Get attendance status from latest plan's attendanceRecord
+  const currentUserAttended = latestPlan.attendanceRecord?.['current'] ?? null;
   
   // Group participants by status
-  const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
-  const maybeParticipants = plan.participants.filter(p => 
+  const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'accepted');
+  const maybeParticipants = latestPlan.participants.filter(p => 
     p.status === 'maybe' || p.status === 'conditional'
   );
-  const pendingParticipants = plan.participants.filter(p => p.status === 'pending');
-  const declinedParticipants = plan.participants.filter(p => p.status === 'declined');
+  const pendingParticipants = latestPlan.participants.filter(p => p.status === 'pending');
+  const declinedParticipants = latestPlan.participants.filter(p => p.status === 'declined');
   
   // Get final poll results
-  const polls = plan.polls || [];
+  const polls = latestPlan.polls || [];
   const whenPoll = polls.find(poll => poll.type === 'when');
   const wherePoll = polls.find(poll => poll.type === 'where');
   const customPolls = polls.filter(poll => poll.type === 'custom');
@@ -75,10 +84,10 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
     };
   };
   
-  const completionInfo = formatCompletionInfo(plan.createdAt);
+  const completionInfo = formatCompletionInfo(latestPlan.createdAt);
   
   // Get unread message count for this plan
-  const unreadCount = getUnreadCount(plan.id, 'current');
+  const unreadCount = getUnreadCount(latestPlan.id, 'current');
 
   // Plan creation handlers
   const handleOpenPlanBuilder = (anonymous: boolean = false) => {
@@ -103,9 +112,57 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
     }, 0);
   };
 
+  // Enhanced attendance handling
+  const handleAttendanceConfirmation = (attended: boolean) => {
+    if (attended) {
+      // User attended - record attendance
+      onAttendanceUpdate?.(latestPlan.id, 'current', true);
+      // In a real app, this would also update the backend/store
+      Alert.alert(
+        'Attendance Recorded',
+        'Thanks for confirming! This plan is now marked as attended.',
+        [{ text: 'OK', style: 'default' }]
+      );
+    } else {
+      // User didn't attend - show deletion prompt
+      Alert.alert(
+        'Plan Removal',
+        'Would you like to delete this from your completed plans?',
+        [
+          {
+            text: 'Keep',
+            style: 'cancel',
+            onPress: () => {
+              onAttendanceUpdate?.(latestPlan.id, 'current', false);
+            }
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              // In a real app, this would remove the plan from completed plans
+              Alert.alert(
+                'Plan Deleted',
+                'This plan has been removed from your completed plans.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      onClose(); // Close the detail view since plan is deleted
+                    }
+                  }
+                ]
+              );
+            }
+          }
+        ]
+      );
+    }
+  };
+
   // Convert plan participants to the format expected by PlanSuggestionSheet
   const getSelectedFriendsData = () => {
-    return plan.participants
+    return latestPlan.participants
       .filter(p => p.id !== 'current') // Exclude current user
       .map(participant => ({
         id: participant.id,
@@ -210,9 +267,9 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
               <Text style={styles.sectionTitle}>Plan Summary</Text>
             </View>
             
-            <Text style={styles.planTitle}>{plan.title}</Text>
-            {plan.description && (
-              <Text style={styles.planDescription}>{plan.description}</Text>
+            <Text style={styles.planTitle}>{latestPlan.title}</Text>
+            {latestPlan.description && (
+              <Text style={styles.planDescription}>{latestPlan.description}</Text>
             )}
             
             <View style={styles.completionInfo}>
@@ -291,14 +348,14 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
             </View>
             
             {/* Attended Section */}
-            {(userAttended === true || acceptedParticipants.filter(p => p.id !== 'current').length > 0) && (
+            {(currentUserAttended === true || acceptedParticipants.filter(p => p.id !== 'current').length > 0) && (
               <View style={styles.participantGroup}>
                 <Text style={styles.groupTitle}>
-                  Attended ({(userAttended === true ? 1 : 0) + acceptedParticipants.filter(p => p.id !== 'current').length})
+                  Attended ({(currentUserAttended === true ? 1 : 0) + acceptedParticipants.filter(p => p.id !== 'current').length})
                 </Text>
                 <View style={styles.participantsList}>
                   {/* Show current user first if they attended */}
-                  {userAttended === true && (
+                  {currentUserAttended === true && (
                     <View style={styles.participantItem}>
                       <Image 
                         source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
@@ -314,14 +371,14 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
             )}
             
             {/* Haven't Responded Section */}
-            {(userAttended === null || maybeParticipants.length > 0 || pendingParticipants.length > 0) && (
+            {(currentUserAttended === null || maybeParticipants.length > 0 || pendingParticipants.length > 0) && (
               <View style={styles.participantGroup}>
                 <Text style={styles.groupTitle}>
-                  Haven't Responded ({(userAttended === null ? 1 : 0) + maybeParticipants.length + pendingParticipants.length})
+                  Haven't Responded ({(currentUserAttended === null ? 1 : 0) + maybeParticipants.length + pendingParticipants.length})
                 </Text>
                 <View style={styles.participantsList}>
                   {/* Show current user if they haven't responded */}
-                  {userAttended === null && (
+                  {currentUserAttended === null && (
                     <View style={styles.participantItem}>
                       <Image 
                         source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
@@ -338,14 +395,14 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
             )}
             
             {/* Did Not Attend Section */}
-            {(userAttended === false || declinedParticipants.length > 0) && (
+            {(currentUserAttended === false || declinedParticipants.length > 0) && (
               <View style={styles.participantGroup}>
                 <Text style={styles.groupTitle}>
-                  Did Not Attend ({(userAttended === false ? 1 : 0) + declinedParticipants.length})
+                  Did Not Attend ({(currentUserAttended === false ? 1 : 0) + declinedParticipants.length})
                 </Text>
                 <View style={styles.participantsList}>
                   {/* Show current user if they didn't attend */}
-                  {userAttended === false && (
+                  {currentUserAttended === false && (
                     <View style={styles.participantItem}>
                       <Image 
                         source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
@@ -367,15 +424,15 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
                 <TouchableOpacity 
                   style={[
                     styles.attendanceToggleButton,
-                    userAttended === true && styles.attendanceToggleButtonActive
+                    currentUserAttended === true && styles.attendanceToggleButtonActive
                   ]}
                   onPress={() => {
-                    setUserAttended(true);
+                    handleAttendanceConfirmation(true);
                   }}
                 >
                   <Text style={[
                     styles.attendanceToggleText,
-                    userAttended === true && styles.attendanceToggleTextActive
+                    currentUserAttended === true && styles.attendanceToggleTextActive
                   ]}>
                     Yes, I attended
                   </Text>
@@ -384,15 +441,15 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
                 <TouchableOpacity 
                   style={[
                     styles.attendanceToggleButton,
-                    userAttended === false && styles.attendanceToggleButtonActive
+                    currentUserAttended === false && styles.attendanceToggleButtonActive
                   ]}
                   onPress={() => {
-                    setUserAttended(false);
+                    handleAttendanceConfirmation(false);
                   }}
                 >
                   <Text style={[
                     styles.attendanceToggleText,
-                    userAttended === false && styles.attendanceToggleTextActive
+                    currentUserAttended === false && styles.attendanceToggleTextActive
                   ]}>
                     No, I didn't attend
                   </Text>
@@ -407,19 +464,25 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
       )}
       
       {activeTab === 'Chat' && (
-        <KeyboardAvoidingView 
-          style={styles.chatContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
+        <View style={styles.chatContainer}>
           {/* Chat Deletion Warning */}
           <View style={styles.chatWarning}>
             <Text style={styles.chatWarningText}>
               💬 Chat messages will be automatically deleted in 7 days from completion
             </Text>
           </View>
-          <ChatView plan={plan} currentUserId="current" />
-        </KeyboardAvoidingView>
+          <KeyboardAvoidingView 
+            style={styles.chatKeyboardView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+          >
+            <ChatView 
+              plan={latestPlan} 
+              currentUserId="current" 
+              disableKeyboardAvoidance={true}
+            />
+          </KeyboardAvoidingView>
+        </View>
       )}
       
       {/* Plan Creation Modal */}
@@ -430,8 +493,8 @@ export default function CompletedPlanDetailView({ plan, onClose }: CompletedPlan
         availableFriends={[]} // Empty since we're not showing additional friends for completed plans
         isAnonymous={isAnonymousPlan}
         onPlanSubmitted={handlePlanSubmitted}
-        prefilledTitle={plan.title}
-        prefilledDescription={plan.description}
+        prefilledTitle={latestPlan.title}
+        prefilledDescription={latestPlan.description}
       />
     </View>
   );
@@ -685,5 +748,8 @@ const styles = StyleSheet.create({
   },
   attendanceToggleTextActive: {
     color: Colors.light.primary,
+  },
+  chatKeyboardView: {
+    flex: 1,
   },
 }); 

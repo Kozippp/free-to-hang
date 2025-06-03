@@ -46,6 +46,7 @@ export interface Plan {
   createdAt: string;
   polls?: Poll[];
   completionVotes?: string[]; // Array of participant IDs who voted for completion
+  attendanceRecord?: Record<string, boolean>; // Track attendance for completed plans
 }
 
 interface PlansState {
@@ -100,6 +101,9 @@ interface PlansState {
   
   // Demo function to add a completed plan for testing
   addDemoCompletedPlan: () => void;
+  
+  // Attendance tracking for completed plans
+  updateAttendance: (planId: string, userId: string, attended: boolean) => void;
 }
 
 const usePlansStore = create<PlansState>((set, get) => ({
@@ -681,10 +685,27 @@ const usePlansStore = create<PlansState>((set, get) => ({
         
         // Plan should be completed if created before the cutoff time
         if (planCreatedAt < cutoffTime) {
-          plansToComplete.push({
-            ...plan,
-            // Mark final participation status
-          });
+          // Filter participants based on their response
+          const respondedParticipants = plan.participants.filter(p => 
+            p.status === 'accepted' || p.status === 'declined'
+          );
+          
+          // Only include the plan in completed if current user responded
+          const currentUser = plan.participants.find(p => p.id === 'current');
+          if (currentUser && (currentUser.status === 'accepted' || currentUser.status === 'declined')) {
+            const completedPlan = {
+              ...plan,
+              participants: respondedParticipants,
+              // Add attendance record - automatically mark "accepted" users as attended
+              attendanceRecord: respondedParticipants.reduce((record: Record<string, boolean>, participant) => {
+                record[participant.id] = participant.status === 'accepted';
+                return record;
+              }, {}),
+            };
+            
+            plansToComplete.push(completedPlan);
+          }
+          // If current user didn't respond, plan won't appear in completed plans
         } else {
           remainingActivePlans.push(plan);
         }
@@ -893,6 +914,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
       isRead: true,
       createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), // 25 hours ago
       completionVotes: ['current', 'demo1'], // 2 out of 3 voted for completion
+      attendanceRecord: {
+        'current': true, // User attended
+        'demo1': true,   // Friend 1 attended
+        'demo2': false   // Friend 2 didn't attend
+      },
       polls: [
         {
           id: 'demo-poll-1',
@@ -918,6 +944,31 @@ const usePlansStore = create<PlansState>((set, get) => ({
       ...state,
       completedPlans: [demoPlan, ...state.completedPlans]
     }));
+  },
+  
+  // Attendance tracking for completed plans
+  updateAttendance: (planId: string, userId: string, attended: boolean) => {
+    set((state) => {
+      const updatePlan = (plan: Plan): Plan => {
+        if (plan.id !== planId || !plan.attendanceRecord) return plan;
+        
+        const updatedAttendanceRecord = {
+          ...plan.attendanceRecord,
+          [userId]: attended
+        };
+        
+        return {
+          ...plan,
+          attendanceRecord: updatedAttendanceRecord
+        };
+      };
+      
+      return {
+        invitations: state.invitations.map(updatePlan),
+        activePlans: state.activePlans.map(updatePlan),
+        completedPlans: state.completedPlans.map(updatePlan)
+      };
+    });
   }
 }));
 

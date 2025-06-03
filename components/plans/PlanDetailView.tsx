@@ -9,7 +9,8 @@ import {
   TextInput,
   Animated,
   Platform,
-  Alert
+  Alert,
+  KeyboardAvoidingView
 } from 'react-native';
 import { 
   Check, 
@@ -878,7 +879,17 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       )}
       
       {activeTab === 'Chat' && (
-        <ChatView plan={latestPlan} currentUserId="current" />
+        <KeyboardAvoidingView 
+          style={styles.chatContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        >
+          <ChatView 
+            plan={latestPlan} 
+            currentUserId="current" 
+            disableKeyboardAvoidance={true}
+          />
+        </KeyboardAvoidingView>
       )}
       
       {/* Poll Creator Modal */}
@@ -1163,5 +1174,8 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 13,
+  },
+  chatContainer: {
+    flex: 1,
   },
 });

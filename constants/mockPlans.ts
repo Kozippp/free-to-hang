@@ -702,6 +702,11 @@ export const mockCompletedPlans: Plan[] = [
     isRead: true,
     createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
     completionVotes: ['current', 'user50', 'user51'],
+    attendanceRecord: {
+      'current': true, // User attended
+      'user50': true, // Friend attended
+      'user51': true  // Friend attended
+    },
     polls: [
       {
         id: 'coffee-time-poll',
