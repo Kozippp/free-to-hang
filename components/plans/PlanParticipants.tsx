@@ -59,12 +59,6 @@ export default function PlanParticipants({
             {participant.name}{participant.id === 'current' ? ' (you)' : ''}
           </Text>
         </View>
-        
-        {canInvite && participant.id !== 'current' && (
-          <TouchableOpacity style={styles.removeButton}>
-            <X size={16} color={Colors.light.secondaryText} />
-          </TouchableOpacity>
-        )}
       </View>
     );
   };
@@ -271,9 +265,6 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: 14,
     color: Colors.light.text,
-  },
-  removeButton: {
-    padding: 8,
   },
   invitationsSection: {
     marginBottom: 16,
