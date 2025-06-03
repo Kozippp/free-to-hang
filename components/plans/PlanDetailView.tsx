@@ -10,7 +10,8 @@ import {
   Animated,
   Platform,
   Alert,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Modal
 } from 'react-native';
 import { 
   Check, 
@@ -42,6 +43,7 @@ import PollDisplay from './PollDisplay';
 import ChatView from '../chat/ChatView';
 import usePlansStore from '@/store/plansStore';
 import useChatStore from '@/store/chatStore';
+import { useRouter } from 'expo-router';
 
 interface PlanDetailViewProps {
   plan: Plan;
@@ -69,6 +71,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     processExpiredInvitationPolls
   } = usePlansStore();
   const { getUnreadCount } = useChatStore();
+  const router = useRouter();
   
   // Get the latest plan data from store
   const latestPlan = [...invitations, ...activePlans].find(p => p.id === plan.id) || plan;
@@ -80,6 +83,14 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [editingDescription, setEditingDescription] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
+  
+  // Response confirmation states
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [confirmationMessage, setConfirmationMessage] = useState('');
+  const [pendingResponse, setPendingResponse] = useState<{
+    status: ParticipantStatus;
+    conditionalFriends?: string[];
+  } | null>(null);
   
   // Poll states
   const [showPollCreator, setShowPollCreator] = useState(false);
@@ -295,9 +306,52 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         }, 200);
       });
     } else {
-      // For all other status changes, pass through directly
-      // PlanUserStatus component handles the warnings
-      onRespond(plan.id, status, conditionalFriends);
+      // For responses that move plan to Plans tab, show confirmation
+      if (status === 'accepted' || status === 'maybe' || status === 'conditional') {
+        // Store the pending response
+        setPendingResponse({ status, conditionalFriends });
+        
+        // Set the status text for display
+        let statusText = '';
+        switch (status) {
+          case 'accepted':
+            statusText = 'Going';
+            break;
+          case 'maybe':
+            statusText = 'Maybe';
+            break;
+          case 'conditional':
+            statusText = 'If';
+            break;
+        }
+        
+        setConfirmationMessage(statusText);
+        setShowConfirmationModal(true);
+      } else {
+        // For all other status changes, pass through directly
+        onRespond(plan.id, status, conditionalFriends);
+      }
+    }
+  };
+  
+  // Handle confirmation modal completion
+  const handleConfirmationComplete = () => {
+    if (pendingResponse) {
+      // Apply the response
+      onRespond(plan.id, pendingResponse.status, pendingResponse.conditionalFriends);
+      
+      // Close confirmation modal
+      setShowConfirmationModal(false);
+      setPendingResponse(null);
+      
+      // Close the plan detail modal
+      onClose();
+      
+      // Navigate to Plans tab with highlighting parameter
+      router.replace({
+        pathname: '/plans',
+        params: { highlightPlan: plan.id }
+      });
     }
   };
   
@@ -848,6 +902,29 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         }}
         onCreateInvitationPoll={handleCreateInvitationPoll}
       />
+      
+      {/* Response Confirmation Modal */}
+      <Modal
+        visible={showConfirmationModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleConfirmationComplete}
+      >
+        <View style={styles.confirmationOverlay}>
+          <View style={styles.confirmationModal}>
+            <CheckCircle size={36} color={Colors.light.onlineGreen} style={styles.confirmationIcon} />
+            <Text style={styles.confirmationTitle}>Your status is set to</Text>
+            <Text style={styles.confirmationStatus}>{confirmationMessage}</Text>
+            <Text style={styles.confirmationSubtext}>You can find this plan in the Plans tab.</Text>
+            <TouchableOpacity
+              style={styles.confirmationButton}
+              onPress={handleConfirmationComplete}
+            >
+              <Text style={styles.confirmationButtonText}>Go to Plans</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
@@ -1081,5 +1158,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 8,
+  },
+  confirmationOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmationModal: {
+    backgroundColor: 'white',
+    padding: 24,
+    borderRadius: 16,
+    width: '85%',
+    maxWidth: 320,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  confirmationIcon: {
+    marginBottom: 12,
+  },
+  confirmationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  confirmationStatus: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  confirmationSubtext: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  confirmationButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  confirmationButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });

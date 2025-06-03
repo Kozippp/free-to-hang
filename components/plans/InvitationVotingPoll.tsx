@@ -202,19 +202,24 @@ export default function InvitationVotingPoll({
 
   return (
     <View style={styles.container}>
-      {invitedUsers.map((user) => (
-        <IndividualVoteBlock
-          key={user.id}
-          user={user}
-          timeLeft={timeLeft}
-          onVote={handleVote}
-          userVoted={userVoted}
-          allowVotes={allowVotes}
-          denyVotes={denyVotes}
-          isExpired={isExpired}
-          userVoteChoice={userVoteChoice}
-          canVote={canVote}
-        />
+      {invitedUsers.map((user, index) => (
+        <View key={user.id}>
+          <IndividualVoteBlock
+            user={user}
+            timeLeft={timeLeft}
+            onVote={handleVote}
+            userVoted={userVoted}
+            allowVotes={allowVotes}
+            denyVotes={denyVotes}
+            isExpired={isExpired}
+            userVoteChoice={userVoteChoice}
+            canVote={canVote}
+          />
+          {/* Add separator between items, but not after the last item */}
+          {index < invitedUsers.length - 1 && (
+            <View style={styles.separator} />
+          )}
+        </View>
       ))}
     </View>
   );
@@ -225,17 +230,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   voteBlock: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: 'transparent',
+    padding: 0,
+    marginBottom: 0,
   },
   voteRow: {
     flexDirection: 'row',
@@ -310,5 +307,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: Colors.light.border,
+    marginVertical: 12,
   },
 }); 

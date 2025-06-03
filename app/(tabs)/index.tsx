@@ -287,12 +287,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   friendsDescription: {
     fontSize: 14,
     color: Colors.light.secondaryText,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   friendsList: {
     flex: 1,

@@ -99,7 +99,7 @@ export default function PlanParticipants({
           </View>
           
           <Text style={[styles.invitationDescription, { marginTop: -8 }]}>
-            Active vote to invite these people is happening. Cast your vote and majority decides.
+            Cast your vote to choose whether to invite these people to the hang.
           </Text>
           
           {/* Active invitation votes - using exact same component as before */}

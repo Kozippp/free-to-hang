@@ -311,14 +311,16 @@ export default function PlanSuggestionSheet({
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={100}
               >
-                <ScrollView 
+                <ScrollView
                   ref={scrollViewRef}
                   style={styles.content}
                   contentContainerStyle={styles.contentContainer}
                   keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled={true}
+                  keyboardDismissMode="on-drag"
                   scrollEventThrottle={16}
                   showsVerticalScrollIndicator={true}
+                  bounces={true}
+                  alwaysBounceVertical={true}
                 >
                   <Text style={[
                     styles.title,
@@ -506,8 +508,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
     paddingBottom: 30,
-    maxHeight: '90%',
-    minHeight: '70%',
+    maxHeight: '95%',
+    minHeight: '80%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
