@@ -244,11 +244,8 @@ export default function PlanCreatedSuccessModal({
                 Your plan is live! 🎉
               </Text>
               
-              <Text style={styles.successText}>
-                {isAnonymous 
-                  ? "Your secret plan is out there! Invite friends outside the app:"
-                  : `"${planTitle}" is ready for action! Invite friends outside the app:`
-                }
+              <Text style={styles.inviteText}>
+                Invite friends outside the app:
               </Text>
               
               {/* Direct invite link section */}
@@ -352,14 +349,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
-  successText: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-    paddingHorizontal: 12,
-  },
   inviteSection: {
     width: '100%',
     marginBottom: 20,
@@ -429,5 +418,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  inviteText: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+    paddingHorizontal: 12,
   },
 }); 

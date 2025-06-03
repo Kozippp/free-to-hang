@@ -193,7 +193,7 @@ export default function ChatView({ plan, currentUserId = 'current' }: ChatViewPr
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <FlatList
         ref={flatListRef}
