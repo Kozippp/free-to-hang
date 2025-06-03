@@ -94,7 +94,7 @@ export default function InviteFriendsModal({
             </TouchableOpacity>
           </View>
           
-          {/* Description */}
+          {/* Description - moved closer to header */}
           <View style={styles.descriptionContainer}>
             <Text style={styles.descriptionText}>
               Invite people to the hang, a vote will be cast and majority decides.
@@ -219,8 +219,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
+    paddingBottom: 0,
   },
   modalTitle: {
     fontSize: 18,
@@ -340,7 +339,9 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   descriptionContainer: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   descriptionText: {
     fontSize: 14,
@@ -348,8 +349,6 @@ const styles = StyleSheet.create({
   },
   inviteLinkSection: {
     padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
   },
   inviteLinkText: {
     fontSize: 14,

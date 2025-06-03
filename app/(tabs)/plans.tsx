@@ -90,6 +90,29 @@ export default function PlansScreen() {
     }
   }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation, dropInAnimation]);
 
+  // Handle highlighting when coming from invitation response
+  useEffect(() => {
+    if (params.highlightPlan) {
+      const planId = typeof params.highlightPlan === 'string' ? params.highlightPlan : params.highlightPlan[0];
+      
+      // Set active tab to Plan since user responded to invitation
+      setActiveTab('Plan');
+      
+      // Set highlighted plan
+      setHighlightedPlanId(planId);
+      
+      // Start highlighting animation
+      setTimeout(() => {
+        startNewPlanAnimation();
+      }, 200);
+      
+      // Clear the parameter after handling
+      setTimeout(() => {
+        router.replace('/plans');
+      }, 500);
+    }
+  }, [params.highlightPlan, router]);
+
   // Check for completed plans periodically
   useEffect(() => {
     // Initial check
