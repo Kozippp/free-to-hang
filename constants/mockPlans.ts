@@ -42,6 +42,8 @@ export const mockInvitations: Plan[] = [
     location: 'AMC Theater',
     isRead: false,
     createdAt: '2023-05-21T14:30:00Z',
+    lastUpdatedAt: '2023-05-21T14:30:00Z',
+    hasUnreadUpdates: false,
     completionVotes: []
   },
   {
@@ -74,6 +76,8 @@ export const mockInvitations: Plan[] = [
     location: 'Starbucks Downtown',
     isRead: true,
     createdAt: '2023-05-21T10:15:00Z',
+    lastUpdatedAt: '2023-05-21T10:15:00Z',
+    hasUnreadUpdates: false,
     completionVotes: []
   },
   {
@@ -116,6 +120,9 @@ export const mockInvitations: Plan[] = [
     location: 'Venice Beach',
     isRead: false,
     createdAt: '2023-05-21T08:45:00Z',
+    lastUpdatedAt: '2023-05-21T15:30:00Z',
+    updateType: 'new_message',
+    hasUnreadUpdates: true,
     completionVotes: []
   }
 ];
@@ -162,6 +169,9 @@ export const mockActivePlans: Plan[] = [
     location: 'Test Location',
     isRead: false,
     createdAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(), // 10 hours ago - can be completed
+    lastUpdatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    updateType: 'poll_voted',
+    hasUnreadUpdates: true,
     completionVotes: ['user70'], // Only 1 person has voted - user can test both buttons (need 2 total)
     polls: [
       {

@@ -44,10 +44,23 @@ export interface Plan {
   location: string;
   isRead: boolean;
   createdAt: string;
+  lastUpdatedAt?: string; // Track when plan was last updated
+  updateType?: 'poll_created' | 'poll_won' | 'new_message' | 'participant_joined' | 'poll_voted'; // Type of last update
+  hasUnreadUpdates?: boolean; // Whether there are unread updates
   polls?: Poll[];
   completionVotes?: string[]; // Array of participant IDs who voted for completion
   attendanceRecord?: Record<string, boolean>; // Track attendance for completed plans
 }
+
+// Helper function to ensure all plans have required fields
+const ensurePlanDefaults = (plan: any): Plan => {
+  return {
+    ...plan,
+    lastUpdatedAt: plan.lastUpdatedAt || plan.createdAt,
+    hasUnreadUpdates: plan.hasUnreadUpdates ?? false,
+    completionVotes: plan.completionVotes || []
+  };
+};
 
 interface PlansState {
   invitations: Plan[];
@@ -59,6 +72,11 @@ interface PlansState {
   respondToPlan: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => void;
   addPlan: (plan: Plan) => void;
   checkConditionalDependencies: (planId: string) => void;
+  
+  // Update tracking actions
+  markPlanUpdated: (planId: string, updateType: string) => void;
+  markUpdatesAsRead: (planId: string) => void;
+  getSortedPlans: (plans: Plan[]) => Plan[];
   
   // Helper function for conditional dependencies
   canParticipantBeAccepted: (
@@ -107,9 +125,9 @@ interface PlansState {
 }
 
 const usePlansStore = create<PlansState>((set, get) => ({
-  invitations: mockInvitations,
-  activePlans: mockActivePlans,
-  completedPlans: mockCompletedPlans,
+  invitations: mockInvitations.map(ensurePlanDefaults),
+  activePlans: mockActivePlans.map(ensurePlanDefaults),
+  completedPlans: mockCompletedPlans.map(ensurePlanDefaults),
   
   markAsRead: (planId: string) => {
     set((state) => ({
@@ -160,11 +178,18 @@ const usePlansStore = create<PlansState>((set, get) => ({
       
       // If response is 'accepted' or 'maybe' or 'conditional', move to activePlans
       if (response === 'accepted' || response === 'maybe' || response === 'conditional') {
-        return {
+        const newState = {
           invitations: state.invitations.filter(p => p.id !== planId),
           activePlans: [...state.activePlans, updatedPlan],
           completedPlans: state.completedPlans
         };
+        
+        // Mark plan as updated when current user joins
+        setTimeout(() => {
+          get().markPlanUpdated(planId, 'participant_joined');
+        }, 0);
+        
+        return newState;
       }
       
       // If response is 'declined', remove from invitations
@@ -370,60 +395,52 @@ const usePlansStore = create<PlansState>((set, get) => ({
   addPoll: (planId: string, poll: Poll) => {
     set((state) => {
       const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId) return plan;
-        
-        const polls = plan.polls || [];
-        
-        // Check if this is an update to existing poll
-        const existingPollIndex = polls.findIndex(p => p.id === poll.id);
-        
-        if (existingPollIndex !== -1) {
-          // Update existing poll
-          const updatedPolls = [...polls];
-          updatedPolls[existingPollIndex] = poll;
+        if (plan.id === planId) {
           return {
             ...plan,
-            polls: updatedPolls
-          };
-        } else {
-          // Add new poll
-          return {
-            ...plan,
-            polls: [...polls, poll]
+            polls: [...(plan.polls || []), poll]
           };
         }
+        return plan;
       };
       
       return {
         invitations: state.invitations.map(updatePlan),
         activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans.map(updatePlan)
+        completedPlans: state.completedPlans
       };
     });
+    
+    // Mark plan as updated with poll creation
+    get().markPlanUpdated(planId, 'poll_created');
   },
   
   voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => {
     set((state) => {
       const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId || !plan.polls) return plan;
+        if (plan.id !== planId) return plan;
         
-        const updatedPolls = plan.polls.map(poll => {
+        const polls = plan.polls || [];
+        const updatedPolls = polls.map(poll => {
           if (poll.id !== pollId) return poll;
           
-          // Remove user's votes from all options first
-          const updatedOptions = poll.options.map(option => ({
+          // Remove user's previous votes
+          const clearedOptions = poll.options.map(option => ({
             ...option,
             votes: option.votes.filter(id => id !== userId)
           }));
           
-          // Then add votes to selected options
+          // Add new votes
+          const updatedOptions = clearedOptions.map(option => ({
+            ...option,
+            votes: optionIds.includes(option.id) 
+              ? [...option.votes, userId]
+              : option.votes
+          }));
+          
           return {
             ...poll,
-            options: updatedOptions.map(option => 
-              optionIds.includes(option.id)
-                ? { ...option, votes: [...option.votes, userId] }
-                : option
-            )
+            options: updatedOptions
           };
         });
         
@@ -436,9 +453,14 @@ const usePlansStore = create<PlansState>((set, get) => ({
       return {
         invitations: state.invitations.map(updatePlan),
         activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans.map(updatePlan)
+        completedPlans: state.completedPlans
       };
     });
+    
+    // Only track as update if it's not the current user voting
+    if (userId !== 'current') {
+      get().markPlanUpdated(planId, 'poll_voted');
+    }
   },
   
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => {
@@ -948,26 +970,75 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   // Attendance tracking for completed plans
   updateAttendance: (planId: string, userId: string, attended: boolean) => {
+    set((state) => ({
+      completedPlans: state.completedPlans.map(plan => 
+        plan.id === planId
+          ? {
+              ...plan,
+              attendanceRecord: {
+                ...plan.attendanceRecord,
+                [userId]: attended
+              }
+            }
+          : plan
+      )
+    }));
+  },
+  
+  // Update tracking functions
+  markPlanUpdated: (planId: string, updateType: string) => {
+    const now = new Date().toISOString();
     set((state) => {
       const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId || !plan.attendanceRecord) return plan;
-        
-        const updatedAttendanceRecord = {
-          ...plan.attendanceRecord,
-          [userId]: attended
-        };
-        
-        return {
-          ...plan,
-          attendanceRecord: updatedAttendanceRecord
-        };
+        if (plan.id === planId) {
+          return {
+            ...plan,
+            lastUpdatedAt: now,
+            updateType: updateType as Plan['updateType'],
+            hasUnreadUpdates: true
+          };
+        }
+        return plan;
       };
       
       return {
         invitations: state.invitations.map(updatePlan),
         activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans.map(updatePlan)
+        completedPlans: state.completedPlans
       };
+    });
+  },
+  
+  markUpdatesAsRead: (planId: string) => {
+    set((state) => {
+      const updatePlan = (plan: Plan): Plan => {
+        if (plan.id === planId) {
+          return {
+            ...plan,
+            hasUnreadUpdates: false
+          };
+        }
+        return plan;
+      };
+      
+      return {
+        invitations: state.invitations.map(updatePlan),
+        activePlans: state.activePlans.map(updatePlan),
+        completedPlans: state.completedPlans
+      };
+    });
+  },
+  
+  getSortedPlans: (plans: Plan[]) => {
+    return [...plans].sort((a, b) => {
+      // First, sort by hasUnreadUpdates (unread updates first)
+      if (a.hasUnreadUpdates && !b.hasUnreadUpdates) return -1;
+      if (!a.hasUnreadUpdates && b.hasUnreadUpdates) return 1;
+      
+      // Then sort by lastUpdatedAt (most recent first)
+      const aTime = new Date(a.lastUpdatedAt || a.createdAt).getTime();
+      const bTime = new Date(b.lastUpdatedAt || b.createdAt).getTime();
+      return bTime - aTime;
     });
   }
 }));

@@ -112,6 +112,13 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
     >
       {!plan.isRead && <View style={styles.unreadIndicator} />}
       
+      {/* Update notification badge */}
+      {plan.hasUnreadUpdates && (
+        <View style={styles.updateBadge}>
+          <Text style={styles.updateBadgeText}>!</Text>
+        </View>
+      )}
+      
       {/* User status badge */}
       {currentUserStatus !== 'pending' && getUserStatusBadge()}
       
@@ -381,5 +388,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+  },
+  updateBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FFCC00',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  updateBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: 'white',
   },
 });
