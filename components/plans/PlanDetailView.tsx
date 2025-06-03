@@ -263,6 +263,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
   
   const handleStatusChange = (status: ParticipantStatus, conditionalFriends?: string[]) => {
+    // Always close any existing confirmation modal first
+    setShowConfirmationModal(false);
+    setPendingResponse(null);
+    
+    // Check if this is a first-time response (user is currently pending)
+    const isFirstTimeResponse = currentUserStatus === 'pending';
+    
     // If changing from 'accepted' to 'maybe' or 'conditional', remove all votes first
     if (currentUserStatus === 'accepted' && (status === 'maybe' || status === 'conditional')) {
       // Remove user votes from all polls
@@ -305,10 +312,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           onClose();
         }, 200);
       });
-    } else {
-      // For responses that move plan to Plans tab, show confirmation
-      if (status === 'accepted' || status === 'maybe' || status === 'conditional') {
-        // Store the pending response
+      return; // Exit early for decline
+    }
+
+    // Handle accepted, maybe, conditional responses
+    if (status === 'accepted' || status === 'maybe' || status === 'conditional') {
+      if (isFirstTimeResponse) {
+        // FIRST-TIME RESPONSE: Show confirmation modal and navigate to Plans tab
         setPendingResponse({ status, conditionalFriends });
         
         // Set the status text for display
@@ -328,9 +338,12 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         setConfirmationMessage(statusText);
         setShowConfirmationModal(true);
       } else {
-        // For all other status changes, pass through directly
+        // STATUS CHANGE: Apply immediately without any alerts - let normal flow handle it
         onRespond(plan.id, status, conditionalFriends);
       }
+    } else {
+      // For all other status changes, pass through directly
+      onRespond(plan.id, status, conditionalFriends);
     }
   };
   

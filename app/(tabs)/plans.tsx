@@ -20,7 +20,7 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
-  const { invitations, activePlans, completedPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance } = usePlansStore();
+  const { invitations, activePlans, completedPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance, getSortedPlans, markUpdatesAsRead } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -193,6 +193,11 @@ export default function PlansScreen() {
     if (!plan.isRead) {
       markAsRead(plan.id);
     }
+    
+    // Mark updates as read when plan is opened
+    if (plan.hasUnreadUpdates) {
+      markUpdatesAsRead(plan.id);
+    }
   };
   
   const handleCloseModal = () => {
@@ -289,7 +294,7 @@ export default function PlansScreen() {
           <Animated.View style={[styles.contentContainer, { transform: [{ translateX }] }]}>
             {activeTab === 'Invitations' && (
               <FlatList
-                data={invitations}
+                data={getSortedPlans(invitations)}
                 renderItem={renderPlanItem}
                 keyExtractor={(item) => `invitations-${item.id}`}
                 contentContainerStyle={styles.listContent}
@@ -301,7 +306,7 @@ export default function PlansScreen() {
               <View style={styles.tabContent}>
                 {activePlans.length === 0 ? renderEmptyState() : (
                   <FlatList
-                    data={activePlans}
+                    data={getSortedPlans(activePlans)}
                     renderItem={renderPlanItem}
                     keyExtractor={(item) => `activePlans-${item.id}`}
                     contentContainerStyle={styles.listContent}
