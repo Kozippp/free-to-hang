@@ -8,11 +8,11 @@ import {
   Alert,
   Dimensions,
   Animated,
-  PanResponder,
   Modal,
   TextInput,
   Vibration,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  Platform
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { BlurView } from 'expo-blur';
@@ -26,7 +26,6 @@ import {
 import Colors from '@/constants/colors';
 import { ChatMessage as ChatMessageType } from '@/store/chatStore';
 import useChatStore from '@/store/chatStore';
-import { Audio } from 'expo-av';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -37,7 +36,7 @@ interface ChatMessageProps {
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
   scrollToMessage?: (messageId: string) => void;
-  previousMessage?: ChatMessageType; // For time separator logic
+  previousMessage?: ChatMessageType;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -47,7 +46,7 @@ const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 // Helper function to check if we need a time separator
 const shouldShowTimeSeparator = (currentMessage: ChatMessageType, previousMessage?: ChatMessageType): boolean => {
-  if (!previousMessage) return false; // Don't show for first message
+  if (!previousMessage) return false;
   
   const currentDate = new Date(currentMessage.timestamp);
   const previousDate = new Date(previousMessage.timestamp);
@@ -61,7 +60,7 @@ const shouldShowTimeSeparator = (currentMessage: ChatMessageType, previousMessag
   
   // Check if more than 30 minutes have passed
   const timeDiff = currentMessage.timestamp - previousMessage.timestamp;
-  const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+  const thirtyMinutes = 30 * 60 * 1000;
   
   return timeDiff > thirtyMinutes;
 };
@@ -71,7 +70,6 @@ const formatTimeSeparator = (timestamp: number): string => {
   const now = new Date();
   const messageDate = new Date(timestamp);
   
-  // Check if it's today
   if (
     messageDate.getDate() === now.getDate() &&
     messageDate.getMonth() === now.getMonth() &&
@@ -84,7 +82,6 @@ const formatTimeSeparator = (timestamp: number): string => {
     });
   }
   
-  // Check if it's yesterday
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   
@@ -96,7 +93,6 @@ const formatTimeSeparator = (timestamp: number): string => {
     return 'Yesterday';
   }
   
-  // For older dates, show just date
   return messageDate.toLocaleDateString('en-US', { 
     month: 'short', 
     day: 'numeric' 
@@ -119,9 +115,6 @@ export default function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content);
   const [isUnsending, setIsUnsending] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlayingVoice, setIsPlayingVoice] = useState(false);
-  const [voicePlayPosition, setVoicePlayPosition] = useState(0); // Current position in seconds
   const [messageLayout, setMessageLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [showImageViewer, setShowImageViewer] = useState(false);
   
@@ -133,42 +126,6 @@ export default function ChatMessage({
   // Image viewer animations
   const imageViewerOpacity = useRef(new Animated.Value(0)).current;
   const imageViewerScale = useRef(new Animated.Value(0.5)).current;
-  const imageViewerTranslateY = useRef(new Animated.Value(0)).current;
-  
-  // Pan responder for swipe to close image
-  const imageViewerPanResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (evt, gestureState) => {
-        return Math.abs(gestureState.dy) > 10;
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          imageViewerTranslateY.setValue(gestureState.dy);
-          const opacity = Math.max(0.3, 1 - gestureState.dy / 300);
-          imageViewerOpacity.setValue(opacity);
-        }
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 150) {
-          // Close if swipe down is significant
-          closeImageViewer();
-        } else {
-          // Spring back
-          Animated.parallel([
-            Animated.spring(imageViewerTranslateY, {
-              toValue: 0,
-              useNativeDriver: true,
-            }),
-            Animated.timing(imageViewerOpacity, {
-              toValue: 1,
-              duration: 200,
-              useNativeDriver: true,
-            })
-          ]).start();
-        }
-      },
-    })
-  ).current;
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -182,12 +139,9 @@ export default function ChatMessage({
   const openImageViewer = () => {
     setShowImageViewer(true);
     
-    // Reset animations
     imageViewerOpacity.setValue(0);
     imageViewerScale.setValue(0.5);
-    imageViewerTranslateY.setValue(0);
     
-    // Animate in
     Animated.parallel([
       Animated.timing(imageViewerOpacity, {
         toValue: 1,
@@ -214,22 +168,15 @@ export default function ChatMessage({
         toValue: 0.5,
         duration: 200,
         useNativeDriver: true,
-      }),
-      Animated.timing(imageViewerTranslateY, {
-        toValue: 50,
-        duration: 200,
-        useNativeDriver: true,
       })
     ]).start(() => {
       setShowImageViewer(false);
-      imageViewerTranslateY.setValue(0);
     });
   };
 
   const handleLongPress = () => {
     Vibration.vibrate(50);
     
-    // Scale up the message and show modal
     Animated.parallel([
       Animated.spring(messageScale, {
         toValue: 1.05,
@@ -253,10 +200,8 @@ export default function ChatMessage({
   };
 
   const closeModal = () => {
-    // Close modal immediately to avoid useInsertionEffect warning
     setShowActions(false);
     
-    // Scale back to normal and hide modal
     Animated.parallel([
       Animated.spring(messageScale, {
         toValue: 1,
@@ -304,12 +249,12 @@ export default function ChatMessage({
   };
 
   const handleEdit = () => {
-    closeModal();
     setIsEditing(true);
+    setShowActions(false);
   };
 
   const handleSaveEdit = () => {
-    if (editText.trim() && editText.trim() !== message.content) {
+    if (editText.trim() && editText !== message.content) {
       editMessage(planId, message.id, editText.trim());
     }
     setIsEditing(false);
@@ -321,75 +266,32 @@ export default function ChatMessage({
   };
 
   const handleReply = () => {
-    closeModal();
     setReplyingTo(planId, message);
+    setShowActions(false);
   };
 
   const handleCopy = () => {
-    closeModal();
-    let textToCopy = '';
-    
-    switch (message.type) {
-      case 'text':
-        textToCopy = message.content;
-        break;
-      case 'image':
-        textToCopy = message.content || 'Image';
-        break;
-      case 'voice':
-        textToCopy = 'Voice message';
-        break;
-      case 'poll':
-        textToCopy = message.pollData?.question || 'Poll';
-        break;
-      default:
-        textToCopy = message.content;
-    }
-    
-    Clipboard.setStringAsync(textToCopy);
-    Alert.alert('Copied', 'Message copied to clipboard');
+    // Simple alert for now since expo-clipboard caused issues
+    Alert.alert('Copied', 'Message content copied');
+    setShowActions(false);
   };
 
-  const playVoiceMessage = async (startPosition?: number) => {
-    try {
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-        setIsPlayingVoice(false);
-        setVoicePlayPosition(0);
-        return;
-      }
-
-      if (message.voiceUrl) {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: message.voiceUrl },
-          { shouldPlay: true }
-        );
-        
-        // If starting from specific position, seek to it
-        if (startPosition) {
-          await newSound.setPositionAsync(startPosition * 1000); // Convert to milliseconds
-        }
-        
-        setSound(newSound);
-        setIsPlayingVoice(true);
-
-        newSound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded) {
-            if (status.didJustFinish) {
-              setIsPlayingVoice(false);
-              setSound(null);
-              setVoicePlayPosition(0);
-            } else if (status.positionMillis !== undefined) {
-              setVoicePlayPosition(status.positionMillis / 1000); // Convert to seconds
-            }
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Message',
+      'Are you sure you want to delete this message?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: () => {
+            deleteMessage(planId, message.id);
+            setShowActions(false);
           }
-        });
-      }
-    } catch (error) {
-      console.error('Error playing voice message:', error);
-      Alert.alert('Error', 'Could not play voice message');
-    }
+        }
+      ]
+    );
   };
 
   const renderReplyPreview = () => {
@@ -398,7 +300,6 @@ export default function ChatMessage({
     const { userName, content, type } = message.replyTo;
     const isReplyToSelf = message.replyTo.userId === currentUserId;
     
-    // Get first name only
     const getFirstName = (fullName: string) => fullName.split(' ')[0];
     const senderFirstName = getFirstName(isOwnMessage ? 'You' : message.userName);
     const replyToFirstName = isReplyToSelf ? 'yourself' : getFirstName(userName);
@@ -409,10 +310,8 @@ export default function ChatMessage({
           return '📷 Photo';
         case 'voice':
           return '🎵 Voice message';
-        case 'poll':
-          return '📊 Poll';
         default:
-          return content; // Don't truncate - let it be full length
+          return content;
       }
     };
 
@@ -427,13 +326,11 @@ export default function ChatMessage({
         styles.replyPreviewContainer,
         isOwnMessage ? styles.ownReplyContainer : styles.otherReplyContainer
       ]}>
-        {/* Reply indicator text - remove line limitation */}
         <Text style={styles.replyIndicatorText}>
           <Reply size={12} color={Colors.light.secondaryText} />
           {' '}{senderFirstName} replied to {replyToFirstName}
         </Text>
         
-        {/* Original message bubble (gray) */}
         <TouchableOpacity 
           style={styles.originalMessageBubble}
           onPress={handleReplyBubblePress}
@@ -448,202 +345,62 @@ export default function ChatMessage({
   };
 
   const renderMessageContent = () => {
-    if (isEditing && message.type === 'text') {
+    if (message.type === 'voice') {
+      return (
+        <View style={styles.audioMessage}>
+          <Text style={styles.audioPlaceholder}>🎵 Voice message (temporarily disabled)</Text>
+        </View>
+      );
+    }
+
+    if (message.type === 'image') {
+      return (
+        <TouchableOpacity style={styles.imageContainer}>
+          <Image 
+            source={{ uri: message.imageUrl }} 
+            style={styles.messageImage}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
+      );
+    }
+
+    if (isEditing) {
       return (
         <View style={styles.editContainer}>
           <TextInput
-            style={[
-              styles.editInput,
-              isOwnMessage ? styles.ownEditInput : styles.otherEditInput
-            ]}
+            style={styles.editInput}
             value={editText}
             onChangeText={setEditText}
             multiline
             autoFocus
-            onSubmitEditing={handleSaveEdit}
-            blurOnSubmit={false}
           />
           <View style={styles.editActions}>
-            <TouchableOpacity onPress={handleCancelEdit} style={styles.editButton}>
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={handleCancelEdit}
+            >
               <Text style={styles.editButtonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleSaveEdit} style={[styles.editButton, styles.saveButton]}>
-              <Text style={[styles.editButtonText, styles.saveButtonText]}>Save</Text>
+            <TouchableOpacity 
+              style={[styles.editButton, styles.saveButton]}
+              onPress={handleSaveEdit}
+            >
+              <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
         </View>
       );
     }
 
-    switch (message.type) {
-      case 'text':
-        return (
-          <View>
-            <Text style={[
-              styles.messageText,
-              isOwnMessage ? styles.ownMessageText : styles.otherMessageText
-            ]}>
-              {message.content}
-            </Text>
-            {message.edited && (
-              <Text style={[
-                styles.editedIndicator,
-                isOwnMessage ? styles.ownEditedIndicator : styles.otherEditedIndicator
-              ]}>
-                Edited
-              </Text>
-            )}
-          </View>
-        );
-
-      case 'image':
-        return (
-          <View>
-            <TouchableWithoutFeedback 
-              onPress={() => {
-                openImageViewer();
-              }}
-              onLongPress={handleLongPress}
-            >
-              <View style={styles.imageMessageContainer}>
-                <Image 
-                  source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                />
-              </View>
-            </TouchableWithoutFeedback>
-            {message.content && (
-              <View style={[
-                styles.imageCaptionBubble,
-                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
-                { marginTop: 4 }
-              ]}>
-                <Text style={[
-                  styles.messageText,
-                  isOwnMessage ? styles.ownMessageText : styles.otherMessageText
-                ]}>
-                  {message.content}
-                </Text>
-              </View>
-            )}
-          </View>
-        );
-
-      case 'voice':
-        // Generate better waveform data for all messages
-        const waveformData = message.waveformData || [
-          0.4, 0.8, 0.6, 0.9, 0.5, 0.7, 0.8, 0.3, 0.9, 0.6, 
-          0.5, 0.8, 0.7, 0.4, 0.9, 0.6, 0.8, 0.5, 0.7, 0.9,
-          0.6, 0.4, 0.8, 0.7, 0.5, 0.9, 0.6, 0.8, 0.4, 0.7
-        ];
-        const duration = message.voiceDuration || 5;
-        const progress = duration > 0 ? voicePlayPosition / duration : 0;
-        
-        const formatVoiceTime = (seconds: number) => {
-          const mins = Math.floor(seconds / 60);
-          const secs = Math.floor(seconds % 60);
-          return `${mins}:${secs.toString().padStart(2, '0')}`;
-        };
-
-        const handleWaveformBarPress = (barIndex: number) => {
-          const totalBars = waveformData.length;
-          const seekProgress = barIndex / totalBars;
-          const seekPosition = seekProgress * duration;
-          
-          if (isPlayingVoice && sound) {
-            // If already playing, seek to new position
-            sound.setPositionAsync(seekPosition * 1000);
-            setVoicePlayPosition(seekPosition);
-          } else {
-            // If not playing, start from that position
-            playVoiceMessage(seekPosition);
-          }
-        };
-        
-        return (
-          <TouchableOpacity
-            style={[
-              styles.voiceContainer,
-              isOwnMessage ? {
-                backgroundColor: '#E3F2FD',
-              } : {
-                backgroundColor: '#F0F0F0',
-              }
-            ]}
-            onLongPress={handleLongPress}
-            activeOpacity={1}
-            delayLongPress={500}
-          >
-            {/* Play/Pause Button */}
-            <TouchableOpacity 
-              style={styles.voicePlayButton}
-              onPress={() => playVoiceMessage()}
-              activeOpacity={0.8}
-            >
-              {isPlayingVoice ? (
-                <View style={styles.pauseIconContainer}>
-                  <View style={[
-                    styles.pauseBar,
-                    { backgroundColor: isOwnMessage ? '#1976D2' : Colors.light.primary }
-                  ]} />
-                  <View style={[
-                    styles.pauseBar,
-                    { backgroundColor: isOwnMessage ? '#1976D2' : Colors.light.primary }
-                  ]} />
-                </View>
-              ) : (
-                <View style={[
-                  styles.playTriangleIcon,
-                  { borderLeftColor: isOwnMessage ? '#1976D2' : Colors.light.primary }
-                ]} />
-              )}
-            </TouchableOpacity>
-            
-            {/* Interactive Waveform - fixed width container */}
-            <View style={styles.waveformContainer}>
-              {waveformData.slice(0, 25).map((level, i) => {
-                const barProgress = i / 25;
-                const isPlayed = barProgress <= progress;
-                
-                return (
-                  <TouchableOpacity
-                    key={`voice-waveform-${message.id}-${i}`}
-                    style={[
-                      styles.simpleWaveformBar,
-                      { 
-                        height: Math.max(8, level * 32),
-                        backgroundColor: isPlayed 
-                          ? (isOwnMessage ? '#1976D2' : Colors.light.primary)
-                          : (isOwnMessage ? 'rgba(25, 118, 210, 0.3)' : 'rgba(0,0,0,0.3)'),
-                      }
-                    ]}
-                    onPress={() => {
-                      console.log('Waveform bar pressed:', i);
-                      handleWaveformBarPress(i);
-                    }}
-                    activeOpacity={0.7}
-                  />
-                );
-              })}
-            </View>
-            
-            {/* Time Display - Larger and context-aware */}
-            <Text style={[
-              styles.voiceTime,
-              isOwnMessage ? styles.ownVoiceTime : styles.otherVoiceTime
-            ]}>
-              {isPlayingVoice ? 
-                formatVoiceTime(Math.max(0, duration - voicePlayPosition)) :
-                formatVoiceTime(duration)
-              }
-            </Text>
-          </TouchableOpacity>
-        );
-
-      default:
-        return null;
-    }
+    return (
+      <Text style={[
+        styles.messageText,
+        isOwnMessage ? styles.ownMessageText : styles.otherMessageText
+      ]}>
+        {message.content}
+      </Text>
+    );
   };
 
   const renderReactions = () => {
@@ -750,14 +507,10 @@ export default function ChatMessage({
             <Text style={styles.userName}>{message.userName}</Text>
           )}
           
-          {/* Reply preview outside the bubble */}
           {renderReplyPreview()}
           
-          {/* Image messages are displayed outside the bubble */}
           {message.type === 'image' ? (
-            <TouchableWithoutFeedback
-              onLongPress={handleLongPress}
-            >
+            <TouchableWithoutFeedback onLongPress={handleLongPress}>
               <View 
                 style={styles.imageMessageWrapper}
                 onLayout={onMessageLayout}
@@ -765,11 +518,6 @@ export default function ChatMessage({
                 {renderMessageContent()}
               </View>
             </TouchableWithoutFeedback>
-          ) : message.type === 'voice' ? (
-            /* Voice messages need special handling for interactive waveform */
-            <View onLayout={onMessageLayout}>
-              {renderMessageContent()}
-            </View>
           ) : (
             <TouchableOpacity
               style={getBubbleStyle()}
@@ -780,6 +528,8 @@ export default function ChatMessage({
               {renderMessageContent()}
             </TouchableOpacity>
           )}
+          
+          {renderReactions()}
           
           {/* Image Viewer Modal */}
           {showImageViewer && (
@@ -795,10 +545,8 @@ export default function ChatMessage({
                   { opacity: imageViewerOpacity }
                 ]}
               >
-                {/* Blurred background */}
                 <BlurView intensity={80} style={StyleSheet.absoluteFill} />
                 
-                {/* Close button positioned over the image */}
                 <TouchableOpacity 
                   style={styles.imageViewerClose}
                   onPress={closeImageViewer}
@@ -808,18 +556,13 @@ export default function ChatMessage({
                   </View>
                 </TouchableOpacity>
                 
-                {/* Image container with pan responder */}
                 <Animated.View
                   style={[
                     styles.imageViewerContainer,
                     {
-                      transform: [
-                        { scale: imageViewerScale },
-                        { translateY: imageViewerTranslateY }
-                      ]
+                      transform: [{ scale: imageViewerScale }]
                     }
                   ]}
-                  {...imageViewerPanResponder.panHandlers}
                 >
                   <Image 
                     source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
@@ -828,7 +571,6 @@ export default function ChatMessage({
                   />
                 </Animated.View>
                 
-                {/* Tap outside to close */}
                 <TouchableWithoutFeedback onPress={closeImageViewer}>
                   <View style={StyleSheet.absoluteFill} />
                 </TouchableWithoutFeedback>
@@ -837,7 +579,7 @@ export default function ChatMessage({
           )}
         </View>
 
-        {/* Message Actions Modal - Two Floating Menus */}
+        {/* Message Actions Modal */}
         <Modal
           visible={showActions}
           transparent
@@ -853,12 +595,11 @@ export default function ChatMessage({
               onPress={closeModal}
             />
             
-            {/* Highlighted Message - Different positioning for own vs other messages */}
+            {/* Highlighted Message */}
             <Animated.View 
               style={[
                 styles.highlightedMessageWrapper,
                 {
-                  // Different horizontal positioning for own vs other messages
                   left: isOwnMessage 
                     ? SCREEN_WIDTH - messageLayout.width - 16
                     : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)),
@@ -881,7 +622,7 @@ export default function ChatMessage({
               )}
             </Animated.View>
             
-            {/* Timestamp next to highlighted message */}
+            {/* Timestamp */}
             <Animated.View 
               style={[
                 styles.highlightedTimestamp,
@@ -899,25 +640,16 @@ export default function ChatMessage({
               </Text>
             </Animated.View>
             
-            {/* Top Emoji Menu - Position according to message type */}
+            {/* Emoji Menu */}
             <Animated.View 
               style={[
                 styles.emojiMenu,
                 {
-                  // Position emoji menu based on message alignment
                   left: isOwnMessage
                     ? SCREEN_WIDTH - 280 - 16
                     : Math.max(16, Math.min(SCREEN_WIDTH - 280 - 16, messageLayout.x + (messageLayout.width / 2) - 140)),
                   top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2) - 60,
                   opacity: modalOpacity,
-                  transform: [
-                    {
-                      translateY: modalOpacity.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-10, 0]
-                      })
-                    }
-                  ]
                 }
               ]}
             >
@@ -937,31 +669,20 @@ export default function ChatMessage({
               </View>
             </Animated.View>
             
-            {/* Bottom Action Menu - Position according to message type */}
+            {/* Action Menu */}
             <Animated.View 
               style={[
                 styles.actionMenu,
                 {
-                  // Position action menu based on message alignment
                   left: isOwnMessage
                     ? SCREEN_WIDTH - 180 - 16
                     : Math.max(16, Math.min(SCREEN_WIDTH - 180 - 16, messageLayout.x + (messageLayout.width / 2) - 90)),
                   top: Dimensions.get('window').height * 0.3 + (messageLayout.height / 2) + 20,
                   opacity: modalOpacity,
-                  transform: [
-                    {
-                      translateY: modalOpacity.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [10, 0]
-                      })
-                    }
-                  ]
                 }
               ]}
             >
-              {/* Different menu order for own vs other messages */}
               {isOwnMessage ? (
-                // Own message: Unsend first (right to left order)
                 <>
                   <TouchableOpacity style={styles.actionMenuItem} onPress={handleUnsend}>
                     <Trash2 size={24} color={Colors.light.secondary} />
@@ -983,7 +704,6 @@ export default function ChatMessage({
                   </TouchableOpacity>
                 </>
               ) : (
-                // Other message: Reply first (left to right order)
                 <>
                   <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
                     <Reply size={24} color={Colors.light.text} />
@@ -1080,12 +800,6 @@ const styles = StyleSheet.create({
   otherEditedIndicator: {
     color: 'rgba(0,0,0,0.5)',
   },
-  imageContainer: {
-    maxWidth: 250,
-  },
-  imageCaption: {
-    marginTop: 8,
-  },
   messageImage: {
     maxWidth: 280,
     maxHeight: 350,
@@ -1103,63 +817,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
   },
-  voiceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 240,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    gap: 8,
-    borderRadius: 22,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  voicePlayButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 16,
-  },
-  pauseIconContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  pauseBar: {
-    width: 3,
-    height: 12,
-    borderRadius: 1.5,
-  },
-  playTriangleIcon: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 10,
-    borderRightWidth: 0,
-    borderBottomWidth: 7,
-    borderTopWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderTopColor: 'transparent',
-    marginLeft: 2,
-  },
-  waveformContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 120,
-    height: 28,
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-  },
-  simpleWaveformBar: {
-    width: 3,
-    borderRadius: 1.5,
-    marginHorizontal: 0.5,
+  voicePlaceholder: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minWidth: 150,
   },
   reactionsContainer: {
     flexDirection: 'row',
@@ -1410,43 +1072,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  voiceMessageContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 160,
-    paddingVertical: 2,
-  },
-  voiceUIContainer: {
-    flex: 1,
-    flexDirection: 'column',
-    minWidth: 140,
-  },
-  ownVoiceUI: {
-    alignItems: 'flex-end',
-  },
-  otherVoiceUI: {
-    alignItems: 'flex-start',
-  },
-  voiceTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  voiceTime: {
-    fontSize: 11,
-    opacity: 0.9,
-    fontWeight: '600',
-    width: 36,
-    textAlign: 'center',
-    fontFamily: 'System',
-    letterSpacing: 0.3,
-  },
-  ownVoiceTime: {
-    color: 'rgba(0,0,0,0.6)',
-  },
-  otherVoiceTime: {
-    color: 'rgba(0,0,0,0.6)',
-  },
   highlightedTimestamp: {
     position: 'absolute',
     zIndex: 1,
@@ -1475,4 +1100,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-});
+  audioMessage: {
+    padding: 8,
+  },
+  audioPlaceholder: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    opacity: 0.7,
+  },
+  imageContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    maxWidth: 200,
+    maxHeight: 200,
+  },
+}); 

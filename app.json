@@ -1,42 +1,72 @@
 {
   "expo": {
     "name": "Free to Hang",
-    "slug": "free-to-hang-ypkkddj",
+    "slug": "free-to-hang",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.free-to-hang-ypkkddj"
+      "bundleIdentifier": "com.yourcompany.freetohang",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app uses location to help you find nearby friends and suggest meeting places.",
+        "NSCameraUsageDescription": "This app uses camera to take profile pictures.",
+        "NSPhotoLibraryUsageDescription": "This app uses photo library to select profile pictures."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.free-to-hang-ypkkddj"
+      "package": "com.yourcompany.freetohang",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
+      "expo-router",
       [
-        "expo-router",
+        "expo-location",
         {
-          "origin": "https://rork.app/"
+          "locationAlwaysAndWhenInUsePermission": "Allow Free to Hang to use your location to find nearby friends and suggest meeting places."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends.",
+          "cameraPermission": "The app accesses your camera to let you take photos to share with friends."
         }
       ]
     ],
-    "experiments": {
-      "typedRoutes": true
+    "scheme": "freetohang",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id-here"
+      }
     }
   }
 }

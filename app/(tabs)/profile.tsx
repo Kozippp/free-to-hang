@@ -43,8 +43,10 @@ import {
   mockBlockedUsers, 
   defaultSettings 
 } from '@/constants/mockData';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ProfileScreen() {
+  const { signOut } = useAuth();
   const [userProfile, setUserProfile] = useState<UserProfile>(mockUserProfile);
   const [friends, setFriends] = useState<Friend[]>(profileFriends);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
@@ -235,17 +237,21 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
+      'Logi välja',
+      'Kas oled kindel, et tahad välja logida?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Tühista', style: 'cancel' },
         { 
-          text: 'Log Out', 
+          text: 'Logi välja', 
           style: 'destructive',
-          onPress: () => {
-            Alert.alert('Logged Out', 'You have been successfully logged out.');
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              Alert.alert('Viga', 'Väljalogimine ebaõnnestus');
+            }
           }
         }
       ]

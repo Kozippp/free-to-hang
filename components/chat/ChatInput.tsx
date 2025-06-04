@@ -1,28 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  StyleSheet,
   View,
+  Text,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
   Alert,
-  Platform,
-  Animated,
-  Text,
-  Dimensions,
   Modal,
-  Image
+  Image,
+  Dimensions,
+  Animated,
+  Platform
 } from 'react-native';
 import { 
   Send, 
-  Camera,
-  Mic, 
-  X,
+  Camera, 
+  X, 
+  Reply,
   Image as ImageIcon
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import useChatStore from '@/store/chatStore';
 import * as ImagePicker from 'expo-image-picker';
-import { Audio } from 'expo-av';
 
 interface ChatInputProps {
   planId: string;
@@ -41,12 +40,6 @@ export default function ChatInput({
 }: ChatInputProps) {
   const { sendMessage, getReplyingTo, setReplyingTo } = useChatStore();
   const [message, setMessage] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [audioLevels, setAudioLevels] = useState<number[]>(Array(40).fill(0));
-  const [recordedWaveform, setRecordedWaveform] = useState<number[]>([]);
-  const [currentAmplitude, setCurrentAmplitude] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showImageConfirmation, setShowImageConfirmation] = useState(false);
   
@@ -57,14 +50,7 @@ export default function ChatInput({
   const replyingTo = getReplyingTo(planId);
   
   // Animations
-  const recordingAnimation = useRef(new Animated.Value(1)).current;
   const sendButtonAnimation = useRef(new Animated.Value(0)).current;
-  const micButtonAnimation = useRef(new Animated.Value(1)).current;
-  const amplitudeAnimation = useRef(new Animated.Value(0)).current;
-  
-  // Timer for recording duration and audio levels
-  const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const audioLevelTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Auto-focus when replying
   useEffect(() => {
@@ -77,21 +63,14 @@ export default function ChatInput({
   }, [replyingTo]);
 
   useEffect(() => {
-    // Animate send button and mic button based on message content
+    // Animate send button based on message content
     const hasText = message.trim().length > 0;
     
-    Animated.parallel([
-      Animated.timing(sendButtonAnimation, {
-        toValue: hasText ? 1 : 0,
-        duration: 200,
-        useNativeDriver: true
-      }),
-      Animated.timing(micButtonAnimation, {
-        toValue: hasText ? 0 : 1,
-        duration: 200,
-        useNativeDriver: true
-      })
-    ]).start();
+    Animated.timing(sendButtonAnimation, {
+      toValue: hasText ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true
+    }).start();
   }, [message]);
 
   const handleSendMessage = () => {
@@ -174,176 +153,6 @@ export default function ChatInput({
     setShowImageConfirmation(false);
   };
 
-  const simulateAudioLevels = () => {
-    // Simulate more realistic audio level patterns with better variation
-    const time = Date.now() / 1000;
-    const baseLevel = 0.2 + Math.sin(time * 0.8) * 0.15; // Base oscillation
-    const speechPattern = Math.sin(time * 2.5) * 0.2; // Speech-like pattern
-    const noise = (Math.random() - 0.5) * 0.3; // Random variation
-    const spike = Math.random() < 0.15 ? Math.random() * 0.4 : 0; // Occasional spikes
-    
-    const newLevel = Math.max(0.05, Math.min(1.0, baseLevel + speechPattern + noise + spike));
-    
-    // Update current amplitude for live animation
-    setCurrentAmplitude(newLevel);
-    
-    // Animate the amplitude value
-    Animated.timing(amplitudeAnimation, {
-      toValue: newLevel,
-      duration: 50,
-      useNativeDriver: false,
-    }).start();
-    
-    setAudioLevels(prev => {
-      const newLevels = [...prev];
-      // Keep only last 60 bars for performance
-      if (newLevels.length >= 60) {
-        newLevels.shift();
-      }
-      newLevels.push(newLevel);
-      return newLevels;
-    });
-    
-    // Store complete waveform for final message
-    setRecordedWaveform(prev => [...prev, newLevel]);
-  };
-
-  const startRecording = async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Microphone permission is required to record voice messages');
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-
-      // Configure recording with metering enabled for amplitude capture
-      const recordingOptions = {
-        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        isMeteringEnabled: true, // Enable audio level monitoring
-      };
-
-      const { recording } = await Audio.Recording.createAsync(recordingOptions);
-      
-      setRecording(recording);
-      setIsRecording(true);
-      setRecordingDuration(0);
-      setRecordedWaveform([]);
-      setAudioLevels(Array(40).fill(0));
-      setCurrentAmplitude(0);
-
-      // Start recording animation (breathing effect)
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(recordingAnimation, {
-            toValue: 1.2,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(recordingAnimation, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-
-      // Start duration timer
-      recordingTimer.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
-
-      // Start real-time audio level monitoring (faster for smoother animation)
-      audioLevelTimer.current = setInterval(simulateAudioLevels, 80);
-
-    } catch (err) {
-      console.error('Failed to start recording', err);
-      Alert.alert('Error', 'Failed to start recording');
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!recording) return;
-
-    try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      
-      if (uri) {
-        sendMessage(planId, {
-          planId,
-          userId: currentUserId,
-          userName: currentUserName,
-          userAvatar: currentUserAvatar,
-          type: 'voice',
-          content: 'Voice message',
-          voiceUrl: uri,
-          voiceDuration: recordingDuration,
-          waveformData: recordedWaveform,
-        });
-      }
-
-      setRecording(null);
-      setIsRecording(false);
-      setRecordingDuration(0);
-      setAudioLevels(Array(40).fill(0));
-      setRecordedWaveform([]);
-      
-      // Stop animations
-      recordingAnimation.stopAnimation();
-      recordingAnimation.setValue(1);
-
-      // Clear timers
-      if (recordingTimer.current) {
-        clearInterval(recordingTimer.current);
-        recordingTimer.current = null;
-      }
-      if (audioLevelTimer.current) {
-        clearInterval(audioLevelTimer.current);
-        audioLevelTimer.current = null;
-      }
-
-    } catch (err) {
-      console.error('Failed to stop recording', err);
-      Alert.alert('Error', 'Failed to stop recording');
-    }
-  };
-
-  const cancelRecording = async () => {
-    if (!recording) return;
-
-    try {
-      await recording.stopAndUnloadAsync();
-      setRecording(null);
-      setIsRecording(false);
-      setRecordingDuration(0);
-      setAudioLevels(Array(40).fill(0));
-      setRecordedWaveform([]);
-      
-      // Stop animations
-      recordingAnimation.stopAnimation();
-      recordingAnimation.setValue(1);
-
-      // Clear timers
-      if (recordingTimer.current) {
-        clearInterval(recordingTimer.current);
-        recordingTimer.current = null;
-      }
-      if (audioLevelTimer.current) {
-        clearInterval(audioLevelTimer.current);
-        audioLevelTimer.current = null;
-      }
-    } catch (err) {
-      console.error('Failed to cancel recording', err);
-    }
-  };
-
   const renderReplyPreview = () => {
     if (!replyingTo) return null;
 
@@ -377,162 +186,100 @@ export default function ChatInput({
     );
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  if (isRecording) {
-    return (
-      <View style={styles.recordingContainer}>
-        <TouchableOpacity onPress={cancelRecording} style={styles.cancelButton}>
-          <X size={24} color={Colors.light.secondary} />
-        </TouchableOpacity>
-        
-        <View style={styles.recordingInfo}>
-          <Animated.View style={[
-            styles.recordingDot,
-            { transform: [{ scale: recordingAnimation }] }
-          ]} />
-          <Text style={styles.recordingDuration}>{formatDuration(recordingDuration)}</Text>
-          
-          <View style={styles.liveWaveformContainer}>
-            <View style={styles.liveWaveformBg}>
-              {audioLevels.map((level, i) => (
-                <Animated.View
-                  key={`live-wave-${i}`}
-                  style={[
-                    styles.liveWaveformBar,
-                    {
-                      height: Math.max(4, level * 32),
-                      opacity: 0.4 + (level * 0.6),
-                      transform: [{
-                        scaleY: i === audioLevels.length - 1 
-                          ? amplitudeAnimation.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [0.5, 1.2],
-                              extrapolate: 'clamp',
-                            })
-                          : 1
-                      }]
-                    }
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-        </View>
-        
-        <TouchableOpacity onPress={stopRecording} style={styles.sendVoiceButton}>
-          <Send size={20} color="white" />
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
+      {/* Reply Preview */}
       {renderReplyPreview()}
       
-      {/* Image Confirmation Modal */}
-      {showImageConfirmation && selectedImage && (
-        <Modal
-          visible={showImageConfirmation}
-          transparent={false}
-          animationType="slide"
-          onRequestClose={handleCancelImage}
+      {/* Main Input Container */}
+      <View style={styles.inputContainer}>
+        {/* Camera Button */}
+        <TouchableOpacity 
+          style={styles.cameraButton}
+          onPress={handleCamera}
         >
-          <View style={styles.imageConfirmationFullscreen}>
-            <Image 
-              source={{ uri: selectedImage }} 
-              style={styles.fullscreenConfirmationImage}
-              resizeMode="contain"
-            />
-            <View style={styles.fullscreenImageActions}>
+          <Camera size={24} color={Colors.light.primary} />
+        </TouchableOpacity>
+
+        {/* Text Input */}
+        <View style={styles.textInputContainer}>
+          <TextInput
+            ref={textInputRef}
+            style={styles.textInput}
+            placeholder="Type a message..."
+            placeholderTextColor={Colors.light.secondaryText}
+            value={message}
+            onChangeText={setMessage}
+            multiline
+            maxLength={1000}
+            blurOnSubmit={false}
+            returnKeyType="default"
+            onSubmitEditing={Platform.OS === 'ios' ? handleSendMessage : undefined}
+          />
+        </View>
+
+        {/* Send/Gallery Button */}
+        <View style={styles.actionButtonsContainer}>
+          {message.trim().length > 0 ? (
+            <Animated.View 
+              style={[
+                styles.sendButtonContainer,
+                { opacity: sendButtonAnimation }
+              ]}
+            >
               <TouchableOpacity 
-                style={styles.fullscreenCancelButton} 
-                onPress={handleCancelImage}
-              >
-                <Text style={styles.fullscreenCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.fullscreenSendButton} 
-                onPress={handleSendImage}
+                style={styles.sendButton}
+                onPress={handleSendMessage}
               >
                 <Send size={20} color="white" />
-                <Text style={styles.fullscreenSendText}>Send</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.galleryButton}
+              onPress={handleGallery}
+            >
+              <ImageIcon size={24} color={Colors.light.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Image Confirmation Modal */}
+      <Modal
+        visible={showImageConfirmation}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelImage}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.imagePreviewContainer}>
+            {selectedImage && (
+              <Image 
+                source={{ uri: selectedImage }} 
+                style={styles.imagePreview}
+                resizeMode="contain"
+              />
+            )}
+            
+            <View style={styles.imageActionsContainer}>
+              <TouchableOpacity 
+                style={styles.cancelImageButton}
+                onPress={handleCancelImage}
+              >
+                <Text style={styles.cancelImageText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.sendImageButton}
+                onPress={handleSendImage}
+              >
+                <Text style={styles.sendImageText}>Send Photo</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-      )}
-      
-      <View style={styles.inputRow}>
-        <TouchableOpacity style={styles.actionButton} onPress={handleGallery}>
-          <ImageIcon size={22} color={Colors.light.primary} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.actionButton} onPress={handleCamera}>
-          <Camera size={22} color={Colors.light.primary} />
-        </TouchableOpacity>
-        
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.textInput}
-            value={message}
-            onChangeText={setMessage}
-            placeholder="Message..."
-            placeholderTextColor={Colors.light.secondaryText}
-            multiline
-            maxLength={1000}
-            returnKeyType="send"
-            onSubmitEditing={handleSendMessage}
-            blurOnSubmit={false}
-            ref={textInputRef}
-          />
-          
-          {message.trim() && (
-            <Animated.View style={[
-              styles.micInInput,
-              {
-                transform: [{ scale: micButtonAnimation }],
-                opacity: micButtonAnimation,
-              }
-            ]}>
-              <TouchableOpacity onPress={startRecording}>
-                <Mic size={18} color={Colors.light.secondaryText} />
-              </TouchableOpacity>
-            </Animated.View>
-          )}
         </View>
-        
-        {message.trim() ? (
-          <Animated.View style={[
-            styles.sendButton,
-            {
-              transform: [{ scale: sendButtonAnimation }],
-              opacity: sendButtonAnimation,
-            }
-          ]}>
-            <TouchableOpacity onPress={handleSendMessage} style={styles.sendButtonInner}>
-              <Send size={18} color="white" />
-            </TouchableOpacity>
-          </Animated.View>
-        ) : (
-          <Animated.View style={[
-            styles.voiceButton,
-            {
-              transform: [{ scale: micButtonAnimation }],
-              opacity: micButtonAnimation,
-            }
-          ]}>
-            <TouchableOpacity onPress={startRecording}>
-              <Mic size={22} color={Colors.light.primary} />
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-      </View>
+      </Modal>
     </View>
   );
 }
@@ -542,227 +289,148 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 12,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  actionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  inputContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.cardBackground,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    minHeight: 36,
-    maxHeight: 100,
-  },
-  textInput: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.light.text,
-    lineHeight: 20,
-    paddingVertical: 0,
-  },
-  micInInput: {
-    marginLeft: 8,
-    padding: 4,
-  },
-  sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonInner: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  voiceButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recordingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.background,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 12,
-    gap: 12,
-  },
-  cancelButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recordingInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.cardBackground,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.light.secondary,
-  },
-  recordingDuration: {
-    fontSize: 14,
-    color: Colors.light.text,
-    fontWeight: '500',
-    minWidth: 35,
-  },
-  liveWaveformContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    height: 30,
-    gap: 2,
-  },
-  liveWaveformBg: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    height: 32,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 16,
-    paddingHorizontal: 8,
-    justifyContent: 'space-around',
-  },
-  liveWaveformBar: {
-    width: 3,
-    backgroundColor: Colors.light.primary,
-    borderRadius: 1.5,
-    minHeight: 3,
-  },
-  sendVoiceButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   replyPreviewContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.cardBackground,
-    marginHorizontal: 12,
-    marginBottom: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
   },
   replyPreviewContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   replyPreviewIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.light.secondary,
-    marginRight: 8,
+    width: 3,
+    height: 32,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 2,
+    marginRight: 12,
   },
   replyPreviewText: {
     flex: 1,
   },
   replyPreviewTitle: {
-    fontSize: 14,
-    color: Colors.light.text,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.primary,
+    marginBottom: 2,
   },
   replyPreviewMessage: {
     fontSize: 14,
     color: Colors.light.secondaryText,
   },
   replyPreviewClose: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    padding: 4,
+    marginLeft: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 60,
+  },
+  cameraButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.cardBackground,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 8,
   },
-  imageConfirmationFullscreen: {
+  textInputContainer: {
     flex: 1,
-    backgroundColor: 'black',
+    minHeight: 40,
+    maxHeight: 120,
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    justifyContent: 'center',
+  },
+  textInput: {
+    fontSize: 16,
+    color: Colors.light.text,
+    textAlignVertical: 'top',
+    includeFontPadding: false,
+  },
+  actionButtonsContainer: {
+    marginLeft: 8,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fullscreenConfirmationImage: {
-    width: '100%',
-    height: '100%',
+  sendButtonContainer: {
+    width: 40,
+    height: 40,
   },
-  fullscreenImageActions: {
-    position: 'absolute',
-    bottom: 60,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  fullscreenCancelButton: {
-    backgroundColor: 'white',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  fullscreenCancelText: {
-    fontSize: 16,
-    color: 'black',
-    fontWeight: '500',
-  },
-  fullscreenSendButton: {
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: Colors.light.primary,
-    flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
   },
-  fullscreenSendText: {
+  galleryButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.cardBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePreviewContainer: {
+    width: SCREEN_WIDTH - 40,
+    maxHeight: '80%',
+    backgroundColor: Colors.light.background,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 300,
+  },
+  imageActionsContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+  },
+  cancelImageButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: 8,
+  },
+  cancelImageText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+  },
+  sendImageButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: Colors.light.primary,
+    borderRadius: 8,
+  },
+  sendImageText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: 'white',
-    fontWeight: '500',
   },
 }); 
