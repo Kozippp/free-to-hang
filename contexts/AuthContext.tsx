@@ -5,7 +5,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { Platform } from 'react-native';
 
 // TEMPORARY: Mock mode for database setup
-const AUTH_MOCK_MODE = false;
+const AUTH_MOCK_MODE = true;
 
 interface AuthContextType {
   user: User | null;

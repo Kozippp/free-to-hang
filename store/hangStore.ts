@@ -142,7 +142,7 @@ const useHangStore = create<HangState>()(
             .from('users')
             .select('*')
             .eq('id', authUser.id)
-            .single();
+            .maybeSingle();
 
           if (error) {
             console.error('Error loading user data:', error);
@@ -159,6 +159,38 @@ const useHangStore = create<HangState>()(
                 activity: ''
               }
             });
+          } else {
+            // User profile doesn't exist, create one
+            console.log('No user profile found, creating one...');
+            const { data: newUserData, error: createError } = await supabase
+              .from('users')
+              .insert([
+                {
+                  id: authUser.id,
+                  email: authUser.email || '',
+                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+                  username: authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'user'
+                }
+              ])
+              .select()
+              .single();
+
+            if (createError) {
+              console.error('Error creating user profile:', createError);
+              return;
+            }
+
+            if (newUserData) {
+              set({
+                user: {
+                  id: newUserData.id,
+                  name: newUserData.name,
+                  avatar: newUserData.avatar_url || defaultUser.avatar,
+                  status: 'offline',
+                  activity: ''
+                }
+              });
+            }
           }
         } catch (error) {
           console.error('Error in loadUserData:', error);
