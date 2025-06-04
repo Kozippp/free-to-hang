@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { User } from '@supabase/supabase-js';
+import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
 import { Platform } from 'react-native';
+
+// TEMPORARY: Mock mode for database setup
+const AUTH_MOCK_MODE = false;
 
 interface AuthContextType {
   user: User | null;
@@ -31,9 +34,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
 
   useEffect(() => {
+    if (AUTH_MOCK_MODE) {
+      // In mock mode, immediately set loading to false and no user
+      setLoading(false);
+      setUser(null);
+      return;
+    }
+
     // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: AuthChangeEvent, session: Session | null) => {
         setUser(session?.user ?? null);
         setLoading(false);
       }
@@ -57,6 +67,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, segments, loading]);
 
   const signIn = async (email: string, password: string) => {
+    if (AUTH_MOCK_MODE) {
+      // In mock mode, just show a message and don't actually sign in
+      throw new Error('Mock mode: Please setup the database first. Go to Supabase dashboard and run the SQL setup.');
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -68,6 +83,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, name: string) => {
+    if (AUTH_MOCK_MODE) {
+      // In mock mode, just show a message and don't actually sign up
+      throw new Error('Mock mode: Please setup the database first. Go to Supabase dashboard and run the SQL setup.');
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -88,6 +108,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (AUTH_MOCK_MODE) {
+      return;
+    }
+
     const { error } = await supabase.auth.signOut();
     if (error) {
       throw error;
@@ -95,39 +119,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithApple = async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: 'exp://192.168.0.24:8081/--/(tabs)',
-        },
-      });
-      
-      if (error) {
-        throw error;
-      }
-    } catch (error: any) {
-      console.error('Apple sign-in error:', error);
-      throw error;
-    }
+    throw new Error('Apple sign-in is not configured yet. Please use email and password to sign in.');
   };
 
   const signInWithGoogle = async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: 'exp://192.168.0.24:8081/--/(tabs)',
-        },
-      });
-      
-      if (error) {
-        throw error;
-      }
-    } catch (error: any) {
-      console.error('Google sign-in error:', error);
-      throw error;
-    }
+    throw new Error('Google sign-in is not configured yet. Please use email and password to sign in.');
   };
 
   return (

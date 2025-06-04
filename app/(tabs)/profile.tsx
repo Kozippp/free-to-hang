@@ -631,8 +631,8 @@ export default function ProfileScreen() {
                       <Text style={styles.searchResultName}>{item.name}</Text>
                       <Text style={styles.searchResultStatus}>
                         {item.status === 'online' ? 'Online' : 'Offline'}
-                      </Text>
-                    </View>
+        </Text>
+      </View>
                     <TouchableOpacity 
                       style={styles.addButton}
                       onPress={() => handleAddFriend(item)}
