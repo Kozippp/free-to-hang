@@ -7,10 +7,11 @@ import { Platform } from "react-native";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ErrorBoundary } from "./error-boundary";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: "(tabs)",
+  initialRouteName: "(auth)",
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -40,7 +41,9 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      <RootLayoutNav />
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
@@ -53,6 +56,7 @@ function RootLayoutNav() {
           headerBackTitle: "Back",
         }}
       >
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       </Stack>

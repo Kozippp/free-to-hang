@@ -43,13 +43,15 @@ import PingOfflineModal from '@/components/PingOfflineModal';
 import InviteShareModal from '@/components/InviteShareModal';
 import PlanSuggestionSheet from '@/components/plans/PlanSuggestionSheet';
 import FriendCard from '@/components/FriendCard';
+import AddFriendsModal from '@/components/friends/AddFriendsModal';
 import useHangStore from '@/store/hangStore';
-import { onlineFriends, offlineFriends } from '@/constants/mockData';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function HangScreen() {
   const { 
     user, 
     friends, 
+    offlineFriends,
     isAvailable, 
     activity, 
     selectedFriends,
@@ -59,15 +61,28 @@ export default function HangScreen() {
     selectFriend,
     unselectFriend,
     isSelectedFriend,
-    clearSelectedFriends
+    clearSelectedFriends,
+    loadUserData,
+    loadFriends
   } = useHangStore();
   
+  const { user: authUser } = useAuth();
   const router = useRouter();
   
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  
+  // Load user data when component mounts or auth user changes
+  useEffect(() => {
+    if (authUser) {
+      loadUserData();
+      loadFriends();
+    }
+  }, [authUser]);
   
   // Handle initial state when component mounts
   useEffect(() => {
@@ -121,13 +136,22 @@ export default function HangScreen() {
     // Don't update state here - let the sheet handle its own closing
     // The new success flow is now handled in the plans tab
   };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    if (authUser) {
+      await Promise.all([loadUserData(), loadFriends()]);
+    }
+    setRefreshing(false);
+  };
   
   // Get all friends for display (including pinged offline friends)
   const getAllFriends = () => {
-    const allFriends = [...onlineFriends];
+    const allFriends = [...friends];
     
-    // Add pinged offline friends
-    pingedFriends.forEach(id => {
+    // Add pinged offline friends - add null check for pingedFriends
+    const safePingedFriends = pingedFriends || [];
+    safePingedFriends.forEach(id => {
       const friend = offlineFriends.find(f => f.id === id);
       if (friend && !allFriends.some(f => f.id === id)) {
         allFriends.push({
@@ -145,8 +169,9 @@ export default function HangScreen() {
     return allFriends;
   };
   
+  const safeSelectedFriends = selectedFriends || [];
   const selectedFriendsData = getAllFriends().filter(friend => 
-    selectedFriends.includes(friend.id)
+    safeSelectedFriends.includes(friend.id)
   );
   
   return (
@@ -190,6 +215,13 @@ export default function HangScreen() {
             <ScrollView 
               style={styles.friendsList}
               showsVerticalScrollIndicator={Platform.OS === 'web'}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={Colors.light.primary}
+                />
+              }
             >
               {getAllFriends().length > 0 ? (
                 getAllFriends().map((friend) => (
@@ -216,10 +248,10 @@ export default function HangScreen() {
                   </Text>
                   <TouchableOpacity 
                     style={styles.inviteFriendsButton}
-                    onPress={() => {}}
+                    onPress={() => setShowAddFriendsModal(true)}
                   >
                     <UserPlus size={18} color="white" style={styles.inviteFriendsIcon} />
-                    <Text style={styles.inviteFriendsText}>Invite Friends</Text>
+                    <Text style={styles.inviteFriendsText}>Add Friends</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -232,10 +264,10 @@ export default function HangScreen() {
                   </Text>
                   <TouchableOpacity 
                     style={styles.inviteFriendsButtonSmall}
-                    onPress={() => {}}
+                    onPress={() => setShowAddFriendsModal(true)}
                   >
                     <UserPlus size={16} color={Colors.light.primary} style={styles.inviteFriendsIconSmall} />
-                    <Text style={styles.inviteFriendsTextSmall}>Invite Friends</Text>
+                    <Text style={styles.inviteFriendsTextSmall}>Add Friends</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -243,7 +275,7 @@ export default function HangScreen() {
           </Animated.View>
         )}
         
-        {isAvailable && selectedFriends.length > 0 && (
+        {isAvailable && safeSelectedFriends.length > 0 && (
           <View style={styles.actionButtonsContainer}>
             <View style={styles.buttonRow}>
               <TouchableOpacity
@@ -253,7 +285,7 @@ export default function HangScreen() {
                 <Text style={styles.suggestButtonText}>Create Plan</Text>
               </TouchableOpacity>
               
-              {selectedFriends.length >= 2 && (
+              {safeSelectedFriends.length >= 2 && (
                 <TouchableOpacity
                   style={[styles.anonymousButton, styles.buttonFlex]}
                   onPress={() => handleOpenPlanBuilder(true)}
@@ -279,9 +311,14 @@ export default function HangScreen() {
         selectedFriends={selectedFriendsData as any}
         isAnonymous={isAnonymousPlan}
         availableFriends={friends.filter(friend => 
-          !selectedFriends.includes(friend.id) && friend.status === 'online'
+          !safeSelectedFriends.includes(friend.id) && friend.status === 'online'
         )}
         onPlanSubmitted={handlePlanSubmitted}
+      />
+      
+      <AddFriendsModal
+        visible={showAddFriendsModal}
+        onClose={() => setShowAddFriendsModal(false)}
       />
     </>
   );

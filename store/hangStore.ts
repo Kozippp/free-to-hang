@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { currentUser, mockFriends, offlineFriends } from '@/constants/mockData';
+import { supabase } from '@/lib/supabase';
 
 interface Friend {
   id: string;
@@ -12,6 +12,7 @@ interface Friend {
   activity?: string;
   lastActive?: string;
   lastSeen?: string;
+  responseStatus?: 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen';
 }
 
 interface User {
@@ -39,15 +40,26 @@ interface HangState {
   pingFriend: (id: string) => void;
   unpingFriend: (id: string) => void;
   isPingedFriend: (id: string) => boolean;
+  loadUserData: () => Promise<void>;
+  loadFriends: () => Promise<void>;
 }
+
+// Default user data
+const defaultUser: User = {
+  id: '',
+  name: 'User',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&h=120&fit=crop&crop=face',
+  status: 'offline',
+  activity: ''
+};
 
 // Create the store with persistence
 const useHangStore = create<HangState>()(
   persist(
     (set, get) => ({
-      user: currentUser,
-      friends: mockFriends,
-      offlineFriends: offlineFriends,
+      user: defaultUser,
+      friends: [],
+      offlineFriends: [],
       selectedFriends: [],
       pingedFriends: [],
       isAvailable: false,
@@ -77,40 +89,139 @@ const useHangStore = create<HangState>()(
       
       selectFriend: (id) => {
         const { selectedFriends } = get();
-        if (!selectedFriends.includes(id)) {
-          set({ selectedFriends: [...selectedFriends, id] });
+        const safeFriends = selectedFriends || [];
+        if (!safeFriends.includes(id)) {
+          set({ selectedFriends: [...safeFriends, id] });
         }
       },
       
       unselectFriend: (id) => {
         const { selectedFriends } = get();
+        const safeFriends = selectedFriends || [];
         set({ 
-          selectedFriends: selectedFriends.filter(friendId => friendId !== id) 
+          selectedFriends: safeFriends.filter(friendId => friendId !== id) 
         });
       },
       
       clearSelectedFriends: () => set({ selectedFriends: [] }),
       
       isSelectedFriend: (id) => {
-        return get().selectedFriends.includes(id);
+        const { selectedFriends } = get();
+        const safeFriends = selectedFriends || [];
+        return safeFriends.includes(id);
       },
       
       pingFriend: (id) => {
         const { pingedFriends } = get();
-        if (!pingedFriends.includes(id)) {
-          set({ pingedFriends: [...pingedFriends, id] });
+        const safePinged = pingedFriends || [];
+        if (!safePinged.includes(id)) {
+          set({ pingedFriends: [...safePinged, id] });
         }
       },
       
       unpingFriend: (id) => {
         const { pingedFriends } = get();
+        const safePinged = pingedFriends || [];
         set({
-          pingedFriends: pingedFriends.filter(friendId => friendId !== id)
+          pingedFriends: safePinged.filter(friendId => friendId !== id)
         });
       },
       
       isPingedFriend: (id) => {
-        return get().pingedFriends.includes(id);
+        const { pingedFriends } = get();
+        const safePinged = pingedFriends || [];
+        return safePinged.includes(id);
+      },
+
+      loadUserData: async () => {
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) return;
+
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', authUser.id)
+            .single();
+
+          if (error) {
+            console.error('Error loading user data:', error);
+            return;
+          }
+
+          if (userData) {
+            set({
+              user: {
+                id: userData.id,
+                name: userData.name,
+                avatar: userData.avatar_url || defaultUser.avatar,
+                status: 'offline',
+                activity: ''
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Error in loadUserData:', error);
+        }
+      },
+
+      loadFriends: async () => {
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) return;
+
+          // Load friends with their status
+          const { data: friendsData, error } = await supabase
+            .from('friends')
+            .select(`
+              friend_id,
+              users!friends_friend_id_fkey (
+                id,
+                name,
+                avatar_url,
+                user_status (
+                  is_available,
+                  activity,
+                  last_seen
+                )
+              )
+            `)
+            .eq('user_id', authUser.id)
+            .eq('status', 'accepted');
+
+          if (error) {
+            console.error('Error loading friends:', error);
+            return;
+          }
+
+          const friends: Friend[] = [];
+          const offlineFriends: Friend[] = [];
+
+          friendsData?.forEach((friendship: any) => {
+            const friend = friendship.users;
+            if (friend) {
+              const friendData: Friend = {
+                id: friend.id,
+                name: friend.name,
+                avatar: friend.avatar_url || defaultUser.avatar,
+                status: friend.user_status?.is_available ? 'online' : 'offline',
+                activity: friend.user_status?.activity || '',
+                lastSeen: friend.user_status?.last_seen,
+                lastActive: friend.user_status?.last_seen
+              };
+
+              if (friendData.status === 'online') {
+                friends.push(friendData);
+              } else {
+                offlineFriends.push(friendData);
+              }
+            }
+          });
+
+          set({ friends, offlineFriends });
+        } catch (error) {
+          console.error('Error in loadFriends:', error);
+        }
       }
     }),
     {
