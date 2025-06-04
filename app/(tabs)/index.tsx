@@ -3,22 +3,48 @@ import {
   StyleSheet, 
   View, 
   Text, 
-  ScrollView, 
-  TouchableOpacity,
-  Platform,
+  FlatList, 
+  TouchableOpacity, 
+  SafeAreaView, 
+  Image,
   Animated,
-  Image
+  LayoutAnimation,
+  Platform,
+  Alert,
+  Modal,
+  TextInput,
+  ScrollView,
+  PanResponder,
+  Dimensions,
+  RefreshControl
 } from 'react-native';
+import { 
+  MessageCircle, 
+  MoreHorizontal, 
+  Activity, 
+  Clock, 
+  Search, 
+  UserPlus, 
+  X,
+  Check,
+  Volume2,
+  VolumeX,
+  Archive,
+  Heart,
+  ArrowUpRight,
+  Vibrate
+} from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
-import { UserPlus } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import StatusToggle from '@/components/StatusToggle';
 import UserStatusBar from '@/components/UserStatusBar';
-import FriendCard from '@/components/FriendCard';
 import ActivityModal from '@/components/ActivityModal';
+import PingOfflineModal from '@/components/PingOfflineModal';
+import InviteShareModal from '@/components/InviteShareModal';
 import PlanSuggestionSheet from '@/components/plans/PlanSuggestionSheet';
+import FriendCard from '@/components/FriendCard';
 import useHangStore from '@/store/hangStore';
-import { mockFriends, offlineFriends } from '@/constants/mockData';
+import { onlineFriends, offlineFriends } from '@/constants/mockData';
 
 export default function HangScreen() {
   const { 
@@ -98,7 +124,7 @@ export default function HangScreen() {
   
   // Get all friends for display (including pinged offline friends)
   const getAllFriends = () => {
-    const allFriends = [...mockFriends];
+    const allFriends = [...onlineFriends];
     
     // Add pinged offline friends
     pingedFriends.forEach(id => {
@@ -111,7 +137,7 @@ export default function HangScreen() {
           status: 'pinged' as const,
           activity: '',
           lastActive: friend.lastSeen,
-          responseStatus: friend.responseStatus
+          responseStatus: 'pending' as const
         });
       }
     });
@@ -173,10 +199,11 @@ export default function HangScreen() {
                     name={friend.name}
                     avatar={friend.avatar}
                     activity={friend.activity}
-                    lastActive={friend.lastActive || friend.lastSeen}
+                    lastActive={friend.lastActive}
                     selected={isSelectedFriend(friend.id)}
                     onSelect={handleFriendSelect}
-                    status={friend.status as 'online' | 'offline' | 'pinged' | undefined}
+                    status={friend.status as 'online' | 'offline' | 'pinged'}
+                    responseStatus={friend.responseStatus as 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen'}
                   />
                 ))
               ) : (
@@ -249,7 +276,7 @@ export default function HangScreen() {
       <PlanSuggestionSheet
         visible={showPlanSheet}
         onClose={handleClosePlanSheet}
-        selectedFriends={selectedFriendsData}
+        selectedFriends={selectedFriendsData as any}
         isAnonymous={isAnonymousPlan}
         availableFriends={friends.filter(friend => 
           !selectedFriends.includes(friend.id) && friend.status === 'online'

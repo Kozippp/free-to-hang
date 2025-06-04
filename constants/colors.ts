@@ -12,6 +12,7 @@ export default {
     modalBackground: 'rgba(0, 0, 0, 0.5)',
     buttonBackground: '#F0F0F0',
     warning: '#FFA726',
+    destructive: '#F44336',
   },
   dark: {
     background: '#000000',
@@ -26,5 +27,6 @@ export default {
     modalBackground: 'rgba(0, 0, 0, 0.7)',
     buttonBackground: '#2A2A2A',
     warning: '#FFA726',
+    destructive: '#F44336',
   }
 };
