@@ -14,7 +14,6 @@ import {
   TouchableWithoutFeedback,
   Platform
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
 import { BlurView } from 'expo-blur';
 import { 
   Reply,

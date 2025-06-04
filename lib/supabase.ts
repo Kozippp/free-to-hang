@@ -2,9 +2,35 @@ import { createClient } from '@supabase/supabase-js';
 
 // Sinu Supabase projekti andmed
 const supabaseUrl = 'https://nfzbvuyntzgszqdlsusl.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5memJ2dXludHpnc3pxZGxzdXNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5MzU3ODYsImV4cCI6MjA2NDUxMTc4Nn0.YJyRcqm6e-0VfOhQuAQr4sPi3cZCwdvkmwxormMb7_0';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5memJ2dXludHpnc3pxZGxzdXNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkwNjQxNDUsImV4cCI6MjA2NDY0MDE0NX0.brg4A93jCea3n429BlyF3mO4yf2LXbIkTXbmrz1Jlh8';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// TEMPORARY: Database setup mode - disable actual Supabase calls
+// Set to false after running the SQL setup in Supabase dashboard
+const DATABASE_SETUP_MODE = false;
+
+// Create mock Supabase client for setup mode
+const createMockClient = () => ({
+  from: (table: string) => ({
+    select: () => Promise.resolve({ data: [], error: null }),
+    insert: () => Promise.resolve({ data: null, error: null }),
+    update: () => Promise.resolve({ data: null, error: null }),
+    delete: () => Promise.resolve({ data: null, error: null }),
+    single: () => Promise.resolve({ data: null, error: null }),
+  }),
+  auth: {
+    signUp: () => Promise.resolve({ data: { user: null, session: null }, error: null }),
+    signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: null }),
+    signOut: () => Promise.resolve({ error: null }),
+    getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+    getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+  },
+  // Add other methods as needed
+});
+
+export const supabase = DATABASE_SETUP_MODE 
+  ? createMockClient() as any
+  : createClient(supabaseUrl, supabaseAnonKey);
 
 // Database tüübid (automaatselt genereeritakse Supabase CLI-ga)
 export type Database = {

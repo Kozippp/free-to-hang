@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ScrollView
+  TouchableWithoutFeedback,
+  Keyboard
 } from 'react-native';
 import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -17,19 +18,23 @@ import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignUpScreen() {
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signUp, signInWithApple, signInWithGoogle } = useAuth();
+  const { signUp } = useAuth();
+
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
 
   const handleSignUp = async () => {
-    if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!email || !password || !name) {
+      Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
@@ -47,41 +52,10 @@ export default function SignUpScreen() {
     
     try {
       await signUp(email, password, name);
-      
-      Alert.alert(
-        'Registration successful!', 
-        'Please check your email and confirm your account.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.push('/(auth)/sign-in' as any)
-          }
-        ]
-      );
+      Alert.alert('Success', 'Account created successfully! Please check your email for verification.');
+      router.push('/(auth)/sign-in');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Registration failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAppleSignIn = async () => {
-    setIsLoading(true);
-    try {
-      await signInWithApple();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Apple sign-in failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    try {
-      await signInWithGoogle();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Google sign-in failed');
+      Alert.alert('Sign Up Failed', error.message || 'Unable to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -91,20 +65,20 @@ export default function SignUpScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
-        >
-          <ScrollView 
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardView}
           >
             <View style={styles.content}>
-              {/* Logo and title */}
-              <View style={styles.header}>
-                <Text style={styles.logo}>Free to Hang</Text>
-                <Text style={styles.subtitle}>Create an account and start meeting friends</Text>
+              {/* Logo */}
+              <View style={styles.logoContainer}>
+                <View style={styles.logoWrapper}>
+                  <View style={styles.logoToggle}>
+                    <View style={styles.logoKnob} />
+                  </View>
+                </View>
+                <Text style={styles.logoText}>Free2Hang</Text>
               </View>
 
               {/* Sign up form */}
@@ -113,11 +87,12 @@ export default function SignUpScreen() {
                   <User size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Full name"
+                    placeholder="Full Name"
                     value={name}
                     onChangeText={setName}
                     autoCapitalize="words"
-                    autoComplete="name"
+                    autoCorrect={false}
+                    returnKeyType="next"
                   />
                 </View>
 
@@ -131,6 +106,8 @@ export default function SignUpScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoComplete="email"
+                    autoCorrect={false}
+                    returnKeyType="next"
                   />
                 </View>
 
@@ -138,11 +115,13 @@ export default function SignUpScreen() {
                   <Lock size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Password (min 6 characters)"
+                    placeholder="Password"
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="next"
                   />
                   <TouchableOpacity
                     style={styles.eyeIcon}
@@ -160,11 +139,14 @@ export default function SignUpScreen() {
                   <Lock size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Confirm password"
+                    placeholder="Confirm Password"
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     secureTextEntry={!showConfirmPassword}
                     autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSignUp}
                   />
                   <TouchableOpacity
                     style={styles.eyeIcon}
@@ -184,38 +166,9 @@ export default function SignUpScreen() {
                   disabled={isLoading}
                 >
                   <Text style={styles.signUpButtonText}>
-                    {isLoading ? 'Creating account...' : 'Sign Up'}
+                    {isLoading ? 'Creating Account...' : 'Sign Up'}
                   </Text>
                 </TouchableOpacity>
-              </View>
-
-              {/* OAuth Section */}
-              <View style={styles.oauthSection}>
-                <View style={styles.dividerContainer}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>Or continue with</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-                
-                <View style={styles.oauthButtons}>
-                  {Platform.OS === 'ios' && (
-                    <TouchableOpacity 
-                      style={[styles.oauthButton, styles.appleButton]}
-                      onPress={handleAppleSignIn}
-                      disabled={isLoading}
-                    >
-                      <Text style={styles.appleButtonText}>🍎 Sign in with Apple</Text>
-                    </TouchableOpacity>
-                  )}
-                  
-                  <TouchableOpacity 
-                    style={[styles.oauthButton, styles.googleButton]}
-                    onPress={handleGoogleSignIn}
-                    disabled={isLoading}
-                  >
-                    <Text style={styles.googleButtonText}>G Sign in with Google</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
 
               {/* Sign in link */}
@@ -226,8 +179,8 @@ export default function SignUpScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </SafeAreaView>
     </>
   );
@@ -241,32 +194,38 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
+    paddingHorizontal: 24,
     justifyContent: 'center',
   },
-  content: {
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-  },
-  header: {
+  logoContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 30,
   },
-  logo: {
+  logoWrapper: {
+    marginBottom: 16,
+  },
+  logoToggle: {
+    width: 60,
+    height: 30,
+    backgroundColor: '#4CAF50',
+    borderRadius: 15,
+    position: 'relative',
+  },
+  logoKnob: {
+    width: 20,
+    height: 20,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    position: 'absolute',
+    top: 5,
+    left: 5,
+  },
+  logoText: {
     fontSize: 32,
     fontWeight: 'bold',
     color: Colors.light.primary,
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    lineHeight: 22,
   },
   form: {
     marginBottom: 32,
@@ -320,51 +279,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.primary,
-  },
-  oauthSection: {
-    marginBottom: 32,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.light.secondaryText,
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-  },
-  oauthButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  oauthButton: {
-    backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 12,
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  appleButton: {
-    backgroundColor: Colors.light.appleButton,
-  },
-  appleButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
-  },
-  googleButton: {
-    backgroundColor: Colors.light.googleButton,
-  },
-  googleButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
   },
 }); 
