@@ -1,13 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Sinu Supabase projekti andmed
-// ⚠️ TURVAHOIATUS: Pane need .env faili või kasuta placeholder'eid
-const supabaseUrl = 'https://nfzbvuyntzgszqdlsusl.supabase.co';
-const supabaseAnonKey = 'PLACEHOLDER_ANON_KEY_PANE_SIIA_ÕIGE_VÕTI'; // Asenda õige võtmega lokaalselt
+// Kasutab environment variable'eid kui saadaval, muidu placeholder'eid
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://nfzbvuyntzgszqdlsusl.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'PLACEHOLDER_ANON_KEY_PANE_SIIA_ÕIGE_VÕTI';
 
 // TEMPORARY: Database setup mode - disable actual Supabase calls
 // Set to false after running the SQL setup in Supabase dashboard
-const DATABASE_SETUP_MODE = true;
+const DATABASE_SETUP_MODE = supabaseAnonKey === 'PLACEHOLDER_ANON_KEY_PANE_SIIA_ÕIGE_VÕTI';
 
 // Create mock Supabase client for setup mode
 const createMockClient = () => ({

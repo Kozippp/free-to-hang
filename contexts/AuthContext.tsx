@@ -5,7 +5,9 @@ import { useRouter, useSegments } from 'expo-router';
 import { Platform } from 'react-native';
 
 // TEMPORARY: Mock mode for database setup
-const AUTH_MOCK_MODE = true;
+// Automatically enabled when placeholder keys are used
+const AUTH_MOCK_MODE = !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
+                      process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY === 'PLACEHOLDER_ANON_KEY_PANE_SIIA_ÕIGE_VÕTI';
 
 interface AuthContextType {
   user: User | null;

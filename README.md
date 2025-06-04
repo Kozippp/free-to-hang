@@ -41,6 +41,33 @@ npm install --legacy-peer-deps
 npm start
 ```
 
+## 🚀 Local Development Setup
+
+### 1. Install dependencies
+```bash
+npm install
+```
+
+### 2. Create environment file
+Create a `.env.local` file in the project root:
+
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://nfzbvuyntzgszqdlsusl.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_actual_anon_key_here
+```
+
+**⚠️ IMPORTANT**: Never commit `.env.local` to git - it's already in `.gitignore`.
+
+### 3. Set up Supabase Database
+1. Go to https://app.supabase.com/project/nfzbvuyntzgszqdlsusl
+2. Open SQL Editor → New Query
+3. Run the SQL setup script (see DATABASE_SETUP.md)
+
+### 4. Start the development server
+```bash
+npx expo start
+```
+
 ## 🏗️ Projekt Struktuur
 
 ```
@@ -214,3 +241,18 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 ## 📄 Litsents
 
 MIT License - vaata LICENSE faili detailide jaoks. 
+
+## 🔐 Security Notes
+
+- Real API keys are never committed to the repository
+- Without `.env.local`, the app runs in mock mode
+- Mock mode shows helpful setup messages
+- Always use placeholder keys in committed code
+
+## 📱 Features
+
+- User authentication with Supabase
+- Social availability sharing
+- Plan creation and management
+- Friend connections
+- Real-time updates 
