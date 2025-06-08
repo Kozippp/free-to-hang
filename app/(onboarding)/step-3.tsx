@@ -15,9 +15,12 @@ import {
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { supabase } from '@/lib/supabase';
 
 export default function VibeInputScreen() {
   const [vibe, setVibe] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [reservationValid, setReservationValid] = useState<boolean | null>(null);
   const router = useRouter();
   const { name, username } = useLocalSearchParams<{ name: string; username: string }>();
   const inputRef = useRef<TextInput>(null);
@@ -30,11 +33,119 @@ export default function VibeInputScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleContinue = () => {
-    router.push({
-      pathname: '/(onboarding)/step-4',
-      params: { name, username, vibe }
-    });
+  // Check username reservation when component mounts
+  useEffect(() => {
+    const checkReservation = async () => {
+      if (!username) return;
+      
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          Alert.alert('Error', 'Please log in again.');
+          router.replace('/(auth)');
+          return;
+        }
+
+        const { data: isValid, error } = await supabase.rpc('check_username_reservation', {
+          check_username: username,
+          check_user_id: user.id
+        });
+
+        if (error) {
+          console.error('Error checking reservation:', error);
+          setReservationValid(false);
+          return;
+        }
+
+        setReservationValid(isValid);
+        
+        if (!isValid) {
+          Alert.alert(
+            'Username Expired', 
+            'Your username reservation has expired. Please choose a username again.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.push('/(onboarding)/step-2')
+              }
+            ]
+          );
+        }
+      } catch (error) {
+        console.error('Error checking reservation:', error);
+        setReservationValid(false);
+      }
+    };
+
+    checkReservation();
+  }, [username]);
+
+  const handleContinue = async () => {
+    if (!name || !username) {
+      Alert.alert('Error', 'Missing required information. Please go back and complete all steps.');
+      return;
+    }
+
+    // Check if reservation is still valid
+    if (reservationValid === false) {
+      Alert.alert(
+        'Username Expired', 
+        'Your username reservation has expired. Please choose a username again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.push('/(onboarding)/step-2')
+          }
+        ]
+      );
+      return;
+    }
+
+    if (reservationValid === null) {
+      Alert.alert('Please Wait', 'Still checking username reservation...');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Double-check reservation before proceeding
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please log in again.');
+        router.replace('/(auth)');
+        return;
+      }
+
+      const { data: isValid, error } = await supabase.rpc('check_username_reservation', {
+        check_username: username,
+        check_user_id: user.id
+      });
+
+      if (error || !isValid) {
+        Alert.alert(
+          'Username Expired', 
+          'Your username reservation has expired. Please choose a username again.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.push('/(onboarding)/step-2')
+            }
+          ]
+        );
+        return;
+      }
+
+      // Proceed to final step
+      router.push({
+        pathname: '/(onboarding)/step-4',
+        params: { name, username, vibe: vibe.trim() || '' }
+      });
+    } catch (error: any) {
+      console.error('Error in handleContinue:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSkip = () => {

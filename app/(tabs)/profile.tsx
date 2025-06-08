@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -13,6 +13,7 @@ import {
   TextInput,
   ScrollView
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   Settings, 
   Edit3, 
@@ -44,13 +45,65 @@ import {
   defaultSettings 
 } from '@/constants/mockData';
 import { useAuth } from '@/contexts/AuthContext';
+import useHangStore from '@/store/hangStore';
 
 export default function ProfileScreen() {
-  const { signOut } = useAuth();
-  const [userProfile, setUserProfile] = useState<UserProfile>(mockUserProfile);
-  const [friends, setFriends] = useState<Friend[]>(profileFriends);
+  const { signOut, user: authUser } = useAuth();
+  const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
+  
+  // Use real user data from hangStore, fallback to mock for missing fields
+  const [userProfile, setUserProfile] = useState<UserProfile>({
+    ...mockUserProfile,
+    name: user.name || mockUserProfile.name,
+    email: authUser?.email || mockUserProfile.email,
+    avatar: user.avatar || mockUserProfile.avatar,
+    bio: '', // Start with empty bio
+  });
+  
+  // Combine online and offline friends from hangStore
+  const [allFriends, setAllFriends] = useState<Friend[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [blockedUsers, setBlockedUsers] = useState<Friend[]>(mockBlockedUsers);
+  
+  // Load user data when component mounts
+  useEffect(() => {
+    if (authUser) {
+      loadUserData();
+      loadFriends();
+    }
+  }, [authUser]);
+
+  // Update local state when hangStore data changes
+  useEffect(() => {
+    setUserProfile(prev => ({
+      ...prev,
+      name: user.name || prev.name,
+      email: authUser?.email || prev.email,
+      avatar: user.avatar || prev.avatar,
+    }));
+  }, [user, authUser]);
+
+  // Update edit states when user data changes
+  useEffect(() => {
+    setEditName(user.name || userProfile.name);
+    setEditUsername(user.username || userProfile.email.split('@')[0]);
+    // Don't set editBio from user.vibe since vibe column doesn't exist in database
+    // Keep the bio that user may have entered during onboarding or editing
+  }, [user, userProfile]);
+
+  // Combine friends from hangStore
+  useEffect(() => {
+    const combinedFriends = [...friends, ...offlineFriends].map(friend => ({
+      id: friend.id,
+      name: friend.name,
+      avatar: friend.avatar,
+      status: friend.status === 'pinged' ? 'offline' as const : friend.status,
+      lastAvailable: friend.lastActive || 'Unknown',
+      shareAvailability: 'week' as const, // Default value
+      isBlocked: false
+    }));
+    setAllFriends(combinedFriends);
+  }, [friends, offlineFriends]);
   
   // Modal states
   const [showSettings, setShowSettings] = useState(false);
@@ -61,7 +114,7 @@ export default function ProfileScreen() {
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   
   // Edit profile states
-  const [editUsername, setEditUsername] = useState(userProfile.email.split('@')[0]);
+  const [editUsername, setEditUsername] = useState('');
   const [editName, setEditName] = useState(userProfile.name);
   const [editBio, setEditBio] = useState(userProfile.bio);
   const [editEmail, setEditEmail] = useState(userProfile.email);
@@ -70,15 +123,25 @@ export default function ProfileScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Friend[]>([]);
 
-  const handleEditProfile = () => {
-    setUserProfile({
-      ...userProfile,
+  const handleEditProfile = async () => {
+    // Update in Supabase via hangStore
+    const success = await updateUserData({
       name: editName,
-      bio: editBio,
-      email: editEmail
+      username: editUsername,
+      vibe: editBio,
     });
-    setShowEditProfile(false);
-    Alert.alert('Profile Updated', 'Your profile has been successfully updated.');
+
+    if (success) {
+      setUserProfile({
+        ...userProfile,
+        name: editName,
+        bio: editBio,
+      });
+      setShowEditProfile(false);
+      Alert.alert('Profile Updated', 'Your profile has been successfully updated.');
+    } else {
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    }
   };
 
   const handleChangeProfilePicture = () => {
@@ -118,7 +181,7 @@ export default function ProfileScreen() {
         }
       ].filter(user => 
         user.name.toLowerCase().includes(query.toLowerCase()) &&
-        !friends.some(f => f.id === user.id)
+        !allFriends.some(f => f.id === user.id)
       );
       setSearchResults(mockResults);
     } else {
@@ -127,7 +190,7 @@ export default function ProfileScreen() {
   };
 
   const handleAddFriend = (friendToAdd: Friend) => {
-    setFriends([...friends, friendToAdd]);
+    setAllFriends([...allFriends, friendToAdd]);
     setSearchResults(searchResults.filter(f => f.id !== friendToAdd.id));
     Alert.alert('Friend Added', `${friendToAdd.name} is now your friend!`);
   };
@@ -152,7 +215,7 @@ export default function ProfileScreen() {
   };
 
   const updateShareAvailability = (friendId: string, availability: Friend['shareAvailability']) => {
-    setFriends(friends.map(friend => 
+    setAllFriends(allFriends.map(friend => 
       friend.id === friendId 
         ? { ...friend, shareAvailability: availability }
         : friend
@@ -169,7 +232,7 @@ export default function ProfileScreen() {
           text: 'Remove', 
           style: 'destructive',
           onPress: () => {
-            setFriends(friends.filter(f => f.id !== friendId));
+            setAllFriends(allFriends.filter(f => f.id !== friendId));
             setShowFriendDetail(false);
           }
         }
@@ -187,10 +250,10 @@ export default function ProfileScreen() {
           text: 'Block', 
           style: 'destructive',
           onPress: () => {
-            const friendToBlock = friends.find(f => f.id === friendId);
+            const friendToBlock = allFriends.find(f => f.id === friendId);
             if (friendToBlock) {
               setBlockedUsers([...blockedUsers, { ...friendToBlock, isBlocked: true }]);
-              setFriends(friends.filter(f => f.id !== friendId));
+              setAllFriends(allFriends.filter(f => f.id !== friendId));
               setShowFriendDetail(false);
             }
           }
@@ -228,7 +291,7 @@ export default function ProfileScreen() {
           onPress: () => {
             const userToUnblock = blockedUsers.find(u => u.id === userId);
             if (userToUnblock) {
-              setFriends([...friends, { ...userToUnblock, isBlocked: false }]);
+              setAllFriends([...allFriends, { ...userToUnblock, isBlocked: false }]);
               setBlockedUsers(blockedUsers.filter(u => u.id !== userId));
             }
           }
@@ -310,7 +373,7 @@ export default function ProfileScreen() {
     return preferences[friendId] || 'Enjoys various activities and meeting new people';
   };
 
-  const sortedFriends = friends.sort((a, b) => {
+  const sortedFriends = allFriends.sort((a, b) => {
     const statusOrder = { 'available': 0, 'online': 1, 'offline': 2 };
     return statusOrder[a.status] - statusOrder[b.status];
   });
@@ -368,7 +431,7 @@ export default function ProfileScreen() {
             <View style={styles.profilePreviewInfo}>
               <Text style={styles.profilePreviewName}>{userProfile.name}</Text>
               <Text style={styles.profilePreviewUsername}>@{editUsername}</Text>
-              <Text style={styles.profilePreviewBio} numberOfLines={2}>{userProfile.bio}</Text>
+              <Text style={styles.profilePreviewBio} numberOfLines={2}>{editBio || "Add a bio to tell friends about yourself"}</Text>
             </View>
             <Edit3 size={20} color={Colors.light.primary} />
           </TouchableOpacity>
@@ -378,7 +441,7 @@ export default function ProfileScreen() {
             <View style={styles.friendsHeader}>
               <View style={styles.friendsHeaderLeft}>
                 <Users size={20} color={Colors.light.text} />
-                <Text style={styles.friendsTitle}>Friends ({friends.length})</Text>
+                <Text style={styles.friendsTitle}>Friends ({allFriends.length})</Text>
               </View>
               <TouchableOpacity 
                 style={styles.addFriendButton}
@@ -389,7 +452,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             
-            {friends.length > 0 ? (
+            {allFriends.length > 0 ? (
               <FlatList
                 data={sortedFriends}
                 renderItem={renderFriendItem}
@@ -631,8 +694,8 @@ export default function ProfileScreen() {
                       <Text style={styles.searchResultName}>{item.name}</Text>
                       <Text style={styles.searchResultStatus}>
                         {item.status === 'online' ? 'Online' : 'Offline'}
-        </Text>
-      </View>
+                      </Text>
+                    </View>
                     <TouchableOpacity 
                       style={styles.addButton}
                       onPress={() => handleAddFriend(item)}
