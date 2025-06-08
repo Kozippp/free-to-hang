@@ -5,7 +5,11 @@
   "scripts": {
     "start": "expo start --tunnel",
     "start-web": "expo start --web --tunnel",
-    "start-web-dev": "DEBUG=expo* expo start --web --tunnel"
+    "start-web-dev": "DEBUG=expo* expo start --web --tunnel",
+    "setup-email": "node scripts/setup-email.js",
+    "test-email": "node scripts/test-email.js",
+    "check-database": "node scripts/check-database.js",
+    "debug-registration": "node scripts/debug-registration.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",

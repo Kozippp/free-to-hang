@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -12,29 +12,40 @@ import {
   TouchableWithoutFeedback,
   Keyboard
 } from 'react-native';
-import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Lock, Eye, EyeOff } from 'lucide-react-native';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
-import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
-export default function SignUpScreen() {
-  const [email, setEmail] = useState('');
+export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signUp } = useAuth();
+  const { access_token, refresh_token } = useLocalSearchParams<{ 
+    access_token: string;
+    refresh_token: string;
+  }>();
+
+  useEffect(() => {
+    // If we have tokens from the URL, set the session
+    if (access_token && refresh_token) {
+      supabase.auth.setSession({
+        access_token,
+        refresh_token
+      } as any);
+    }
+  }, [access_token, refresh_token]);
 
   const dismissKeyboard = () => {
     Keyboard.dismiss();
   };
 
-  const handleSignUp = async () => {
-    if (!email || !password || !name) {
-      Alert.alert('Error', 'Please fill in all required fields');
+  const handleResetPassword = async () => {
+    if (!password || !confirmPassword) {
+      Alert.alert('Error', 'Please enter both password fields');
       return;
     }
 
@@ -51,20 +62,26 @@ export default function SignUpScreen() {
     setIsLoading(true);
     
     try {
-      const result = await signUp(email, password, name);
-      
-      if (result.needsEmailConfirmation) {
-        // Navigate to email confirmation screen
-        router.push({
-          pathname: '/(auth)/email-confirmation',
-          params: { email }
-        });
-      } else {
-        // Registration completed without email confirmation needed
-        Alert.alert('Success!', 'Your account has been created successfully!');
+      const { error } = await supabase.auth.updateUser({
+        password: password
+      });
+
+      if (error) {
+        throw error;
       }
+
+      Alert.alert(
+        'Password Updated!', 
+        'Your password has been successfully updated. You can now sign in with your new password.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/(auth)/sign-in')
+          }
+        ]
+      );
     } catch (error: any) {
-      Alert.alert('Sign Up Failed', error.message || 'Unable to create account. Please try again.');
+      Alert.alert('Error', error.message || 'Unable to update password. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -76,55 +93,23 @@ export default function SignUpScreen() {
       <SafeAreaView style={styles.container}>
         <TouchableWithoutFeedback onPress={dismissKeyboard}>
           <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
             <View style={styles.content}>
-              {/* Logo */}
-              <View style={styles.logoContainer}>
-                <View style={styles.logoWrapper}>
-                  <View style={styles.logoToggle}>
-                    <View style={styles.logoKnob} />
-                  </View>
-                </View>
-                <Text style={styles.logoText}>Free2Hang</Text>
-              </View>
+              {/* Title and description */}
+              <Text style={styles.title}>Reset Your Password</Text>
+              <Text style={styles.description}>
+                Enter your new password below.
+              </Text>
 
-              {/* Sign up form */}
+              {/* Form */}
               <View style={styles.form}>
-                <View style={styles.inputContainer}>
-                  <User size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Full Name"
-                    value={name}
-                    onChangeText={setName}
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    returnKeyType="next"
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Mail size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect={false}
-                    returnKeyType="next"
-                  />
-                </View>
-
                 <View style={styles.inputContainer}>
                   <Lock size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Password"
+                    placeholder="New Password"
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry={!showPassword}
@@ -148,14 +133,14 @@ export default function SignUpScreen() {
                   <Lock size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Confirm Password"
+                    placeholder="Confirm New Password"
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     secureTextEntry={!showConfirmPassword}
                     autoCapitalize="none"
                     autoCorrect={false}
                     returnKeyType="done"
-                    onSubmitEditing={handleSignUp}
+                    onSubmitEditing={handleResetPassword}
                   />
                   <TouchableOpacity
                     style={styles.eyeIcon}
@@ -170,22 +155,21 @@ export default function SignUpScreen() {
                 </View>
 
                 <TouchableOpacity 
-                  style={[styles.signUpButton, isLoading && styles.buttonDisabled]}
-                  onPress={handleSignUp}
+                  style={[styles.updateButton, isLoading && styles.buttonDisabled]}
+                  onPress={handleResetPassword}
                   disabled={isLoading}
                 >
-                  <Text style={styles.signUpButtonText}>
-                    {isLoading ? 'Creating Account...' : 'Sign Up'}
+                  <Text style={styles.updateButtonText}>
+                    {isLoading ? 'Updating...' : 'Update Password'}
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Sign in link */}
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>Already have an account? </Text>
-                <TouchableOpacity onPress={() => router.push('/(auth)/sign-in' as any)}>
-                  <Text style={styles.signInLink}>Sign In</Text>
-                </TouchableOpacity>
+              {/* Help text */}
+              <View style={styles.helpContainer}>
+                <Text style={styles.helpText}>
+                  Password must be at least 6 characters long.
+                </Text>
               </View>
             </View>
           </KeyboardAvoidingView>
@@ -208,33 +192,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     justifyContent: 'center',
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  logoWrapper: {
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: Colors.light.text,
+    textAlign: 'center',
     marginBottom: 16,
   },
-  logoToggle: {
-    width: 60,
-    height: 30,
-    backgroundColor: '#4CAF50',
-    borderRadius: 15,
-    position: 'relative',
-  },
-  logoKnob: {
-    width: 20,
-    height: 20,
-    backgroundColor: 'white',
-    borderRadius: 10,
-    position: 'absolute',
-    top: 5,
-    left: 5,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: Colors.light.primary,
+  description: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 16,
   },
   form: {
     marginBottom: 32,
@@ -259,7 +230,7 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 4,
   },
-  signUpButton: {
+  updateButton: {
     backgroundColor: Colors.light.primary,
     borderRadius: 12,
     height: 56,
@@ -270,23 +241,17 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
-  signUpButtonText: {
+  updateButtonText: {
     fontSize: 18,
     fontWeight: '600',
     color: 'white',
   },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  helpContainer: {
     alignItems: 'center',
   },
-  footerText: {
-    fontSize: 16,
+  helpText: {
+    fontSize: 14,
     color: Colors.light.secondaryText,
-  },
-  signInLink: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.primary,
+    textAlign: 'center',
   },
 }); 

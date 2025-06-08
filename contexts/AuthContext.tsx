@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
+import * as Linking from 'expo-linking';
 
 // TEMPORARY: Mock mode for database setup
 // Automatically enabled when placeholder keys are used
@@ -12,10 +13,15 @@ const AUTH_MOCK_MODE = !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
 interface AuthContextType {
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string) => Promise<{
+    user: any;
+    needsEmailConfirmation: boolean;
+  }>;
   signInWithApple: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  resendConfirmation: (email: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   loading: boolean;
 }
 
@@ -46,12 +52,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
+        if (__DEV__) {
+          console.log('Auth event:', event, 'Session:', !!session);
+        }
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          Alert.alert('Welcome!', 'You have successfully signed in.');
+        }
+        
+        if (event === 'TOKEN_REFRESHED' && __DEV__) {
+          console.log('Token refreshed');
+        }
+        
         setUser(session?.user ?? null);
         setLoading(false);
       }
     );
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Handle deep links (e-posti kinnituse lingid)
+  useEffect(() => {
+    const handleDeepLink = async (url: string) => {
+      if (__DEV__) {
+        console.log('Deep link received:', url);
+      }
+      
+      // Handle email confirmation success
+      if (url.includes('auth/confirmed')) {
+        Alert.alert('Success!', 'Your email has been confirmed! You can now sign in.');
+        router.replace('/(auth)/sign-in');
+        return;
+      }
+      
+      // Handle password reset
+      if (url.includes('auth/reset-password')) {
+        const urlParts = url.split('?');
+        if (urlParts.length > 1) {
+          const urlParams = new URLSearchParams(urlParts[1]);
+          const accessToken = urlParams.get('access_token');
+          const refreshToken = urlParams.get('refresh_token');
+          
+          if (accessToken && refreshToken) {
+            router.push({
+              pathname: '/(auth)/reset-password',
+              params: { access_token: accessToken, refresh_token: refreshToken }
+            });
+            return;
+          }
+        }
+      }
+      
+      // Handle general auth callbacks with tokens
+      if (url.includes('#access_token=') || url.includes('?access_token=')) {
+        // This is likely an auth callback
+        const { data, error } = await supabase.auth.getSessionFromUrl({ url });
+        
+        if (error) {
+          if (__DEV__) {
+            console.error('Auth callback error:', error);
+          }
+          Alert.alert('Error', 'An error occurred while confirming your email: ' + error.message);
+        } else if (data.session) {
+          if (__DEV__) {
+            console.log('Email confirmed successfully');
+          }
+          Alert.alert('Success!', 'Your email address has been successfully confirmed!');
+        }
+      }
+    };
+
+    // Listen for URL changes
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+
+    // Check if app was opened with a URL
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink(url);
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -74,13 +160,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Mock mode: Please setup the database first. Go to Supabase dashboard and run the SQL setup.');
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     
     if (error) {
+      // Check if it's an email not confirmed error
+      if (error.message.includes('Email not confirmed')) {
+        throw new Error('Your email address is not yet confirmed. Please check your inbox and click the confirmation link. If you can\'t find the email, also check your spam folder.');
+      }
       throw error;
+    }
+    
+    if (data.user && !data.user.email_confirmed_at) {
+      // Sign out the user if email is not confirmed
+      await supabase.auth.signOut();
+      throw new Error('Your email address is not yet confirmed. Please check your inbox and click the confirmation link before signing in.');
     }
   };
 
@@ -105,6 +201,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
 
+    // Don't throw error for successful signup that needs email confirmation
+    // The sign-up screen will handle this appropriately
+    return {
+      user: data.user,
+      needsEmailConfirmation: data.user && !data.user.email_confirmed_at
+    };
+
     // Note: User profile will be created automatically by the database trigger
     // The handle_new_user() function handles profile creation
   };
@@ -128,6 +231,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     throw new Error('Google sign-in is not configured yet. Please use email and password to sign in.');
   };
 
+  const resendConfirmation = async (email: string) => {
+    if (AUTH_MOCK_MODE) {
+      throw new Error('Mock mode: Please setup the database first.');
+    }
+
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email,
+    });
+
+    if (error) {
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    if (AUTH_MOCK_MODE) {
+      throw new Error('Mock mode: Please setup the database first.');
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://freetohang.com/auth/reset-password'
+    });
+
+    if (error) {
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -137,6 +269,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         signInWithApple,
         signInWithGoogle,
+        resendConfirmation,
+        resetPassword,
         loading,
       }}
     >
