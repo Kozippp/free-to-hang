@@ -41,6 +41,13 @@ export default function VibeInputScreen() {
     }
   };
 
+  const handleSkip = () => {
+    router.push({
+      pathname: '/(auth)/profile-photo',
+      params: { name, username, vibe: '' }
+    });
+  };
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -49,46 +56,52 @@ export default function VibeInputScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
         >
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoWrapper}>
+              <View style={styles.logoCircles}>
+                <View style={styles.logoCircle1} />
+                <View style={styles.logoCircle2} />
+                <View style={styles.logoCircle3} />
+              </View>
+            </View>
+            <Text style={styles.logoText}>freetohang</Text>
+          </View>
+
           {/* Content */}
           <View style={styles.content}>
-            <Text style={styles.title}>What's Your Favorite Vibe for Hanging Out?</Text>
+            <Text style={styles.title}>tell us about yourself</Text>
+            <Text style={styles.subtitle}>
+              a short bio to help other travelers get to know you (optional)
+            </Text>
             
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.vibeInput}
-                placeholder="Describe your perfect hangout vibe..."
+                placeholder="I'm a foodie who loves exploring local cuisines and meeting new people..."
                 placeholderTextColor="#999"
                 value={vibe}
                 onChangeText={setVibe}
                 multiline
-                numberOfLines={4}
-                maxLength={120}
+                numberOfLines={6}
+                maxLength={200}
                 textAlignVertical="top"
                 autoCorrect={true}
-                returnKeyType="done"
-                onSubmitEditing={handleContinue}
               />
               
               <View style={styles.characterCounter}>
                 <Text style={styles.characterCountText}>
-                  {vibe.length}/120
+                  {vibe.length}/200
                 </Text>
-                             </View>
-             </View>
+              </View>
+            </View>
 
             <TouchableOpacity 
-              style={[
-                styles.continueButton,
-                (!vibe.trim() || isLoading) && styles.disabledButton
-              ]}
-              onPress={handleContinue}
-              disabled={!vibe.trim() || isLoading}
+              style={styles.skipButton}
+              onPress={handleSkip}
             >
-              <Text style={[
-                styles.continueButtonText,
-                (!vibe.trim() || isLoading) && styles.disabledButtonText
-              ]}>
-                {isLoading ? 'saving...' : 'continue'}
+              <Text style={styles.skipButtonText}>
+                {isLoading ? 'saving...' : 'skip'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -106,21 +119,68 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
+  logoContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
+    marginBottom: 80,
+  },
+  logoWrapper: {
+    marginBottom: 16,
+  },
+  logoCircles: {
+    width: 60,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: -8,
+  },
+  logoCircle1: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+  },
+  logoCircle2: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '80',
+  },
+  logoCircle3: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '40',
+  },
+  logoText: {
+    fontSize: 18,
+    fontWeight: '400',
+    color: Colors.light.text,
+    letterSpacing: -0.5,
+  },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 32,
     justifyContent: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '600',
     color: Colors.light.text,
-    textAlign: 'center',
+    marginBottom: 8,
+    textAlign: 'left',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+    textAlign: 'left',
     marginBottom: 48,
-    lineHeight: 36,
+    lineHeight: 22,
+    fontWeight: '400',
   },
   inputContainer: {
-    marginBottom: 32,
+    marginBottom: 48,
   },
   vibeInput: {
     backgroundColor: '#F8F8F8',
@@ -128,9 +188,11 @@ const styles = StyleSheet.create({
     padding: 20,
     fontSize: 16,
     color: Colors.light.text,
-    minHeight: 120,
+    minHeight: 140,
     borderWidth: 1,
     borderColor: '#F0F0F0',
+    fontWeight: '400',
+    lineHeight: 22,
   },
   characterCounter: {
     alignItems: 'flex-end',
@@ -139,33 +201,26 @@ const styles = StyleSheet.create({
   characterCountText: {
     fontSize: 12,
     color: Colors.light.secondaryText,
+    fontWeight: '400',
   },
-  continueButton: {
+  skipButton: {
     backgroundColor: Colors.light.primary,
-    borderRadius: 16,
+    borderRadius: 28,
     height: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: Colors.light.primary,
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  disabledButton: {
-    backgroundColor: '#E0E0E0',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  continueButtonText: {
+  skipButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-  },
-  disabledButtonText: {
-    color: '#999',
   },
 }); 

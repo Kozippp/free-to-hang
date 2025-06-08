@@ -1,162 +1,182 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
   Alert,
-  Image,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import { Camera, Upload, User, ArrowLeft } from 'lucide-react-native';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { Check, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import * as ImagePicker from 'expo-image-picker';
 
-export default function OnboardingStep2Screen() {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+export default function UsernameInputScreen() {
+  const [username, setUsername] = useState('');
+  const [isChecking, setIsChecking] = useState(false);
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { name } = useLocalSearchParams<{ name: string }>();
 
-  const requestPermissions = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission needed',
-        'Sorry, we need camera roll permissions to make this work!'
-      );
-      return false;
-    }
-    return true;
-  };
-
-  const pickImageFromGallery = async () => {
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) return;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
-    }
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission needed',
-        'Sorry, we need camera permissions to take a photo!'
-      );
+  // Debounced username checking
+  useEffect(() => {
+    if (username.length < 3) {
+      setIsAvailable(null);
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
+    setIsChecking(true);
+    const timer = setTimeout(async () => {
+      try {
+        // Simulate API call to check username availability
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Simulate some usernames being taken
+        const takenUsernames = ['admin', 'test', 'user', 'freetohang', 'mihkelkk'];
+        const available = !takenUsernames.includes(username.toLowerCase());
+        setIsAvailable(available);
+      } catch (error) {
+        console.error('Error checking username:', error);
+      } finally {
+        setIsChecking(false);
+      }
+    }, 500);
 
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  const handleContinue = async () => {
+    if (!username.trim()) {
+      Alert.alert('Username Required', 'Please enter a username to continue');
+      return;
+    }
+
+    if (username.length < 3) {
+      Alert.alert('Username Too Short', 'Username must be at least 3 characters long');
+      return;
+    }
+
+    if (!isAvailable) {
+      Alert.alert('Username Not Available', 'Please choose a different username');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Here you would save the username to your backend
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      router.push({
+        pathname: '/(onboarding)/step-3',
+        params: { name, username: username.trim() }
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleContinue = () => {
-    // Save profile image
-    // For now, just navigate to next step
-    router.push('/(onboarding)/step-3');
+  const handleUsernameChange = (text: string) => {
+    // Only allow alphanumeric characters and underscores
+    const cleaned = text.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    setUsername(cleaned);
   };
 
-  const handleSkip = () => {
-    router.push('/(onboarding)/step-3');
-  };
+  const getAvailabilityIndicator = () => {
+    if (username.length < 3) return null;
+    
+    if (isChecking) {
+      return (
+        <View style={styles.checkingContainer}>
+          <Text style={styles.checkingText}>checking...</Text>
+        </View>
+      );
+    }
 
-  const handleBack = () => {
-    router.back();
+    if (isAvailable === true) {
+      return (
+        <View style={styles.availableContainer}>
+          <Check size={16} color={Colors.light.onlineGreen} />
+          <Text style={styles.availableText}>Available</Text>
+        </View>
+      );
+    }
+
+    if (isAvailable === false) {
+      return (
+        <View style={styles.unavailableContainer}>
+          <X size={16} color={Colors.light.destructive} />
+          <Text style={styles.unavailableText}>Unavailable</Text>
+        </View>
+      );
+    }
+
+    return null;
   };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        {/* Header with progress and navigation */}
-        <View style={styles.headerContainer}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <ArrowLeft size={24} color={Colors.light.secondaryText} />
-          </TouchableOpacity>
-          
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressStep, styles.completedStep]} />
-              <View style={[styles.progressStep, styles.activeStep]} />
-              <View style={styles.progressStep} />
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoWrapper}>
+              <View style={styles.logoCircles}>
+                <View style={styles.logoCircle1} />
+                <View style={styles.logoCircle2} />
+                <View style={styles.logoCircle3} />
+              </View>
             </View>
-          </View>
-          
-          <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-            <Text style={styles.skipText}>skip</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Content */}
-        <View style={styles.content}>
-          <Text style={styles.title}>add a profile photo</Text>
-          <Text style={styles.subtitle}>
-            help others recognize you when meeting up (optional)
-          </Text>
-
-          {/* Profile image preview */}
-          <View style={styles.imageContainer}>
-            {selectedImage ? (
-              <Image source={{ uri: selectedImage }} style={styles.profileImage} />
-            ) : (
-              <View style={styles.placeholderImage}>
-                <User size={60} color={Colors.light.secondaryText} />
-              </View>
-            )}
+            <Text style={styles.logoText}>freetohang</Text>
           </View>
 
-          {/* Photo options */}
-          <View style={styles.optionsContainer}>
-            <TouchableOpacity style={styles.primaryOption} onPress={takePhoto}>
-              <View style={styles.optionIconContainer}>
-                <Camera size={20} color="white" />
-              </View>
-              <Text style={styles.primaryOptionText}>Take Photo</Text>
-            </TouchableOpacity>
+          {/* Content */}
+          <View style={styles.content}>
+            <Text style={styles.title}>Create a username</Text>
 
-            <TouchableOpacity style={styles.secondaryOption} onPress={pickImageFromGallery}>
-              <View style={styles.secondaryIconContainer}>
-                <Upload size={20} color={Colors.light.primary} />
-              </View>
-              <Text style={styles.secondaryOptionText}>Choose from Gallery</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.usernameInput}
+                value={username}
+                onChangeText={handleUsernameChange}
+                placeholder="username"
+                placeholderTextColor="#999"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={handleContinue}
+                maxLength={20}
+              />
+            </View>
+            
+            {getAvailabilityIndicator()}
 
-          {selectedImage && (
             <TouchableOpacity 
-              style={styles.removeButton} 
-              onPress={() => setSelectedImage(null)}
+              style={[
+                styles.continueButton,
+                (!username.trim() || isLoading || !isAvailable) && styles.disabledButton
+              ]}
+              onPress={handleContinue}
+              disabled={!username.trim() || isLoading || !isAvailable}
             >
-              <Text style={styles.removeText}>Remove Photo</Text>
+              <Text style={[
+                styles.continueButtonText,
+                (!username.trim() || isLoading || !isAvailable) && styles.disabledButtonText
+              ]}>
+                {isLoading ? 'creating...' : 'Continue'}
+              </Text>
             </TouchableOpacity>
-          )}
-
-          {/* Continue button */}
-          <TouchableOpacity 
-            style={styles.continueButton}
-            onPress={handleContinue}
-          >
-            <Text style={styles.continueButtonText}>
-              continue
-            </Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </>
   );
@@ -166,173 +186,141 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'white',
-    paddingHorizontal: 24,
   },
-  headerContainer: {
+  keyboardView: {
+    flex: 1,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
+    marginBottom: 120,
+  },
+  logoWrapper: {
+    marginBottom: 16,
+  },
+  logoCircles: {
+    width: 60,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    marginTop: 40,
-    marginBottom: 30,
+    justifyContent: 'center',
+    gap: -8,
   },
-  progressContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  progressBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    maxWidth: 120,
-  },
-  progressStep: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  activeStep: {
+  logoCircle1: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: Colors.light.primary,
   },
-  completedStep: {
-    backgroundColor: Colors.light.primary,
+  logoCircle2: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '80',
   },
-  navigationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 8,
+  logoCircle3: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '40',
   },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  skipButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  skipText: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
+  logoText: {
+    fontSize: 18,
+    fontWeight: '400',
+    color: Colors.light.text,
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,
-    marginTop: 20,
+    paddingHorizontal: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 12,
+    marginBottom: 60,
     textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
+  inputContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  usernameInput: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E0E0E0',
+    height: 60,
+    paddingHorizontal: 0,
+    paddingVertical: 16,
+    fontSize: 32,
+    color: Colors.light.text,
     textAlign: 'center',
-    marginBottom: 50,
-    lineHeight: 22,
-  },
-  imageContainer: {
-    alignItems: 'center',
-    marginBottom: 50,
-  },
-  profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  placeholderImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: Colors.light.buttonBackground,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E5E5',
-    borderStyle: 'dashed',
-  },
-  optionsContainer: {
-    gap: 12,
-    marginBottom: 30,
-  },
-  primaryOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    backgroundColor: Colors.light.primary,
-    borderRadius: 16,
-    gap: 12,
-  },
-  optionIconContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  primaryOptionText: {
-    fontSize: 16,
-    color: 'white',
     fontWeight: '600',
   },
-  secondaryOption: {
-    flexDirection: 'row',
+  checkingContainer: {
     alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.light.primary,
-    gap: 12,
+    marginBottom: 40,
   },
-  secondaryIconContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: `${Colors.light.primary}15`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryOptionText: {
-    fontSize: 16,
-    color: Colors.light.primary,
-    fontWeight: '600',
-  },
-  removeButton: {
-    alignSelf: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  removeText: {
-    fontSize: 16,
+  checkingText: {
+    fontSize: 14,
     color: Colors.light.secondaryText,
-    textDecorationLine: 'underline',
+    fontWeight: '400',
+  },
+  availableContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 40,
+    gap: 6,
+  },
+  availableText: {
+    fontSize: 14,
+    color: Colors.light.onlineGreen,
+    fontWeight: '600',
+  },
+  unavailableContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 40,
+    gap: 6,
+  },
+  unavailableText: {
+    fontSize: 14,
+    color: Colors.light.destructive,
+    fontWeight: '600',
   },
   continueButton: {
     backgroundColor: Colors.light.primary,
-    borderRadius: 16,
+    borderRadius: 28,
     height: 56,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 'auto',
-    marginBottom: 32,
     shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  disabledButton: {
+    backgroundColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   continueButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  disabledButtonText: {
+    color: '#999',
   },
 }); 

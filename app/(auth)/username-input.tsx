@@ -36,7 +36,7 @@ export default function UsernameInputScreen() {
         await new Promise(resolve => setTimeout(resolve, 500));
         
         // Simulate some usernames being taken
-        const takenUsernames = ['admin', 'test', 'user', 'free2hang', 'mihkel'];
+        const takenUsernames = ['admin', 'test', 'user', 'freetohang', 'mihkelkk'];
         const available = !takenUsernames.includes(username.toLowerCase());
         setIsAvailable(available);
       } catch (error) {
@@ -101,7 +101,7 @@ export default function UsernameInputScreen() {
     if (isAvailable === true) {
       return (
         <View style={styles.availableContainer}>
-          <Check size={16} color="#4CAF50" />
+          <Check size={16} color={Colors.light.onlineGreen} />
           <Text style={styles.availableText}>Available</Text>
         </View>
       );
@@ -110,7 +110,7 @@ export default function UsernameInputScreen() {
     if (isAvailable === false) {
       return (
         <View style={styles.unavailableContainer}>
-          <X size={16} color="#F44336" />
+          <X size={16} color={Colors.light.destructive} />
           <Text style={styles.unavailableText}>Unavailable</Text>
         </View>
       );
@@ -129,7 +129,14 @@ export default function UsernameInputScreen() {
         >
           {/* Logo */}
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>Free2Hang</Text>
+            <View style={styles.logoWrapper}>
+              <View style={styles.logoCircles}>
+                <View style={styles.logoCircle1} />
+                <View style={styles.logoCircle2} />
+                <View style={styles.logoCircle3} />
+              </View>
+            </View>
+            <Text style={styles.logoText}>freetohang</Text>
           </View>
 
           {/* Content */}
@@ -142,15 +149,16 @@ export default function UsernameInputScreen() {
                 value={username}
                 onChangeText={handleUsernameChange}
                 placeholder="username"
+                placeholderTextColor="#999"
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="done"
                 onSubmitEditing={handleContinue}
                 maxLength={20}
               />
-              
-              {getAvailabilityIndicator()}
             </View>
+            
+            {getAvailabilityIndicator()}
 
             <TouchableOpacity 
               style={[
@@ -177,104 +185,142 @@ export default function UsernameInputScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: 'white',
   },
   keyboardView: {
     flex: 1,
   },
   logoContainer: {
     alignItems: 'center',
-    paddingTop: 80,
+    paddingTop: 60,
     marginBottom: 120,
   },
+  logoWrapper: {
+    marginBottom: 16,
+  },
+  logoCircles: {
+    width: 60,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: -8,
+  },
+  logoCircle1: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+  },
+  logoCircle2: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '80',
+  },
+  logoCircle3: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '40',
+  },
   logoText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: 'white',
+    fontSize: 18,
+    fontWeight: '400',
+    color: Colors.light.text,
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 32,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: 'white',
-    textAlign: 'center',
+    fontSize: 28,
+    fontWeight: '600',
+    color: Colors.light.text,
     marginBottom: 60,
+    textAlign: 'center',
   },
   inputContainer: {
-    alignItems: 'center',
-    marginBottom: 80,
-  },
-  usernameInput: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: 'white',
-    textAlign: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    borderBottomWidth: 2,
-    borderBottomColor: '#333',
-    minWidth: 200,
+    width: '100%',
     marginBottom: 16,
   },
+  usernameInput: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E0E0E0',
+    height: 60,
+    paddingHorizontal: 0,
+    paddingVertical: 16,
+    fontSize: 32,
+    color: Colors.light.text,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
   checkingContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginBottom: 40,
   },
   checkingText: {
     fontSize: 14,
-    color: '#999',
-    fontStyle: 'italic',
+    color: Colors.light.secondaryText,
+    fontWeight: '400',
   },
   availableContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    justifyContent: 'center',
+    marginBottom: 40,
+    gap: 6,
   },
   availableText: {
     fontSize: 14,
-    color: 'white',
+    color: Colors.light.onlineGreen,
     fontWeight: '600',
   },
   unavailableContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F44336',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    justifyContent: 'center',
+    marginBottom: 40,
+    gap: 6,
   },
   unavailableText: {
     fontSize: 14,
-    color: 'white',
+    color: Colors.light.destructive,
     fontWeight: '600',
   },
   continueButton: {
-    backgroundColor: 'white',
-    borderRadius: 50,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 28,
     height: 56,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 40,
+    shadowColor: Colors.light.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
   },
   disabledButton: {
-    backgroundColor: '#333',
+    backgroundColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   continueButtonText: {
-    color: '#000',
-    fontSize: 18,
+    color: 'white',
+    fontSize: 16,
     fontWeight: '600',
   },
   disabledButtonText: {
-    color: '#666',
+    color: '#999',
   },
 }); 

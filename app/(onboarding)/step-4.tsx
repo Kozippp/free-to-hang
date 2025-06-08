@@ -149,14 +149,14 @@ export default function ProfilePhotoScreen() {
 
             {/* Action Buttons */}
             <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.primaryButton} onPress={takePhoto}>
+              <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
                 <Camera size={20} color={Colors.light.primary} />
-                <Text style={styles.primaryButtonText}>Camera</Text>
+                <Text style={styles.photoButtonText}>Camera</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.primaryButton} onPress={chooseFromGallery}>
+              <TouchableOpacity style={styles.photoButton} onPress={chooseFromGallery}>
                 <ImageIcon size={20} color={Colors.light.primary} />
-                <Text style={styles.primaryButtonText}>Gallery</Text>
+                <Text style={styles.photoButtonText}>Gallery</Text>
               </TouchableOpacity>
             </View>
 
@@ -167,7 +167,7 @@ export default function ProfilePhotoScreen() {
               disabled={isLoading}
             >
               <Text style={[styles.continueButtonText, isLoading && styles.disabledButtonText]}>
-                {isLoading ? 'setting up...' : profileImage ? 'continue' : 'skip for now'}
+                {isLoading ? 'setting up your account...' : profileImage ? 'complete setup' : 'skip for now'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -253,43 +253,43 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    overflow: 'hidden',
-    backgroundColor: '#F8F8F8',
-    borderWidth: 3,
-    borderColor: '#F0F0F0',
   },
   profileImage: {
-    width: '100%',
-    height: '100%',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
   placeholderImage: {
-    width: '100%',
-    height: '100%',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F8F8F8',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    borderStyle: 'dashed',
   },
   buttonContainer: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 16,
     marginBottom: 48,
   },
-  primaryButton: {
+  photoButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8F8F8',
-    borderRadius: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 24,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: Colors.light.primary,
     gap: 8,
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
   },
-  primaryButtonText: {
-    color: Colors.light.primary,
+  photoButtonText: {
     fontSize: 16,
+    color: Colors.light.primary,
     fontWeight: '600',
   },
   continueButton: {

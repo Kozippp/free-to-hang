@@ -6,181 +6,100 @@ import {
   TextInput,
   TouchableOpacity,
   SafeAreaView,
-  ScrollView,
-  Keyboard,
-  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
   Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Heart, MapPin, Coffee, Music, Camera, Users, ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 
-export default function OnboardingStep1Screen() {
-  const [bio, setBio] = useState('');
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+export default function NameInputScreen() {
+  const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { user } = useAuth();
-
-  const interests = [
-    { id: 'outdoor', label: 'Outdoor Adventures', icon: MapPin },
-    { id: 'food', label: 'Food & Drinks', icon: Coffee },
-    { id: 'music', label: 'Music & Concerts', icon: Music },
-    { id: 'culture', label: 'Culture & Arts', icon: Camera },
-    { id: 'sports', label: 'Sports & Fitness', icon: Heart },
-    { id: 'social', label: 'Social Events', icon: Users },
-  ];
-
-  const toggleInterest = (interestId: string) => {
-    setSelectedInterests(prev => 
-      prev.includes(interestId) 
-        ? prev.filter(id => id !== interestId)
-        : [...prev, interestId]
-    );
-  };
 
   const handleContinue = async () => {
-    if (!user || isLoading) return;
+    if (!name.trim()) {
+      Alert.alert('Name Required', 'Please enter your name to continue');
+      return;
+    }
+
+    if (name.trim().length < 2) {
+      Alert.alert('Invalid Name', 'Please enter a valid name');
+      return;
+    }
 
     setIsLoading(true);
     try {
-      // Save bio and interests to user profile
-      const interestsString = selectedInterests.join(',');
+      // Here you would save the name to your backend/context
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      const { error } = await supabase
-        .from('users')
-        .update({ 
-          bio: bio.trim() || null,
-          // Store interests in bio for now, later we can create separate interests table
-          interests: interestsString
-        })
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('Error saving profile:', error);
-        Alert.alert('Error', 'Failed to save your profile. Please try again.');
-        return;
-      }
-
-      router.push('/(onboarding)/step-2');
+      router.push({
+        pathname: '/(onboarding)/step-2',
+        params: { name: name.trim() }
+      });
     } catch (error) {
-      console.error('Error in handleContinue:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleSkip = () => {
-    router.push('/(onboarding)/step-2');
-  };
-
-  const handleBack = () => {
-    // Go back to sign-in or previous screen
-    router.replace('/(tabs)');
   };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView contentContainerStyle={styles.scrollContainer}>
-            {/* Header with progress and navigation */}
-            <View style={styles.headerContainer}>
-              <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                <ArrowLeft size={24} color={Colors.light.secondaryText} />
-              </TouchableOpacity>
-              
-              <View style={styles.progressContainer}>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressStep, styles.activeStep]} />
-                  <View style={styles.progressStep} />
-                  <View style={styles.progressStep} />
-                </View>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoWrapper}>
+              <View style={styles.logoCircles}>
+                <View style={styles.logoCircle1} />
+                <View style={styles.logoCircle2} />
+                <View style={styles.logoCircle3} />
               </View>
-              
-              <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-                <Text style={styles.skipText}>skip</Text>
-              </TouchableOpacity>
             </View>
+            <Text style={styles.logoText}>freetohang</Text>
+          </View>
 
-            {/* Content */}
-            <View style={styles.content}>
-              <Text style={styles.title}>what's your vibe?</Text>
-              <Text style={styles.subtitle}>
-                tell us your favorite vibe for hanging out
+          {/* Content */}
+          <View style={styles.content}>
+            <Text style={styles.title}>what's your name?</Text>
+            <Text style={styles.subtitle}>let's get to know each other</Text>
+
+            <TextInput
+              style={styles.nameInput}
+              placeholder="Enter your name"
+              placeholderTextColor="#999"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleContinue}
+              maxLength={50}
+            />
+
+            <TouchableOpacity 
+              style={[
+                styles.nextButton,
+                (!name.trim() || isLoading) && styles.disabledButton
+              ]}
+              onPress={handleContinue}
+              disabled={!name.trim() || isLoading}
+            >
+              <Text style={[
+                styles.nextButtonText,
+                (!name.trim() || isLoading) && styles.disabledButtonText
+              ]}>
+                {isLoading ? 'continuing...' : 'next'}
               </Text>
-
-              {/* Interests selection */}
-              <View style={styles.interestsContainer}>
-                {interests.map((interest) => {
-                  const Icon = interest.icon;
-                  const isSelected = selectedInterests.includes(interest.id);
-                  
-                  return (
-                    <TouchableOpacity
-                      key={interest.id}
-                      style={[
-                        styles.interestCard,
-                        isSelected && styles.selectedInterestCard
-                      ]}
-                      onPress={() => toggleInterest(interest.id)}
-                    >
-                      <Icon 
-                        size={24} 
-                        color={isSelected ? Colors.light.primary : Colors.light.secondaryText} 
-                      />
-                      <Text style={[
-                        styles.interestText,
-                        isSelected && styles.selectedInterestText
-                      ]}>
-                        {interest.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Vibe input */}
-              <View style={styles.vibeContainer}>
-                <Text style={styles.vibeLabel}>
-                  describe your perfect hangout vibe
-                </Text>
-                <TextInput
-                  style={styles.vibeInput}
-                  placeholder="Chill coffee talks, spontaneous adventures, cozy movie nights..."
-                  multiline
-                  numberOfLines={3}
-                  value={bio}
-                  onChangeText={setBio}
-                  maxLength={120}
-                  textAlignVertical="top"
-                />
-                <Text style={styles.characterCount}>{bio.length}/120</Text>
-              </View>
-
-              {/* Continue button */}
-              <TouchableOpacity 
-                style={[
-                  styles.continueButton,
-                  (selectedInterests.length === 0 || isLoading) && styles.disabledButton
-                ]}
-                onPress={handleContinue}
-                disabled={selectedInterests.length === 0 || isLoading}
-              >
-                <Text style={[
-                  styles.continueButtonText,
-                  (selectedInterests.length === 0 || isLoading) && styles.disabledButtonText
-                ]}>
-                  {isLoading ? 'saving...' : 'continue'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </>
   );
@@ -191,151 +110,108 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
+  keyboardView: {
+    flex: 1,
   },
-  headerContainer: {
+  logoContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
+    marginBottom: 80,
+  },
+  logoWrapper: {
+    marginBottom: 16,
+  },
+  logoCircles: {
+    width: 60,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    marginTop: 40,
-    marginBottom: 30,
+    justifyContent: 'center',
+    gap: -8,
   },
-  progressContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  progressBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    maxWidth: 120,
-  },
-  progressStep: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  activeStep: {
+  logoCircle1: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: Colors.light.primary,
   },
-  navigationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 8,
+  logoCircle2: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '80',
   },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+  logoCircle3: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '40',
   },
-  skipButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  skipText: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
+  logoText: {
+    fontSize: 18,
+    fontWeight: '400',
+    color: Colors.light.text,
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,
-    marginTop: 20,
+    paddingHorizontal: 32,
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 12,
-    textAlign: 'center',
+    marginBottom: 8,
+    textAlign: 'left',
   },
   subtitle: {
     fontSize: 16,
     color: Colors.light.secondaryText,
-    textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 22,
+    textAlign: 'left',
+    marginBottom: 48,
+    fontWeight: '400',
   },
-  interestsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 40,
-  },
-  interestCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
-    backgroundColor: Colors.light.buttonBackground,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    gap: 8,
-  },
-  selectedInterestCard: {
-    backgroundColor: `${Colors.light.primary}15`,
-    borderColor: Colors.light.primary,
-  },
-  interestText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-  },
-  selectedInterestText: {
-    color: Colors.light.primary,
-    fontWeight: '500',
-  },
-  vibeContainer: {
-    marginBottom: 40,
-  },
-  vibeLabel: {
-    fontSize: 16,
-    fontWeight: '500',
+  nameInput: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    height: 56,
+    paddingHorizontal: 0,
+    paddingVertical: 16,
+    fontSize: 24,
     color: Colors.light.text,
-    marginBottom: 12,
+    marginBottom: 48,
+    fontWeight: '400',
   },
-  vibeInput: {
-    backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 16,
-    padding: 20,
-    fontSize: 16,
-    color: Colors.light.text,
-    minHeight: 80,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-  },
-  characterCount: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-    textAlign: 'right',
-    marginTop: 8,
-  },
-  continueButton: {
+  nextButton: {
     backgroundColor: Colors.light.primary,
-    borderRadius: 16,
+    borderRadius: 28,
     height: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 'auto',
     shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
   },
   disabledButton: {
-    backgroundColor: '#E5E5E5',
+    backgroundColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  continueButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
+  nextButtonText: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   disabledButtonText: {
-    color: Colors.light.secondaryText,
+    color: '#999',
   },
 }); 
