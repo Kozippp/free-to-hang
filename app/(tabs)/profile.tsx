@@ -14,6 +14,7 @@ import {
   ScrollView
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { 
   Settings, 
   Edit3, 
@@ -46,6 +47,7 @@ import {
 } from '@/constants/mockData';
 import { useAuth } from '@/contexts/AuthContext';
 import useHangStore from '@/store/hangStore';
+import { supabase } from '@/lib/supabase';
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
@@ -57,7 +59,7 @@ export default function ProfileScreen() {
     name: user.name || mockUserProfile.name,
     email: authUser?.email || mockUserProfile.email,
     avatar: user.avatar || mockUserProfile.avatar,
-    bio: '', // Start with empty bio
+    bio: user.vibe || '', // Use vibe from sign up as bio
   });
   
   // Combine online and offline friends from hangStore
@@ -80,6 +82,7 @@ export default function ProfileScreen() {
       name: user.name || prev.name,
       email: authUser?.email || prev.email,
       avatar: user.avatar || prev.avatar,
+      bio: user.vibe || prev.bio, // Update bio with vibe from database
     }));
   }, [user, authUser]);
 
@@ -87,8 +90,8 @@ export default function ProfileScreen() {
   useEffect(() => {
     setEditName(user.name || userProfile.name);
     setEditUsername(user.username || userProfile.email.split('@')[0]);
-    // Don't set editBio from user.vibe since vibe column doesn't exist in database
-    // Keep the bio that user may have entered during onboarding or editing
+    setEditBio(user.vibe || ''); // Load vibe from database as bio
+    setOriginalUsername(user.username || userProfile.email.split('@')[0]); // Store original username
   }, [user, userProfile]);
 
   // Combine friends from hangStore
@@ -119,15 +122,114 @@ export default function ProfileScreen() {
   const [editBio, setEditBio] = useState(userProfile.bio);
   const [editEmail, setEditEmail] = useState(userProfile.email);
   
+  // Username validation states for edit profile
+  const [originalUsername, setOriginalUsername] = useState('');
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameReservationValid, setUsernameReservationValid] = useState<boolean | null>(null);
+  
   // Add friend states
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Friend[]>([]);
 
+  // Username validation effect for edit profile
+  useEffect(() => {
+    if (!showEditProfile) {
+      // Reset states when modal closes
+      setIsUsernameAvailable(null);
+      setUsernameReservationValid(null);
+      return;
+    }
+
+    if (editUsername.length < 3 || editUsername === originalUsername) {
+      setIsUsernameAvailable(null);
+      return;
+    }
+
+    setIsCheckingUsername(true);
+    const timer = setTimeout(async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsUsernameAvailable(null);
+          setIsCheckingUsername(false);
+          return;
+        }
+
+        // Check if username is available
+        const { data, error } = await supabase.rpc('is_username_available', {
+          check_username: editUsername.toLowerCase()
+        });
+
+        if (error) {
+          console.error('Error checking username availability:', error);
+          setIsUsernameAvailable(null);
+        } else {
+          setIsUsernameAvailable(data);
+          
+          // If available, create/update reservation
+          if (data) {
+            const { data: reservationSuccess, error: reservationError } = await supabase.rpc('reserve_username', {
+              reserve_username: editUsername.toLowerCase(),
+              reserve_user_id: user.id
+            });
+
+            if (reservationError) {
+              console.error('Error creating reservation:', reservationError);
+              setUsernameReservationValid(false);
+            } else {
+              setUsernameReservationValid(reservationSuccess);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error in username validation:', error);
+        setIsUsernameAvailable(null);
+        setUsernameReservationValid(null);
+      } finally {
+        setIsCheckingUsername(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [editUsername, originalUsername, showEditProfile]);
+
+  // Cleanup reservations when modal closes
+  useEffect(() => {
+    return () => {
+      if (!showEditProfile && usernameReservationValid) {
+        // Clean up reservation when modal closes without saving
+        const cleanupReservation = async () => {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await supabase
+                .from('username_reservations')
+                .delete()
+                .eq('user_id', user.id);
+            }
+          } catch (error) {
+            console.error('Error cleaning up reservation:', error);
+          }
+        };
+        cleanupReservation();
+      }
+    };
+  }, [showEditProfile, usernameReservationValid]);
+
   const handleEditProfile = async () => {
+    // Check if username was changed and if so, validate reservation
+    if (editUsername !== originalUsername) {
+      if (!isUsernameAvailable || !usernameReservationValid) {
+        Alert.alert('Username Error', 'Please choose a valid available username before saving.');
+        return;
+      }
+    }
+
     // Update in Supabase via hangStore
     const success = await updateUserData({
       name: editName,
-      username: editUsername,
+      username: editUsername.toLowerCase(),
       vibe: editBio,
     });
 
@@ -137,6 +239,23 @@ export default function ProfileScreen() {
         name: editName,
         bio: editBio,
       });
+      
+      // Clean up reservation since we successfully saved
+      if (editUsername !== originalUsername && usernameReservationValid) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase
+              .from('username_reservations')
+              .delete()
+              .eq('username', editUsername.toLowerCase())
+              .eq('user_id', user.id);
+          }
+        } catch (error) {
+          console.error('Error cleaning up reservation after save:', error);
+        }
+      }
+      
       setShowEditProfile(false);
       Alert.alert('Profile Updated', 'Your profile has been successfully updated.');
     } else {
@@ -144,16 +263,32 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleChangeProfilePicture = () => {
-    Alert.alert(
-      'Change Profile Picture',
-      'Choose a photo or take a picture',
-      [
-        { text: 'Camera', onPress: () => Alert.alert('Camera', 'Camera functionality would be implemented here') },
-        { text: 'Gallery', onPress: () => Alert.alert('Gallery', 'Gallery functionality would be implemented here') },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
+  const handleChangeProfilePicture = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to change your profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const newAvatar = result.assets[0].uri;
+      setUserProfile(prev => ({ ...prev, avatar: newAvatar }));
+      
+      // Update in database via hangStore
+      await updateUserData({
+        name: userProfile.name,
+        username: editUsername,
+        vibe: userProfile.bio,
+        avatar_url: newAvatar,
+      });
+    }
   };
 
   const handleSearchFriends = (query: string) => {
@@ -620,6 +755,21 @@ export default function ProfileScreen() {
                 onChangeText={setEditUsername}
                 placeholder="username"
               />
+              {editUsername !== originalUsername && editUsername.length >= 3 && (
+                <View style={styles.usernameIndicator}>
+                  {isCheckingUsername ? (
+                    <Text style={styles.checkingText}>Checking...</Text>
+                  ) : isUsernameAvailable === true ? (
+                    <View style={[styles.indicator, styles.available]}>
+                      <Text style={styles.availableText}>✓ Available</Text>
+                    </View>
+                  ) : isUsernameAvailable === false ? (
+                    <View style={[styles.indicator, styles.taken]}>
+                      <Text style={styles.takenText}>✗ Username taken</Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
               
               <Text style={styles.inputLabel}>Name</Text>
               <TextInput
@@ -628,27 +778,17 @@ export default function ProfileScreen() {
                 onChangeText={setEditName}
                 placeholder="Your name"
               />
-
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editEmail}
-                onChangeText={setEditEmail}
-                placeholder="your@email.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
               
-              <Text style={styles.inputLabel}>Bio (max 120 characters)</Text>
+              <Text style={styles.inputLabel}>Ideal hang vibe (max 100 characters)</Text>
               <TextInput
                 style={[styles.textInput, styles.bioInput]}
                 value={editBio}
-                onChangeText={(text) => text.length <= 120 && setEditBio(text)}
-                placeholder="Tell others about yourself..."
+                onChangeText={(text) => text.length <= 100 && setEditBio(text)}
+                placeholder="What's your ideal vibe when hanging out?"
                 multiline
-                maxLength={120}
+                maxLength={100}
               />
-              <Text style={styles.characterCount}>{editBio.length}/120</Text>
+              <Text style={styles.characterCount}>{editBio.length}/100</Text>
               
               <TouchableOpacity style={styles.saveButton} onPress={handleEditProfile}>
                 <Text style={styles.saveButtonText}>Save Changes</Text>
@@ -1158,9 +1298,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   editProfileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: Colors.light.buttonBackground,
   },
   cameraOverlay: {
@@ -1392,5 +1532,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.light.background,
+  },
+  usernameIndicator: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  checkingText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    fontStyle: 'italic',
+  },
+  indicator: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  available: {
+    backgroundColor: Colors.light.primary + '20',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+  },
+  taken: {
+    backgroundColor: Colors.light.destructive + '20',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+  },
+  availableText: {
+    fontSize: 14,
+    color: Colors.light.primary,
+    fontWeight: '600',
+  },
+  takenText: {
+    fontSize: 14,
+    color: Colors.light.destructive,
+    fontWeight: '600',
   },
 });
