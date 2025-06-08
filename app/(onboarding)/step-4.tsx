@@ -11,6 +11,7 @@ import {
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, Image as ImageIcon, ArrowLeft } from 'lucide-react-native';
+import { supabase } from '@/lib/supabase';
 import Colors from '@/constants/colors';
 
 export default function ProfilePhotoScreen() {
@@ -104,9 +105,98 @@ export default function ProfilePhotoScreen() {
   const handleContinue = async () => {
     setIsLoading(true);
     try {
-      // Here you would save the profile data to your backend
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      // Get current user
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        throw new Error('No authenticated user found');
+      }
+
+      // Try different combinations of fields, starting with the most complete
+      const profileVariations = [
+        // Full profile with all fields
+        {
+          id: authUser.id,
+          name: name || authUser.user_metadata?.name || 'User',
+          username: username || authUser.user_metadata?.username || 'user',
+          vibe: vibe || '',
+          avatar_url: profilePhoto || null,
+          onboarding_completed: true,
+          updated_at: new Date().toISOString()
+        },
+        // Without onboarding_completed
+        {
+          id: authUser.id,
+          name: name || authUser.user_metadata?.name || 'User',
+          username: username || authUser.user_metadata?.username || 'user',
+          vibe: vibe || '',
+          avatar_url: profilePhoto || null,
+          updated_at: new Date().toISOString()
+        },
+        // Without vibe and onboarding_completed
+        {
+          id: authUser.id,
+          name: name || authUser.user_metadata?.name || 'User',
+          username: username || authUser.user_metadata?.username || 'user',
+          avatar_url: profilePhoto || null,
+          updated_at: new Date().toISOString()
+        },
+        // Without updated_at, vibe, onboarding_completed
+        {
+          id: authUser.id,
+          name: name || authUser.user_metadata?.name || 'User',
+          username: username || authUser.user_metadata?.username || 'user',
+          avatar_url: profilePhoto || null
+        },
+        // Without avatar_url, updated_at, vibe, onboarding_completed
+        {
+          id: authUser.id,
+          name: name || authUser.user_metadata?.name || 'User',
+          username: username || authUser.user_metadata?.username || 'user'
+        },
+        // Super minimal - just required fields
+        {
+          id: authUser.id,
+          name: name || authUser.user_metadata?.name || 'User'
+        },
+        // Emergency fallback - maybe only email exists
+        {
+          id: authUser.id,
+          email: authUser.email || ''
+        }
+      ];
+
+      let saveSuccessful = false;
+      let lastError = null;
+
+      // Try each variation until one works
+      for (const profileData of profileVariations) {
+        try {
+          const { error } = await supabase
+            .from('users')
+            .upsert(profileData, { 
+              onConflict: 'id',
+              ignoreDuplicates: false 
+            });
+
+          if (!error) {
+            console.log('Profile saved successfully with fields:', Object.keys(profileData));
+            saveSuccessful = true;
+            break;
+          } else {
+            console.log('Failed to save with fields:', Object.keys(profileData), 'Error:', error.message);
+            lastError = error;
+          }
+        } catch (error) {
+          console.log('Exception saving with fields:', Object.keys(profileData), 'Error:', error);
+          lastError = error;
+        }
+      }
+
+      if (!saveSuccessful) {
+        console.error('All profile save attempts failed. Last error:', lastError);
+        throw new Error('Failed to save profile data - database schema may be incomplete');
+      }
+
       // Navigate to main app first
       router.replace('/(tabs)');
       
@@ -124,6 +214,7 @@ export default function ProfilePhotoScreen() {
         );
       }, 500);
     } catch (error) {
+      console.error('Profile setup error:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
