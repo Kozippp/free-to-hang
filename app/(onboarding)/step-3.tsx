@@ -63,26 +63,15 @@ export default function VibeSelectionScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardView}
           >
-            {/* Header with Skip */}
+            {/* Header with Logo and Skip */}
             <View style={styles.header}>
+              <Text style={styles.logoText}>freetohang</Text>
               <TouchableOpacity 
                 style={styles.skipButton}
                 onPress={handleSkip}
               >
-                <Text style={styles.skipButtonText}>skip for now</Text>
+                <Text style={styles.skipButtonText}>skip</Text>
               </TouchableOpacity>
-            </View>
-
-            {/* Logo */}
-            <View style={styles.logoContainer}>
-              <View style={styles.logoWrapper}>
-                <View style={styles.logoCircles}>
-                  <View style={styles.logoCircle1} />
-                  <View style={styles.logoCircle2} />
-                  <View style={styles.logoCircle3} />
-                </View>
-              </View>
-              <Text style={styles.logoText}>freetohang</Text>
             </View>
 
             {/* Content */}
@@ -97,15 +86,15 @@ export default function VibeSelectionScreen() {
                   value={vibe}
                   onChangeText={setVibe}
                   multiline
-                  numberOfLines={6}
-                  maxLength={200}
+                  numberOfLines={4}
+                  maxLength={100}
                   textAlignVertical="top"
                   autoCorrect={true}
                 />
                 
                 <View style={styles.characterCounter}>
                   <Text style={styles.characterCountText}>
-                    {vibe.length}/200
+                    {vibe.length}/100
                   </Text>
                 </View>
               </View>
@@ -146,10 +135,17 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 32,
-    paddingTop: 20,
-    paddingBottom: 10,
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
+  logoText: {
+    fontSize: 18,
+    fontWeight: '400',
+    color: Colors.light.text,
+    letterSpacing: -0.5,
   },
   skipButton: {
     paddingVertical: 8,
@@ -160,56 +156,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
   },
-  logoContainer: {
-    alignItems: 'center',
-    paddingTop: 20,
-    marginBottom: 60,
-  },
-  logoWrapper: {
-    marginBottom: 16,
-  },
-  logoCircles: {
-    width: 60,
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: -8,
-  },
-  logoCircle1: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary,
-  },
-  logoCircle2: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary + '80',
-  },
-  logoCircle3: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary + '40',
-  },
-  logoText: {
-    fontSize: 18,
-    fontWeight: '400',
-    color: Colors.light.text,
-    letterSpacing: -0.5,
-  },
   content: {
     flex: 1,
     paddingHorizontal: 32,
-    justifyContent: 'flex-start',
   },
   title: {
     fontSize: 28,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 48,
+    marginBottom: 32,
     textAlign: 'left',
     lineHeight: 34,
   },
@@ -222,7 +177,7 @@ const styles = StyleSheet.create({
     padding: 20,
     fontSize: 16,
     color: Colors.light.text,
-    minHeight: 140,
+    minHeight: 120,
     borderWidth: 1,
     borderColor: '#F0F0F0',
     fontWeight: '400',
