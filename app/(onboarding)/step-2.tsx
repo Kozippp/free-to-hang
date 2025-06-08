@@ -139,11 +139,12 @@ export default function UsernameInputScreen() {
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           {/* Header with Logo and Back */}
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-              <ArrowLeft size={24} color={Colors.light.text} />
+              <ArrowLeft size={20} color="#999" />
             </TouchableOpacity>
             <Text style={styles.logoText}>freetohang</Text>
             <View style={styles.placeholder} />
