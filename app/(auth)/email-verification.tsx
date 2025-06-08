@@ -188,7 +188,7 @@ export default function EmailVerificationScreen() {
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-              <ArrowLeft size={24} color={Colors.light.text} />
+              <ArrowLeft size={20} color="#999" />
             </TouchableOpacity>
           </View>
 

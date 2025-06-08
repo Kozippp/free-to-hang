@@ -60,11 +60,12 @@ export default function VibeInputScreen() {
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardView}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
             {/* Header with Logo, Back and Skip */}
             <View style={styles.header}>
               <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                <ArrowLeft size={24} color={Colors.light.text} />
+                <ArrowLeft size={20} color="#999" />
               </TouchableOpacity>
               <Text style={styles.logoText}>freetohang</Text>
               <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
@@ -74,7 +75,7 @@ export default function VibeInputScreen() {
 
             {/* Content */}
             <View style={styles.content}>
-              <Text style={styles.title}>what's your ideal hang vibe?</Text>
+              <Text style={styles.title}>Your ideal hang vibe</Text>
               
               <View style={styles.inputContainer}>
                 <TextInput
@@ -162,12 +163,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 60,
+    marginBottom: 32,
     textAlign: 'center',
   },
   inputContainer: {
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   vibeInput: {
     backgroundColor: '#F8F9FA',
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 60,
+    marginTop: 24,
   },
   continueButtonActive: {
     backgroundColor: Colors.light.primary,

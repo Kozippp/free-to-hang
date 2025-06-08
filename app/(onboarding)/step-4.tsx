@@ -145,7 +145,7 @@ export default function ProfilePhotoScreen() {
         {/* Header with Logo, Back and Skip */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <ArrowLeft size={24} color={Colors.light.text} />
+            <ArrowLeft size={20} color="#999" />
           </TouchableOpacity>
           <Text style={styles.logoText}>freetohang</Text>
           <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>

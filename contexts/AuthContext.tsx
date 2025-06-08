@@ -58,7 +58,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (event === 'SIGNED_IN' && session?.user) {
-          Alert.alert('Welcome!', 'You have successfully signed in.');
           setHasCheckedOnboarding(false); // Reset onboarding check for new login
         }
         
