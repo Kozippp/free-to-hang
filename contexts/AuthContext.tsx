@@ -177,46 +177,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setHasCheckedOnboarding(true); // Mark that we've checked to prevent loops
 
-    // TEMPORARY: Always show onboarding for design purposes
-    // Remove this block after onboarding design is complete
-    console.log('Showing onboarding for design purposes');
-    router.replace('/(onboarding)/step-1');
-    return;
-
     try {
-      // Check if user has completed onboarding
+      // First check if user exists in our users table
       const { data: userData, error } = await supabase
         .from('users')
-        .select('onboarding_completed')
+        .select('*')
         .eq('id', user!.id)
         .single();
 
       if (error) {
-        // If the column doesn't exist yet (error code 42703), assume onboarding is completed
-        // This provides backward compatibility for existing users
-        if (error.code === '42703') {
-          console.log('Onboarding column does not exist yet. Directing to main app.');
-          router.replace('/(tabs)');
+        // If user doesn't exist in users table (404/PGRST116), they need onboarding
+        if (error.code === 'PGRST116') {
+          console.log('User not found in users table. Directing to onboarding.');
+          router.replace('/(onboarding)/step-1');
           return;
         }
         
-        console.error('Error checking onboarding status:', error);
-        // On other errors, default to main app to prevent being stuck
-        router.replace('/(tabs)');
+        console.error('Error checking user existence:', error);
+        // On other errors, default to onboarding for safety
+        router.replace('/(onboarding)/step-1');
         return;
       }
 
-      if (!userData?.onboarding_completed) {
-        // User hasn't completed onboarding
-        router.replace('/(onboarding)/step-1');
+      // User exists, check onboarding status
+      if (userData) {
+        // If onboarding_completed field exists and is true, go to main app
+        if (userData.onboarding_completed === true) {
+          router.replace('/(tabs)');
+        } 
+        // If onboarding_completed field doesn't exist or is false/null, assume onboarding needed
+        else if (userData.onboarding_completed === false || userData.onboarding_completed == null) {
+          router.replace('/(onboarding)/step-1');
+        }
+        // If the column doesn't exist at all (undefined), assume user needs to complete flow
+        else {
+          console.log('User exists but onboarding status unclear. Directing to main app for backward compatibility.');
+          router.replace('/(tabs)');
+        }
       } else {
-        // User has completed onboarding
-        router.replace('/(tabs)');
+        // No user data found, need onboarding
+        router.replace('/(onboarding)/step-1');
       }
     } catch (error) {
       console.error('Error in checkOnboardingStatus:', error);
-      // On unexpected errors, default to main app
-      router.replace('/(tabs)');
+      // On unexpected errors, default to onboarding for safety
+      router.replace('/(onboarding)/step-1');
     }
   };
 
