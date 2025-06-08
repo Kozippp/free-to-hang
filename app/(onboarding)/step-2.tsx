@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { Check, X } from 'lucide-react-native';
+import { Check, X, ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 export default function UsernameInputScreen() {
@@ -21,6 +21,15 @@ export default function UsernameInputScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { name } = useLocalSearchParams<{ name: string }>();
+  const inputRef = useRef<TextInput>(null);
+
+  // Auto focus input when component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Debounced username checking
   useEffect(() => {
@@ -87,6 +96,10 @@ export default function UsernameInputScreen() {
     setUsername(cleaned);
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   const getAvailabilityIndicator = () => {
     if (username.length < 3) return null;
     
@@ -127,16 +140,13 @@ export default function UsernameInputScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
         >
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoWrapper}>
-              <View style={styles.logoCircles}>
-                <View style={styles.logoCircle1} />
-                <View style={styles.logoCircle2} />
-                <View style={styles.logoCircle3} />
-              </View>
-            </View>
+          {/* Header with Logo and Back */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+              <ArrowLeft size={24} color={Colors.light.text} />
+            </TouchableOpacity>
             <Text style={styles.logoText}>freetohang</Text>
+            <View style={styles.placeholder} />
           </View>
 
           {/* Content */}
@@ -145,6 +155,7 @@ export default function UsernameInputScreen() {
 
             <View style={styles.inputContainer}>
               <TextInput
+                ref={inputRef}
                 style={styles.usernameInput}
                 value={username}
                 onChangeText={handleUsernameChange}
@@ -160,21 +171,24 @@ export default function UsernameInputScreen() {
             
             {getAvailabilityIndicator()}
 
-            <TouchableOpacity 
-              style={[
-                styles.continueButton,
-                (!username.trim() || isLoading || !isAvailable) && styles.disabledButton
-              ]}
-              onPress={handleContinue}
-              disabled={!username.trim() || isLoading || !isAvailable}
-            >
-              <Text style={[
-                styles.continueButtonText,
-                (!username.trim() || isLoading || !isAvailable) && styles.disabledButtonText
-              ]}>
-                {isLoading ? 'creating...' : 'Continue'}
-              </Text>
-            </TouchableOpacity>
+            {/* Continue button - positioned above keyboard */}
+            {username.length >= 3 && isAvailable && (
+              <TouchableOpacity 
+                style={[
+                  styles.continueButton,
+                  isLoading && styles.disabledButton
+                ]}
+                onPress={handleContinue}
+                disabled={isLoading}
+              >
+                <Text style={[
+                  styles.continueButtonText,
+                  isLoading && styles.disabledButtonText
+                ]}>
+                  {isLoading ? 'creating...' : 'Continue'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -190,39 +204,19 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  logoContainer: {
-    alignItems: 'center',
-    paddingTop: 60,
-    marginBottom: 120,
-  },
-  logoWrapper: {
-    marginBottom: 16,
-  },
-  logoCircles: {
-    width: 60,
-    height: 40,
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 60,
+    paddingHorizontal: 32,
+    paddingBottom: 40,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
-    gap: -8,
-  },
-  logoCircle1: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary,
-  },
-  logoCircle2: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary + '80',
-  },
-  logoCircle3: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary + '40',
+    alignItems: 'center',
   },
   logoText: {
     fontSize: 18,
@@ -230,11 +224,13 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     letterSpacing: -0.5,
   },
+  placeholder: {
+    width: 40,
+  },
   content: {
     flex: 1,
     paddingHorizontal: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   title: {
     fontSize: 28,
@@ -307,6 +303,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 8,
+    marginTop: 20,
   },
   disabledButton: {
     backgroundColor: '#E0E0E0',
