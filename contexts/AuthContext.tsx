@@ -38,6 +38,7 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
@@ -58,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (event === 'SIGNED_IN' && session?.user) {
           Alert.alert('Welcome!', 'You have successfully signed in.');
+          setHasCheckedOnboarding(false); // Reset onboarding check for new login
         }
         
         if (event === 'TOKEN_REFRESHED' && __DEV__) {
@@ -144,15 +146,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboardingGroup = segments[0] === '(onboarding)';
+
+    if (__DEV__) {
+      console.log('AuthContext navigation check:', { 
+        user: !!user, 
+        segments: segments[0], 
+        hasCheckedOnboarding,
+        inAuthGroup,
+        inOnboardingGroup
+      });
+    }
 
     if (!user && !inAuthGroup) {
       // User is not logged in and not in auth group
+      setHasCheckedOnboarding(false);
       router.replace('/(auth)/sign-in');
-    } else if (user && inAuthGroup) {
-      // User is logged in and is in auth group
+    } else if (user && inAuthGroup && !hasCheckedOnboarding) {
+      // User is logged in but in auth group - check onboarding status once
+      console.log('Checking onboarding status from auth group');
+      checkOnboardingStatus();
+    } else if (user && !inOnboardingGroup && !inAuthGroup && !hasCheckedOnboarding) {
+      // User is logged in and not in onboarding/auth - check if onboarding is completed once
+      console.log('Checking onboarding status from main app');
+      checkOnboardingStatus();
+    }
+  }, [user, segments, loading, hasCheckedOnboarding]);
+
+  const checkOnboardingStatus = async () => {
+    if (!user) return;
+
+    setHasCheckedOnboarding(true); // Mark that we've checked to prevent loops
+
+    // TEMPORARY: Always show onboarding for design purposes
+    // Remove this block after onboarding design is complete
+    console.log('Showing onboarding for design purposes');
+    router.replace('/(onboarding)/step-1');
+    return;
+
+    try {
+      // Check if user has completed onboarding
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('onboarding_completed')
+        .eq('id', user!.id)
+        .single();
+
+      if (error) {
+        // If the column doesn't exist yet (error code 42703), assume onboarding is completed
+        // This provides backward compatibility for existing users
+        if (error.code === '42703') {
+          console.log('Onboarding column does not exist yet. Directing to main app.');
+          router.replace('/(tabs)');
+          return;
+        }
+        
+        console.error('Error checking onboarding status:', error);
+        // On other errors, default to main app to prevent being stuck
+        router.replace('/(tabs)');
+        return;
+      }
+
+      if (!userData?.onboarding_completed) {
+        // User hasn't completed onboarding
+        router.replace('/(onboarding)/step-1');
+      } else {
+        // User has completed onboarding
+        router.replace('/(tabs)');
+      }
+    } catch (error) {
+      console.error('Error in checkOnboardingStatus:', error);
+      // On unexpected errors, default to main app
       router.replace('/(tabs)');
     }
-  }, [user, segments, loading]);
+  };
 
   const signIn = async (email: string, password: string) => {
     if (AUTH_MOCK_MODE) {
