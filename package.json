@@ -9,7 +9,8 @@
     "setup-email": "node scripts/setup-email.js",
     "test-email": "node scripts/test-email.js",
     "check-database": "node scripts/check-database.js",
-    "debug-registration": "node scripts/debug-registration.js"
+    "debug-registration": "node scripts/debug-registration.js",
+    "migrate-onboarding": "node scripts/migrate-onboarding.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
