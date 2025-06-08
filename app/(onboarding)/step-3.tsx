@@ -6,163 +6,131 @@ import {
   TextInput,
   TouchableOpacity,
   SafeAreaView,
-  ScrollView,
-  Share,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import { Users, Search, UserPlus, Share2, Smartphone, ArrowLeft } from 'lucide-react-native';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 
-export default function OnboardingStep3Screen() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [contacts, setContacts] = useState<any[]>([]);
+export default function VibeSelectionScreen() {
+  const [vibe, setVibe] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { user } = useAuth();
+  const { name, username } = useLocalSearchParams<{ name: string; username: string }>();
 
-  const handleInviteFriends = async () => {
+  const handleContinue = async () => {
+    if (!vibe.trim()) {
+      Alert.alert('Vibe Required', 'Please describe your ideal hang vibe');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const result = await Share.share({
-        message: `Hey! I'm using Free2Hang to organize hangouts with friends. Join me here: https://freetohang.com/download`,
-        title: 'Join me on Free2Hang!',
-      });
+      // Here you would save the vibe to your backend
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      if (result.action === Share.sharedAction) {
-        Alert.alert('Great!', 'Thanks for sharing Free2Hang with your friends!');
-      }
+      router.push({
+        pathname: '/(onboarding)/step-4',
+        params: { name, username, vibe: vibe.trim() }
+      });
     } catch (error) {
-      console.error('Error sharing:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleSearchContacts = () => {
-    // This would search for existing users by username/email
-    // For now, just show a placeholder
-    Alert.alert('Coming Soon', 'User search functionality will be available soon!');
+  const handleSkip = () => {
+    router.push({
+      pathname: '/(onboarding)/step-4',
+      params: { name, username, vibe: '' }
+    });
   };
 
-  const handleFinishOnboarding = async () => {
-    if (!user) return;
-
-    try {
-      // TEMPORARY: Skip database update until migration is run
-      // TODO: Uncomment this after running the onboarding database migration
-      /*
-      const { error } = await supabase
-        .from('users')
-        .update({ onboarding_completed: true })
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('Error completing onboarding:', error);
-        Alert.alert('Error', 'Failed to complete onboarding. Please try again.');
-        return;
-      }
-      */
-
-      // For now, just navigate to main app
-      console.log('Onboarding completed successfully (temporary mode)');
-      router.replace('/(tabs)');
-    } catch (error) {
-      console.error('Error in handleFinishOnboarding:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-    }
-  };
-
-  const handleSkipForNow = () => {
-    Alert.alert(
-      'Skip for now?',
-      'Free2Hang is much more fun with friends! You can always invite them later from your profile.',
-      [
-        { text: 'Go Back', style: 'cancel' },
-        { text: 'Skip for Now', onPress: handleFinishOnboarding },
-      ]
-    );
-  };
-
-  const handleBack = () => {
-    router.back();
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
   };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {/* Header with progress and navigation */}
-          <View style={styles.headerContainer}>
-            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-              <ArrowLeft size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
-            
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressStep, styles.completedStep]} />
-                <View style={[styles.progressStep, styles.completedStep]} />
-                <View style={[styles.progressStep, styles.activeStep]} />
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardView}
+          >
+            {/* Header with Skip */}
+            <View style={styles.header}>
+              <TouchableOpacity 
+                style={styles.skipButton}
+                onPress={handleSkip}
+              >
+                <Text style={styles.skipButtonText}>skip for now</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Logo */}
+            <View style={styles.logoContainer}>
+              <View style={styles.logoWrapper}>
+                <View style={styles.logoCircles}>
+                  <View style={styles.logoCircle1} />
+                  <View style={styles.logoCircle2} />
+                  <View style={styles.logoCircle3} />
+                </View>
               </View>
+              <Text style={styles.logoText}>freetohang</Text>
             </View>
-            
-            <TouchableOpacity style={styles.skipButton} onPress={handleSkipForNow}>
-              <Text style={styles.skipText}>skip</Text>
-            </TouchableOpacity>
-          </View>
 
-          {/* Content */}
-          <View style={styles.content}>
-            <View style={styles.iconContainer}>
-              <Users size={60} color={Colors.light.primary} />
-            </View>
-            
-            <Text style={styles.title}>invite friends</Text>
-            <Text style={styles.subtitle}>
-              free2hang is way more fun with friends! 
-            </Text>
-            <Text style={styles.funnyText}>
-              (seriously, it's pretty useless without them 😅)
-            </Text>
-
-            {/* Invite options */}
-            <View style={styles.inviteOptionsContainer}>
-              <TouchableOpacity 
-                style={styles.primaryInviteButton} 
-                onPress={handleInviteFriends}
-              >
-                <View style={styles.inviteIconContainer}>
-                  <Share2 size={20} color="white" />
+            {/* Content */}
+            <View style={styles.content}>
+              <Text style={styles.title}>what's your ideal hang vibe?</Text>
+              
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.vibeInput}
+                  placeholder="Slow, cozy nights with soft music and meaningful conversations :)"
+                  placeholderTextColor="#999"
+                  value={vibe}
+                  onChangeText={setVibe}
+                  multiline
+                  numberOfLines={6}
+                  maxLength={200}
+                  textAlignVertical="top"
+                  autoCorrect={true}
+                />
+                
+                <View style={styles.characterCounter}>
+                  <Text style={styles.characterCountText}>
+                    {vibe.length}/200
+                  </Text>
                 </View>
-                <Text style={styles.primaryInviteText}>Share with Friends</Text>
-              </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity 
-                style={styles.secondaryInviteButton} 
-                onPress={handleSearchContacts}
-              >
-                <View style={styles.searchIconContainer}>
-                  <Search size={20} color={Colors.light.primary} />
-                </View>
-                <Text style={styles.secondaryInviteText}>Find Friends</Text>
-              </TouchableOpacity>
+              {/* Submit button - shows above keyboard when typing */}
+              {vibe.trim().length > 0 && (
+                <TouchableOpacity 
+                  style={[
+                    styles.continueButton,
+                    isLoading && styles.disabledButton
+                  ]}
+                  onPress={handleContinue}
+                  disabled={isLoading}
+                >
+                  <Text style={[
+                    styles.continueButtonText,
+                    isLoading && styles.disabledButtonText
+                  ]}>
+                    {isLoading ? 'saving...' : 'continue'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
-
-            {/* Alternative text */}
-            <Text style={styles.alternativeText}>
-              You can always invite friends later from your profile
-            </Text>
-
-            {/* Finish button */}
-            <TouchableOpacity 
-              style={styles.finishButton}
-              onPress={handleFinishOnboarding}
-            >
-              <Text style={styles.finishButtonText}>
-                let's get started!
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </SafeAreaView>
     </>
   );
@@ -173,161 +141,131 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    marginTop: 40,
-    marginBottom: 30,
-  },
-  progressContainer: {
+  keyboardView: {
     flex: 1,
-    alignItems: 'center',
   },
-  progressBar: {
+  header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    maxWidth: 120,
-  },
-  progressStep: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  activeStep: {
-    backgroundColor: Colors.light.primary,
-  },
-  completedStep: {
-    backgroundColor: Colors.light.primary,
-  },
-  navigationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 32,
+    paddingTop: 20,
+    paddingBottom: 10,
   },
   skipButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
   },
-  skipText: {
+  skipButtonText: {
+    color: '#999',
     fontSize: 16,
-    color: Colors.light.secondaryText,
+    fontWeight: '400',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    paddingTop: 20,
+    marginBottom: 60,
+  },
+  logoWrapper: {
+    marginBottom: 16,
+  },
+  logoCircles: {
+    width: 60,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: -8,
+  },
+  logoCircle1: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+  },
+  logoCircle2: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '80',
+  },
+  logoCircle3: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '40',
+  },
+  logoText: {
+    fontSize: 18,
+    fontWeight: '400',
+    color: Colors.light.text,
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,
-    marginTop: 20,
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 32,
+    justifyContent: 'flex-start',
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 12,
-    textAlign: 'center',
+    marginBottom: 48,
+    textAlign: 'left',
+    lineHeight: 34,
   },
-  subtitle: {
+  inputContainer: {
+    marginBottom: 24,
+  },
+  vibeInput: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 16,
+    padding: 20,
     fontSize: 16,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
+    color: Colors.light.text,
+    minHeight: 140,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    fontWeight: '400',
     lineHeight: 22,
   },
-  funnyText: {
-    fontSize: 14,
+  characterCounter: {
+    alignItems: 'flex-end',
+    marginTop: 8,
+  },
+  characterCountText: {
+    fontSize: 12,
     color: Colors.light.secondaryText,
-    textAlign: 'center',
-    marginBottom: 40,
-    fontStyle: 'italic',
+    fontWeight: '400',
   },
-  inviteOptionsContainer: {
-    gap: 12,
-    marginBottom: 40,
-  },
-  primaryInviteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
+  continueButton: {
     backgroundColor: Colors.light.primary,
-    borderRadius: 16,
-    gap: 12,
-  },
-  inviteIconContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  primaryInviteText: {
-    fontSize: 16,
-    color: 'white',
-    fontWeight: '600',
-  },
-  secondaryInviteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.light.primary,
-    gap: 12,
-  },
-  searchIconContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: `${Colors.light.primary}15`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryInviteText: {
-    fontSize: 16,
-    color: Colors.light.primary,
-    fontWeight: '600',
-  },
-  alternativeText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  finishButton: {
-    backgroundColor: Colors.light.primary,
-    borderRadius: 16,
+    borderRadius: 28,
     height: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 'auto',
     shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+    marginTop: 16,
   },
-  finishButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
+  disabledButton: {
+    backgroundColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  continueButtonText: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  disabledButtonText: {
+    color: '#999',
   },
 }); 

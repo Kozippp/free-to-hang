@@ -56,11 +56,13 @@ export default function NameInputScreen() {
           {/* Logo */}
           <View style={styles.logoContainer}>
             <View style={styles.logoWrapper}>
-              <View style={styles.logoToggle}>
-                <View style={styles.logoKnob} />
+              <View style={styles.logoCircles}>
+                <View style={styles.logoCircle1} />
+                <View style={styles.logoCircle2} />
+                <View style={styles.logoCircle3} />
               </View>
             </View>
-            <Text style={styles.logoText}>Free2Hang</Text>
+            <Text style={styles.logoText}>freetohang</Text>
           </View>
 
           {/* Content */}
@@ -71,6 +73,7 @@ export default function NameInputScreen() {
             <TextInput
               style={styles.nameInput}
               placeholder="Enter your name"
+              placeholderTextColor="#999"
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
@@ -116,76 +119,83 @@ const styles = StyleSheet.create({
     marginBottom: 80,
   },
   logoWrapper: {
-    width: 60,
-    height: 60,
-    backgroundColor: Colors.light.primary,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 16,
   },
-  logoToggle: {
-    width: 40,
-    height: 20,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 10,
+  logoCircles: {
+    width: 60,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 2,
+    gap: -8,
   },
-  logoKnob: {
-    width: 16,
-    height: 16,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    alignSelf: 'flex-end',
+  logoCircle1: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+  },
+  logoCircle2: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '80',
+  },
+  logoCircle3: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary + '40',
   },
   logoText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '400',
     color: Colors.light.text,
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 32,
     justifyContent: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   subtitle: {
     fontSize: 16,
     color: Colors.light.secondaryText,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: 48,
+    fontWeight: '400',
   },
   nameInput: {
-    backgroundColor: '#F8F8F8',
-    borderRadius: 16,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
     height: 56,
-    paddingHorizontal: 20,
-    fontSize: 18,
+    paddingHorizontal: 0,
+    paddingVertical: 16,
+    fontSize: 24,
     color: Colors.light.text,
-    textAlign: 'center',
-    marginBottom: 32,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    marginBottom: 48,
+    fontWeight: '400',
   },
   nextButton: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 50,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 28,
     height: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FF6B6B',
+    shadowColor: Colors.light.primary,
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 8,
   },
@@ -198,7 +208,7 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
   disabledButtonText: {
