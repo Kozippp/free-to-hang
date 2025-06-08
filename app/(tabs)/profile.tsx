@@ -400,14 +400,14 @@ export default function ProfileScreen() {
             ) : (
               <View style={styles.emptyFriends}>
                 <Users size={48} color={Colors.light.secondaryText} />
-                <Text style={styles.emptyFriendsText}>No friends yet</Text>
-                <Text style={styles.emptyFriendsSubtext}>Add friends to see them here</Text>
+                <Text style={styles.emptyFriendsText}>Seems quiet here</Text>
+                <Text style={styles.emptyFriendsSubtext}>Add more friends to see when they are available</Text>
                 <TouchableOpacity 
                   style={styles.emptyAddFriendButton}
                   onPress={() => setShowAddFriend(true)}
                 >
                   <UserPlus size={18} color="white" />
-                  <Text style={styles.emptyAddFriendText}>Add your first friend</Text>
+                  <Text style={styles.emptyAddFriendText}>Add friends</Text>
                 </TouchableOpacity>
               </View>
             )}

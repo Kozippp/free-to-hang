@@ -88,21 +88,20 @@ export default function OnboardingStep1Screen() {
       <SafeAreaView style={styles.container}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView contentContainerStyle={styles.scrollContainer}>
-            {/* Progress indicator */}
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressStep, styles.activeStep]} />
-                <View style={styles.progressStep} />
-                <View style={styles.progressStep} />
-              </View>
-              <Text style={styles.progressText}>Step 1 of 3</Text>
-            </View>
-
-            {/* Navigation buttons */}
-            <View style={styles.navigationContainer}>
+            {/* Header with progress and navigation */}
+            <View style={styles.headerContainer}>
               <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                <ArrowLeft size={20} color={Colors.light.secondaryText} />
+                <ArrowLeft size={24} color={Colors.light.secondaryText} />
               </TouchableOpacity>
+              
+              <View style={styles.progressContainer}>
+                <View style={styles.progressBar}>
+                  <View style={[styles.progressStep, styles.activeStep]} />
+                  <View style={styles.progressStep} />
+                  <View style={styles.progressStep} />
+                </View>
+              </View>
+              
               <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                 <Text style={styles.skipText}>skip</Text>
               </TouchableOpacity>
@@ -110,9 +109,9 @@ export default function OnboardingStep1Screen() {
 
             {/* Content */}
             <View style={styles.content}>
-              <Text style={styles.title}>tell us about yourself</Text>
+              <Text style={styles.title}>what's your vibe?</Text>
               <Text style={styles.subtitle}>
-                what kind of hangouts do you enjoy most? this helps us show you better plans
+                tell us your favorite vibe for hanging out
               </Text>
 
               {/* Interests selection */}
@@ -145,22 +144,22 @@ export default function OnboardingStep1Screen() {
                 })}
               </View>
 
-              {/* Bio input */}
-              <View style={styles.bioContainer}>
-                <Text style={styles.bioLabel}>
-                  tell others a bit about yourself (optional)
+              {/* Vibe input */}
+              <View style={styles.vibeContainer}>
+                <Text style={styles.vibeLabel}>
+                  describe your perfect hangout vibe
                 </Text>
                 <TextInput
-                  style={styles.bioInput}
-                  placeholder="I'm a foodie who loves exploring local cuisines and meeting new people..."
+                  style={styles.vibeInput}
+                  placeholder="Chill coffee talks, spontaneous adventures, cozy movie nights..."
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={3}
                   value={bio}
                   onChangeText={setBio}
-                  maxLength={200}
+                  maxLength={120}
                   textAlignVertical="top"
                 />
-                <Text style={styles.characterCount}>{bio.length}/200</Text>
+                <Text style={styles.characterCount}>{bio.length}/120</Text>
               </View>
 
               {/* Continue button */}
@@ -197,29 +196,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 32,
   },
-  progressContainer: {
+  headerContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
     marginTop: 40,
-    marginBottom: 20,
+    marginBottom: 30,
+  },
+  progressContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   progressBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 6,
+    flex: 1,
+    maxWidth: 120,
   },
   progressStep: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E5E5E5',
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   activeStep: {
     backgroundColor: Colors.light.primary,
-  },
-  progressText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
   },
   navigationContainer: {
     flexDirection: 'row',
@@ -286,23 +289,24 @@ const styles = StyleSheet.create({
     color: Colors.light.primary,
     fontWeight: '500',
   },
-  bioContainer: {
+  vibeContainer: {
     marginBottom: 40,
   },
-  bioLabel: {
+  vibeLabel: {
     fontSize: 16,
+    fontWeight: '500',
     color: Colors.light.text,
     marginBottom: 12,
   },
-  bioInput: {
+  vibeInput: {
     backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     fontSize: 16,
     color: Colors.light.text,
-    minHeight: 100,
+    minHeight: 80,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: 'rgba(0,0,0,0.08)',
   },
   characterCount: {
     fontSize: 12,
@@ -312,11 +316,16 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     backgroundColor: Colors.light.primary,
-    borderRadius: 12,
+    borderRadius: 16,
     height: 56,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 'auto',
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   disabledButton: {
     backgroundColor: '#E5E5E5',

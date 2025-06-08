@@ -24,7 +24,7 @@ export default function SignInScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signIn } = useAuth(); // Removed OAuth methods since they need proper setup
+  const { signIn } = useAuth();
 
   const dismissKeyboard = () => {
     Keyboard.dismiss();
@@ -48,12 +48,24 @@ export default function SignInScreen() {
     }
   };
 
-  const handleOAuthNotAvailable = (provider: string) => {
+  const handleAppleSignIn = async () => {
     Alert.alert(
-      `${provider} Sign-In`, 
-      `${provider} authentication is not configured yet. Please use email and password to sign in.`,
+      'Apple Sign-In', 
+      'Apple authentication is not configured yet. Please use phone number to sign in.',
       [{ text: 'OK', style: 'default' }]
     );
+  };
+
+  const handleGoogleSignIn = async () => {
+    Alert.alert(
+      'Google Sign-In', 
+      'Google authentication is not configured yet. Please use phone number to sign in.',
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
+  const handleEmailSignIn = () => {
+    router.push('/(auth)/email-signin');
   };
 
   return (
@@ -76,103 +88,51 @@ export default function SignInScreen() {
                 <Text style={styles.logoText}>Free2Hang</Text>
               </View>
 
-              {/* Sign in form */}
-              <View style={styles.form}>
-                <View style={styles.inputContainer}>
-                  <Mail size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect={false}
-                    returnKeyType="next"
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Lock size={20} color={Colors.light.secondaryText} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Password"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                    onSubmitEditing={handleSignIn}
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeIcon}
-                    onPress={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff size={20} color={Colors.light.secondaryText} />
-                    ) : (
-                      <Eye size={20} color={Colors.light.secondaryText} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity 
-                  style={[styles.signInButton, isLoading && styles.buttonDisabled]}
-                  onPress={handleSignIn}
-                  disabled={isLoading}
-                >
-                  <Text style={styles.signInButtonText}>
-                    {isLoading ? 'Signing in...' : 'Sign In'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={styles.forgotPassword}
-                  onPress={() => router.push('/(auth)/forgot-password' as any)}
-                >
-                  <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-                </TouchableOpacity>
+              {/* Welcome text */}
+              <View style={styles.welcomeContainer}>
+                <Text style={styles.welcomeTitle}>welcome back</Text>
+                <Text style={styles.welcomeSubtitle}>sign in to continue</Text>
               </View>
 
-              {/* OAuth Section - Currently disabled in development */}
-              <View style={styles.oauthSection}>
-                <View style={styles.dividerContainer}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>Or continue with</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-                
-                <View style={styles.oauthButtons}>
-                  {Platform.OS === 'ios' && (
-                    <TouchableOpacity 
-                      style={[styles.oauthButton, styles.appleButton, styles.disabledButton]}
-                      onPress={() => handleOAuthNotAvailable('Apple')}
-                    >
-                      <Text style={styles.appleButtonText}>🍎 Sign in with Apple</Text>
-                    </TouchableOpacity>
-                  )}
-                  
+              {/* Sign in options */}
+              <View style={styles.signInOptions}>
+                {Platform.OS === 'ios' && (
                   <TouchableOpacity 
-                    style={[styles.oauthButton, styles.googleButton, styles.disabledButton]}
-                    onPress={() => handleOAuthNotAvailable('Google')}
+                    style={[styles.signInButton, styles.appleButton]}
+                    onPress={handleAppleSignIn}
+                    disabled={isLoading}
                   >
-                    <Text style={styles.googleButtonText}>G Sign in with Google</Text>
+                    <Text style={styles.appleButtonText}>🍎 Continue with Apple</Text>
                   </TouchableOpacity>
-                </View>
+                )}
                 
-                <Text style={styles.oauthNote}>
-                  OAuth providers require additional setup for production use
-                </Text>
+                {Platform.OS === 'android' && (
+                  <TouchableOpacity 
+                    style={[styles.signInButton, styles.googleButton]}
+                    onPress={handleGoogleSignIn}
+                    disabled={isLoading}
+                  >
+                    <Text style={styles.googleButtonText}>G Continue with Google</Text>
+                  </TouchableOpacity>
+                )}
+                
+                            <TouchableOpacity 
+              style={[styles.signInButton, styles.emailButton]}
+              onPress={handleEmailSignIn}
+              disabled={isLoading}
+            >
+              <Text style={styles.emailButtonText}>✉️ Continue with Email</Text>
+            </TouchableOpacity>
               </View>
 
-              {/* Sign up link */}
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>Don't have an account? </Text>
-                <TouchableOpacity onPress={() => router.push('/(auth)/sign-up' as any)}>
-                  <Text style={styles.signUpLink}>Sign Up</Text>
-                </TouchableOpacity>
+              {/* Terms */}
+              <View style={styles.termsContainer}>
+                <Text style={styles.termsText}>
+                  By continuing, you agree to our{' '}
+                  <Text style={styles.termsLink}>Terms of Service</Text>
+                  {' '}and{' '}
+                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                </Text>
               </View>
             </View>
           </KeyboardAvoidingView>
@@ -185,7 +145,7 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: 'white',
   },
   keyboardView: {
     flex: 1,
@@ -197,144 +157,107 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 48,
   },
   logoWrapper: {
+    width: 80,
+    height: 80,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
   },
   logoToggle: {
     width: 60,
     height: 30,
-    backgroundColor: '#4CAF50',
+    backgroundColor: 'rgba(255,255,255,0.3)',
     borderRadius: 15,
-    position: 'relative',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
   },
   logoKnob: {
-    width: 20,
-    height: 20,
+    width: 24,
+    height: 24,
     backgroundColor: 'white',
-    borderRadius: 10,
-    position: 'absolute',
-    top: 5,
-    left: 5,
+    borderRadius: 12,
+    alignSelf: 'flex-end',
   },
   logoText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: Colors.light.primary,
-  },
-  form: {
-    marginBottom: 32,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    height: 56,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
+    fontSize: 24,
+    fontWeight: '700',
     color: Colors.light.text,
   },
-  eyeIcon: {
-    padding: 4,
-  },
-  signInButton: {
-    backgroundColor: Colors.light.primary,
-    borderRadius: 12,
-    height: 56,
-    justifyContent: 'center',
+  welcomeContainer: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 48,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 8,
   },
-  signInButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
-  },
-  forgotPassword: {
-    alignSelf: 'center',
-  },
-  forgotPasswordText: {
-    fontSize: 16,
-    color: Colors.light.primary,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerText: {
+  welcomeSubtitle: {
     fontSize: 16,
     color: Colors.light.secondaryText,
   },
-  signUpLink: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.primary,
-  },
-  oauthSection: {
+  signInOptions: {
+    gap: 16,
     marginBottom: 32,
   },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.light.secondaryText,
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-  },
-  oauthButtons: {
-    gap: 12,
-    marginBottom: 12,
-  },
-  oauthButton: {
-    backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 12,
+  signInButton: {
     height: 56,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   appleButton: {
-    backgroundColor: Colors.light.appleButton,
+    backgroundColor: '#000',
   },
   appleButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: '600',
-    color: 'white',
   },
   googleButton: {
-    backgroundColor: Colors.light.googleButton,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   googleButtonText: {
+    color: '#333',
     fontSize: 16,
     fontWeight: '600',
+  },
+  emailButton: {
+    backgroundColor: Colors.light.primary,
+  },
+  emailButtonText: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  disabledButton: {
-    opacity: 0.5,
+  termsContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
   },
-  oauthNote: {
+  termsText: {
     fontSize: 12,
     color: Colors.light.secondaryText,
     textAlign: 'center',
-    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
 }); 
