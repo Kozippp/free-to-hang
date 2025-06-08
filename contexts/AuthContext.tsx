@@ -201,21 +201,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // User exists, check onboarding status
       if (userData) {
+        console.log('User found in database:', { 
+          id: userData.id, 
+          name: userData.name, 
+          username: userData.username,
+          onboarding_completed: userData.onboarding_completed 
+        });
+        
+        // If user has name and username, consider them onboarded (backward compatibility)
+        if (userData.name && userData.username) {
+          console.log('User has name and username, directing to main app');
+          router.replace('/(tabs)');
+          return;
+        }
+        
         // If onboarding_completed field exists and is true, go to main app
         if (userData.onboarding_completed === true) {
+          console.log('User has onboarding_completed = true, directing to main app');
           router.replace('/(tabs)');
+          return;
         } 
-        // If onboarding_completed field doesn't exist or is false/null, assume onboarding needed
-        else if (userData.onboarding_completed === false || userData.onboarding_completed == null) {
-          router.replace('/(onboarding)/step-1');
-        }
-        // If the column doesn't exist at all (undefined), assume user needs to complete flow
-        else {
-          console.log('User exists but onboarding status unclear. Directing to main app for backward compatibility.');
-          router.replace('/(tabs)');
-        }
+        
+        // Otherwise, user needs onboarding
+        console.log('User needs onboarding, directing to step-1');
+        router.replace('/(onboarding)/step-1');
       } else {
         // No user data found, need onboarding
+        console.log('No user data found, directing to onboarding');
         router.replace('/(onboarding)/step-1');
       }
     } catch (error) {

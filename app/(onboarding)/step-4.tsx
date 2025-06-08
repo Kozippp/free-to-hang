@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -23,6 +23,11 @@ export default function ProfilePhotoScreen() {
     username: string; 
     vibe: string; 
   }>();
+
+  // Debug params
+  useEffect(() => {
+    console.log('Step-4 received params:', { name, username, vibe });
+  }, [name, username, vibe]);
 
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -111,91 +116,95 @@ export default function ProfilePhotoScreen() {
         throw new Error('No authenticated user found');
       }
 
-      // Try different combinations of fields, starting with the most complete
-      const profileVariations = [
-        // Full profile with all fields
-        {
-          id: authUser.id,
-          name: name || authUser.user_metadata?.name || 'User',
-          username: username || authUser.user_metadata?.username || 'user',
-          vibe: vibe || '',
-          avatar_url: profilePhoto || null,
-          onboarding_completed: true,
-          updated_at: new Date().toISOString()
-        },
-        // Without onboarding_completed
-        {
-          id: authUser.id,
-          name: name || authUser.user_metadata?.name || 'User',
-          username: username || authUser.user_metadata?.username || 'user',
-          vibe: vibe || '',
-          avatar_url: profilePhoto || null,
-          updated_at: new Date().toISOString()
-        },
-        // Without vibe and onboarding_completed
-        {
-          id: authUser.id,
-          name: name || authUser.user_metadata?.name || 'User',
-          username: username || authUser.user_metadata?.username || 'user',
-          avatar_url: profilePhoto || null,
-          updated_at: new Date().toISOString()
-        },
-        // Without updated_at, vibe, onboarding_completed
-        {
-          id: authUser.id,
-          name: name || authUser.user_metadata?.name || 'User',
-          username: username || authUser.user_metadata?.username || 'user',
-          avatar_url: profilePhoto || null
-        },
-        // Without avatar_url, updated_at, vibe, onboarding_completed
-        {
-          id: authUser.id,
-          name: name || authUser.user_metadata?.name || 'User',
-          username: username || authUser.user_metadata?.username || 'user'
-        },
-        // Super minimal - just required fields
-        {
-          id: authUser.id,
-          name: name || authUser.user_metadata?.name || 'User'
-        },
-        // Emergency fallback - maybe only email exists
-        {
-          id: authUser.id,
-          email: authUser.email || ''
-        }
-      ];
+      console.log('AuthUser data:', { 
+        id: authUser.id, 
+        email: authUser.email, 
+        user_metadata: authUser.user_metadata 
+      });
+      console.log('Params from URL:', { name, username, vibe });
 
-      let saveSuccessful = false;
-      let lastError = null;
-
-      // Try each variation until one works
-      for (const profileData of profileVariations) {
-        try {
-          const { error } = await supabase
-            .from('users')
-            .upsert(profileData, { 
-              onConflict: 'id',
-              ignoreDuplicates: false 
-            });
-
-          if (!error) {
-            console.log('Profile saved successfully with fields:', Object.keys(profileData));
-            saveSuccessful = true;
-            break;
-          } else {
-            console.log('Failed to save with fields:', Object.keys(profileData), 'Error:', error.message);
-            lastError = error;
-          }
-        } catch (error) {
-          console.log('Exception saving with fields:', Object.keys(profileData), 'Error:', error);
-          lastError = error;
-        }
+      // Validate that we have required data from onboarding
+      if (!name || !username) {
+        throw new Error('Missing required onboarding data. Please complete all steps.');
       }
 
-      if (!saveSuccessful) {
-        console.error('All profile save attempts failed. Last error:', lastError);
-        throw new Error('Failed to save profile data - database schema may be incomplete');
+      // Final check - ensure username reservation is still valid
+      const { data: isReservationValid, error: reservationError } = await supabase.rpc('check_username_reservation', {
+        check_username: username,
+        check_user_id: authUser.id
+      });
+
+      if (reservationError) {
+        console.error('Error checking reservation:', reservationError);
+        throw new Error('Failed to verify username reservation');
       }
+
+      if (!isReservationValid) {
+        Alert.alert(
+          'Username Expired', 
+          'Your username reservation has expired. Please choose a username again.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.push('/(onboarding)/step-2')
+            }
+          ]
+        );
+        return;
+      }
+
+      // Prepare data with guaranteed required fields from onboarding
+      const profileData = {
+        id: authUser.id,
+        email: authUser.email || authUser.user_metadata?.email || `user_${authUser.id}@example.com`,
+        name: name, // From onboarding step-1
+        username: username, // From onboarding step-2 (validated and reserved)
+        vibe: vibe || null, // From onboarding step-3 (can be empty)
+        avatar_url: profilePhoto || null,
+        onboarding_completed: true,
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('Attempting to save profile with data:', profileData);
+      
+      const { error } = await supabase
+        .from('users')
+        .upsert(profileData, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error('Failed to save profile:', error);
+        
+        // Handle specific error cases
+        if (error.message.includes('duplicate key value violates unique constraint "users_username_key"')) {
+          Alert.alert(
+            'Username Taken', 
+            'This username was taken while you were completing registration. Please choose a different username.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.push('/(onboarding)/step-2')
+              }
+            ]
+          );
+          return;
+        }
+        
+        throw new Error('Failed to save profile data. Please try again.');
+      }
+
+      console.log('Profile saved successfully!');
+
+      // Remove the username reservation since registration is complete
+      await supabase
+        .from('username_reservations')
+        .delete()
+        .eq('username', username)
+        .eq('user_id', authUser.id);
+
+      console.log('Username reservation cleaned up');
 
       // Navigate to main app first
       router.replace('/(tabs)');
@@ -213,9 +222,9 @@ export default function ProfilePhotoScreen() {
           ]
         );
       }, 500);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Profile setup error:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert('Error', error.message || 'Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -282,7 +291,7 @@ export default function ProfilePhotoScreen() {
                 styles.continueButtonText,
                 isLoading && styles.disabledButtonText
               ]}>
-                {isLoading ? 'Finishing up...' : 'Continue'}
+                {isLoading ? 'Finishing up...' : 'Sign up'}
               </Text>
             </TouchableOpacity>
           )}

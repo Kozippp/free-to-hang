@@ -13,6 +13,7 @@ import {
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Check, X, ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { supabase } from '@/lib/supabase';
 
 export default function UsernameInputScreen() {
   const [username, setUsername] = useState('');
@@ -31,7 +32,7 @@ export default function UsernameInputScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Debounced username checking
+  // Debounced username checking with reservation system
   useEffect(() => {
     if (username.length < 3) {
       setIsAvailable(null);
@@ -41,15 +42,28 @@ export default function UsernameInputScreen() {
     setIsChecking(true);
     const timer = setTimeout(async () => {
       try {
-        // Simulate API call to check username availability
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Simulate some usernames being taken
-        const takenUsernames = ['admin', 'test', 'user', 'freetohang', 'mihkelkk'];
-        const available = !takenUsernames.includes(username.toLowerCase());
-        setIsAvailable(available);
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setIsAvailable(null);
+          setIsChecking(false);
+          return;
+        }
+
+        // Check if username is available using the database function
+        const { data, error } = await supabase.rpc('is_username_available', {
+          check_username: username.toLowerCase()
+        });
+
+        if (error) {
+          console.error('Error checking username availability:', error);
+          setIsAvailable(null);
+        } else {
+          setIsAvailable(data);
+        }
       } catch (error) {
-        console.error('Error checking username:', error);
+        console.error('Error checking username availability:', error);
+        setIsAvailable(null);
       } finally {
         setIsChecking(false);
       }
@@ -58,32 +72,60 @@ export default function UsernameInputScreen() {
     return () => clearTimeout(timer);
   }, [username]);
 
+  const isValidUsername = username.length >= 3 && /^[a-zA-Z0-9_]+$/.test(username);
+  const canContinue = isValidUsername && isAvailable === true && !isChecking;
+
   const handleContinue = async () => {
-    if (!username.trim()) {
-      Alert.alert('Username Required', 'Please enter a username to continue');
-      return;
-    }
-
-    if (username.length < 3) {
-      Alert.alert('Username Too Short', 'Username must be at least 3 characters long');
-      return;
-    }
-
-    if (!isAvailable) {
-      Alert.alert('Username Not Available', 'Please choose a different username');
+    if (!canContinue) {
+      if (!isValidUsername) {
+        Alert.alert('Invalid Username', 'Username must be at least 3 characters long and contain only letters, numbers, and underscores.');
+      } else if (isAvailable === false) {
+        Alert.alert('Username Taken', 'This username is already taken. Please choose a different one.');
+      } else if (isChecking) {
+        Alert.alert('Please Wait', 'Still checking username availability...');
+      }
       return;
     }
 
     setIsLoading(true);
+    
     try {
-      // Here you would save the username to your backend
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please log in again.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Reserve the username
+      const { data: reservationSuccess, error } = await supabase.rpc('reserve_username', {
+        reserve_username: username.toLowerCase(),
+        reserve_user_id: user.id
+      });
+
+      if (error) {
+        console.error('Error reserving username:', error);
+        Alert.alert('Error', 'Failed to reserve username. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!reservationSuccess) {
+        // Username was taken between check and reservation
+        Alert.alert('Username Taken', 'This username was just taken by someone else. Please choose a different one.');
+        setIsAvailable(false); // Update UI to show it's no longer available
+        setIsLoading(false);
+        return;
+      }
+
+      // Success - username is reserved, proceed to next step
       router.push({
         pathname: '/(onboarding)/step-3',
-        params: { name, username: username.trim() }
+        params: { name: name!, username: username.toLowerCase() }
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error in handleContinue:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
@@ -105,30 +147,30 @@ export default function UsernameInputScreen() {
     
     if (isChecking) {
       return (
-        <View style={styles.checkingContainer}>
-          <Text style={styles.checkingText}>checking...</Text>
+        <View style={styles.indicator}>
+          <Text style={styles.checkingText}>Checking...</Text>
         </View>
       );
     }
-
+    
     if (isAvailable === true) {
       return (
-        <View style={styles.availableContainer}>
-          <Check size={16} color={Colors.light.onlineGreen} />
+        <View style={[styles.indicator, styles.available]}>
+          <Check size={16} color={Colors.light.primary} />
           <Text style={styles.availableText}>Available</Text>
         </View>
       );
     }
-
+    
     if (isAvailable === false) {
       return (
-        <View style={styles.unavailableContainer}>
-          <X size={16} color={Colors.light.destructive} />
-          <Text style={styles.unavailableText}>Unavailable</Text>
+        <View style={[styles.indicator, styles.taken]}>
+          <X size={16} color="#FF4B55" />
+          <Text style={styles.takenText}>Username taken</Text>
         </View>
       );
     }
-
+    
     return null;
   };
 
@@ -256,7 +298,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
-  checkingContainer: {
+  indicator: {
     alignItems: 'center',
     marginBottom: 40,
   },
@@ -265,11 +307,10 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     fontWeight: '400',
   },
-  availableContainer: {
+  available: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 40,
     gap: 6,
   },
   availableText: {
@@ -277,14 +318,13 @@ const styles = StyleSheet.create({
     color: Colors.light.onlineGreen,
     fontWeight: '600',
   },
-  unavailableContainer: {
+  taken: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 40,
     gap: 6,
   },
-  unavailableText: {
+  takenText: {
     fontSize: 14,
     color: Colors.light.destructive,
     fontWeight: '600',

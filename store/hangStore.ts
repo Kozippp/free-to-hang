@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
+import { generateDefaultAvatar, SILHOUETTE_AVATAR_URL } from '@/constants/defaultImages';
 
 interface Friend {
   id: string;
@@ -18,6 +19,8 @@ interface Friend {
 interface User {
   id: string;
   name: string;
+  username?: string;
+  vibe?: string;
   avatar: string;
   status: 'online' | 'offline';
   activity: string;
@@ -42,22 +45,28 @@ interface HangState {
   isPingedFriend: (id: string) => boolean;
   loadUserData: () => Promise<void>;
   loadFriends: () => Promise<void>;
+  updateUserData: (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => Promise<boolean>;
 }
 
-// Default user data
-const defaultUser: User = {
-  id: '',
-  name: 'User',
-  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&h=120&fit=crop&crop=face',
-  status: 'offline',
-  activity: ''
+// Remove old defaultUser object and create a function instead
+const getDefaultAvatar = (name?: string, userId?: string) => {
+  if (name && userId) {
+    return generateDefaultAvatar(name, userId);
+  }
+  return SILHOUETTE_AVATAR_URL;
 };
 
 // Create the store with persistence
 const useHangStore = create<HangState>()(
   persist(
     (set, get) => ({
-      user: defaultUser,
+      user: {
+        id: '',
+        name: 'User',
+        avatar: getDefaultAvatar(),
+        status: 'offline',
+        activity: ''
+      },
       friends: [],
       offlineFriends: [],
       selectedFriends: [],
@@ -154,7 +163,9 @@ const useHangStore = create<HangState>()(
               user: {
                 id: userData.id,
                 name: userData.name,
-                avatar: userData.avatar_url || defaultUser.avatar,
+                username: userData.username,
+                vibe: userData.vibe,
+                avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
                 status: 'offline',
                 activity: ''
               }
@@ -185,7 +196,8 @@ const useHangStore = create<HangState>()(
                 user: {
                   id: newUserData.id,
                   name: newUserData.name,
-                  avatar: newUserData.avatar_url || defaultUser.avatar,
+                  username: newUserData.username,
+                  avatar: newUserData.avatar_url || getDefaultAvatar(newUserData.name, newUserData.id),
                   status: 'offline',
                   activity: ''
                 }
@@ -235,7 +247,7 @@ const useHangStore = create<HangState>()(
               const friendData: Friend = {
                 id: friend.id,
                 name: friend.name,
-                avatar: friend.avatar_url || defaultUser.avatar,
+                avatar: friend.avatar_url || getDefaultAvatar(friend.name, friend.id),
                 status: friend.user_status?.is_available ? 'online' : 'offline',
                 activity: friend.user_status?.activity || '',
                 lastSeen: friend.user_status?.last_seen,
@@ -253,6 +265,78 @@ const useHangStore = create<HangState>()(
           set({ friends, offlineFriends });
         } catch (error) {
           console.error('Error in loadFriends:', error);
+        }
+      },
+
+      updateUserData: async (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => {
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) return false;
+
+          const { data: userData, error } = await supabase
+            .from('users')
+            .update(updates)
+            .eq('id', authUser.id)
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error updating user data:', error);
+            return false;
+          }
+
+          if (userData) {
+            set({
+              user: {
+                id: userData.id,
+                name: userData.name,
+                username: userData.username,
+                vibe: userData.vibe,
+                avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
+                status: 'offline',
+                activity: ''
+              }
+            });
+            return true;
+          } else {
+            // User profile doesn't exist, create one
+            console.log('No user profile found, creating one...');
+            const { data: newUserData, error: createError } = await supabase
+              .from('users')
+              .insert([
+                {
+                  id: authUser.id,
+                  email: authUser.email || '',
+                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+                  username: authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'user'
+                }
+              ])
+              .select()
+              .single();
+
+            if (createError) {
+              console.error('Error creating user profile:', createError);
+              return false;
+            }
+
+            if (newUserData) {
+              set({
+                user: {
+                  id: newUserData.id,
+                  name: newUserData.name,
+                  username: newUserData.username,
+                  avatar: newUserData.avatar_url || getDefaultAvatar(newUserData.name, newUserData.id),
+                  status: 'offline',
+                  activity: ''
+                }
+              });
+              return true;
+            }
+          }
+          return false;
+        } catch (error) {
+          console.error('Error in updateUserData:', error);
+          return false;
         }
       }
     }),
