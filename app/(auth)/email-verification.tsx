@@ -23,6 +23,14 @@ export default function EmailVerificationScreen() {
   const inputRefs = useRef<TextInput[]>([]);
   const router = useRouter();
 
+  // Auto-focus first input when component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRefs.current[0]?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Start resend timer on mount
   useEffect(() => {
     setResendTimer(60);

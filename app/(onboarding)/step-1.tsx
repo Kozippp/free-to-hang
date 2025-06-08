@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,12 +11,22 @@ import {
   Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 export default function NameInputScreen() {
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const inputRef = useRef<TextInput>(null);
+
+  // Auto focus input when component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleContinue = async () => {
     if (!name.trim()) {
@@ -45,6 +55,10 @@ export default function NameInputScreen() {
     }
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -53,51 +67,53 @@ export default function NameInputScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
         >
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoWrapper}>
-              <View style={styles.logoCircles}>
-                <View style={styles.logoCircle1} />
-                <View style={styles.logoCircle2} />
-                <View style={styles.logoCircle3} />
-              </View>
-            </View>
+          {/* Header with Logo and Back */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+              <ArrowLeft size={24} color={Colors.light.text} />
+            </TouchableOpacity>
             <Text style={styles.logoText}>freetohang</Text>
+            <View style={styles.placeholder} />
           </View>
 
           {/* Content */}
           <View style={styles.content}>
-            <Text style={styles.title}>what's your name?</Text>
-            <Text style={styles.subtitle}>let's get to know each other</Text>
+            <Text style={styles.title}>What's your name?</Text>
 
-            <TextInput
-              style={styles.nameInput}
-              placeholder="Enter your name"
-              placeholderTextColor="#999"
-              value={name}
-              onChangeText={setName}
-              autoCapitalize="words"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={handleContinue}
-              maxLength={50}
-            />
+            <View style={styles.inputContainer}>
+              <TextInput
+                ref={inputRef}
+                style={styles.nameInput}
+                placeholder="Enter your name"
+                placeholderTextColor="#999"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={handleContinue}
+                maxLength={50}
+              />
+            </View>
 
-            <TouchableOpacity 
-              style={[
-                styles.nextButton,
-                (!name.trim() || isLoading) && styles.disabledButton
-              ]}
-              onPress={handleContinue}
-              disabled={!name.trim() || isLoading}
-            >
-              <Text style={[
-                styles.nextButtonText,
-                (!name.trim() || isLoading) && styles.disabledButtonText
-              ]}>
-                {isLoading ? 'continuing...' : 'next'}
-              </Text>
-            </TouchableOpacity>
+            {/* Continue button - positioned above keyboard */}
+            {name.trim().length >= 2 && (
+              <TouchableOpacity 
+                style={[
+                  styles.continueButton,
+                  isLoading && styles.disabledButton
+                ]}
+                onPress={handleContinue}
+                disabled={isLoading}
+              >
+                <Text style={[
+                  styles.continueButtonText,
+                  isLoading && styles.disabledButtonText
+                ]}>
+                  {isLoading ? 'continuing...' : 'Continue'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -113,39 +129,19 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  logoContainer: {
-    alignItems: 'center',
-    paddingTop: 60,
-    marginBottom: 80,
-  },
-  logoWrapper: {
-    marginBottom: 16,
-  },
-  logoCircles: {
-    width: 60,
-    height: 40,
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 60,
+    paddingHorizontal: 32,
+    paddingBottom: 40,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
-    gap: -8,
-  },
-  logoCircle1: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary,
-  },
-  logoCircle2: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary + '80',
-  },
-  logoCircle3: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary + '40',
+    alignItems: 'center',
   },
   logoText: {
     fontSize: 18,
@@ -153,41 +149,42 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     letterSpacing: -0.5,
   },
+  placeholder: {
+    width: 40,
+  },
   content: {
     flex: 1,
     paddingHorizontal: 32,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 8,
-    textAlign: 'left',
+    marginBottom: 60,
+    textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-    textAlign: 'left',
-    marginBottom: 48,
-    fontWeight: '400',
+  inputContainer: {
+    width: '100%',
+    marginBottom: 16,
   },
   nameInput: {
     backgroundColor: 'transparent',
-    borderBottomWidth: 1,
+    borderBottomWidth: 2,
     borderBottomColor: '#E0E0E0',
-    height: 56,
+    height: 60,
     paddingHorizontal: 0,
     paddingVertical: 16,
-    fontSize: 24,
+    fontSize: 32,
     color: Colors.light.text,
-    marginBottom: 48,
-    fontWeight: '400',
+    textAlign: 'center',
+    fontWeight: '600',
   },
-  nextButton: {
+  continueButton: {
     backgroundColor: Colors.light.primary,
     borderRadius: 28,
     height: 56,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: Colors.light.primary,
@@ -198,6 +195,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 8,
+    marginTop: 20,
   },
   disabledButton: {
     backgroundColor: '#E0E0E0',
@@ -206,7 +204,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  nextButtonText: {
+  continueButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',

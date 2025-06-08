@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -13,34 +13,28 @@ import {
   Keyboard,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
-export default function VibeSelectionScreen() {
+export default function VibeInputScreen() {
   const [vibe, setVibe] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { name, username } = useLocalSearchParams<{ name: string; username: string }>();
+  const inputRef = useRef<TextInput>(null);
 
-  const handleContinue = async () => {
-    if (!vibe.trim()) {
-      Alert.alert('Vibe Required', 'Please describe your ideal hang vibe');
-      return;
-    }
+  // Auto focus input when component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
-    setIsLoading(true);
-    try {
-      // Here you would save the vibe to your backend
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      router.push({
-        pathname: '/(onboarding)/step-4',
-        params: { name, username, vibe: vibe.trim() }
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleContinue = () => {
+    router.push({
+      pathname: '/(onboarding)/step-4',
+      params: { name, username, vibe }
+    });
   };
 
   const handleSkip = () => {
@@ -50,6 +44,10 @@ export default function VibeSelectionScreen() {
     });
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   const dismissKeyboard = () => {
     Keyboard.dismiss();
   };
@@ -57,20 +55,20 @@ export default function VibeSelectionScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={styles.container}>
-        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <SafeAreaView style={styles.container}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardView}
           >
-            {/* Header with Logo and Skip */}
+            {/* Header with Logo, Back and Skip */}
             <View style={styles.header}>
+              <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                <ArrowLeft size={24} color={Colors.light.text} />
+              </TouchableOpacity>
               <Text style={styles.logoText}>freetohang</Text>
-              <TouchableOpacity 
-                style={styles.skipButton}
-                onPress={handleSkip}
-              >
-                <Text style={styles.skipButtonText}>skip</Text>
+              <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+                <Text style={styles.skipText}>skip</Text>
               </TouchableOpacity>
             </View>
 
@@ -80,47 +78,40 @@ export default function VibeSelectionScreen() {
               
               <View style={styles.inputContainer}>
                 <TextInput
+                  ref={inputRef}
                   style={styles.vibeInput}
-                  placeholder="Slow, cozy nights with soft music and meaningful conversations :)"
-                  placeholderTextColor="#999"
                   value={vibe}
                   onChangeText={setVibe}
+                  placeholder="Slow, cozy nights with soft music and meaningful conversations :)"
+                  placeholderTextColor="#999"
                   multiline
-                  numberOfLines={4}
-                  maxLength={100}
                   textAlignVertical="top"
-                  autoCorrect={true}
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                  maxLength={100}
                 />
-                
-                <View style={styles.characterCounter}>
-                  <Text style={styles.characterCountText}>
-                    {vibe.length}/100
-                  </Text>
-                </View>
+                <Text style={styles.characterCount}>{vibe.length}/100</Text>
               </View>
 
-              {/* Submit button - shows above keyboard when typing */}
-              {vibe.trim().length > 0 && (
-                <TouchableOpacity 
-                  style={[
-                    styles.continueButton,
-                    isLoading && styles.disabledButton
-                  ]}
-                  onPress={handleContinue}
-                  disabled={isLoading}
-                >
-                  <Text style={[
-                    styles.continueButtonText,
-                    isLoading && styles.disabledButtonText
-                  ]}>
-                    {isLoading ? 'saving...' : 'continue'}
-                  </Text>
-                </TouchableOpacity>
-              )}
+              {/* Continue button - positioned above keyboard */}
+              <TouchableOpacity 
+                style={[
+                  styles.continueButton,
+                  vibe.trim() ? styles.continueButtonActive : styles.continueButtonInactive
+                ]}
+                onPress={handleContinue}
+              >
+                <Text style={[
+                  styles.continueButtonText,
+                  vibe.trim() ? styles.continueButtonTextActive : styles.continueButtonTextInactive
+                ]}>
+                  Continue
+                </Text>
+              </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
-        </TouchableWithoutFeedback>
-      </SafeAreaView>
+        </SafeAreaView>
+      </TouchableWithoutFeedback>
     </>
   );
 }
@@ -135,11 +126,17 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    justifyContent: 'space-between',
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingHorizontal: 32,
+    paddingBottom: 40,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   logoText: {
     fontSize: 18,
@@ -149,55 +146,56 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
-  skipButtonText: {
-    color: '#999',
+  skipText: {
     fontSize: 16,
+    color: '#999',
     fontWeight: '400',
   },
   content: {
     flex: 1,
     paddingHorizontal: 32,
+    justifyContent: 'flex-start',
   },
   title: {
     fontSize: 28,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 32,
-    textAlign: 'left',
-    lineHeight: 34,
+    marginBottom: 60,
+    textAlign: 'center',
   },
   inputContainer: {
+    width: '100%',
     marginBottom: 24,
   },
   vibeInput: {
-    backgroundColor: '#F8F8F8',
-    borderRadius: 16,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 20,
     padding: 20,
     fontSize: 16,
     color: Colors.light.text,
-    minHeight: 120,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-    fontWeight: '400',
+    minHeight: 80,
+    maxHeight: 120,
+    textAlignVertical: 'top',
     lineHeight: 22,
   },
-  characterCounter: {
-    alignItems: 'flex-end',
+  characterCount: {
+    textAlign: 'right',
+    fontSize: 12,
+    color: '#999',
     marginTop: 8,
   },
-  characterCountText: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-    fontWeight: '400',
-  },
   continueButton: {
-    backgroundColor: Colors.light.primary,
     borderRadius: 28,
     height: 56,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 60,
+  },
+  continueButtonActive: {
+    backgroundColor: Colors.light.primary,
     shadowColor: Colors.light.primary,
     shadowOffset: {
       width: 0,
@@ -206,21 +204,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 8,
-    marginTop: 16,
   },
-  disabledButton: {
+  continueButtonInactive: {
     backgroundColor: '#E0E0E0',
     shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
   continueButtonText: {
-    color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  disabledButtonText: {
+  continueButtonTextActive: {
+    color: 'white',
+  },
+  continueButtonTextInactive: {
     color: '#999',
   },
 }); 
