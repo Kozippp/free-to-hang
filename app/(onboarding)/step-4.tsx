@@ -87,10 +87,10 @@ export default function ProfilePhotoScreen() {
       // Here you would upload the profile image and save all user data
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Show success message and navigate to main app
+      // Show success message and navigate to main app (offline state)
       Alert.alert(
         'Welcome to Free to Hang! 🎉',
-        'Your account has been created successfully. You can now connect with friends and see when they\'re available to hang out!',
+        'Your account has been created successfully. Toggle your status when you\'re ready to hang out!',
         [
           {
             text: 'Get Started',
@@ -113,16 +113,15 @@ export default function ProfilePhotoScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoWrapper}>
-              <View style={styles.logoCircles}>
-                <View style={styles.logoCircle1} />
-                <View style={styles.logoCircle2} />
-                <View style={styles.logoCircle3} />
-              </View>
-            </View>
+          {/* Header with Logo and Skip */}
+          <View style={styles.header}>
             <Text style={styles.logoText}>freetohang</Text>
+            <TouchableOpacity 
+              style={styles.skipButton}
+              onPress={handleSkip}
+            >
+              <Text style={styles.skipButtonText}>skip</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.mainContent}>
@@ -186,45 +185,27 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 32,
   },
-  logoContainer: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 60,
-    marginBottom: 60,
-  },
-  logoWrapper: {
-    marginBottom: 16,
-  },
-  logoCircles: {
-    width: 60,
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: -8,
-  },
-  logoCircle1: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary,
-  },
-  logoCircle2: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary + '80',
-  },
-  logoCircle3: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primary + '40',
+    paddingBottom: 20,
   },
   logoText: {
     fontSize: 18,
     fontWeight: '400',
     color: Colors.light.text,
     letterSpacing: -0.5,
+  },
+  skipButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  skipButtonText: {
+    color: '#999',
+    fontSize: 16,
+    fontWeight: '400',
   },
   mainContent: {
     flex: 1,

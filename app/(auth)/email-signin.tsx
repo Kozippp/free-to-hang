@@ -47,21 +47,11 @@ export default function EmailSignInScreen() {
         throw error;
       }
 
-      Alert.alert(
-        'Check Your Email',
-        `We've sent a 6-digit verification code to ${email.trim()}.\n\nPlease check your email and enter the code in the next screen.`,
-        [
-          { 
-            text: 'OK', 
-            onPress: () => {
-              router.push({
-                pathname: '/(auth)/email-verification',
-                params: { email: email.trim() }
-              });
-            }
-          }
-        ]
-      );
+      // Go directly to verification screen
+      router.push({
+        pathname: '/(auth)/email-verification',
+        params: { email: email.trim() }
+      });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to send verification code. Please try again.');
     } finally {

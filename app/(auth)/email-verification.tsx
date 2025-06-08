@@ -210,6 +210,8 @@ export default function EmailVerificationScreen() {
                   keyboardType="number-pad"
                   maxLength={6} // Allow paste of full code
                   selectTextOnFocus
+                  textContentType="oneTimeCode"
+                  autoComplete="sms-otp"
                 />
               ))}
             </View>
