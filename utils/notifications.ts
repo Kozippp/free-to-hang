@@ -1,7 +1,7 @@
 import { Platform, Alert } from 'react-native';
 
-// Mock notifications utility (ilma expo-notifications package'ita)
-// Kui expo-notifications on paigaldatud, asenda see päris implementatsiooniga
+// Mock notifications utility (without expo-notifications package)
+// When expo-notifications is installed, replace this with real implementation
 
 // Mock notification handler
 export const setNotificationHandler = (handler: any) => {
@@ -12,14 +12,14 @@ export const setNotificationHandler = (handler: any) => {
 export async function registerForPushNotificationsAsync() {
   console.log('Mock: Registering for push notifications...');
   
-  // Simuleerime permission request'i
+  // Simulate permission request
   const granted = await new Promise((resolve) => {
     Alert.alert(
-      'Teavituste luba',
-      'Kas lubada push teavitused?',
+      'Allow Notifications',
+      'Allow push notifications?',
       [
-        { text: 'Ei', onPress: () => resolve(false) },
-        { text: 'Jah', onPress: () => resolve(true) }
+        { text: 'No', onPress: () => resolve(false) },
+        { text: 'Yes', onPress: () => resolve(true) }
       ]
     );
   });
@@ -35,34 +35,34 @@ export async function registerForPushNotificationsAsync() {
   return mockToken;
 }
 
-// Mock kohalik teavitus (testimiseks)
+// Mock local notification (for testing)
 export async function scheduleLocalNotification(title: string, body: string, data?: any) {
   console.log('Mock Local Notification:', { title, body, data });
   
-  // Näita alert'i kohe (mock notification)
+  // Show alert immediately (mock notification)
   setTimeout(() => {
     Alert.alert(title, body);
   }, 1000);
 }
 
-// Plaanis uuenduste teavitused
+// Plan update notifications
 export async function notifyPlanUpdate(planTitle: string, updateType: string) {
   const notifications = {
     'new_message': {
-      title: '💬 Uus sõnum',
-      body: `${planTitle} plaani lisati uus sõnum`,
+      title: '💬 New Message',
+      body: `New message added to ${planTitle}`,
     },
     'participant_joined': {
-      title: '🎉 Keegi liitus!',
-      body: `${planTitle} - uus osaline liitus plaaniga`,
+      title: '🎉 Someone Joined!',
+      body: `${planTitle} - new participant joined the plan`,
     },
     'poll_created': {
-      title: '🗳️ Uus hääletus',
-      body: `${planTitle} - uus hääletus on loodud`,
+      title: '🗳️ New Poll',
+      body: `${planTitle} - new poll has been created`,
     },
     'poll_voted': {
-      title: '✅ Hääletus lõppes',
-      body: `${planTitle} - hääletus on lõppenud`,
+      title: '✅ Poll Ended',
+      body: `${planTitle} - voting has ended`,
     },
   };
 
@@ -78,27 +78,27 @@ export async function notifyPlanUpdate(planTitle: string, updateType: string) {
   }
 }
 
-// Kutse teavitused
+// Invitation notifications
 export async function notifyNewInvitation(planTitle: string, inviterName: string) {
   console.log('Mock Invitation Notification:', { planTitle, inviterName });
   await scheduleLocalNotification(
-    '📨 Uus kutse!',
-    `${inviterName} kutsus teid: ${planTitle}`,
+    '📨 New Invitation!',
+    `${inviterName} invited you to: ${planTitle}`,
     { type: 'invitation' }
   );
 }
 
-// Test funktsioon
+// Test function
 export async function testNotifications() {
   console.log('Testing notifications...');
   
-  await notifyNewInvitation('Kinno minek', 'Alex Johnson');
+  await notifyNewInvitation('Movie Night', 'Alex Johnson');
   
   setTimeout(() => {
-    notifyPlanUpdate('Kinno minek', 'new_message');
+    notifyPlanUpdate('Movie Night', 'new_message');
   }, 3000);
   
   setTimeout(() => {
-    notifyPlanUpdate('Kinno minek', 'participant_joined');
+    notifyPlanUpdate('Movie Night', 'participant_joined');
   }, 6000);
 } 
