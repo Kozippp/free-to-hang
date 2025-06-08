@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -11,7 +11,9 @@ import {
   Switch,
   Modal,
   TextInput,
-  ScrollView
+  ScrollView,
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -91,7 +93,11 @@ export default function ProfileScreen() {
     setEditName(user.name || userProfile.name);
     setEditUsername(user.username || userProfile.email.split('@')[0]);
     setEditBio(user.vibe || ''); // Load vibe from database as bio
+    setEditAvatar(user.avatar || userProfile.avatar);
     setOriginalUsername(user.username || userProfile.email.split('@')[0]); // Store original username
+    setOriginalName(user.name || userProfile.name);
+    setOriginalBio(user.vibe || '');
+    setOriginalAvatar(user.avatar || userProfile.avatar);
   }, [user, userProfile]);
 
   // Combine friends from hangStore
@@ -121,9 +127,13 @@ export default function ProfileScreen() {
   const [editName, setEditName] = useState(userProfile.name);
   const [editBio, setEditBio] = useState(userProfile.bio);
   const [editEmail, setEditEmail] = useState(userProfile.email);
+  const [editAvatar, setEditAvatar] = useState(userProfile.avatar);
   
   // Username validation states for edit profile
   const [originalUsername, setOriginalUsername] = useState('');
+  const [originalName, setOriginalName] = useState('');
+  const [originalBio, setOriginalBio] = useState('');
+  const [originalAvatar, setOriginalAvatar] = useState('');
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
   const [usernameReservationValid, setUsernameReservationValid] = useState<boolean | null>(null);
@@ -131,6 +141,19 @@ export default function ProfileScreen() {
   // Add friend states
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Friend[]>([]);
+  
+  // ScrollView ref for auto-scrolling
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Auto-scroll functions
+  const scrollToInput = (yOffset: number) => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: yOffset, animated: true });
+    }, 100);
+  };
+
+  // Check if there are any changes made
+  const hasChanges = editName !== originalName || editUsername !== originalUsername || editBio !== originalBio || editAvatar !== originalAvatar;
 
   // Username validation effect for edit profile
   useEffect(() => {
@@ -231,6 +254,7 @@ export default function ProfileScreen() {
       name: editName,
       username: editUsername.toLowerCase(),
       vibe: editBio,
+      avatar_url: editAvatar,
     });
 
     if (success) {
@@ -238,6 +262,7 @@ export default function ProfileScreen() {
         ...userProfile,
         name: editName,
         bio: editBio,
+        avatar: editAvatar,
       });
       
       // Clean up reservation since we successfully saved
@@ -257,38 +282,77 @@ export default function ProfileScreen() {
       }
       
       setShowEditProfile(false);
-      Alert.alert('Profile Updated', 'Your profile has been successfully updated.');
     } else {
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     }
   };
 
   const handleChangeProfilePicture = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to change your profile picture.');
-      return;
-    }
+    Alert.alert(
+      'Change Profile Picture',
+      'Choose how you want to update your photo',
+      [
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission needed', 'Sorry, we need camera permissions to take photos.');
+              return;
+            }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+                          const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+              });
 
-    if (!result.canceled && result.assets[0]) {
-      const newAvatar = result.assets[0].uri;
-      setUserProfile(prev => ({ ...prev, avatar: newAvatar }));
-      
-      // Update in database via hangStore
-      await updateUserData({
-        name: userProfile.name,
-        username: editUsername,
-        vibe: userProfile.bio,
-        avatar_url: newAvatar,
-      });
-    }
+            if (!result.canceled && result.assets[0]) {
+              const newAvatar = result.assets[0].uri;
+              console.log('New avatar selected:', newAvatar);
+              console.log('Current editAvatar:', editAvatar);
+              setEditAvatar(newAvatar);
+              setUserProfile(prev => {
+                console.log('Updating userProfile avatar from:', prev.avatar, 'to:', newAvatar);
+                return { ...prev, avatar: newAvatar };
+              });
+              console.log('Avatar state updated');
+            }
+          }
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to change your profile picture.');
+              return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              const newAvatar = result.assets[0].uri;
+              console.log('New avatar selected from gallery:', newAvatar);
+              console.log('Current editAvatar:', editAvatar);
+              setEditAvatar(newAvatar);
+              setUserProfile(prev => {
+                console.log('Updating userProfile avatar from:', prev.avatar, 'to:', newAvatar);
+                return { ...prev, avatar: newAvatar };
+              });
+              console.log('Avatar state updated from gallery');
+            }
+          }
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
   };
 
   const handleSearchFriends = (query: string) => {
@@ -536,6 +600,54 @@ export default function ProfileScreen() {
     </TouchableOpacity>
   );
 
+  // Handle modal close with confirmation if there are changes
+  const handleCloseModal = async () => {
+    if (hasChanges) {
+      Alert.alert(
+        'Unsaved Changes',
+        'You have unsaved changes. Are you sure you want to close without saving?',
+        [
+          {
+            text: 'Keep Editing',
+            style: 'cancel'
+          },
+          {
+            text: 'Discard Changes',
+            onPress: async () => {
+              // Clean up any username reservation
+              if (usernameReservationValid) {
+                try {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (user) {
+                    await supabase
+                      .from('username_reservations')
+                      .delete()
+                      .eq('user_id', user.id);
+                  }
+                } catch (error) {
+                  console.error('Error cleaning up reservation:', error);
+                }
+              }
+              
+              // Reset to original values
+              setEditName(originalName);
+              setEditUsername(originalUsername);
+              setEditBio(originalBio);
+              setEditAvatar(originalAvatar);
+              setUserProfile(prev => ({ ...prev, avatar: originalAvatar }));
+              setIsUsernameAvailable(null);
+              setUsernameReservationValid(null);
+              setShowEditProfile(false);
+            }
+          }
+        ]
+      );
+    } else {
+      // No changes, just close
+      setShowEditProfile(false);
+    }
+  };
+
   return (
     <>
       <Stack.Screen 
@@ -562,9 +674,13 @@ export default function ProfileScreen() {
             onPress={() => setShowEditProfile(true)}
             activeOpacity={0.7}
           >
-            <Image source={{ uri: userProfile.avatar }} style={styles.profilePreviewImage} />
+            <Image 
+              source={{ uri: (editAvatar || userProfile.avatar) + '?' + Date.now() }} 
+              style={styles.profilePreviewImage} 
+              key={editAvatar || userProfile.avatar}
+            />
             <View style={styles.profilePreviewInfo}>
-              <Text style={styles.profilePreviewName}>{userProfile.name}</Text>
+              <Text style={styles.profilePreviewName}>{editName || userProfile.name}</Text>
               <Text style={styles.profilePreviewUsername}>@{editUsername}</Text>
               <Text style={styles.profilePreviewBio} numberOfLines={2}>{editBio || "Add a bio to tell friends about yourself"}</Text>
             </View>
@@ -727,20 +843,33 @@ export default function ProfileScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={() => setShowEditProfile(false)}>
+            <TouchableOpacity onPress={handleCloseModal}>
               <X size={24} color={Colors.light.secondaryText} />
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.editForm}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardAvoidingContainer}
+          >
+            <ScrollView 
+              ref={scrollViewRef}
+              style={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.editForm}>
               {/* Profile Picture */}
               <View style={styles.profilePictureSection}>
                 <TouchableOpacity 
                   style={styles.profilePictureContainer}
                   onPress={handleChangeProfilePicture}
                 >
-                  <Image source={{ uri: userProfile.avatar }} style={styles.editProfileImage} />
+                  <Image 
+                    source={{ uri: editAvatar + '?' + Date.now() }} 
+                    style={styles.editProfileImage} 
+                    key={editAvatar}
+                  />
                   <View style={styles.cameraOverlay}>
                     <Camera size={20} color="white" />
                   </View>
@@ -748,53 +877,68 @@ export default function ProfileScreen() {
                 <Text style={styles.profilePictureText}>Tap image to change</Text>
               </View>
 
-              <Text style={styles.inputLabel}>Username</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editUsername}
-                onChangeText={setEditUsername}
-                placeholder="username"
-              />
-              {editUsername !== originalUsername && editUsername.length >= 3 && (
-                <View style={styles.usernameIndicator}>
-                  {isCheckingUsername ? (
-                    <Text style={styles.checkingText}>Checking...</Text>
-                  ) : isUsernameAvailable === true ? (
-                    <View style={[styles.indicator, styles.available]}>
-                      <Text style={styles.availableText}>✓ Available</Text>
-                    </View>
-                  ) : isUsernameAvailable === false ? (
-                    <View style={[styles.indicator, styles.taken]}>
-                      <Text style={styles.takenText}>✗ Username taken</Text>
-                    </View>
-                  ) : null}
-                </View>
-              )}
-              
               <Text style={styles.inputLabel}>Name</Text>
               <TextInput
                 style={styles.textInput}
                 value={editName}
                 onChangeText={setEditName}
                 placeholder="Your name"
+                onFocus={() => scrollToInput(50)}
               />
               
-              <Text style={styles.inputLabel}>Ideal hang vibe (max 100 characters)</Text>
+              <Text style={styles.inputLabel}>Username</Text>
+              <TextInput
+                style={styles.textInput}
+                value={editUsername}
+                onChangeText={(text) => {
+                  // Allow only alphanumeric characters, dots, underscores, and hyphens (no spaces)
+                  const cleanText = text.replace(/[^a-zA-Z0-9._-]/g, '');
+                  setEditUsername(cleanText);
+                }}
+                placeholder="username"
+                autoCapitalize="none"
+                onFocus={() => scrollToInput(150)}
+              />
+              {editUsername !== originalUsername && editUsername.length >= 3 && (
+                <View style={styles.usernameIndicator}>
+                  {isCheckingUsername ? (
+                    <Text style={styles.checkingText}>Checking...</Text>
+                  ) : isUsernameAvailable === true ? (
+                    <Text style={styles.availableText}>Available</Text>
+                  ) : isUsernameAvailable === false ? (
+                    <Text style={styles.takenText}>Username taken</Text>
+                  ) : null}
+                </View>
+              )}
+              
+              <Text style={styles.inputLabel}>Ideal hang vibe</Text>
               <TextInput
                 style={[styles.textInput, styles.bioInput]}
                 value={editBio}
                 onChangeText={(text) => text.length <= 100 && setEditBio(text)}
-                placeholder="What's your ideal vibe when hanging out?"
+                placeholder="Love it when time doesn't exist and everything just clicks! :)"
                 multiline
                 maxLength={100}
+                onFocus={() => scrollToInput(300)}
               />
               <Text style={styles.characterCount}>{editBio.length}/100</Text>
               
-              <TouchableOpacity style={styles.saveButton} onPress={handleEditProfile}>
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+              <TouchableOpacity 
+                style={[
+                  styles.saveButton, 
+                  (editUsername !== originalUsername && (!isUsernameAvailable || !usernameReservationValid)) && styles.disabledButton
+                ]} 
+                onPress={handleEditProfile}
+                disabled={editUsername !== originalUsername && (!isUsernameAvailable || !usernameReservationValid)}
+              >
+                <Text style={[
+                  styles.saveButtonText,
+                  (editUsername !== originalUsername && (!isUsernameAvailable || !usernameReservationValid)) && styles.disabledButtonText
+                ]}>Save Changes</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
 
@@ -1542,28 +1686,23 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     fontStyle: 'italic',
   },
-  indicator: {
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  available: {
-    backgroundColor: Colors.light.primary + '20',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-  },
-  taken: {
-    backgroundColor: Colors.light.destructive + '20',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-  },
   availableText: {
     fontSize: 14,
-    color: Colors.light.primary,
+    color: Colors.light.onlineGreen,
     fontWeight: '600',
   },
   takenText: {
     fontSize: 14,
     color: Colors.light.destructive,
     fontWeight: '600',
+  },
+  disabledButton: {
+    backgroundColor: Colors.light.buttonBackground,
+  },
+  disabledButtonText: {
+    color: Colors.light.secondaryText,
+  },
+  keyboardAvoidingContainer: {
+    flex: 1,
   },
 });
