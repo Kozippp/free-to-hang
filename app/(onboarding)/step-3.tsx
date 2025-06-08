@@ -91,21 +91,20 @@ export default function OnboardingStep3Screen() {
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {/* Progress indicator */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressStep, styles.completedStep]} />
-              <View style={[styles.progressStep, styles.completedStep]} />
-              <View style={[styles.progressStep, styles.activeStep]} />
-            </View>
-            <Text style={styles.progressText}>Step 3 of 3</Text>
-          </View>
-
-          {/* Navigation buttons */}
-          <View style={styles.navigationContainer}>
+          {/* Header with progress and navigation */}
+          <View style={styles.headerContainer}>
             <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-              <ArrowLeft size={20} color={Colors.light.secondaryText} />
+              <ArrowLeft size={24} color={Colors.light.secondaryText} />
             </TouchableOpacity>
+            
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressStep, styles.completedStep]} />
+                <View style={[styles.progressStep, styles.completedStep]} />
+                <View style={[styles.progressStep, styles.activeStep]} />
+              </View>
+            </View>
+            
             <TouchableOpacity style={styles.skipButton} onPress={handleSkipForNow}>
               <Text style={styles.skipText}>skip</Text>
             </TouchableOpacity>
@@ -117,7 +116,7 @@ export default function OnboardingStep3Screen() {
               <Users size={60} color={Colors.light.primary} />
             </View>
             
-            <Text style={styles.title}>invite your friends</Text>
+            <Text style={styles.title}>invite friends</Text>
             <Text style={styles.subtitle}>
               free2hang is way more fun with friends! 
             </Text>
@@ -125,52 +124,33 @@ export default function OnboardingStep3Screen() {
               (seriously, it's pretty useless without them 😅)
             </Text>
 
-            {/* Search for existing users */}
-            <View style={styles.searchContainer}>
-              <Text style={styles.sectionTitle}>Find friends already on Free2Hang</Text>
-              <View style={styles.searchBox}>
-                <Search size={20} color={Colors.light.secondaryText} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search by username or email"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                  onSubmitEditing={handleSearchContacts}
-                />
-              </View>
+            {/* Invite options */}
+            <View style={styles.inviteOptionsContainer}>
               <TouchableOpacity 
-                style={styles.searchButton} 
-                onPress={handleSearchContacts}
-              >
-                <UserPlus size={20} color={Colors.light.primary} />
-                <Text style={styles.searchButtonText}>Search Users</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Invite via sharing */}
-            <View style={styles.inviteContainer}>
-              <Text style={styles.sectionTitle}>Invite friends to join</Text>
-              <Text style={styles.inviteDescription}>
-                Share Free2Hang with your friends so they can join you!
-              </Text>
-              
-              <TouchableOpacity 
-                style={styles.inviteButton} 
+                style={styles.primaryInviteButton} 
                 onPress={handleInviteFriends}
               >
-                <Share2 size={20} color="white" />
-                <Text style={styles.inviteButtonText}>Invite Friends</Text>
+                <View style={styles.inviteIconContainer}>
+                  <Share2 size={20} color="white" />
+                </View>
+                <Text style={styles.primaryInviteText}>Share with Friends</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.secondaryInviteButton} 
+                onPress={handleSearchContacts}
+              >
+                <View style={styles.searchIconContainer}>
+                  <Search size={20} color={Colors.light.primary} />
+                </View>
+                <Text style={styles.secondaryInviteText}>Find Friends</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Alternative contact options */}
-            <View style={styles.alternativeContainer}>
-              <Text style={styles.alternativeText}>
-                You can also invite friends later from your profile
-              </Text>
-            </View>
+            {/* Alternative text */}
+            <Text style={styles.alternativeText}>
+              You can always invite friends later from your profile
+            </Text>
 
             {/* Finish button */}
             <TouchableOpacity 
@@ -178,7 +158,7 @@ export default function OnboardingStep3Screen() {
               onPress={handleFinishOnboarding}
             >
               <Text style={styles.finishButtonText}>
-                Let's Get Started!
+                let's get started!
               </Text>
             </TouchableOpacity>
           </View>
@@ -198,32 +178,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 32,
   },
-  progressContainer: {
+  headerContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
     marginTop: 40,
-    marginBottom: 20,
+    marginBottom: 30,
+  },
+  progressContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   progressBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 6,
+    flex: 1,
+    maxWidth: 120,
   },
   progressStep: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E5E5E5',
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   activeStep: {
     backgroundColor: Colors.light.primary,
   },
   completedStep: {
     backgroundColor: Colors.light.primary,
-  },
-  progressText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
   },
   navigationContainer: {
     flexDirection: 'row',
@@ -271,89 +255,75 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     fontStyle: 'italic',
   },
-  searchContainer: {
-    marginBottom: 30,
+  inviteOptionsContainer: {
+    gap: 12,
+    marginBottom: 40,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 12,
-  },
-  searchBox: {
+  primaryInviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 16,
     gap: 12,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.light.text,
-  },
-  searchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: `${Colors.light.primary}15`,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.light.primary,
-    gap: 8,
-    alignSelf: 'flex-start',
-  },
-  searchButtonText: {
-    fontSize: 14,
-    color: Colors.light.primary,
-    fontWeight: '500',
-  },
-  inviteContainer: {
-    marginBottom: 30,
-  },
-  inviteDescription: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  inviteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.light.primary,
+  inviteIconContainer: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    paddingVertical: 16,
-    gap: 8,
-  },
-  inviteButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-  },
-  alternativeContainer: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
+  },
+  primaryInviteText: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: '600',
+  },
+  secondaryInviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.light.primary,
+    gap: 12,
+  },
+  searchIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: `${Colors.light.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secondaryInviteText: {
+    fontSize: 16,
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
   alternativeText: {
     fontSize: 14,
     color: Colors.light.secondaryText,
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 20,
   },
   finishButton: {
     backgroundColor: Colors.light.primary,
-    borderRadius: 12,
+    borderRadius: 16,
     height: 56,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 'auto',
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   finishButtonText: {
     fontSize: 18,

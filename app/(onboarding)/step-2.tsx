@@ -84,21 +84,20 @@ export default function OnboardingStep2Screen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        {/* Progress indicator */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressStep, styles.completedStep]} />
-            <View style={[styles.progressStep, styles.activeStep]} />
-            <View style={styles.progressStep} />
-          </View>
-          <Text style={styles.progressText}>Step 2 of 3</Text>
-        </View>
-
-        {/* Navigation buttons */}
-        <View style={styles.navigationContainer}>
+        {/* Header with progress and navigation */}
+        <View style={styles.headerContainer}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <ArrowLeft size={20} color={Colors.light.secondaryText} />
+            <ArrowLeft size={24} color={Colors.light.secondaryText} />
           </TouchableOpacity>
+          
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressStep, styles.completedStep]} />
+              <View style={[styles.progressStep, styles.activeStep]} />
+              <View style={styles.progressStep} />
+            </View>
+          </View>
+          
           <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
             <Text style={styles.skipText}>skip</Text>
           </TouchableOpacity>
@@ -124,14 +123,18 @@ export default function OnboardingStep2Screen() {
 
           {/* Photo options */}
           <View style={styles.optionsContainer}>
-            <TouchableOpacity style={styles.optionButton} onPress={takePhoto}>
-              <Camera size={24} color={Colors.light.primary} />
-              <Text style={styles.optionText}>Take Photo</Text>
+            <TouchableOpacity style={styles.primaryOption} onPress={takePhoto}>
+              <View style={styles.optionIconContainer}>
+                <Camera size={20} color="white" />
+              </View>
+              <Text style={styles.primaryOptionText}>Take Photo</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.optionButton} onPress={pickImageFromGallery}>
-              <Upload size={24} color={Colors.light.primary} />
-              <Text style={styles.optionText}>Choose from Gallery</Text>
+            <TouchableOpacity style={styles.secondaryOption} onPress={pickImageFromGallery}>
+              <View style={styles.secondaryIconContainer}>
+                <Upload size={20} color={Colors.light.primary} />
+              </View>
+              <Text style={styles.secondaryOptionText}>Choose from Gallery</Text>
             </TouchableOpacity>
           </View>
 
@@ -165,32 +168,36 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     paddingHorizontal: 24,
   },
-  progressContainer: {
+  headerContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
     marginTop: 40,
-    marginBottom: 20,
+    marginBottom: 30,
+  },
+  progressContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   progressBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 6,
+    flex: 1,
+    maxWidth: 120,
   },
   progressStep: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E5E5E5',
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   activeStep: {
     backgroundColor: Colors.light.primary,
   },
   completedStep: {
     backgroundColor: Colors.light.primary,
-  },
-  progressText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
   },
   navigationContainer: {
     flexDirection: 'row',
@@ -249,24 +256,54 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   optionsContainer: {
-    gap: 16,
+    gap: 12,
     marginBottom: 30,
   },
-  optionButton: {
+  primaryOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 16,
     gap: 12,
   },
-  optionText: {
+  optionIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  primaryOptionText: {
     fontSize: 16,
-    color: Colors.light.text,
-    fontWeight: '500',
+    color: 'white',
+    fontWeight: '600',
+  },
+  secondaryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.light.primary,
+    gap: 12,
+  },
+  secondaryIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: `${Colors.light.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secondaryOptionText: {
+    fontSize: 16,
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
   removeButton: {
     alignSelf: 'center',
@@ -281,12 +318,17 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     backgroundColor: Colors.light.primary,
-    borderRadius: 12,
+    borderRadius: 16,
     height: 56,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 'auto',
     marginBottom: 32,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   continueButtonText: {
     fontSize: 18,
