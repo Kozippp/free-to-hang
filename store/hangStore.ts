@@ -4,16 +4,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar, SILHOUETTE_AVATAR_URL } from '@/constants/defaultImages';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface Friend {
   id: string;
   name: string;
+  username?: string;
   avatar: string;
   status: 'available' | 'offline' | 'pinged';
-  activity?: string;
+  activity: string;
   lastActive?: string;
-  lastSeen?: string;
-  responseStatus?: 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen';
+  responseStatus?: 'pending' | 'accepted' | 'declined';
 }
 
 interface User {
@@ -50,16 +51,16 @@ interface HangState {
   stopRealTimeUpdates: () => void;
 }
 
-// Remove old defaultUser object and create a function instead
-const getDefaultAvatar = (name?: string, userId?: string) => {
-  if (name && userId) {
-    return generateDefaultAvatar(name, userId);
-  }
-  return SILHOUETTE_AVATAR_URL;
-};
+// SIMPLE realtime variables - one channel for all hang-related updates
+let hangRealtimeChannel: RealtimeChannel | null = null;
 
-// Add at the top of the file after imports
-let refreshInterval: NodeJS.Timeout | null = null;
+// Helper to get default avatar
+const getDefaultAvatar = (name?: string, id?: string) => {
+  if (id) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=007AFF&color=fff&size=100`;
+  }
+  return 'https://ui-avatars.com/api/?name=User&background=007AFF&color=fff&size=100';
+};
 
 // Create the store with persistence
 const useHangStore = create<HangState>()(
@@ -116,7 +117,7 @@ const useHangStore = create<HangState>()(
                 }
               });
             } else {
-              console.log('Status updated in database:', newStatus ? 'available' : 'offline');
+              console.log('Status updated successfully:', newStatus ? 'available' : 'offline');
             }
           }
         } catch (error) {
@@ -167,8 +168,8 @@ const useHangStore = create<HangState>()(
       unpingFriend: (id) => {
         const { pingedFriends } = get();
         const safePinged = pingedFriends || [];
-        set({
-          pingedFriends: safePinged.filter(friendId => friendId !== id)
+        set({ 
+          pingedFriends: safePinged.filter(friendId => friendId !== id) 
         });
       },
       
@@ -206,42 +207,42 @@ const useHangStore = create<HangState>()(
                 activity: ''
               }
             });
-          } else {
-            // User profile doesn't exist, create one
-            console.log('No user profile found, creating one...');
-            const { data: newUserData, error: createError } = await supabase
-              .from('users')
-              .insert([
-                {
-                  id: authUser.id,
-                  email: authUser.email || '',
-                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                  username: authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'user'
-                }
-              ])
-              .select()
-              .single();
-
-            if (createError) {
-              console.error('Error creating user profile:', createError);
-              return;
-            }
-
-            if (newUserData) {
-              set({
-                user: {
-                  id: newUserData.id,
-                  name: newUserData.name,
-                  username: newUserData.username,
-                  avatar: newUserData.avatar_url || getDefaultAvatar(newUserData.name, newUserData.id),
-                  status: 'offline',
-                  activity: ''
-                }
-              });
-            }
           }
         } catch (error) {
-          console.error('Error in loadUserData:', error);
+          console.error('Load user data error:', error);
+        }
+      },
+
+      updateUserData: async (updates) => {
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) return false;
+
+          const { error } = await supabase
+            .from('users')
+            .update({
+              ...updates,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', authUser.id);
+
+          if (error) {
+            console.error('Error updating user data:', error);
+            return false;
+          }
+
+          // Update local state
+          set({
+            user: {
+              ...get().user,
+              ...updates
+            }
+          });
+
+          return true;
+        } catch (error) {
+          console.error('Update user data error:', error);
+          return false;
         }
       },
 
@@ -250,77 +251,38 @@ const useHangStore = create<HangState>()(
           const { data: { user: authUser } } = await supabase.auth.getUser();
           if (!authUser) return;
 
-          // Query friendships table with proper joins
-          const { data: friendships, error: friendshipsError } = await supabase
+          // Load all friendships in one go
+          const { data: friendships, error } = await supabase
             .from('friendships')
             .select(`
               friend_id,
-              friend_user:users!friendships_friend_id_fkey (
+              users!friendships_friend_id_fkey (
                 id,
                 name,
                 username,
                 avatar_url,
-                status
+                status,
+                vibe
               )
             `)
             .eq('user_id', authUser.id);
 
-          if (friendshipsError) {
-            console.error('Error loading friendships:', friendshipsError);
+          if (error) {
+            console.error('Error loading friends:', error);
             return;
           }
 
-          // Also query reverse friendships (where current user is the friend)
-          const { data: reverseFriendships, error: reverseError } = await supabase
-            .from('friendships')
-            .select(`
-              user_id,
-              user:users!friendships_user_id_fkey (
-                id,
-                name,
-                username,
-                avatar_url,
-                status
-              )
-            `)
-            .eq('friend_id', authUser.id);
+          const allFriendData: Friend[] = [];
 
-          if (reverseError) {
-            console.error('Error loading reverse friendships:', reverseError);
-            return;
-          }
-
-          // Combine both directions and remove duplicates
-          const allFriendData: any[] = [];
-          const seenIds = new Set<string>();
-          
           if (friendships) {
             friendships.forEach((f: any) => {
-              if (f.friend_user && !seenIds.has(f.friend_user.id)) {
-                seenIds.add(f.friend_user.id);
+              if (f.users) {
                 allFriendData.push({
-                  id: f.friend_user.id,
-                  name: f.friend_user.name,
-                  username: f.friend_user.username,
-                  avatar: f.friend_user.avatar_url || getDefaultAvatar(f.friend_user.name, f.friend_user.id),
-                  status: f.friend_user.status === 'available' ? 'available' : 'offline',
-                  activity: '',
-                  lastActive: 'Recently'
-                });
-              }
-            });
-          }
-
-          if (reverseFriendships) {
-            reverseFriendships.forEach((f: any) => {
-              if (f.user && !seenIds.has(f.user.id)) {
-                seenIds.add(f.user.id);
-                allFriendData.push({
-                  id: f.user.id,
-                  name: f.user.name,
-                  username: f.user.username,
-                  avatar: f.user.avatar_url || getDefaultAvatar(f.user.name, f.user.id),
-                  status: f.user.status === 'available' ? 'available' : 'offline',
+                  id: f.users.id,
+                  name: f.users.name,
+                  username: f.users.username,
+                  avatar: f.users.avatar_url || getDefaultAvatar(f.users.name, f.users.id),
+                  status: f.users.status === 'available' ? 'available' : 'offline',
                   activity: '',
                   lastActive: 'Recently'
                 });
@@ -337,111 +299,79 @@ const useHangStore = create<HangState>()(
             offlineFriends: offlineFriends 
           });
 
-          console.log('Friends loaded successfully:', { available: availableFriends.length, offline: offlineFriends.length });
+          console.log('Friends loaded:', { available: availableFriends.length, offline: offlineFriends.length });
         } catch (error) {
-          console.error('Error loading friends:', error);
-          // Set empty arrays on error to prevent UI issues
-          set({ 
-            friends: [],
-            offlineFriends: [] 
-          });
+          console.error('Load friends error:', error);
         }
       },
 
-      updateUserData: async (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => {
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (!authUser) return false;
-
-          const { data: userData, error } = await supabase
-            .from('users')
-            .update(updates)
-            .eq('id', authUser.id)
-            .select()
-            .single();
-
-          if (error) {
-            console.error('Error updating user data:', error);
-            return false;
-          }
-
-          if (userData) {
-            set({
-              user: {
-                id: userData.id,
-                name: userData.name,
-                username: userData.username,
-                vibe: userData.vibe,
-                avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
-                status: 'offline',
-                activity: ''
-              }
-            });
-            return true;
-          } else {
-            // User profile doesn't exist, create one
-            console.log('No user profile found, creating one...');
-            const { data: newUserData, error: createError } = await supabase
-              .from('users')
-              .insert([
-                {
-                  id: authUser.id,
-                  email: authUser.email || '',
-                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                  username: authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'user'
-                }
-              ])
-              .select()
-              .single();
-
-            if (createError) {
-              console.error('Error creating user profile:', createError);
-              return false;
-            }
-
-            if (newUserData) {
-              set({
-                user: {
-                  id: newUserData.id,
-                  name: newUserData.name,
-                  username: newUserData.username,
-                  avatar: newUserData.avatar_url || getDefaultAvatar(newUserData.name, newUserData.id),
-                  status: 'offline',
-                  activity: ''
-                }
-              });
-              return true;
-            }
-          }
-          return false;
-        } catch (error) {
-          console.error('Error in updateUserData:', error);
-          return false;
-        }
-      },
-
+      // SIMPLIFIED REALTIME - Just listen to what matters
       startRealTimeUpdates: () => {
-        // Clear any existing interval
-        if (refreshInterval) {
-          clearInterval(refreshInterval);
+        // Clean up existing
+        if (hangRealtimeChannel) {
+          supabase.removeChannel(hangRealtimeChannel);
+          hangRealtimeChannel = null;
         }
         
-        // Start refreshing friends every second
-        refreshInterval = setInterval(() => {
-          get().loadFriends();
-        }, 1000);
+        console.log('🔄 Starting realtime for hang features...');
+        
+        // ONE channel for all hang-related changes
+        hangRealtimeChannel = supabase
+          .channel('hang-realtime', {
+            config: {
+              broadcast: { self: false },
+              presence: { key: 'hang' }
+            }
+          })
+          // Listen to user status changes (affects who's available)
+          .on(
+            'postgres_changes',
+            { 
+              event: 'UPDATE', 
+              schema: 'public', 
+              table: 'users',
+              filter: 'status=neq.null'
+            },
+                         (payload: any) => {
+               console.log('👤 User status changed, reloading friends');
+               get().loadFriends();
+             }
+          )
+          // Listen to new friendships
+          .on(
+            'postgres_changes',
+            { 
+              event: '*', 
+              schema: 'public', 
+              table: 'friendships'
+            },
+                         (payload: any) => {
+               console.log('👥 Friendship changed, reloading friends');
+               get().loadFriends();
+             }
+           )
+           .subscribe((status: any) => {
+             console.log('📡 Hang realtime status:', status);
+           });
       },
 
       stopRealTimeUpdates: () => {
-        if (refreshInterval) {
-          clearInterval(refreshInterval);
-          refreshInterval = null;
+        console.log('⏹️ Stopping hang realtime...');
+        
+        if (hangRealtimeChannel) {
+          supabase.removeChannel(hangRealtimeChannel);
+          hangRealtimeChannel = null;
         }
       }
     }),
     {
       name: 'hang-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        selectedFriends: state.selectedFriends,
+        pingedFriends: state.pingedFriends,
+        isAvailable: state.isAvailable,
+        activity: state.activity,
+      }),
     }
   )
 );

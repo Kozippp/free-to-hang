@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { generateDefaultAvatar } from '@/constants/defaultImages';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 interface User {
   id: string;
@@ -18,10 +20,28 @@ interface FriendRequest {
   users: User;
 }
 
+interface BlockedUser {
+  id: string;
+  user_id: string;
+  blocked_user_id: string;
+  created_at: string;
+  users: User;
+}
+
+interface SearchUser {
+  id: string;
+  name: string;
+  username: string;
+  avatar_url: string;
+  bio?: string;
+}
+
 interface FriendsState {
-  searchResults: User[];
+  searchResults: SearchUser[];
   friendRequests: FriendRequest[];
   sentRequests: FriendRequest[];
+  blockedUsers: BlockedUser[];
+  searchQuery: string;
   isSearching: boolean;
   isLoading: boolean;
   
@@ -32,13 +52,25 @@ interface FriendsState {
   declineFriendRequest: (requestId: string) => Promise<void>;
   loadFriendRequests: () => Promise<void>;
   loadSentRequests: () => Promise<void>;
-  clearSearchResults: () => void;
+  loadBlockedUsers: () => Promise<void>;
+  clearSearch: () => void;
+  blockUser: (userId: string) => Promise<void>;
+  unblockUser: (userId: string) => Promise<void>;
+  
+  // Real-time functions
+  startRealTimeUpdates: () => void;
+  stopRealTimeUpdates: () => void;
 }
+
+// Real-time subscription variable
+let friendRequestsChannel: RealtimeChannel | null = null;
 
 const useFriendsStore = create<FriendsState>((set, get) => ({
   searchResults: [],
   friendRequests: [],
   sentRequests: [],
+  blockedUsers: [],
+  searchQuery: '',
   isSearching: false,
   isLoading: false,
 
@@ -73,8 +105,8 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         .select('friend_id')
         .eq('user_id', currentUser.id);
 
-      const connectedUserIds = existingConnections?.map(conn => conn.friend_id) || [];
-      const filteredUsers = users?.filter(user => !connectedUserIds.includes(user.id)) || [];
+      const connectedUserIds = existingConnections?.map((conn: any) => conn.friend_id) || [];
+      const filteredUsers = users?.filter((user: any) => !connectedUserIds.includes(user.id)) || [];
 
       set({ searchResults: filteredUsers });
     } catch (error) {
@@ -89,8 +121,48 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) return;
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
 
+      // Check if friend request already exists
+      const { data: existingRequest, error: checkError } = await supabase
+        .from('friend_requests')
+        .select('id')
+        .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        // PGRST116 means no rows found, which is what we want
+        console.error('Error checking existing request:', checkError);
+        throw checkError;
+      }
+
+      if (existingRequest) {
+        // Request already exists
+        console.log('Friend request already exists');
+        return;
+      }
+
+      // Check if they're already friends
+      const { data: existingFriendship, error: friendshipError } = await supabase
+        .from('friendships')
+        .select('id')
+        .eq('user_id', currentUser.id)
+        .eq('friend_id', friendId)
+        .single();
+
+      if (friendshipError && friendshipError.code !== 'PGRST116') {
+        console.error('Error checking existing friendship:', friendshipError);
+        throw friendshipError;
+      }
+
+      if (existingFriendship) {
+        console.log('Users are already friends');
+        return;
+      }
+
+      // Send the friend request
       const { error } = await supabase
         .from('friend_requests')
         .insert([
@@ -107,7 +179,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         throw error;
       }
 
-      // Remove from search results
+      console.log('Friend request sent successfully');
+
+      // Remove from search results immediately for better UX
       const { searchResults } = get();
       set({ 
         searchResults: searchResults.filter(user => user.id !== friendId) 
@@ -173,14 +247,20 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     set({ isLoading: true });
     
     try {
+      // Delete the friend request from friend_requests table
       const { error } = await supabase
-        .from('friends')
-        .update({ status: 'declined' })
+        .from('friend_requests')
+        .delete()
         .eq('id', requestId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Decline friend request error:', error);
+        throw error;
+      }
 
-      // Remove from friend requests
+      console.log('Friend request declined successfully');
+
+      // Remove from friend requests immediately for better UX
       const { friendRequests } = get();
       set({ 
         friendRequests: friendRequests.filter(req => req.id !== requestId) 
@@ -280,8 +360,133 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     }
   },
 
-  clearSearchResults: () => {
+  loadBlockedUsers: async () => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      const { data: blockedUsers, error } = await supabase
+        .from('blocked_users')
+        .select(`
+          id,
+          user_id,
+          blocked_user_id,
+          created_at,
+          users!blocked_users_user_id_fkey (
+            id,
+            name,
+            username,
+            avatar_url,
+            bio
+          )
+        `)
+        .eq('user_id', currentUser.id);
+
+      if (error) {
+        console.error('Load blocked users error:', error);
+        return;
+      }
+
+      set({ blockedUsers: blockedUsers || [] });
+    } catch (error) {
+      console.error('Load blocked users error:', error);
+    }
+  },
+
+  clearSearch: () => {
     set({ searchResults: [] });
+  },
+
+  blockUser: async (userId: string) => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      const { error } = await supabase
+        .from('blocked_users')
+        .insert([
+          { user_id: currentUser.id, blocked_user_id: userId, created_at: new Date().toISOString() }
+        ]);
+
+      if (error) throw error;
+
+      // Remove from friend requests
+      const { friendRequests } = get();
+      set({ 
+        friendRequests: friendRequests.filter(req => req.user_id !== userId && req.friend_id !== userId) 
+      });
+
+      // Remove from search results
+      const { searchResults } = get();
+      set({ 
+        searchResults: searchResults.filter(user => user.id !== userId) 
+      });
+      
+    } catch (error) {
+      console.error('Block user error:', error);
+      throw error;
+    }
+  },
+
+  unblockUser: async (userId: string) => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      const { error } = await supabase
+        .from('blocked_users')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('blocked_user_id', userId);
+
+      if (error) throw error;
+
+      // Reload friend requests
+      await get().loadFriendRequests();
+      
+    } catch (error) {
+      console.error('Unblock user error:', error);
+      throw error;
+    }
+  },
+
+  startRealTimeUpdates: () => {
+    // Clear any existing channel
+    if (friendRequestsChannel) {
+      supabase.removeChannel(friendRequestsChannel);
+    }
+    
+    console.log('👥 Starting friends realtime...');
+    
+    // Simple channel for friend-related updates
+    friendRequestsChannel = supabase
+      .channel('friends-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'friend_requests' },
+        (payload: any) => {
+          console.log('📬 Friend request changed');
+          get().loadFriendRequests();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'blocked_users' },
+        (payload: any) => {
+          console.log('🚫 Blocked users changed');
+          get().loadBlockedUsers();
+        }
+      )
+      .subscribe((status: any) => {
+        console.log('📡 Friends realtime status:', status);
+      });
+  },
+
+  stopRealTimeUpdates: () => {
+    if (friendRequestsChannel) {
+      supabase.removeChannel(friendRequestsChannel);
+      friendRequestsChannel = null;
+    }
   },
 }));
 

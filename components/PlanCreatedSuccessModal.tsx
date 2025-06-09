@@ -233,11 +233,11 @@ export default function PlanCreatedSuccessModal({
               
               {/* Success Icon with Sparkles */}
               <View style={styles.successIconContainer}>
-                <Sparkles size={24} color="#FFD700" style={styles.sparkleLeft} />
+                <Sparkles size={24} color="#FFD700" />
                 <View style={styles.successIcon}>
                   <CheckCircle size={48} color="#4CAF50" />
                 </View>
-                <Sparkles size={24} color="#FFD700" style={styles.sparkleRight} />
+                <Sparkles size={24} color="#FFD700" />
               </View>
               
               <Text style={styles.successTitle}>
@@ -337,9 +337,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   sparkleLeft: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
     transform: [{ rotate: '-15deg' }],
   },
   sparkleRight: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
     transform: [{ rotate: '15deg' }],
   },
   successTitle: {
