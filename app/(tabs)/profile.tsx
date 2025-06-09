@@ -50,6 +50,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import useHangStore from '@/store/hangStore';
 import { supabase } from '@/lib/supabase';
+import AddFriendsModal from '@/components/friends/AddFriendsModal';
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
@@ -138,9 +139,7 @@ export default function ProfileScreen() {
   const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
   const [usernameReservationValid, setUsernameReservationValid] = useState<boolean | null>(null);
   
-  // Add friend states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Friend[]>([]);
+  // Add friend states - moved to AddFriendsModal component
   
 
   
@@ -366,44 +365,7 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleSearchFriends = (query: string) => {
-    setSearchQuery(query);
-    if (query.length > 2) {
-      // Mock search results - in real app this would be an API call
-      const mockResults: Friend[] = [
-        {
-          id: 'search1',
-          name: 'Mari Kask',
-          avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-          status: 'online' as const,
-          lastAvailable: '5 minutes ago',
-          shareAvailability: 'week' as const,
-          isBlocked: false
-        },
-        {
-          id: 'search2',
-          name: 'Jaan Tamm',
-          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-          status: 'offline' as const,
-          lastAvailable: '2 hours ago',
-          shareAvailability: 'today' as const,
-          isBlocked: false
-        }
-      ].filter(user => 
-        user.name.toLowerCase().includes(query.toLowerCase()) &&
-        !allFriends.some(f => f.id === user.id)
-      );
-      setSearchResults(mockResults);
-    } else {
-      setSearchResults([]);
-    }
-  };
-
-  const handleAddFriend = (friendToAdd: Friend) => {
-    setAllFriends([...allFriends, friendToAdd]);
-    setSearchResults(searchResults.filter(f => f.id !== friendToAdd.id));
-    Alert.alert('Friend Added', `${friendToAdd.name} is now your friend!`);
-  };
+  // Add friend functionality moved to AddFriendsModal component
 
   const handleFriendTap = (friend: Friend) => {
     setSelectedFriend(friend);
@@ -952,71 +914,10 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* Add Friend Modal */}
-      <Modal
+      <AddFriendsModal 
         visible={showAddFriend}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add Friend</Text>
-            <TouchableOpacity onPress={() => setShowAddFriend(false)}>
-              <X size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.modalContent}>
-            <View style={styles.searchContainer}>
-              <Search size={20} color={Colors.light.secondaryText} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search by username or name..."
-                value={searchQuery}
-                onChangeText={handleSearchFriends}
-                autoCapitalize="none"
-              />
-            </View>
-            
-            {searchResults.length > 0 ? (
-              <FlatList
-                data={searchResults}
-                renderItem={({ item }) => (
-                  <View style={styles.searchResultCard}>
-                    <Image source={{ uri: item.avatar }} style={styles.searchResultAvatar} />
-                    <View style={styles.searchResultInfo}>
-                      <Text style={styles.searchResultName}>{item.name}</Text>
-                      <Text style={styles.searchResultStatus}>
-                        {item.status === 'online' ? 'Online' : 'Offline'}
-                      </Text>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.addButton}
-                      onPress={() => handleAddFriend(item)}
-                    >
-                      <UserPlus size={18} color="white" />
-                      <Text style={styles.addButtonText}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                keyExtractor={(item) => item.id}
-                style={styles.searchResults}
-              />
-            ) : searchQuery.length > 2 ? (
-              <View style={styles.noResults}>
-                <Search size={48} color={Colors.light.secondaryText} />
-                <Text style={styles.noResultsText}>No users found</Text>
-                <Text style={styles.noResultsSubtext}>Try a different search</Text>
-              </View>
-            ) : (
-              <View style={styles.searchInstructions}>
-                <Search size={48} color={Colors.light.secondaryText} />
-                <Text style={styles.searchInstructionsText}>Start searching</Text>
-                <Text style={styles.searchInstructionsSubtext}>Enter at least 3 characters</Text>
-              </View>
-            )}
-          </View>
-        </SafeAreaView>
-      </Modal>
+        onClose={() => setShowAddFriend(false)}
+      />
         
       {/* Settings Modal */}
       <Modal

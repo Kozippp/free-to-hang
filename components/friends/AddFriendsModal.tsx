@@ -10,11 +10,23 @@ import {
   Alert,
   Modal,
   SafeAreaView,
-  ActivityIndicator
+  ActivityIndicator,
+  TouchableWithoutFeedback,
+  Keyboard
 } from 'react-native';
-import { X, Search, UserPlus, Clock, Check } from 'lucide-react-native';
+import { X, Search, UserPlus } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import useFriendsStore from '@/store/friendsStore';
+import { supabase } from '@/lib/supabase';
+import { generateDefaultAvatar } from '@/constants/defaultImages';
+
+interface User {
+  id: string;
+  name: string;
+  username: string;
+  avatar_url: string;
+  vibe?: string;
+  friendRequestSent?: boolean;
+}
 
 interface AddFriendsModalProps {
   visible: boolean;
@@ -23,264 +35,323 @@ interface AddFriendsModalProps {
 
 export default function AddFriendsModal({ visible, onClose }: AddFriendsModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'search' | 'requests' | 'sent'>('search');
-  
-  const {
-    searchResults,
-    friendRequests,
-    sentRequests,
-    isSearching,
-    isLoading,
-    searchUsers,
-    sendFriendRequest,
-    acceptFriendRequest,
-    declineFriendRequest,
-    loadFriendRequests,
-    loadSentRequests,
-    clearSearchResults
-  } = useFriendsStore();
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showUserProfile, setShowUserProfile] = useState(false);
 
-  useEffect(() => {
-    if (visible) {
-      loadFriendRequests();
-      loadSentRequests();
+  // Search users based on name and username
+  const searchUsers = async (query: string) => {
+    if (!query.trim() || query.trim().length < 3) {
+      setSearchResults([]);
+      return;
     }
-  }, [visible]);
 
+    setIsSearching(true);
+    
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      console.log('Searching for users with query:', query.trim());
+
+      // Search by username and name - supports partial matches anywhere in the string
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('id, name, username, avatar_url, vibe')
+        .or(`username.ilike.%${query.trim()}%,name.ilike.%${query.trim()}%`)
+        .neq('id', currentUser.id) // Exclude current user
+        .limit(20);
+
+      console.log('Search results from database:', users?.length || 0, 'users found');
+
+      if (error) {
+        console.error('Search error:', error);
+        return;
+      }
+
+      // Filter out users who are already friends (accepted) or blocked, but keep pending requests
+      const { data: existingConnections } = await supabase
+        .from('friends')
+        .select('friend_id, status')
+        .eq('user_id', currentUser.id);
+
+      const blockedOrFriendIds = existingConnections?.filter((conn: any) => 
+        conn.status === 'accepted' || conn.status === 'blocked'
+      ).map((conn: any) => conn.friend_id) || [];
+      
+      const pendingIds = existingConnections?.filter((conn: any) => 
+        conn.status === 'pending'
+      ).map((conn: any) => conn.friend_id) || [];
+
+      const filteredUsers = users?.filter((user: any) => !blockedOrFriendIds.includes(user.id)) || [];
+      
+      // Mark users with pending requests
+      const usersWithStatus = filteredUsers.map((user: any) => ({
+        ...user,
+        friendRequestSent: pendingIds.includes(user.id)
+      }));
+
+      console.log('Final search results:', usersWithStatus?.length || 0, 'users');
+
+      setSearchResults(usersWithStatus);
+    } catch (error) {
+      console.error('Search users error:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Search with debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (searchQuery.trim()) {
-        searchUsers(searchQuery);
-      } else {
-        clearSearchResults();
-      }
+      searchUsers(searchQuery);
     }, 300);
 
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  const handleSendRequest = async (friendId: string) => {
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setSearchQuery('');
+      setSearchResults([]);
+      setSelectedUser(null);
+      setShowUserProfile(false);
+    }
+  }, [visible]);
+
+  const handleUserPress = (user: User) => {
+    setSelectedUser(user);
+    setShowUserProfile(true);
+  };
+
+  const handleAddFriend = async (user: User) => {
+    if (user.friendRequestSent) return;
+    
     try {
-      await sendFriendRequest(friendId);
-      Alert.alert('Success', 'Friend request sent!');
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      const { error } = await supabase
+        .from('friends')
+        .insert([
+          { user_id: currentUser.id, friend_id: user.id, status: 'pending' }
+        ]);
+
+      if (error) {
+        console.error('Send friend request error:', error);
+        Alert.alert('Error', 'Failed to send friend request');
+        return;
+      }
+      
+      // Mark user as having pending request and update selected user too
+      const updatedUser = { ...user, friendRequestSent: true };
+      setSearchResults(prev => prev.map(u => 
+        u.id === user.id ? updatedUser : u
+      ));
+      
+      // Update selected user in profile modal
+      if (selectedUser?.id === user.id) {
+        setSelectedUser(updatedUser);
+      }
+      
     } catch (error) {
+      console.error('Add friend error:', error);
       Alert.alert('Error', 'Failed to send friend request');
     }
   };
 
-  const handleAcceptRequest = async (requestId: string) => {
+  const handleUndoFriendRequest = async (user: User) => {
+    if (!user.friendRequestSent) return;
+    
     try {
-      await acceptFriendRequest(requestId);
-      Alert.alert('Success', 'Friend request accepted!');
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      const { error } = await supabase
+        .from('friends')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('friend_id', user.id)
+        .eq('status', 'pending');
+
+      if (error) {
+        console.error('Undo friend request error:', error);
+        Alert.alert('Error', 'Failed to undo friend request');
+        return;
+      }
+      
+      // Mark user as not having pending request
+      const updatedUser = { ...user, friendRequestSent: false };
+      setSearchResults(prev => prev.map(u => 
+        u.id === user.id ? updatedUser : u
+      ));
+      
+      // Update selected user in profile modal
+      if (selectedUser?.id === user.id) {
+        setSelectedUser(updatedUser);
+      }
+      
     } catch (error) {
-      Alert.alert('Error', 'Failed to accept friend request');
+      console.error('Undo friend request error:', error);
+      Alert.alert('Error', 'Failed to undo friend request');
     }
   };
 
-  const handleDeclineRequest = async (requestId: string) => {
-    try {
-      await declineFriendRequest(requestId);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to decline friend request');
-    }
-  };
-
-  const renderSearchResult = ({ item }: { item: any }) => (
-    <View style={styles.userItem}>
-      <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
+  const renderSearchResult = ({ item }: { item: User }) => (
+    <TouchableOpacity 
+      style={styles.userItem}
+      onPress={() => handleUserPress(item)}
+    >
+      <Image 
+        source={{ uri: item.avatar_url || generateDefaultAvatar(item.name, item.id) }} 
+        style={styles.avatar} 
+      />
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.name}</Text>
         <Text style={styles.userUsername}>@{item.username}</Text>
-        {item.bio && <Text style={styles.userBio}>{item.bio}</Text>}
+        {item.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.vibe}</Text>}
       </View>
       <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => handleSendRequest(item.id)}
-        disabled={isLoading}
+        style={[styles.quickAddButton, item.friendRequestSent && styles.pendingButton]}
+        onPress={() => item.friendRequestSent ? handleUndoFriendRequest(item) : handleAddFriend(item)}
       >
-        <UserPlus size={20} color="white" />
-        <Text style={styles.addButtonText}>Add</Text>
+        {item.friendRequestSent ? (
+          <Text style={styles.pendingText}>Pending</Text>
+        ) : (
+          <UserPlus size={18} color="white" />
+        )}
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
-  const renderFriendRequest = ({ item }: { item: any }) => (
-    <View style={styles.userItem}>
-      <Image source={{ uri: item.users.avatar_url }} style={styles.avatar} />
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.users.name}</Text>
-        <Text style={styles.userUsername}>@{item.users.username}</Text>
-        {item.users.bio && <Text style={styles.userBio}>{item.users.bio}</Text>}
-      </View>
-      <View style={styles.requestActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.acceptButton]}
-          onPress={() => handleAcceptRequest(item.id)}
-          disabled={isLoading}
-        >
-          <Check size={16} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.declineButton]}
-          onPress={() => handleDeclineRequest(item.id)}
-          disabled={isLoading}
-        >
-          <X size={16} color="white" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+    >
+      <SafeAreaView style={styles.container}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Add Friends</Text>
+              <TouchableOpacity onPress={onClose}>
+                <X size={24} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+            </View>
 
-  const renderSentRequest = ({ item }: { item: any }) => (
-    <View style={styles.userItem}>
-      <Image source={{ uri: item.users.avatar_url }} style={styles.avatar} />
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.users.name}</Text>
-        <Text style={styles.userUsername}>@{item.users.username}</Text>
-        {item.users.bio && <Text style={styles.userBio}>{item.users.bio}</Text>}
-      </View>
-      <View style={styles.pendingIndicator}>
-        <Clock size={16} color={Colors.light.secondaryText} />
-        <Text style={styles.pendingText}>Pending</Text>
-      </View>
-    </View>
-  );
-
-  const getTabBadgeCount = (tab: string) => {
-    switch (tab) {
-      case 'requests':
-        return friendRequests.length;
-      case 'sent':
-        return sentRequests.length;
-      default:
-        return 0;
-    }
-  };
-
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'search':
-        return (
-          <View style={styles.tabContent}>
+            {/* Search */}
             <View style={styles.searchContainer}>
               <Search size={20} color={Colors.light.secondaryText} style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search by name or username..."
+                placeholder="Search by name or username"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCorrect={false}
                 autoCapitalize="none"
+                blurOnSubmit={false}
               />
               {isSearching && (
                 <ActivityIndicator size="small" color={Colors.light.primary} />
               )}
             </View>
-            
-            {searchQuery.trim() && (
-              <FlatList
-                data={searchResults}
-                keyExtractor={(item) => item.id}
-                renderItem={renderSearchResult}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                  !isSearching ? (
-                    <View style={styles.emptyState}>
-                      <Text style={styles.emptyStateText}>
-                        {searchQuery.trim() ? 'No users found' : 'Start typing to search for friends'}
-                      </Text>
-                    </View>
-                  ) : null
-                }
-              />
-            )}
-            
-            {!searchQuery.trim() && (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>
-                  Search for friends by their name or username
-                </Text>
-              </View>
-            )}
-          </View>
-        );
-      
-      case 'requests':
-        return (
-          <View style={styles.tabContent}>
-            <FlatList
-              data={friendRequests}
-              keyExtractor={(item) => item.id}
-              renderItem={renderFriendRequest}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No friend requests</Text>
-                </View>
-              }
-            />
-          </View>
-        );
-      
-      case 'sent':
-        return (
-          <View style={styles.tabContent}>
-            <FlatList
-              data={sentRequests}
-              keyExtractor={(item) => item.id}
-              renderItem={renderSentRequest}
-              showsVerticalScrollIndicator={false}
-              ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No pending requests</Text>
-                </View>
-              }
-            />
-          </View>
-        );
-    }
-  };
 
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Add Friends</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color={Colors.light.text} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Tabs */}
-        <View style={styles.tabBar}>
-          {[
-            { key: 'search', title: 'Search' },
-            { key: 'requests', title: 'Requests' },
-            { key: 'sent', title: 'Sent' }
-          ].map((tab) => {
-            const badgeCount = getTabBadgeCount(tab.key);
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-                onPress={() => setActiveTab(tab.key as any)}
-              >
-                <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
-                  {tab.title}
-                </Text>
-                {badgeCount > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{badgeCount}</Text>
+            {/* Search Results */}
+            <View style={styles.content}>
+              {searchQuery.trim() ? (
+                searchResults.length > 0 ? (
+                  <FlatList
+                    data={searchResults}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderSearchResult}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.listContent}
+                  />
+                ) : !isSearching ? (
+                  <View style={styles.emptyState}>
+                    <Search size={48} color={Colors.light.secondaryText} />
+                    <Text style={styles.emptyStateText}>No users found</Text>
+                    <Text style={styles.emptyStateSubtext}>Try a different search term</Text>
                   </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                ) : null
+              ) : (
+                <View style={styles.emptyState}>
+                  <Search size={48} color={Colors.light.secondaryText} />
+                  <Text style={styles.emptyStateText}>Add friends</Text>
+                  <Text style={styles.emptyStateSubtext}>Just start typing a name or username</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
 
-        {/* Content */}
-        {renderTabContent()}
+        {/* User Profile Modal */}
+        <Modal
+          visible={showUserProfile}
+          animationType="fade"
+          transparent={true}
+        >
+          <TouchableOpacity 
+            style={styles.overlay}
+            activeOpacity={1}
+            onPress={() => setShowUserProfile(false)}
+          >
+            <TouchableOpacity 
+              style={styles.profileModal}
+              activeOpacity={1}
+              onPress={() => {}} // Prevent closing when clicking inside modal
+            >
+              {selectedUser && (
+                <>
+                  {/* Close Button */}
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={() => setShowUserProfile(false)}
+                  >
+                    <X size={20} color={Colors.light.secondaryText} />
+                  </TouchableOpacity>
+
+                  {/* Profile Picture */}
+                  <Image 
+                    source={{ uri: selectedUser.avatar_url || generateDefaultAvatar(selectedUser.name, selectedUser.id) }} 
+                    style={styles.profileAvatar} 
+                  />
+                  
+                  {/* Name & Username */}
+                  <Text style={styles.profileName}>{selectedUser.name}</Text>
+                  <Text style={styles.profileUsername}>@{selectedUser.username}</Text>
+                  
+                  {/* Vibe */}
+                  {selectedUser.vibe && (
+                    <Text style={styles.profileVibe}>{selectedUser.vibe}</Text>
+                  )}
+                  
+                  {/* Add Friend Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.addFriendButton, 
+                      selectedUser.friendRequestSent && styles.profilePendingButton
+                    ]}
+                    onPress={() => selectedUser.friendRequestSent ? handleUndoFriendRequest(selectedUser) : handleAddFriend(selectedUser)}
+                  >
+                    {selectedUser.friendRequestSent ? (
+                      <Text style={[styles.addFriendText, { color: '#999999' }]}>Pending</Text>
+                    ) : (
+                      <>
+                        <UserPlus size={20} color="white" />
+                        <Text style={styles.addFriendText}>Add Friend</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
       </SafeAreaView>
     </Modal>
   );
@@ -289,79 +360,29 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: 'white',
   },
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-    position: 'relative',
+    borderBottomColor: '#F0F0F0',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: Colors.light.text,
-  },
-  closeButton: {
-    position: 'absolute',
-    right: 16,
-    padding: 4,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.light.primary,
-  },
-  tabText: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-  },
-  activeTabText: {
-    color: Colors.light.primary,
-    fontWeight: '600',
-  },
-  badge: {
-    position: 'absolute',
-    top: 8,
-    right: 20,
-    backgroundColor: Colors.light.secondary,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  badgeText: {
-    fontSize: 12,
-    color: 'white',
-    fontWeight: '600',
-  },
-  tabContent: {
-    flex: 1,
-    padding: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.cardBackground,
+    backgroundColor: '#F5F5F5',
     borderRadius: 12,
+    margin: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginBottom: 16,
   },
   searchIcon: {
     marginRight: 12,
@@ -371,12 +392,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.text,
   },
+  content: {
+    flex: 1,
+  },
+  listContent: {
+    padding: 20,
+    paddingTop: 0,
+  },
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
+    borderBottomColor: '#F0F0F0',
   },
   avatar: {
     width: 50,
@@ -398,60 +426,117 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     marginBottom: 2,
   },
-  userBio: {
+  userVibe: {
     fontSize: 12,
     color: Colors.light.secondaryText,
     fontStyle: 'italic',
   },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  quickAddButton: {
     backgroundColor: Colors.light.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  requestActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  acceptButton: {
-    backgroundColor: Colors.light.onlineGreen,
-  },
-  declineButton: {
-    backgroundColor: Colors.light.secondary,
-  },
-  pendingIndicator: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+  },
+  pendingButton: {
+    backgroundColor: '#E0E0E0',
+    width: 60,
+    height: 28,
+    borderRadius: 14,
   },
   pendingText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#999999',
   },
   emptyState: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    alignItems: 'center',
+    paddingHorizontal: 40,
   },
   emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  // Profile Modal Styles
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  profileModal: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    minWidth: 280,
+    maxWidth: 320,
+    position: 'relative',
+  },
+  profileAvatar: {
+    width: 112, // 40% larger than 80px
+    height: 112,
+    borderRadius: 56,
+    marginBottom: 16,
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.light.text,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  profileUsername: {
     fontSize: 16,
     color: Colors.light.secondaryText,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  profileVibe: {
+    fontSize: 14,
+    color: Colors.light.text,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: 24,
+    paddingHorizontal: 10,
+  },
+  addFriendButton: {
+    backgroundColor: Colors.light.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24, // Made wider
+    borderRadius: 12,
+    gap: 8,
+    minWidth: 160, // Ensure minimum width
+  },
+  addFriendText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 1,
+    padding: 4,
+  },
+  profilePendingButton: {
+    backgroundColor: '#E0E0E0',
   },
 }); 
