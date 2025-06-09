@@ -142,6 +142,8 @@ export default function ProfileScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Friend[]>([]);
   
+
+  
   // ScrollView ref for auto-scrolling
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -152,8 +154,8 @@ export default function ProfileScreen() {
     }, 100);
   };
 
-  // Check if there are any changes made
-  const hasChanges = editName !== originalName || editUsername !== originalUsername || editBio !== originalBio || editAvatar !== originalAvatar;
+  // Check if there are any changes made (avatar changes are saved immediately)
+  const hasChanges = editName !== originalName || editUsername !== originalUsername || editBio !== originalBio;
 
   // Username validation effect for edit profile
   useEffect(() => {
@@ -249,12 +251,11 @@ export default function ProfileScreen() {
       }
     }
 
-    // Update in Supabase via hangStore
+    // Update in Supabase via hangStore (avatar is already saved separately)
     const success = await updateUserData({
       name: editName,
       username: editUsername.toLowerCase(),
       vibe: editBio,
-      avatar_url: editAvatar,
     });
 
     if (success) {
@@ -301,23 +302,28 @@ export default function ProfileScreen() {
               return;
             }
 
-                          const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-              });
+                                      const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+              base64: true,
+            });
 
             if (!result.canceled && result.assets[0]) {
-              const newAvatar = result.assets[0].uri;
-              console.log('New avatar selected:', newAvatar);
-              console.log('Current editAvatar:', editAvatar);
+              const asset = result.assets[0];
+              const newAvatar = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+              console.log('New avatar selected from camera');
+              
+              // Update UI immediately
               setEditAvatar(newAvatar);
-              setUserProfile(prev => {
-                console.log('Updating userProfile avatar from:', prev.avatar, 'to:', newAvatar);
-                return { ...prev, avatar: newAvatar };
+              setUserProfile(prev => ({ ...prev, avatar: newAvatar }));
+              
+              // Save to database immediately
+              await updateUserData({
+                avatar_url: newAvatar,
               });
-              console.log('Avatar state updated');
+              console.log('Avatar saved to database');
             }
           }
         },
@@ -335,18 +341,23 @@ export default function ProfileScreen() {
               allowsEditing: true,
               aspect: [1, 1],
               quality: 0.8,
+              base64: true,
             });
 
             if (!result.canceled && result.assets[0]) {
-              const newAvatar = result.assets[0].uri;
-              console.log('New avatar selected from gallery:', newAvatar);
-              console.log('Current editAvatar:', editAvatar);
+              const asset = result.assets[0];
+              const newAvatar = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+              console.log('New avatar selected from gallery');
+              
+              // Update UI immediately
               setEditAvatar(newAvatar);
-              setUserProfile(prev => {
-                console.log('Updating userProfile avatar from:', prev.avatar, 'to:', newAvatar);
-                return { ...prev, avatar: newAvatar };
+              setUserProfile(prev => ({ ...prev, avatar: newAvatar }));
+              
+              // Save to database immediately
+              await updateUserData({
+                avatar_url: newAvatar,
               });
-              console.log('Avatar state updated from gallery');
+              console.log('Avatar saved to database');
             }
           }
         },
@@ -629,12 +640,10 @@ export default function ProfileScreen() {
                 }
               }
               
-              // Reset to original values
+              // Reset to original values (except avatar - it's already saved)
               setEditName(originalName);
               setEditUsername(originalUsername);
               setEditBio(originalBio);
-              setEditAvatar(originalAvatar);
-              setUserProfile(prev => ({ ...prev, avatar: originalAvatar }));
               setIsUsernameAvailable(null);
               setUsernameReservationValid(null);
               setShowEditProfile(false);
@@ -675,7 +684,7 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <Image 
-              source={{ uri: (editAvatar || userProfile.avatar) + '?' + Date.now() }} 
+              source={{ uri: editAvatar || userProfile.avatar }} 
               style={styles.profilePreviewImage} 
               key={editAvatar || userProfile.avatar}
             />
@@ -866,7 +875,7 @@ export default function ProfileScreen() {
                   onPress={handleChangeProfilePicture}
                 >
                   <Image 
-                    source={{ uri: editAvatar + '?' + Date.now() }} 
+                    source={{ uri: editAvatar }} 
                     style={styles.editProfileImage} 
                     key={editAvatar}
                   />

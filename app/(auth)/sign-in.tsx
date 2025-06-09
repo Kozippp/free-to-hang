@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -11,10 +11,12 @@ import {
   Alert,
   Image,
   TouchableWithoutFeedback,
-  Keyboard
+  Keyboard,
+  Animated
 } from 'react-native';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -25,6 +27,33 @@ export default function SignInScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { signIn } = useAuth();
+  
+  // Animated gradient
+  const animatedValue = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    const createAnimation = () => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(animatedValue, {
+            toValue: 1,
+            duration: 4000,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedValue, {
+            toValue: 0,
+            duration: 4000,
+            useNativeDriver: false,
+          }),
+        ])
+      );
+    };
+    
+    const animation = createAnimation();
+    animation.start();
+    
+    return () => animation.stop();
+  }, []);
 
   const dismissKeyboard = () => {
     Keyboard.dismiss();
@@ -68,10 +97,27 @@ export default function SignInScreen() {
     router.push('/(auth)/email-signin');
   };
 
+  const animatedColors = animatedValue.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [
+      'rgba(173, 216, 255, 0.3)', // Light baby blue
+      'rgba(255, 192, 203, 0.3)', // Light baby pink  
+      'rgba(173, 216, 255, 0.3)'  // Back to light baby blue
+    ]
+  });
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
+        <Animated.View style={[styles.gradientBackground, { backgroundColor: animatedColors }]}>
+          <LinearGradient
+            colors={['rgba(173, 216, 255, 0.15)', 'rgba(255, 192, 203, 0.15)', 'rgba(173, 216, 255, 0.15)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradientOverlay}
+          />
+        </Animated.View>
         <TouchableWithoutFeedback onPress={dismissKeyboard}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -80,18 +126,17 @@ export default function SignInScreen() {
             <View style={styles.content}>
               {/* Logo */}
               <View style={styles.logoContainer}>
-                <View style={styles.logoWrapper}>
-                  <View style={styles.logoToggle}>
-                    <View style={styles.logoKnob} />
-                  </View>
-                </View>
-                <Text style={styles.logoText}>Free2Hang</Text>
+                <Image 
+                  source={require('@/assets/images/Logo ready.png')} 
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
               </View>
 
               {/* Welcome text */}
               <View style={styles.welcomeContainer}>
-                <Text style={styles.welcomeTitle}>welcome back</Text>
-                <Text style={styles.welcomeSubtitle}>sign in to continue</Text>
+                <Text style={styles.welcomeTitle}>See who's down to hang 👋</Text>
+                <Text style={styles.welcomeSubtitle}>One tap to show you're free — and see which friends are too.</Text>
               </View>
 
               {/* Sign in options */}
@@ -102,7 +147,14 @@ export default function SignInScreen() {
                     onPress={handleAppleSignIn}
                     disabled={isLoading}
                   >
-                    <Text style={styles.appleButtonText}>🍎 Continue with Apple</Text>
+                    <View style={styles.buttonContent}>
+                      <Image 
+                        source={require('@/assets/images/Apple_logo_white.svg.png')} 
+                        style={styles.appleIconImage}
+                        resizeMode="contain"
+                      />
+                      <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                    </View>
                   </TouchableOpacity>
                 )}
                 
@@ -121,7 +173,10 @@ export default function SignInScreen() {
               onPress={handleEmailSignIn}
               disabled={isLoading}
             >
-              <Text style={styles.emailButtonText}>✉️ Continue with Email</Text>
+              <View style={styles.buttonContent}>
+                <Mail size={20} color="white" />
+                <Text style={styles.emailButtonText}>Continue with Email</Text>
+              </View>
             </TouchableOpacity>
               </View>
 
@@ -146,18 +201,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'white',
+    position: 'relative',
+  },
+  gradientBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  gradientOverlay: {
+    flex: 1,
   },
   keyboardView: {
     flex: 1,
+    zIndex: 1,
   },
   content: {
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'center',
+    zIndex: 2,
   },
   logoContainer: {
     alignItems: 'center',
     marginBottom: 48,
+  },
+  logoImage: {
+    width: 280,
+    height: 110,
   },
   logoWrapper: {
     width: 80,
@@ -196,11 +269,15 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   welcomeSubtitle: {
     fontSize: 16,
     color: Colors.light.secondaryText,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 16,
   },
   signInOptions: {
     gap: 16,
@@ -259,5 +336,16 @@ const styles = StyleSheet.create({
   termsLink: {
     color: Colors.light.primary,
     fontWeight: '600',
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  appleIconImage: {
+    width: 20,
+    height: 20,
+    marginRight: 8,
   },
 }); 
