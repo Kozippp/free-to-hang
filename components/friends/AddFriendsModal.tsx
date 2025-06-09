@@ -22,7 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import * as Contacts from 'expo-contacts';
 import useFriendsStore from '@/store/friendsStore';
-import UserProfileModal, { UserProfile } from '@/components/shared/UserProfileModal';
+import UserProfileModal from '@/components/UserProfileModal';
 
 interface User {
   id: string;
@@ -31,8 +31,7 @@ interface User {
   avatar_url: string;
   bio?: string;
   vibe?: string;
-  status?: 'available' | 'offline';
-  last_seen?: string;
+  friendRequestSent?: boolean;
 }
 
 interface AddFriendsModalProps {
@@ -51,12 +50,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     cancelSentRequest,
     clearSearchResults,
     friendRequests,
-    acceptFriendRequest,
-    declineFriendRequest
+    acceptFriendRequest
   } = useFriendsStore();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [hasContactsPermission, setHasContactsPermission] = useState(false);
@@ -128,65 +126,13 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   }, [visible]);
 
   const handleUserPress = (user: User) => {
-    // Convert User to UserProfile
-    const userProfile: UserProfile = {
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      avatar_url: user.avatar_url,
-      bio: user.bio,
-      vibe: user.vibe,
-      status: user.status,
-      last_seen: user.last_seen,
-    };
-    setSelectedUser(userProfile);
+    setSelectedUser(user);
     setShowUserProfile(true);
-  };
-
-  const handleProfileSendFriendRequest = async (userId: string) => {
-    try {
-      await sendFriendRequest(userId);
-    } catch (error) {
-      console.error('Send friend request error:', error);
-      Alert.alert('Error', 'Failed to send friend request');
-    }
-  };
-
-  const handleProfileCancelFriendRequest = async (userId: string) => {
-    try {
-      const sentRequest = sentRequests.find(req => req.friend_id === userId);
-      if (sentRequest) {
-        await cancelSentRequest(sentRequest.id);
-        setCancelledRequestIds(prev => new Set(prev).add(sentRequest.id));
-      }
-    } catch (error) {
-      console.error('Cancel friend request error:', error);
-      Alert.alert('Error', 'Failed to cancel friend request');
-    }
-  };
-
-  const handleProfileAcceptFriendRequest = async (requestId: string) => {
-    try {
-      await acceptFriendRequest(requestId);
-    } catch (error) {
-      console.error('Accept friend request error:', error);
-      Alert.alert('Error', 'Failed to accept friend request');
-    }
-  };
-
-  const handleProfileDeclineFriendRequest = async (requestId: string) => {
-    try {
-      await declineFriendRequest(requestId);
-    } catch (error) {
-      console.error('Decline friend request error:', error);
-      Alert.alert('Error', 'Failed to decline friend request');
-    }
   };
 
   const handleAddFriend = async (user: User) => {
     try {
       await sendFriendRequest(user.id);
-      // Popup teade eemaldatud - kasutaja näeb juba muutust UI-s
     } catch (error) {
       console.error('Send friend request error:', error);
       Alert.alert('Error', 'Failed to send friend request');
@@ -202,8 +148,6 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
         
         // Add to cancelled requests set so it doesn't disappear immediately
         setCancelledRequestIds(prev => new Set(prev).add(sentRequest.id));
-        
-        // Popup teade eemaldatud - kasutaja näeb juba muutust UI-s
       }
     } catch (error) {
       console.error('Cancel friend request error:', error);
@@ -413,23 +357,29 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     const sentRequest = sentRequests.find(req => req.friend_id === item.id);
     const wasCancelled = sentRequest && cancelledRequestIds.has(sentRequest.id);
     
-    // Determine button text and style
+    // Determine button state and action
     let buttonText = '';
-    let buttonStyle: any = styles.quickAddButton;
-    let textStyle: any = {};
+    let buttonAction = () => {};
+    let isSpecialState = false;
     
     if (hasSentRequest && !wasCancelled) {
       buttonText = 'Pending';
-      buttonStyle = [styles.quickAddButton, styles.pendingButton];
-      textStyle = styles.pendingText;
+      buttonAction = () => handleUndoFriendRequest(item);
+      isSpecialState = true;
     } else if (hasIncomingRequest) {
       buttonText = 'Accept';
-      buttonStyle = [styles.quickAddButton, styles.acceptButton];
-      textStyle = styles.acceptText;
+      buttonAction = () => {
+        // Find the incoming request and accept it
+        const incomingRequest = friendRequests.find(req => req.user_id === item.id);
+        if (incomingRequest) {
+          acceptFriendRequest(incomingRequest.id);
+        }
+      };
+      isSpecialState = true;
     } else {
       buttonText = 'Add';
-      buttonStyle = styles.quickAddButton;
-      textStyle = {};
+      buttonAction = () => handleAddFriend(item);
+      isSpecialState = false;
     }
     
     return (
@@ -446,15 +396,22 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           <Text style={styles.userUsername}>@{item.username}</Text>
           {item.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.vibe}</Text>}
         </View>
-        <View style={buttonStyle}>
+        <TouchableOpacity
+          style={[
+            styles.quickAddButton, 
+            (hasSentRequest && !wasCancelled) && styles.pendingButton,
+            hasIncomingRequest && styles.acceptButton
+          ]}
+          onPress={buttonAction}
+        >
           {hasSentRequest && !wasCancelled ? (
-            <Text style={textStyle}>Pending</Text>
+            <Text style={styles.pendingText}>Pending</Text>
           ) : hasIncomingRequest ? (
-            <Text style={textStyle}>Accept</Text>
+            <Text style={styles.acceptText}>Accept</Text>
           ) : (
             <UserPlus size={18} color="white" />
           )}
-        </View>
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
@@ -633,15 +590,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           </View>
         </TouchableWithoutFeedback>
 
-        {/* New User Profile Modal */}
+        {/* User Profile Modal */}
         <UserProfileModal
           visible={showUserProfile}
-          user={selectedUser}
           onClose={() => setShowUserProfile(false)}
-          onSendFriendRequest={handleProfileSendFriendRequest}
-          onCancelFriendRequest={handleProfileCancelFriendRequest}
-          onAcceptFriendRequest={handleProfileAcceptFriendRequest}
-          onDeclineFriendRequest={handleProfileDeclineFriendRequest}
+          userId={selectedUser?.id || null}
         />
 
         {/* Contacts Access Modal */}
@@ -808,79 +761,6 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     marginTop: 8,
     textAlign: 'center',
-  },
-  // Profile Modal Styles
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  profileModal: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 30,
-    alignItems: 'center',
-    minWidth: 280,
-    maxWidth: 320,
-    position: 'relative',
-  },
-  profileAvatar: {
-    width: 112, // 40% larger than 80px
-    height: 112,
-    borderRadius: 56,
-    marginBottom: 16,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.light.text,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  profileUsername: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  profileVibe: {
-    fontSize: 14,
-    color: Colors.light.text,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginBottom: 24,
-    paddingHorizontal: 10,
-  },
-  addFriendButton: {
-    backgroundColor: Colors.light.primary,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24, // Made wider
-    borderRadius: 12,
-    gap: 8,
-    minWidth: 160, // Ensure minimum width
-  },
-  addFriendText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 1,
-    padding: 4,
-  },
-  profilePendingButton: {
-    backgroundColor: '#E0E0E0',
-  },
-  profileAcceptButton: {
-    backgroundColor: Colors.light.primary, // Jääb roheliseks
   },
   emptyStateContainer: {
     flex: 1,
@@ -1099,5 +979,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'white',
   },
-  
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 1,
+    padding: 4,
+  },
 }); 

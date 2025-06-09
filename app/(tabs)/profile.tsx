@@ -52,6 +52,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import useHangStore from '@/store/hangStore';
 import { supabase } from '@/lib/supabase';
 import AddFriendsModal from '@/components/friends/AddFriendsModal';
+import UserProfileModal from '@/components/UserProfileModal';
 import useFriendsStore from '@/store/friendsStore';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { uploadImage } from '@/lib/storage';
@@ -205,8 +206,8 @@ export default function ProfileScreen() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showBlockedUsers, setShowBlockedUsers] = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
-  const [showFriendDetail, setShowFriendDetail] = useState(false);
-  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [showUserProfile, setShowUserProfile] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [showRequestProfile, setShowRequestProfile] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   
@@ -486,130 +487,9 @@ export default function ProfileScreen() {
   // Add friend functionality moved to AddFriendsModal component
 
   const handleFriendTap = (friend: Friend) => {
-    setSelectedFriend(friend);
-    setShowFriendDetail(true);
+    setSelectedUserId(friend.id);
+    setShowUserProfile(true);
   };
-
-  const handleGhostFriend = (friendId: string) => {
-    Alert.alert(
-      'Ghost Friend',
-      'Choose how long you want to ghost each other:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Today', 
-          onPress: () => {
-            Alert.alert('Ghosted for Today', 'You and this friend won\'t see each other\'s status today.');
-            setShowFriendDetail(false);
-          }
-        },
-        { 
-          text: 'Next 7 days', 
-          onPress: () => {
-            Alert.alert('Ghosted for 7 Days', 'You and this friend won\'t see each other\'s status for the next 7 days.');
-            setShowFriendDetail(false);
-          }
-        },
-        { 
-          text: 'Forever', 
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert('Ghosted Forever', 'You and this friend will never see each other\'s status again.');
-            setShowFriendDetail(false);
-          }
-        }
-      ]
-    );
-  };
-
-  const handleRemoveFriend = async (friendId: string) => {
-    Alert.alert(
-      'Remove Friend',
-      'Are you sure you want to remove this friend?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) {
-                // Delete the friendship connection from database
-                await supabase
-                  .from('friendships')
-                  .delete()
-                  .or(`and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`);
-
-                // Also remove from friend_requests if there's a pending request
-                await supabase
-                  .from('friend_requests')
-                  .delete()
-                  .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`);
-                  
-                // Update local state
-                setAllFriends(allFriends.filter(f => f.id !== friendId));
-                loadFriends(); // Refresh friends list
-                
-                Alert.alert('Success', 'Friend removed successfully');
-              }
-              setShowFriendDetail(false);
-            } catch (error) {
-              console.error('Error removing friend:', error);
-              Alert.alert('Error', 'Failed to remove friend');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleBlockUser = async (friendId: string) => {
-    Alert.alert(
-      'Block User',
-      'Are you sure you want to block this user? They won\'t be able to find you in search or send friend requests.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Block', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) {
-                // Remove friendship first
-                await supabase
-                  .from('friendships')
-                  .delete()
-                  .or(`and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`);
-
-                // Add to blocked users
-                await supabase
-                  .from('blocked_users')
-                  .insert({
-                    blocker_id: user.id,
-                    blocked_id: friendId,
-                    created_at: new Date().toISOString()
-                  });
-
-                // Update local state
-                setAllFriends(allFriends.filter(f => f.id !== friendId));
-                loadFriends(); // Refresh friends list
-                loadBlockedUsers(); // Refresh blocked users list
-                
-                Alert.alert('Success', 'User blocked successfully');
-              }
-            } catch (error) {
-              console.error('Error blocking user:', error);
-              Alert.alert('Error', 'Failed to block user');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-
 
   const handleUnblockUser = (userId: string) => {
     Alert.alert(
@@ -956,96 +836,12 @@ export default function ProfileScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* Friend Detail Modal */}
-      <Modal
-        visible={showFriendDetail}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Friend Details</Text>
-            <TouchableOpacity onPress={() => setShowFriendDetail(false)}>
-              <X size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
-          </View>
-          
-          {selectedFriend && (
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.friendDetailContent}>
-                {/* Friend Info */}
-                <View style={styles.friendDetailHeader}>
-                  <Image source={{ uri: selectedFriend.avatar }} style={styles.friendDetailAvatar} />
-                  <View style={styles.friendDetailInfo}>
-                    <Text style={styles.friendDetailName}>{selectedFriend.name}</Text>
-                    <Text style={styles.friendDetailUsername}>@{selectedFriend.name.toLowerCase().replace(' ', '')}</Text>
-                    <View style={styles.friendDetailStatus}>
-                      <View style={[styles.friendDetailStatusDot, { backgroundColor: getStatusColor(selectedFriend.status) }]} />
-                      <Text style={styles.friendDetailStatusText}>
-                        {selectedFriend.status === 'available' ? 'Available to hang' : 
-                         selectedFriend.status === 'online' ? 'Online' : 'Offline'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* What they like to do */}
-                <View style={styles.hangingPreferencesSection}>
-                  <Text style={styles.sectionLabel}>What they usually like to do when hanging</Text>
-                  <Text style={styles.hangingPreferencesText}>
-                    {getFriendHangingPreference(selectedFriend.id)}
-                  </Text>
-                </View>
-
-                {/* Actions */}
-                <View style={styles.friendActionsSection}>
-                  <TouchableOpacity 
-                    style={styles.friendActionButton}
-                    onPress={() => handleGhostFriend(selectedFriend.id)}
-                  >
-                    <EyeOff size={20} color={Colors.light.secondaryText} />
-                    <View style={styles.friendActionTextContainer}>
-                      <Text style={styles.friendActionTitle}>Ghost Friend</Text>
-                      <Text style={styles.friendActionSubtitle}>
-                        Hide your status from each other
-                      </Text>
-                    </View>
-                    <ChevronRight size={20} color={Colors.light.secondaryText} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.friendActionButton}
-                    onPress={() => handleRemoveFriend(selectedFriend.id)}
-                  >
-                    <UserX size={20} color={Colors.light.destructive} />
-                    <View style={styles.friendActionTextContainer}>
-                      <Text style={[styles.friendActionTitle, { color: Colors.light.destructive }]}>Remove Friend</Text>
-                      <Text style={styles.friendActionSubtitle}>
-                        Remove this person from your friends list
-                      </Text>
-                    </View>
-                    <ChevronRight size={20} color={Colors.light.secondaryText} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.friendActionButton}
-                    onPress={() => handleBlockUser(selectedFriend.id)}
-                  >
-                    <Shield size={20} color={Colors.light.destructive} />
-                    <View style={styles.friendActionTextContainer}>
-                      <Text style={[styles.friendActionTitle, { color: Colors.light.destructive }]}>Block Friend</Text>
-                      <Text style={styles.friendActionSubtitle}>
-                        Block this person completely
-                      </Text>
-                    </View>
-                    <ChevronRight size={20} color={Colors.light.secondaryText} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
+      {/* User Profile Modal */}
+      <UserProfileModal 
+        visible={showUserProfile}
+        userId={selectedUserId}
+        onClose={() => setShowUserProfile(false)}
+      />
 
       {/* Edit Profile Modal */}
       <Modal
