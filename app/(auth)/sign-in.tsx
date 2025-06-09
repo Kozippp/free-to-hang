@@ -31,28 +31,56 @@ export default function SignInScreen() {
   // Animated gradient
   const animatedValue = useRef(new Animated.Value(0)).current;
   
+  // Animated toggle glow
+  const toggleGlow = useRef(new Animated.Value(0)).current;
+  
   useEffect(() => {
-    const createAnimation = () => {
+    // Gradient animation - slower
+    const createGradientAnimation = () => {
       return Animated.loop(
         Animated.sequence([
           Animated.timing(animatedValue, {
             toValue: 1,
-            duration: 4000,
+            duration: 8000,
             useNativeDriver: false,
           }),
           Animated.timing(animatedValue, {
             toValue: 0,
-            duration: 4000,
+            duration: 8000,
             useNativeDriver: false,
           }),
         ])
       );
     };
     
-    const animation = createAnimation();
-    animation.start();
+    // Toggle glow animation
+    const createToggleAnimation = () => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(toggleGlow, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: false,
+          }),
+          Animated.timing(toggleGlow, {
+            toValue: 0,
+            duration: 2000,
+            useNativeDriver: false,
+          }),
+        ])
+      );
+    };
     
-    return () => animation.stop();
+    const gradientAnimation = createGradientAnimation();
+    const toggleAnimation = createToggleAnimation();
+    
+    gradientAnimation.start();
+    toggleAnimation.start();
+    
+    return () => {
+      gradientAnimation.stop();
+      toggleAnimation.stop();
+    };
   }, []);
 
   const dismissKeyboard = () => {
@@ -97,26 +125,49 @@ export default function SignInScreen() {
     router.push('/(auth)/email-signin');
   };
 
-  const animatedColors = animatedValue.interpolate({
-    inputRange: [0, 0.5, 1],
+  const gradientColors1 = animatedValue.interpolate({
+    inputRange: [0, 0.33, 0.66, 1],
     outputRange: [
-      'rgba(173, 216, 255, 0.3)', // Light baby blue
-      'rgba(255, 192, 203, 0.3)', // Light baby pink  
-      'rgba(173, 216, 255, 0.3)'  // Back to light baby blue
+      'rgba(173, 216, 255, 0.4)',  // blue
+      'rgba(255, 192, 203, 0.4)',  // pink
+      'rgba(216, 191, 216, 0.4)',  // lavender
+      'rgba(173, 216, 255, 0.4)'   // back to blue
     ]
+  });
+
+  const gradientColors2 = animatedValue.interpolate({
+    inputRange: [0, 0.33, 0.66, 1],
+    outputRange: [
+      'rgba(255, 218, 185, 0.3)',  // peach
+      'rgba(216, 191, 216, 0.3)',  // lavender
+      'rgba(173, 216, 255, 0.3)',  // blue
+      'rgba(255, 192, 203, 0.3)'   // pink
+    ]
+  });
+
+  const toggleGlowOpacity = toggleGlow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1]
+  });
+
+  const toggleGlowScale = toggleGlow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.05]
   });
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        <Animated.View style={[styles.gradientBackground, { backgroundColor: animatedColors }]}>
-          <LinearGradient
-            colors={['rgba(173, 216, 255, 0.15)', 'rgba(255, 192, 203, 0.15)', 'rgba(173, 216, 255, 0.15)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.gradientOverlay}
-          />
+        <Animated.View style={[styles.gradientBackground, { backgroundColor: gradientColors1 }]}>
+          <Animated.View style={[styles.gradientOverlay, { backgroundColor: gradientColors2 }]}>
+            <LinearGradient
+              colors={['transparent', 'rgba(255, 255, 255, 0.05)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gradientOverlay}
+            />
+          </Animated.View>
         </Animated.View>
         <TouchableWithoutFeedback onPress={dismissKeyboard}>
           <KeyboardAvoidingView 
@@ -124,18 +175,29 @@ export default function SignInScreen() {
             style={styles.keyboardView}
           >
             <View style={styles.content}>
-              {/* Logo */}
+              {/* Brand Logo */}
               <View style={styles.logoContainer}>
-                <Image 
-                  source={require('@/assets/images/Logo ready.png')} 
-                  style={styles.logoImage}
-                  resizeMode="contain"
-                />
+                <Text style={styles.logoText}></Text>
               </View>
+
+              {/* Toggle */}
+              <Animated.View 
+                style={[
+                  styles.toggleWrapper,
+                  {
+                    opacity: toggleGlowOpacity,
+                    transform: [{ scale: toggleGlowScale }]
+                  }
+                ]}
+              >
+                <View style={styles.toggleBackground}>
+                  <Animated.View style={[styles.toggleKnob, { opacity: toggleGlowOpacity }]} />
+                </View>
+              </Animated.View>
 
               {/* Welcome text */}
               <View style={styles.welcomeContainer}>
-                <Text style={styles.welcomeTitle}>See who's down to hang 👋</Text>
+                <Text style={styles.welcomeTitle}>See who's free to hang</Text>
                 <Text style={styles.welcomeSubtitle}>One tap to show you're free — and see which friends are too.</Text>
               </View>
 
@@ -222,48 +284,68 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'center',
+    paddingTop: 120,
     zIndex: 2,
   },
   logoContainer: {
     alignItems: 'center',
+    marginBottom: 20,
+    position: 'absolute',
+    top: 80,
+    left: 0,
+    right: 0,
+    zIndex: 3,
+  },
+  toggleWrapper: {
+    alignSelf: 'center',
+    marginTop: -50,
     marginBottom: 48,
+    shadowColor: Colors.light.onlineGreen,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
   },
-  logoImage: {
-    width: 280,
-    height: 110,
-  },
-  logoWrapper: {
-    width: 80,
-    height: 80,
-    backgroundColor: Colors.light.primary,
-    borderRadius: 40,
+  toggleBackground: {
+    width: 96,
+    height: 48,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 24,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(76, 175, 80, 0.4)',
   },
-  logoToggle: {
-    width: 60,
-    height: 30,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 15,
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  logoKnob: {
-    width: 24,
-    height: 24,
-    backgroundColor: 'white',
-    borderRadius: 12,
+  toggleKnob: {
+    width: 38,
+    height: 38,
+    backgroundColor: Colors.light.onlineGreen,
+    borderRadius: 19,
     alignSelf: 'flex-end',
+    shadowColor: Colors.light.onlineGreen,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 6,
   },
   logoText: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '200',
     color: Colors.light.text,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    marginBottom: 16,
   },
+
   welcomeContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 36,
   },
   welcomeTitle: {
     fontSize: 28,
