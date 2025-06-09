@@ -131,37 +131,36 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   };
 
   const handleAddFriend = async (user: User) => {
-    try {
-      await sendFriendRequest(user.id);
-    } catch (error) {
-      console.error('Send friend request error:', error);
-      Alert.alert('Error', 'Failed to send friend request');
+    const success = await sendFriendRequest(user.id);
+    if (success) {
+      const sentRequest = sentRequests.find(req => req.id === user.id);
+      if (sentRequest) {
+        setCancelledRequestIds(prev => new Set(prev).add(sentRequest.id));
+      }
     }
   };
 
   const handleUndoFriendRequest = async (user: User) => {
-    try {
-      // Find the sent request ID for this user
-      const sentRequest = sentRequests.find(req => req.friend_id === user.id);
-      if (sentRequest) {
-        await cancelSentRequest(sentRequest.id);
-        
-        // Add to cancelled requests set so it doesn't disappear immediately
-        setCancelledRequestIds(prev => new Set(prev).add(sentRequest.id));
-      }
-    } catch (error) {
-      console.error('Cancel friend request error:', error);
-      Alert.alert('Error', 'Failed to cancel friend request');
+    const success = await cancelSentRequest(user.id);
+    if (success) {
+      setCancelledRequestIds(prev => {
+        const newSet = new Set(prev);
+        const sentRequest = sentRequests.find(req => req.id === user.id);
+        if (sentRequest) {
+          newSet.add(sentRequest.id);
+        }
+        return newSet;
+      });
     }
   };
 
   // Check if user has a pending request (sent OR received)
   const userHasPendingRequest = (userId: string) => {
-    return sentRequests.some(req => req.friend_id === userId);
+    return sentRequests.some(req => req.id === userId);
   };
 
   const userHasIncomingRequest = (userId: string) => {
-    return friendRequests.some(req => req.user_id === userId);
+    return friendRequests.some(req => req.id === userId);
   };
 
   const handleInviteFriends = async () => {
@@ -294,22 +293,15 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
 
           console.log('Found matching users from contacts:', matchingUsers.length);
           
-          // Filter out already connected friends and mark pending requests
-          const { data: existingConnections } = await supabase
-            .from('friends')
-            .select('friend_id, status')
-            .eq('user_id', user.id);
-
-          const blockedOrFriendIds = existingConnections?.filter((conn: any) => 
-            conn.status === 'accepted' || conn.status === 'blocked'
-          ).map((conn: any) => conn.friend_id) || [];
+          // Use friendsStore to check relationship status instead of direct DB queries
+          const { friends, sentRequests, blockedUsers } = useFriendsStore.getState();
           
-          const pendingIds = existingConnections?.filter((conn: any) => 
-            conn.status === 'pending'
-          ).map((conn: any) => conn.friend_id) || [];
+          const blockedIds = blockedUsers.map(u => u.id);
+          const friendIds = friends.map(u => u.id);
+          const pendingIds = sentRequests.map(u => u.id);
 
           const availableUsers = matchingUsers.filter((user: any) => 
-            !blockedOrFriendIds.includes(user.id)
+            !blockedIds.includes(user.id) && !friendIds.includes(user.id)
           );
           
           // Mark users with pending requests
@@ -354,7 +346,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     const hasIncomingRequest = userHasIncomingRequest(item.id);
     
     // Check if this request was cancelled (for pending requests section)
-    const sentRequest = sentRequests.find(req => req.friend_id === item.id);
+    const sentRequest = sentRequests.find(req => req.id === item.id);
     const wasCancelled = sentRequest && cancelledRequestIds.has(sentRequest.id);
     
     // Determine button state and action
@@ -370,7 +362,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       buttonText = 'Accept';
       buttonAction = () => {
         // Find the incoming request and accept it
-        const incomingRequest = friendRequests.find(req => req.user_id === item.id);
+        const incomingRequest = friendRequests.find(req => req.id === item.id);
         if (incomingRequest) {
           acceptFriendRequest(incomingRequest.id);
         }
@@ -503,15 +495,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
               data={sentRequests.filter(req => !cancelledRequestIds.has(req.id))}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => {
-                const user = {
-                  id: item.friend_id,
-                  name: item.users.name,
-                  username: item.users.username,
-                  avatar_url: item.users.avatar_url,
-                  bio: item.users.bio,
-                  vibe: item.users.vibe
-                };
-                return renderSearchResult({ item: user });
+                // item is already a User object from friendsStore
+                return renderSearchResult({ item });
               }}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.contactsList}
