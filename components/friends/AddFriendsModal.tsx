@@ -21,12 +21,14 @@ import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import * as Contacts from 'expo-contacts';
+import useFriendsStore from '@/store/friendsStore';
 
 interface User {
   id: string;
   name: string;
   username: string;
   avatar_url: string;
+  bio?: string;
   vibe?: string;
   friendRequestSent?: boolean;
 }
@@ -37,9 +39,18 @@ interface AddFriendsModalProps {
 }
 
 export default function AddFriendsModal({ visible, onClose }: AddFriendsModalProps) {
+  // Use friendsStore for search and send requests
+  const { 
+    searchResults,
+    sentRequests,
+    isSearching,
+    searchUsers,
+    sendFriendRequest,
+    cancelSentRequest,
+    clearSearchResults
+  } = useFriendsStore();
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<User[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [showContactsModal, setShowContactsModal] = useState(false);
@@ -85,80 +96,14 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     setShowContactsModal(false);
   };
 
-  // Search users based on name and username
-  const searchUsers = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-    
-    try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) return;
-
-      console.log('Searching for users with query:', query.trim());
-
-      // Search by username and name - supports partial matches anywhere in the string
-      const { data: users, error } = await supabase
-        .from('users')
-        .select('id, name, username, avatar_url, vibe')
-        .or(`username.ilike.%${query.trim()}%,name.ilike.%${query.trim()}%`)
-        .neq('id', currentUser.id) // Exclude current user
-        .limit(20);
-
-      console.log('Search results from database:', users?.length || 0, 'users found');
-
-      if (error) {
-        console.error('Search error:', error);
-        return;
-      }
-
-      // Filter out users who are already friends (accepted) or blocked, but keep pending requests
-      const { data: existingConnections } = await supabase
-        .from('friends')
-        .select('friend_id, status')
-        .eq('user_id', currentUser.id);
-
-      const blockedOrFriendIds = existingConnections?.filter((conn: any) => 
-        conn.status === 'accepted' || conn.status === 'blocked'
-      ).map((conn: any) => conn.friend_id) || [];
-      
-      const pendingIds = existingConnections?.filter((conn: any) => 
-        conn.status === 'pending'
-      ).map((conn: any) => conn.friend_id) || [];
-
-      const filteredUsers = users?.filter((user: any) => !blockedOrFriendIds.includes(user.id)) || [];
-      
-      // Mark users with pending requests
-      const usersWithStatus = filteredUsers.map((user: any) => ({
-        ...user,
-        friendRequestSent: pendingIds.includes(user.id)
-      }));
-
-      console.log('Final search results:', usersWithStatus?.length || 0, 'users');
-
-      setSearchResults(usersWithStatus);
-      
-      // Also update contact friends if they overlap
-      if (contactFriends.length > 0) {
-        setContactFriends(prev => prev.map(contactUser => {
-          const matchingSearchUser = usersWithStatus.find((u: any) => u.id === contactUser.id);
-          return matchingSearchUser ? { ...contactUser, friendRequestSent: matchingSearchUser.friendRequestSent } : contactUser;
-        }));
-    }
-    } catch (error) {
-      console.error('Search users error:', error);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // Search with debounce
+  // Search with debounce - use friendsStore
   useEffect(() => {
     const timeoutId = setTimeout(() => {
+      if (searchQuery.trim().length >= 2) {
         searchUsers(searchQuery);
+      } else {
+        clearSearchResults();
+      }
     }, 300);
 
     return () => clearTimeout(timeoutId);
@@ -168,7 +113,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   useEffect(() => {
     if (!visible) {
       setSearchQuery('');
-      setSearchResults([]);
+      clearSearchResults();
       setSelectedUser(null);
       setShowUserProfile(false);
       setShowContactsModal(false);
@@ -181,86 +126,32 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   };
 
   const handleAddFriend = async (user: User) => {
-    if (user.friendRequestSent) return;
-    
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) return;
-
-      const { error } = await supabase
-        .from('friends')
-        .insert([
-          { user_id: currentUser.id, friend_id: user.id, status: 'pending' }
-        ]);
-
-      if (error) {
-        console.error('Send friend request error:', error);
-        Alert.alert('Error', 'Failed to send friend request');
-        return;
-      }
-      
-      // Mark user as having pending request and update both search results and contact friends
-      const updatedUser = { ...user, friendRequestSent: true };
-      
-      setSearchResults(prev => prev.map(u => 
-        u.id === user.id ? updatedUser : u
-      ));
-      
-      setContactFriends(prev => prev.map(u => 
-        u.id === user.id ? updatedUser : u
-      ));
-      
-      // Update selected user in profile modal
-      if (selectedUser?.id === user.id) {
-        setSelectedUser(updatedUser);
-      }
-      
+      await sendFriendRequest(user.id);
+      Alert.alert('Success', 'Friend request sent!');
     } catch (error) {
-      console.error('Add friend error:', error);
+      console.error('Send friend request error:', error);
       Alert.alert('Error', 'Failed to send friend request');
     }
   };
 
   const handleUndoFriendRequest = async (user: User) => {
-    if (!user.friendRequestSent) return;
-    
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) return;
-
-      const { error } = await supabase
-        .from('friends')
-        .delete()
-        .eq('user_id', currentUser.id)
-        .eq('friend_id', user.id)
-        .eq('status', 'pending');
-
-      if (error) {
-        console.error('Undo friend request error:', error);
-        Alert.alert('Error', 'Failed to undo friend request');
-        return;
+      // Find the sent request ID for this user
+      const sentRequest = sentRequests.find(req => req.friend_id === user.id);
+      if (sentRequest) {
+        await cancelSentRequest(sentRequest.id);
+        Alert.alert('Success', 'Friend request cancelled');
       }
-      
-      // Mark user as not having pending request and update both search results and contact friends
-      const updatedUser = { ...user, friendRequestSent: false };
-      
-      setSearchResults(prev => prev.map(u => 
-        u.id === user.id ? updatedUser : u
-      ));
-      
-      setContactFriends(prev => prev.map(u => 
-        u.id === user.id ? updatedUser : u
-      ));
-      
-      // Update selected user in profile modal
-      if (selectedUser?.id === user.id) {
-        setSelectedUser(updatedUser);
-      }
-      
     } catch (error) {
-      console.error('Undo friend request error:', error);
-      Alert.alert('Error', 'Failed to undo friend request');
+      console.error('Cancel friend request error:', error);
+      Alert.alert('Error', 'Failed to cancel friend request');
     }
+  };
+
+  // Check if user has a pending request
+  const userHasPendingRequest = (userId: string) => {
+    return sentRequests.some(req => req.friend_id === userId);
   };
 
   const handleInviteFriends = async () => {
@@ -448,32 +339,36 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     setContactFriends([]);
   };
 
-  const renderSearchResult = ({ item }: { item: User }) => (
-    <TouchableOpacity 
-      style={styles.userItem}
-      onPress={() => handleUserPress(item)}
-    >
-      <Image 
-        source={{ uri: item.avatar_url || generateDefaultAvatar(item.name, item.id) }} 
-        style={styles.avatar} 
-      />
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.name}</Text>
-        <Text style={styles.userUsername}>@{item.username}</Text>
-        {item.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.vibe}</Text>}
-      </View>
-      <TouchableOpacity
-        style={[styles.quickAddButton, item.friendRequestSent && styles.pendingButton]}
-        onPress={() => item.friendRequestSent ? handleUndoFriendRequest(item) : handleAddFriend(item)}
+  const renderSearchResult = ({ item }: { item: User }) => {
+    const hasPendingRequest = userHasPendingRequest(item.id);
+    
+    return (
+      <TouchableOpacity 
+        style={styles.userItem}
+        onPress={() => handleUserPress(item)}
       >
-        {item.friendRequestSent ? (
-          <Text style={styles.pendingText}>Pending</Text>
-        ) : (
-          <UserPlus size={18} color="white" />
-        )}
+        <Image 
+          source={{ uri: item.avatar_url || generateDefaultAvatar(item.name, item.id) }} 
+          style={styles.avatar} 
+        />
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>{item.name}</Text>
+          <Text style={styles.userUsername}>@{item.username}</Text>
+          {item.bio && <Text style={styles.userVibe} numberOfLines={1}>{item.bio}</Text>}
+        </View>
+        <TouchableOpacity
+          style={[styles.quickAddButton, hasPendingRequest && styles.pendingButton]}
+          onPress={() => hasPendingRequest ? handleUndoFriendRequest(item) : handleAddFriend(item)}
+        >
+          {hasPendingRequest ? (
+            <Text style={styles.pendingText}>Pending</Text>
+          ) : (
+            <UserPlus size={18} color="white" />
+          )}
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const renderEmptyState = () => {
     if (searchQuery.length > 0) {
@@ -667,11 +562,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
                   <TouchableOpacity
                     style={[
                       styles.addFriendButton, 
-                      selectedUser.friendRequestSent && styles.profilePendingButton
+                      userHasPendingRequest(selectedUser.id) && styles.profilePendingButton
                     ]}
-                    onPress={() => selectedUser.friendRequestSent ? handleUndoFriendRequest(selectedUser) : handleAddFriend(selectedUser)}
+                    onPress={() => userHasPendingRequest(selectedUser.id) ? handleUndoFriendRequest(selectedUser) : handleAddFriend(selectedUser)}
                   >
-                    {selectedUser.friendRequestSent ? (
+                    {userHasPendingRequest(selectedUser.id) ? (
                       <Text style={[styles.addFriendText, { color: '#999999' }]}>Pending</Text>
                     ) : (
                       <>
