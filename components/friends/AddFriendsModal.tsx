@@ -47,7 +47,9 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     searchUsers,
     sendFriendRequest,
     cancelSentRequest,
-    clearSearchResults
+    clearSearchResults,
+    friendRequests,
+    acceptFriendRequest
   } = useFriendsStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,6 +63,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   const [contactFriends, setContactFriends] = useState<User[]>([]);
   const [showContactsList, setShowContactsList] = useState(false);
   const [contactsAccessGranted, setContactsAccessGranted] = useState(false);
+  const [cancelledRequestIds, setCancelledRequestIds] = useState<Set<string>>(new Set());
 
   // Load current user username
   useEffect(() => {
@@ -117,6 +120,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       setSelectedUser(null);
       setShowUserProfile(false);
       setShowContactsModal(false);
+      setCancelledRequestIds(new Set());
     }
   }, [visible]);
 
@@ -141,6 +145,10 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       const sentRequest = sentRequests.find(req => req.friend_id === user.id);
       if (sentRequest) {
         await cancelSentRequest(sentRequest.id);
+        
+        // Add to cancelled requests set so it doesn't disappear immediately
+        setCancelledRequestIds(prev => new Set(prev).add(sentRequest.id));
+        
         Alert.alert('Success', 'Friend request cancelled');
       }
     } catch (error) {
@@ -149,9 +157,13 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     }
   };
 
-  // Check if user has a pending request
+  // Check if user has a pending request (sent OR received)
   const userHasPendingRequest = (userId: string) => {
     return sentRequests.some(req => req.friend_id === userId);
+  };
+
+  const userHasIncomingRequest = (userId: string) => {
+    return friendRequests.some(req => req.user_id === userId);
   };
 
   const handleInviteFriends = async () => {
@@ -237,8 +249,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
 
         // Find users in our database that match these contacts
         if (contactEmails.length > 0 || contactNames.length > 0) {
-          const { data: { user: currentUser } } = await supabase.auth.getUser();
-          if (!currentUser) return;
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
 
           let matchingUsers: any[] = [];
 
@@ -250,7 +262,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
               .from('users')
               .select('id, name, username, avatar_url, vibe, email')
               .or(emailFilter)
-              .neq('id', currentUser.id)
+              .neq('id', user.id)
               .eq('onboarding_completed', true);
 
             if (!emailError && emailMatches) {
@@ -269,7 +281,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
               .from('users')
               .select('id, name, username, avatar_url, vibe, email')
               .or(nameQueries)
-              .neq('id', currentUser.id)
+              .neq('id', user.id)
               .eq('onboarding_completed', true);
 
             if (!nameError && nameMatches) {
@@ -288,7 +300,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           const { data: existingConnections } = await supabase
             .from('friends')
             .select('friend_id, status')
-            .eq('user_id', currentUser.id);
+            .eq('user_id', user.id);
 
           const blockedOrFriendIds = existingConnections?.filter((conn: any) => 
             conn.status === 'accepted' || conn.status === 'blocked'
@@ -340,7 +352,37 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   };
 
   const renderSearchResult = ({ item }: { item: User }) => {
-    const hasPendingRequest = userHasPendingRequest(item.id);
+    const hasSentRequest = userHasPendingRequest(item.id);
+    const hasIncomingRequest = userHasIncomingRequest(item.id);
+    
+    // Check if this request was cancelled (for pending requests section)
+    const sentRequest = sentRequests.find(req => req.friend_id === item.id);
+    const wasCancelled = sentRequest && cancelledRequestIds.has(sentRequest.id);
+    
+    // Determine button state and action
+    let buttonText = '';
+    let buttonAction = () => {};
+    let isSpecialState = false;
+    
+    if (hasSentRequest && !wasCancelled) {
+      buttonText = 'Pending';
+      buttonAction = () => handleUndoFriendRequest(item);
+      isSpecialState = true;
+    } else if (hasIncomingRequest) {
+      buttonText = 'Accept';
+      buttonAction = () => {
+        // Find the incoming request and accept it
+        const incomingRequest = friendRequests.find(req => req.user_id === item.id);
+        if (incomingRequest) {
+          acceptFriendRequest(incomingRequest.id);
+        }
+      };
+      isSpecialState = true;
+    } else {
+      buttonText = 'Add';
+      buttonAction = () => handleAddFriend(item);
+      isSpecialState = false;
+    }
     
     return (
       <TouchableOpacity 
@@ -354,14 +396,20 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{item.name}</Text>
           <Text style={styles.userUsername}>@{item.username}</Text>
-          {item.bio && <Text style={styles.userVibe} numberOfLines={1}>{item.bio}</Text>}
+          {item.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.vibe}</Text>}
         </View>
         <TouchableOpacity
-          style={[styles.quickAddButton, hasPendingRequest && styles.pendingButton]}
-          onPress={() => hasPendingRequest ? handleUndoFriendRequest(item) : handleAddFriend(item)}
+          style={[
+            styles.quickAddButton, 
+            (hasSentRequest && !wasCancelled) && styles.pendingButton,
+            hasIncomingRequest && styles.acceptButton
+          ]}
+          onPress={buttonAction}
         >
-          {hasPendingRequest ? (
+          {hasSentRequest && !wasCancelled ? (
             <Text style={styles.pendingText}>Pending</Text>
+          ) : hasIncomingRequest ? (
+            <Text style={styles.acceptText}>Accept</Text>
           ) : (
             <UserPlus size={18} color="white" />
           )}
@@ -393,11 +441,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
             <Text style={styles.actionSubtitle}>
               freetohang.app/{currentUserUsername || 'mihkelkkk'}
             </Text>
-      </View>
+          </View>
           <ChevronRight size={20} color={Colors.light.secondaryText} />
         </TouchableOpacity>
 
-        {/* Contacts Section */}
+        {/* FIND CONTACTS SECTION - now first */}
         {showContactsList ? (
           <View style={styles.contactsContainer}>
             <View style={styles.contactsHeader}>
@@ -408,8 +456,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
               <TouchableOpacity onPress={handleResetContacts} style={styles.resetButton}>
                 <RotateCcw size={16} color={Colors.light.secondaryText} />
                 <Text style={styles.resetText}>Reset</Text>
-        </TouchableOpacity>
-      </View>
+              </TouchableOpacity>
+            </View>
             
             {contactFriends.length > 0 ? (
               <FlatList
@@ -439,26 +487,53 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Find contacts</Text>
               <Text style={styles.actionSubtitle}>Find friends from your contacts</Text>
-    </View>
+            </View>
             <ChevronRight size={20} color={Colors.light.secondaryText} />
           </TouchableOpacity>
         ) : null}
 
-        {/* Default empty state - only show when no contacts */}
-        {!showContactsList && (
+        {/* PENDING REQUESTS SECTION - now comes after contacts */}
+        {sentRequests.length > 0 && (
+          <View style={styles.contactsContainer}>
+            <View style={styles.contactsHeader}>
+              <Text style={styles.contactsTitle}>
+                Pending Requests ({sentRequests.filter(req => !cancelledRequestIds.has(req.id)).length})
+              </Text>
+            </View>
+            
+            <FlatList
+              data={sentRequests.filter(req => !cancelledRequestIds.has(req.id))}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => {
+                const user = {
+                  id: item.friend_id,
+                  name: item.users.name,
+                  username: item.users.username,
+                  avatar_url: item.users.avatar_url,
+                  bio: item.users.bio,
+                  vibe: item.users.vibe
+                };
+                return renderSearchResult({ item: user });
+              }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.contactsList}
+            />
+          </View>
+        )}
+
+        {/* Default empty state - only show when no contacts and no pending requests */}
+        {!showContactsList && sentRequests.length === 0 && (
           <View style={styles.defaultEmptyState}>
             <Search size={48} color={Colors.light.secondaryText} />
             <Text style={styles.emptyStateText}>Add friends</Text>
             <Text style={styles.emptyStateSubtext}>Just start typing a name or username</Text>
-      </View>
+          </View>
         )}
-    </View>
-  );
-
-
+      </View>
+    );
   };
 
-        return (
+  return (
     <Modal
       visible={visible}
       animationType="slide"
@@ -562,18 +637,49 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
                   <TouchableOpacity
                     style={[
                       styles.addFriendButton, 
-                      userHasPendingRequest(selectedUser.id) && styles.profilePendingButton
+                      userHasPendingRequest(selectedUser.id) && 
+                        !cancelledRequestIds.has(sentRequests.find(req => req.friend_id === selectedUser.id)?.id || '') && 
+                        styles.profilePendingButton,
+                      userHasIncomingRequest(selectedUser.id) && styles.profileAcceptButton
                     ]}
-                    onPress={() => userHasPendingRequest(selectedUser.id) ? handleUndoFriendRequest(selectedUser) : handleAddFriend(selectedUser)}
+                    onPress={() => {
+                      const sentRequest = sentRequests.find(req => req.friend_id === selectedUser.id);
+                      const wasCancelled = sentRequest && cancelledRequestIds.has(sentRequest.id);
+                      
+                      if (userHasPendingRequest(selectedUser.id) && !wasCancelled) {
+                        handleUndoFriendRequest(selectedUser);
+                      } else if (userHasIncomingRequest(selectedUser.id)) {
+                        const incomingRequest = friendRequests.find(req => req.user_id === selectedUser.id);
+                        if (incomingRequest) {
+                          acceptFriendRequest(incomingRequest.id);
+                        }
+                      } else {
+                        handleAddFriend(selectedUser);
+                      }
+                    }}
                   >
-                    {userHasPendingRequest(selectedUser.id) ? (
-                      <Text style={[styles.addFriendText, { color: '#999999' }]}>Pending</Text>
-                    ) : (
-                      <>
-                        <UserPlus size={20} color="white" />
-                        <Text style={styles.addFriendText}>Add Friend</Text>
-                      </>
-                    )}
+                    {(() => {
+                      const sentRequest = sentRequests.find(req => req.friend_id === selectedUser.id);
+                      const wasCancelled = sentRequest && cancelledRequestIds.has(sentRequest.id);
+                      
+                      if (userHasPendingRequest(selectedUser.id) && !wasCancelled) {
+                        return <Text style={[styles.addFriendText, { color: '#999999' }]}>Pending</Text>;
+                      } else if (userHasIncomingRequest(selectedUser.id)) {
+                        return (
+                          <>
+                            <UserPlus size={20} color="white" />
+                            <Text style={styles.addFriendText}>Accept Request</Text>
+                          </>
+                        );
+                      } else {
+                        return (
+                          <>
+                            <UserPlus size={20} color="white" />
+                            <Text style={styles.addFriendText}>Add Friend</Text>
+                          </>
+                        );
+                      }
+                    })()}
                   </TouchableOpacity>
                 </>
               )}
@@ -816,6 +922,9 @@ const styles = StyleSheet.create({
   profilePendingButton: {
     backgroundColor: '#E0E0E0',
   },
+  profileAcceptButton: {
+    backgroundColor: Colors.light.primary, // Jääb roheliseks
+  },
   emptyStateContainer: {
     flex: 1,
     padding: 20,
@@ -1022,4 +1131,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
+  acceptButton: {
+    backgroundColor: Colors.light.primary,
+    width: 60,
+    height: 28,
+    borderRadius: 14,
+  },
+  acceptText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+  },
+  
 }); 

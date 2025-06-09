@@ -8,6 +8,7 @@ interface User {
   username: string;
   avatar_url: string;
   bio?: string;
+  vibe?: string;
 }
 
 interface FriendRequest {
@@ -66,37 +67,28 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
       const { data: users, error } = await supabase
         .from('users')
-        .select('id, name, username, avatar_url, bio')
+        .select('id, name, username, avatar_url, bio, vibe')
         .or(`name.ilike.%${query}%, username.ilike.%${query}%`)
         .neq('id', currentUser.id)
         .limit(50);
 
       if (error) throw error;
 
-      // Filter out existing friends and pending requests
+      // Filter out ONLY existing friends (accepted friendships)
       const { data: existingFriendships, error: friendshipsError } = await supabase
         .from('friendships')
         .select('friend_id')
         .eq('user_id', currentUser.id);
 
-      const { data: existingRequests, error: requestsError } = await supabase
-        .from('friend_requests')
-        .select('receiver_id, sender_id')
-        .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
-        .eq('status', 'pending');
-
-      if (friendshipsError || requestsError) {
-        console.error('Error filtering results:', friendshipsError || requestsError);
+      if (friendshipsError) {
+        console.error('Error checking friendships:', friendshipsError);
       }
 
       const friendIds = new Set(existingFriendships?.map((f: any) => f.friend_id) || []);
-      const requestIds = new Set([
-        ...(existingRequests?.map((r: any) => r.receiver_id) || []),
-        ...(existingRequests?.map((r: any) => r.sender_id) || [])
-      ]);
 
+      // Only filter out confirmed friends, keep everyone else including pending requests
       const filteredUsers = users?.filter((user: any) => 
-        !friendIds.has(user.id) && !requestIds.has(user.id)
+        !friendIds.has(user.id)
       ) || [];
 
       set({ searchResults: filteredUsers });
@@ -165,12 +157,6 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         console.error('Send friend request error:', insertError);
         throw insertError;
       }
-
-      // Remove from search results
-      const { searchResults } = get();
-      set({ 
-        searchResults: searchResults.filter(user => user.id !== friendId) 
-      });
 
       // Reload sent requests
       await get().loadSentRequests();
@@ -313,7 +299,8 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             name,
             username,
             avatar_url,
-            bio
+            bio,
+            vibe
           )
         `)
         .eq('receiver_id', currentUser.id)
@@ -363,7 +350,8 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             name,
             username,
             avatar_url,
-            bio
+            bio,
+            vibe
           )
         `)
         .eq('sender_id', currentUser.id)
