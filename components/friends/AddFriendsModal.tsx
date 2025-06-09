@@ -535,7 +535,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           </View>
         ) : !contactsAccessGranted ? (
           <TouchableOpacity 
-            style={styles.actionCard} 
+            style={styles.inviteCard} 
             onPress={() => setContactsModalVisible(true)}
           >
             <View style={styles.actionIconContainer}>
@@ -929,7 +929,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#F8F9FA',
+
     borderRadius: 12,
     marginBottom: 12,
   },
@@ -966,7 +966,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 40,
-    marginTop: 120,
+    marginTop: 40,
   },
   contactsModal: {
     backgroundColor: 'white',

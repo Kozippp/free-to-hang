@@ -137,16 +137,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       
-      // Handle general auth callbacks with tokens
-      if (url.includes('#access_token=') || url.includes('?access_token=')) {
-        // This is likely an auth callback
+      // Handle general auth callbacks with tokens - but NOT regular app URLs
+      if ((url.includes('#access_token=') || url.includes('?access_token=')) && 
+          !url.includes('exp://') && 
+          !url.includes('localhost')) {
+        // This is likely an auth callback from email confirmation
         const { data, error } = await supabase.auth.getSessionFromUrl({ url });
         
         if (error) {
           if (__DEV__) {
             console.error('Auth callback error:', error);
           }
-          Alert.alert('Error', 'An error occurred while confirming your email: ' + error.message);
+          // Only show error if it's a real auth callback issue, not normal app usage
+          if (!error.message.includes('expired') && !error.message.includes('invalid')) {
+            Alert.alert('Error', 'An error occurred while confirming your email: ' + error.message);
+          }
         } else if (data.session) {
           if (__DEV__) {
             console.log('Email confirmed successfully');
