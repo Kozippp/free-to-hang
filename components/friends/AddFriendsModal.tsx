@@ -929,7 +929,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-
+    backgroundColor: '#F8F9FA',
     borderRadius: 12,
     marginBottom: 12,
   },

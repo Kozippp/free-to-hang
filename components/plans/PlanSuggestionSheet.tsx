@@ -28,7 +28,7 @@ interface Friend {
   id: string;
   name: string;
   avatar: string;
-  status: 'online' | 'offline' | 'pinged';
+  status: 'available' | 'offline' | 'pinged';
   activity?: string;
   lastActive?: string;
   lastSeen?: string;
@@ -256,7 +256,7 @@ export default function PlanSuggestionSheet({
       ...user,
       id: 'current',
       name: `${user.name} (you)`,
-      status: 'online' as const
+      status: 'available' as const
     };
     
     // Add user at the beginning of the list
@@ -385,7 +385,7 @@ export default function PlanSuggestionSheet({
                             <Image source={{ uri: friend.avatar }} style={styles.avatar} />
                             <View style={[
                               styles.statusDot,
-                              friend.status === 'online' && styles.onlineDot,
+                              friend.status === 'available' && styles.onlineDot,
                               friend.status === 'offline' && styles.offlineDot,
                               friend.status === 'pinged' && styles.pingedDot,
                             ]} />
