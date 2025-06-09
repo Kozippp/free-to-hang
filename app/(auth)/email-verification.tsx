@@ -16,7 +16,9 @@ import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 
 export default function EmailVerificationScreen() {
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const { email } = useLocalSearchParams<{ 
+    email: string;
+  }>();
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
@@ -117,8 +119,9 @@ export default function EmailVerificationScreen() {
       }
 
       if (data.user) {
-        // Successfully verified - proceed to name input
-        router.push('/(auth)/name-input');
+        console.log('OTP verified successfully, AuthContext will handle navigation');
+        // AuthContext will automatically handle navigation based on user's onboarding status
+        // No need to navigate manually here
       } else {
         throw new Error('Verification failed');
       }
