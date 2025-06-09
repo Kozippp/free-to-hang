@@ -14,6 +14,7 @@ import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import useFriendsStore from '@/store/friendsStore';
+import { relationshipService, RelationshipStatus } from '@/lib/relationship-service';
 import GhostSelectionModal from '@/components/GhostSelectionModal';
 
 interface User {
@@ -32,14 +33,6 @@ interface UserProfileModalProps {
   onClose: () => void;
 }
 
-type RelationshipStatus = 
-  | 'none' 
-  | 'pending_sent' 
-  | 'pending_received' 
-  | 'friends' 
-  | 'blocked_by_me' 
-  | 'blocked_by_them';
-
 export default function UserProfileModal({ visible, userId, onClose }: UserProfileModalProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,53 +41,23 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   const [showGhostModal, setShowGhostModal] = useState(false);
 
   const { 
-    sendFriendRequest, 
-    acceptFriendRequest, 
-    declineFriendRequest, 
-    cancelSentRequest,
     ghostFriend,
     unghostFriend,
     getGhostStatus,
-    friendRequests,
-    sentRequests,
-    getRelationshipStatus,
-    refreshRelationshipStatus 
+    loadAllRelationships
   } = useFriendsStore();
 
   // Load user data and relationship status when modal opens
   useEffect(() => {
     if (visible && userId) {
       loadUserData();
-      // Get cached relationship status or refresh if not available
-      const cachedStatus = getRelationshipStatus(userId);
-      setRelationshipStatus(cachedStatus);
-      
-      // If status is 'none', refresh it to make sure it's accurate
-      if (cachedStatus === 'none') {
-        refreshRelationshipStatus(userId).then(newStatus => {
-          setRelationshipStatus(newStatus);
-        });
-      }
+      determineRelationshipStatus();
     } else {
       // Reset state when modal closes
       setUser(null);
       setRelationshipStatus('none');
     }
   }, [visible, userId]);
-
-  // Listen for relationship status changes in the store
-  useEffect(() => {
-    if (visible && userId) {
-      const checkStatusUpdate = () => {
-        const currentStatus = getRelationshipStatus(userId);
-        setRelationshipStatus(currentStatus);
-      };
-      
-      // Check status every second while modal is open
-      const interval = setInterval(checkStatusUpdate, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [visible, userId, getRelationshipStatus]);
 
   const loadUserData = async () => {
     if (!userId) return;
@@ -117,12 +80,30 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     }
   };
 
+  // Simple single-query relationship status check
+  const determineRelationshipStatus = async () => {
+    if (!userId) return;
+    
+    try {
+      const status = await relationshipService.getRelationshipStatus(userId);
+      setRelationshipStatus(status);
+    } catch (error) {
+      console.error('Error determining relationship status:', error);
+      setRelationshipStatus('none');
+    }
+  };
+
   const handleAddFriend = async () => {
     if (!user) return;
     setActionLoading(true);
     try {
-      await sendFriendRequest(user.id);
-      setRelationshipStatus('pending_sent');
+      const success = await relationshipService.sendFriendRequest(user.id);
+      if (success) {
+        await loadAllRelationships(); // Refresh store data
+        await determineRelationshipStatus(); // Refresh local status
+      } else {
+        Alert.alert('Error', 'Failed to send friend request');
+      }
     } catch (error) {
       console.error('Add friend error:', error);
       Alert.alert('Error', 'Failed to send friend request');
@@ -135,10 +116,12 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     if (!user) return;
     setActionLoading(true);
     try {
-      const sentRequest = sentRequests.find(req => req.friend_id === user.id);
-      if (sentRequest) {
-        await cancelSentRequest(sentRequest.id);
-        setRelationshipStatus('none');
+      const success = await relationshipService.declineFriendRequest(user.id);
+      if (success) {
+        await loadAllRelationships(); // Refresh store data
+        await determineRelationshipStatus(); // Refresh local status
+      } else {
+        Alert.alert('Error', 'Failed to cancel friend request');
       }
     } catch (error) {
       console.error('Cancel request error:', error);
@@ -152,10 +135,12 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     if (!user) return;
     setActionLoading(true);
     try {
-      const receivedRequest = friendRequests.find(req => req.user_id === user.id);
-      if (receivedRequest) {
-        await acceptFriendRequest(receivedRequest.id);
-        setRelationshipStatus('friends');
+      const success = await relationshipService.acceptFriendRequest(user.id);
+      if (success) {
+        await loadAllRelationships(); // Refresh store data
+        await determineRelationshipStatus(); // Refresh local status
+      } else {
+        Alert.alert('Error', 'Failed to accept friend request');
       }
     } catch (error) {
       console.error('Accept request error:', error);
@@ -169,10 +154,12 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     if (!user) return;
     setActionLoading(true);
     try {
-      const receivedRequest = friendRequests.find(req => req.user_id === userId);
-      if (receivedRequest) {
-        await declineFriendRequest(receivedRequest.id);
-        setRelationshipStatus('none');
+      const success = await relationshipService.declineFriendRequest(user.id);
+      if (success) {
+        await loadAllRelationships(); // Refresh store data
+        await determineRelationshipStatus(); // Refresh local status
+      } else {
+        Alert.alert('Error', 'Failed to decline friend request');
       }
     } catch (error) {
       console.error('Decline request error:', error);
@@ -187,7 +174,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     
     Alert.alert(
       'Remove Friend',
-      `Remove ${user.name} from your friends?`,
+      `Are you sure you want to remove ${user.name} from your friends?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -196,16 +183,13 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
           onPress: async () => {
             setActionLoading(true);
             try {
-              const { data: { user: currentUser } } = await supabase.auth.getUser();
-              if (!currentUser) return;
-
-              // Remove bidirectional friendship
-              await supabase
-                .from('friendships')
-                .delete()
-                .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${user.id}),and(user_id.eq.${user.id},friend_id.eq.${currentUser.id})`);
-
-              setRelationshipStatus('none');
+              const success = await relationshipService.removeFriend(user.id);
+              if (success) {
+                await loadAllRelationships(); // Refresh store data
+                await determineRelationshipStatus(); // Refresh local status
+              } else {
+                Alert.alert('Error', 'Failed to remove friend');
+              }
             } catch (error) {
               console.error('Remove friend error:', error);
               Alert.alert('Error', 'Failed to remove friend');
@@ -219,35 +203,17 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   };
 
   const handleGhostFriend = async () => {
-    if (!user) return;
-    
-    // Check if already ghosted
-    const ghostStatus = getGhostStatus(user.id);
-    if (ghostStatus) {
-      // If already ghosted, unghost them
-      try {
-        setActionLoading(true);
-        await unghostFriend(user.id);
-      } catch (error) {
-        console.error('Unghost error:', error);
-        Alert.alert('Error', 'Failed to unghost friend');
-      } finally {
-        setActionLoading(false);
-      }
-    } else {
-      // Show ghost selection modal
-      setShowGhostModal(true);
-    }
+    setShowGhostModal(true);
   };
 
   const handleGhostSelection = async (duration: '1_day' | '3_days' | 'forever') => {
     if (!user) return;
-    
+    setShowGhostModal(false);
+    setActionLoading(true);
     try {
-      setActionLoading(true);
       await ghostFriend(user.id, duration);
     } catch (error) {
-      console.error('Ghost error:', error);
+      console.error('Ghost friend error:', error);
       Alert.alert('Error', 'Failed to ghost friend');
     } finally {
       setActionLoading(false);
@@ -255,36 +221,21 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   };
 
   const getGhostButtonText = () => {
-    if (!user) return 'Ghost Friend';
+    if (!user) return 'Ghost';
     
     const ghostStatus = getGhostStatus(user.id);
-    if (!ghostStatus) return 'Ghost Friend';
+    if (!ghostStatus) return 'Ghost';
     
-    if (ghostStatus.duration_type === 'forever') {
-      return '🔕 Ghosted forever';
+    switch (ghostStatus.duration_type) {
+      case '1_day':
+        return 'Ghosted (1 day)';
+      case '3_days':
+        return 'Ghosted (3 days)';
+      case 'forever':
+        return 'Ghosted (forever)';
+      default:
+        return 'Ghost';
     }
-    
-    // Calculate time remaining
-    if (ghostStatus.expires_at) {
-      const now = new Date();
-      const expiry = new Date(ghostStatus.expires_at);
-      const diff = expiry.getTime() - now.getTime();
-      
-      if (diff <= 0) {
-        return 'Ghost Friend'; // Expired
-      }
-      
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      
-      if (hours > 0) {
-        return `🔕 Ghosted for ${hours}h ${minutes}min`;
-      } else {
-        return `🔕 Ghosted for ${minutes}min`;
-      }
-    }
-    
-    return 'Ghost Friend';
   };
 
   const handleBlockUser = async () => {
@@ -292,7 +243,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     
     Alert.alert(
       'Block User',
-      `Block ${user.name}? They won't be able to find you or send friend requests.`,
+      `Are you sure you want to block ${user.name}? This will remove them from your friends and prevent them from contacting you.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -301,27 +252,14 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
           onPress: async () => {
             setActionLoading(true);
             try {
-              const { data: { user: currentUser } } = await supabase.auth.getUser();
-              if (!currentUser) return;
-
-              // Remove any existing friendship first
-              await supabase
-                .from('friendships')
-                .delete()
-                .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${user.id}),and(user_id.eq.${user.id},friend_id.eq.${currentUser.id})`);
-
-              // Remove any pending friend requests
-              await supabase
-                .from('friend_requests')
-                .delete()
-                .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${user.id}),and(sender_id.eq.${user.id},receiver_id.eq.${currentUser.id})`);
-
-              // Add to blocked users
-              await supabase
-                .from('blocked_users')
-                .insert({ blocker_id: currentUser.id, blocked_id: user.id });
-
-              setRelationshipStatus('blocked_by_me');
+              const success = await relationshipService.blockUser(user.id);
+              if (success) {
+                await loadAllRelationships(); // Refresh store data
+                await determineRelationshipStatus(); // Refresh local status
+                onClose(); // Close modal after successful blocking
+              } else {
+                Alert.alert('Error', 'Failed to block user');
+              }
             } catch (error) {
               console.error('Block user error:', error);
               Alert.alert('Error', 'Failed to block user');
@@ -336,19 +274,15 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
   const handleUnblockUser = async () => {
     if (!user) return;
-    
     setActionLoading(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) return;
-
-      await supabase
-        .from('blocked_users')
-        .delete()
-        .eq('blocker_id', currentUser.id)
-        .eq('blocked_id', user.id);
-
-      setRelationshipStatus('none');
+      const success = await relationshipService.unblockUser(user.id);
+      if (success) {
+        await loadAllRelationships(); // Refresh store data
+        await determineRelationshipStatus(); // Refresh local status
+      } else {
+        Alert.alert('Error', 'Failed to unblock user');
+      }
     } catch (error) {
       console.error('Unblock user error:', error);
       Alert.alert('Error', 'Failed to unblock user');
@@ -358,7 +292,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   };
 
   const getAvailabilityText = () => {
-    if (!user) return '';
+    if (!user?.status) return '';
     
     switch (user.status) {
       case 'available':
@@ -368,19 +302,24 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
       case 'offline':
         return 'Offline';
       default:
-        return 'Offline';
+        return '';
     }
   };
 
   const renderActionButtons = () => {
-    if (actionLoading) {
-      return <ActivityIndicator size="small" color={Colors.light.primary} />;
-    }
+    if (!user) return null;
+
+    const ghostStatus = getGhostStatus(user.id);
+    const isGhosted = !!ghostStatus;
 
     switch (relationshipStatus) {
       case 'none':
         return (
-          <TouchableOpacity style={styles.primaryButton} onPress={handleAddFriend}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handleAddFriend}
+            disabled={actionLoading}
+          >
             <UserPlus size={20} color="white" />
             <Text style={styles.primaryButtonText}>Add Friend</Text>
           </TouchableOpacity>
@@ -388,19 +327,34 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
       case 'pending_sent':
         return (
-          <TouchableOpacity style={styles.pendingButton} onPress={handleCancelRequest}>
-            <Text style={styles.pendingButtonText}>Pending</Text>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={handleCancelRequest}
+            disabled={actionLoading}
+          >
+            <UserMinus size={20} color={Colors.light.primary} />
+            <Text style={styles.secondaryButtonText}>Cancel Request</Text>
           </TouchableOpacity>
         );
 
       case 'pending_received':
         return (
           <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.acceptButton} onPress={handleAcceptRequest}>
-              <Text style={styles.acceptButtonText}>Accept</Text>
+            <TouchableOpacity
+              style={[styles.primaryButton, styles.halfButton]}
+              onPress={handleAcceptRequest}
+              disabled={actionLoading}
+            >
+              <UserPlus size={18} color="white" />
+              <Text style={styles.primaryButtonText}>Accept</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.declineButton} onPress={handleDeclineRequest}>
-              <Text style={styles.declineButtonText}>Decline</Text>
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.halfButton]}
+              onPress={handleDeclineRequest}
+              disabled={actionLoading}
+            >
+              <UserMinus size={18} color={Colors.light.primary} />
+              <Text style={styles.secondaryButtonText}>Decline</Text>
             </TouchableOpacity>
           </View>
         );
@@ -408,113 +362,133 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
       case 'friends':
         return (
           <View style={styles.friendButtonsContainer}>
-            <TouchableOpacity 
-              style={[
-                styles.ghostButton,
-                getGhostStatus(user?.id || '') && styles.ghostedButton
-              ]} 
-              onPress={handleGhostFriend}
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.secondaryButton, styles.halfButton]}
+                onPress={isGhosted ? () => unghostFriend(user.id) : handleGhostFriend}
+                disabled={actionLoading}
+              >
+                {isGhosted ? (
+                  <Eye size={18} color={Colors.light.primary} />
+                ) : (
+                  <EyeOff size={18} color={Colors.light.primary} />
+                )}
+                <Text style={styles.secondaryButtonText}>
+                  {isGhosted ? 'Unghost' : getGhostButtonText()}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dangerButton, styles.halfButton]}
+                onPress={handleRemoveFriend}
+                disabled={actionLoading}
+              >
+                <UserMinus size={18} color="white" />
+                <Text style={styles.dangerButtonText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.blockButton}
+              onPress={handleBlockUser}
+              disabled={actionLoading}
             >
-              <EyeOff size={18} color={getGhostStatus(user?.id || '') ? '#FF6B6B' : Colors.light.text} />
-              <Text style={[
-                styles.ghostButtonText,
-                getGhostStatus(user?.id || '') && styles.ghostedButtonText
-              ]}>
-                {getGhostButtonText()}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.removeButton} onPress={handleRemoveFriend}>
-              <UserMinus size={18} color="#FF4444" />
-              <Text style={styles.removeButtonText}>Remove Friend</Text>
+              <UserX size={20} color="white" />
+              <Text style={styles.blockButtonText}>Block User</Text>
             </TouchableOpacity>
           </View>
         );
 
       case 'blocked_by_me':
         return (
-          <TouchableOpacity style={styles.blockedButton} onPress={handleUnblockUser}>
-            <Text style={styles.blockedButtonText}>Blocked</Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handleUnblockUser}
+            disabled={actionLoading}
+          >
+            <Text style={styles.primaryButtonText}>Unblock User</Text>
           </TouchableOpacity>
         );
 
       case 'blocked_by_them':
-        return null; // They blocked you, no actions available
+        return (
+          <View style={styles.blockedContainer}>
+            <Text style={styles.blockedText}>This user has blocked you</Text>
+          </View>
+        );
 
       default:
         return null;
     }
   };
 
-  if (!visible || !userId) return null;
+  if (!visible) return null;
 
   return (
     <Modal
       visible={visible}
-      animationType="fade"
-      transparent={true}
+      transparent
+      animationType="slide"
       onRequestClose={onClose}
     >
-      <TouchableOpacity 
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <TouchableOpacity 
-          style={styles.modal}
-          activeOpacity={1}
-          onPress={() => {}} // Prevent closing when clicking inside modal
-        >
-          {/* Close Button */}
+      <View style={styles.overlay}>
+        <View style={styles.modal}>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={20} color={Colors.light.secondaryText} />
+            <X size={24} color={Colors.light.secondaryText} />
           </TouchableOpacity>
 
           {loading ? (
-            <ActivityIndicator size="large" color={Colors.light.primary} />
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.light.primary} />
+              <Text style={styles.loadingText}>Loading profile...</Text>
+            </View>
           ) : user ? (
-            <>
-              {/* Profile Header */}
-              <View style={styles.profileHeader}>
-                <Image 
-                  source={{ uri: user.avatar_url || generateDefaultAvatar(user.name, user.id) }} 
-                  style={styles.avatar} 
+            <View style={styles.content}>
+              <View style={styles.header}>
+                <Image
+                  source={{ uri: user.avatar_url || generateDefaultAvatar(user.name) }}
+                  style={styles.avatar}
                 />
                 <View style={styles.userInfo}>
                   <Text style={styles.name}>{user.name}</Text>
                   <Text style={styles.username}>@{user.username}</Text>
-                  {relationshipStatus === 'friends' && (
+                  {user.status && (
                     <Text style={styles.availability}>{getAvailabilityText()}</Text>
                   )}
                 </View>
               </View>
 
-              {/* Vibe Section - Only show if not blocked */}
-              {relationshipStatus !== 'blocked_by_me' && relationshipStatus !== 'blocked_by_them' && user.vibe && (
-                <View style={styles.vibeSection}>
-                  <Text style={styles.vibeHeader}>Ideal hang vibe:</Text>
-                  <Text style={styles.vibeText}>"{user.vibe}"</Text>
+              {user.bio && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Bio</Text>
+                  <Text style={styles.bio}>{user.bio}</Text>
                 </View>
               )}
 
-              {/* Action Buttons */}
-              <View style={styles.actionsSection}>
-                {renderActionButtons()}
-              </View>
-
-              {/* Block Button - Only show if not already blocked */}
-              {relationshipStatus !== 'blocked_by_me' && relationshipStatus !== 'blocked_by_them' && (
-                <TouchableOpacity style={styles.blockTextButton} onPress={handleBlockUser}>
-                  <Text style={styles.blockText}>Block user</Text>
-                </TouchableOpacity>
+              {user.vibe && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Vibe</Text>
+                  <Text style={styles.vibe}>{user.vibe}</Text>
+                </View>
               )}
-            </>
+
+              <View style={styles.actions}>
+                {actionLoading ? (
+                  <View style={styles.actionLoadingContainer}>
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                    <Text style={styles.actionLoadingText}>Processing...</Text>
+                  </View>
+                ) : (
+                  renderActionButtons()
+                )}
+              </View>
+            </View>
           ) : (
-            <Text style={styles.errorText}>User not found</Text>
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>Failed to load user profile</Text>
+            </View>
           )}
-        </TouchableOpacity>
-      </TouchableOpacity>
-      
-      {/* Ghost Selection Modal */}
+        </View>
+      </View>
+
       <GhostSelectionModal
         visible={showGhostModal}
         onClose={() => setShowGhostModal(false)}
@@ -524,216 +498,211 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   );
 }
 
-// Global function to open user modal
-let openUserProfileModal: ((userId: string) => void) | null = null;
+// Global reference for opening user modal
+let globalOpenUserModal: ((userId: string) => void) | null = null;
 
 export const openUserModal = (userId: string) => {
-  if (openUserProfileModal) {
-    openUserProfileModal(userId);
+  if (globalOpenUserModal) {
+    globalOpenUserModal(userId);
+  } else {
+    console.warn('User modal not ready yet');
   }
 };
 
 export const setOpenUserModalFunction = (fn: (userId: string) => void) => {
-  openUserProfileModal = fn;
+  globalOpenUserModal = fn;
 };
 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    justifyContent: 'flex-end',
   },
   modal: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 30,
-    alignItems: 'center',
-    minWidth: 320,
-    maxWidth: 360,
-    position: 'relative',
+    backgroundColor: Colors.light.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   closeButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 1,
-    padding: 4,
+    alignSelf: 'flex-end',
+    padding: 10,
+    marginBottom: 10,
   },
-  profileHeader: {
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+  },
+  content: {
+    flex: 1,
+  },
+  header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 24,
-    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    marginRight: 16,
+    marginRight: 15,
   },
   userInfo: {
     flex: 1,
-    paddingTop: 8,
   },
   name: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   username: {
     fontSize: 16,
     color: Colors.light.secondaryText,
-    marginBottom: 8,
+    marginBottom: 2,
   },
   availability: {
     fontSize: 14,
     color: Colors.light.primary,
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  vibeSection: {
-    width: '100%',
-    marginBottom: 24,
+  section: {
+    marginBottom: 20,
   },
-  vibeHeader: {
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 8,
   },
-  vibeText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    fontStyle: 'italic',
-    lineHeight: 20,
+  bio: {
+    fontSize: 16,
+    color: Colors.light.text,
+    lineHeight: 22,
   },
-  actionsSection: {
-    width: '100%',
-    marginBottom: 16,
+  vibe: {
+    fontSize: 16,
+    color: Colors.light.text,
+    lineHeight: 22,
+    textAlign: 'left',
+  },
+  actions: {
+    marginTop: 20,
+  },
+  actionLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+  },
+  actionLoadingText: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: Colors.light.secondaryText,
   },
   primaryButton: {
     backgroundColor: Colors.light.primary,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginBottom: 10,
   },
   primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
     color: 'white',
-  },
-  pendingButton: {
-    backgroundColor: '#E0E0E0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-  },
-  pendingButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#999999',
+    marginLeft: 8,
+  },
+  secondaryButton: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: Colors.light.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  secondaryButtonText: {
+    color: Colors.light.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  dangerButton: {
+    backgroundColor: Colors.light.destructive,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  dangerButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  blockButton: {
+    backgroundColor: Colors.light.destructive,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  blockButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  acceptButton: {
-    flex: 1,
-    backgroundColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  acceptButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-  },
-  declineButton: {
-    flex: 1,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  declineButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
+  halfButton: {
+    flex: 0.48,
   },
   friendButtonsContainer: {
-    gap: 12,
+    gap: 0,
   },
-  ghostButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  blockedContainer: {
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: '#F8F9FA',
-    gap: 8,
+    padding: 20,
   },
-  ghostButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  removeButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: '#FFF0F0',
-    gap: 8,
-  },
-  removeButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FF4444',
-  },
-  blockedButton: {
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-  },
-  blockedButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#999999',
-  },
-  blockTextButton: {
-    paddingVertical: 8,
-  },
-  blockText: {
-    fontSize: 14,
-    color: '#FF4444',
-    textAlign: 'center',
-  },
-  errorText: {
+  blockedText: {
     fontSize: 16,
     color: Colors.light.secondaryText,
     textAlign: 'center',
   },
-  ghostedButton: {
-    backgroundColor: '#FFE0E0',
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
   },
-  ghostedButtonText: {
-    color: '#FF6B6B',
+  errorText: {
+    fontSize: 16,
+    color: Colors.light.destructive,
+    textAlign: 'center',
   },
 }); 

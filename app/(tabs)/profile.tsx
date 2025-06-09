@@ -61,11 +61,14 @@ export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
   const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData, startRealTimeUpdates, stopRealTimeUpdates } = useHangStore();
   const { 
-    friendRequests, 
+    friendRequests,
+    friends: storeFriends,
+    blockedUsers,
     isLoading, 
-    loadFriendRequests, 
+    loadAllRelationships,
     acceptFriendRequest, 
-    declineFriendRequest
+    declineFriendRequest,
+    unblockUser
   } = useFriendsStore();
   
   // Use real user data from hangStore, fallback to mock for missing fields
@@ -77,92 +80,17 @@ export default function ProfileScreen() {
     bio: user.vibe || '', // Use vibe from sign up as bio
   });
   
-  // Combine online and offline friends from hangStore
+  // Local state - friends and blocked users come from useFriendsStore
   const [allFriends, setAllFriends] = useState<Friend[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
-  const [blockedUsers, setBlockedUsers] = useState<Friend[]>(mockBlockedUsers);
-  
-  // Tab state for Friends/Requests
   const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
   
-  // Load user data when component mounts
+  // Load data on component mount
   useEffect(() => {
-    if (authUser) {
-      loadUserData();
-      loadFriends();
-      loadFriendRequests();
-      loadBlockedUsers();
-    }
-  }, [authUser]);
+    loadAllRelationships();
+  }, []);
 
   // Realtime is now managed globally in layout - no need to start/stop here
-
-  const loadBlockedUsers = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // First check if blocked_users table exists by trying a simple query
-        const { data: blockedData, error: blockedError } = await supabase
-          .from('blocked_users')
-          .select('blocked_id')
-          .eq('blocker_id', user.id)
-          .limit(1);
-
-        if (blockedError) {
-          // Check for table not found errors
-          if (blockedError.code === '42P01' || blockedError.code === 'PGRST200') {
-            console.log('Blocked users table not yet created, skipping...');
-            setBlockedUsers([]);
-            return;
-          }
-          console.error('Error checking blocked users table:', blockedError);
-          return;
-        }
-
-        // If we have blocked users, get the full data
-        const { data: fullBlockedData, error: fullError } = await supabase
-          .from('blocked_users')
-          .select('blocked_id')
-          .eq('blocker_id', user.id);
-
-        if (fullError) {
-          console.error('Error loading blocked users:', fullError);
-          return;
-        }
-
-        if (!fullBlockedData || fullBlockedData.length === 0) {
-          setBlockedUsers([]);
-          return;
-        }
-
-        // Get user details for blocked users
-        const blockedIds = fullBlockedData.map((item: { blocked_id: string }) => item.blocked_id);
-        const { data: usersData, error: usersError } = await supabase
-          .from('users')
-          .select('id, name, username, avatar_url')
-          .in('id', blockedIds);
-
-        if (usersError) {
-          console.error('Error loading blocked user details:', usersError);
-          return;
-        }
-
-        const blocked = usersData?.map((user: any) => ({
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          avatar: user.avatar_url || generateDefaultAvatar(user.name, user.id),
-          isBlocked: true
-        })) || [];
-
-        setBlockedUsers(blocked as Friend[]);
-        console.log('Blocked users loaded successfully:', blocked.length);
-      }
-    } catch (error) {
-      console.error('Error in loadBlockedUsers:', error);
-      setBlockedUsers([]);
-    }
-  };
 
   // Update local state when hangStore data changes
   useEffect(() => {
@@ -491,7 +419,7 @@ export default function ProfileScreen() {
     setShowUserProfile(true);
   };
 
-  const handleUnblockUser = (userId: string) => {
+  const handleUnblockUser = async (userId: string) => {
     Alert.alert(
       'Unblock User',
       'Are you sure you want to unblock this user?',
@@ -501,18 +429,9 @@ export default function ProfileScreen() {
           text: 'Unblock', 
           onPress: async () => {
             try {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) {
-                // Remove block record from database
-                await supabase
-                  .from('blocked_users')
-                  .delete()
-                  .eq('blocker_id', user.id)
-                  .eq('blocked_id', userId);
-                  
-                // Update local state
-                setBlockedUsers(blockedUsers.filter(u => u.id !== userId));
-              }
+              await unblockUser(userId);
+              // Refresh blocked users list
+              await loadAllRelationships();
             } catch (error) {
               console.error('Error unblocking user:', error);
               Alert.alert('Error', 'Failed to unblock user');
@@ -695,13 +614,13 @@ export default function ProfileScreen() {
       onPress={() => handleRequestPress(item)}
     >
       <Image 
-        source={{ uri: item.users.avatar_url || generateDefaultAvatar(item.users.name, item.users.id) }} 
+        source={{ uri: item.avatar_url || generateDefaultAvatar(item.name, item.id) }} 
         style={styles.avatar} 
       />
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.users.name}</Text>
-        <Text style={styles.userUsername}>@{item.users.username}</Text>
-{item.users.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.users.vibe}</Text>}
+        <Text style={styles.userName}>{item.name}</Text>
+        <Text style={styles.userUsername}>@{item.username}</Text>
+        {item.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.vibe}</Text>}
       </View>
       <View style={styles.requestActions}>
         <TouchableOpacity 
@@ -719,6 +638,11 @@ export default function ProfileScreen() {
       </View>
     </TouchableOpacity>
   );
+
+  // Listen for blocked users changes
+  useEffect(() => {
+    console.log('Profile: Blocked users state changed:', blockedUsers.length, blockedUsers);
+  }, [blockedUsers]);
 
   return (
     <>
@@ -985,17 +909,17 @@ export default function ProfileScreen() {
 
                 {/* Profile Picture */}
                 <Image 
-                  source={{ uri: selectedRequest.users.avatar_url || generateDefaultAvatar(selectedRequest.users.name, selectedRequest.users.id) }} 
+                  source={{ uri: selectedRequest.avatar_url || generateDefaultAvatar(selectedRequest.name, selectedRequest.id) }} 
                   style={styles.profileAvatar} 
                 />
                 
                 {/* Name & Username */}
-                <Text style={styles.profileName}>{selectedRequest.users.name}</Text>
-                <Text style={styles.profileUsername}>@{selectedRequest.users.username}</Text>
+                <Text style={styles.profileName}>{selectedRequest.name}</Text>
+                <Text style={styles.profileUsername}>@{selectedRequest.username}</Text>
                 
                 {/* Vibe */}
-                {selectedRequest.users.vibe && (
-                  <Text style={styles.profileVibe}>{selectedRequest.users.vibe}</Text>
+                {selectedRequest.vibe && (
+                  <Text style={styles.profileVibe}>{selectedRequest.vibe}</Text>
                 )}
                 
                 {/* Action Buttons - side by side */}
@@ -1127,10 +1051,13 @@ export default function ProfileScreen() {
                 data={blockedUsers}
                 renderItem={({ item }) => (
                   <View style={styles.blockedUserCard}>
-                    <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
+                    <Image 
+                      source={{ uri: item.avatar_url || generateDefaultAvatar(item.name, item.id) }} 
+                      style={styles.friendAvatar} 
+                    />
                     <View style={styles.friendDetails}>
                       <Text style={styles.friendName}>{item.name}</Text>
-                      <Text style={styles.friendLastSeen}>Blocked</Text>
+                      <Text style={styles.friendLastSeen}>@{item.username}</Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.unblockButton}
@@ -1644,16 +1571,18 @@ const styles = StyleSheet.create({
   blockedUserCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.buttonBackground,
+    padding: 12,
+    backgroundColor: Colors.light.background,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.buttonBackground,
   },
   unblockButton: {
     backgroundColor: Colors.light.primary,
-    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    borderRadius: 8,
   },
   unblockButtonText: {
     fontSize: 14,
@@ -1964,7 +1893,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.light.buttonBackground,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     gap: 8,
   },
   modalDeclineText: {
