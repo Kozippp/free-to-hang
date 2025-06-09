@@ -260,6 +260,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // If user has name and username, consider them onboarded (backward compatibility)
         if (userData.name && userData.username) {
           console.log('User has name and username, directing to main app and setting loading false');
+          // Show welcome back message for existing users
+          Alert.alert('Welcome back!', 'Ready to make some memories?');
           setTimeout(() => {
             router.replace('/(tabs)');
             setNavigationReady(true);
@@ -271,6 +273,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // If onboarding_completed field exists and is true, go to main app
         if (userData.onboarding_completed === true) {
           console.log('User has onboarding_completed = true, directing to main app and setting loading false');
+          // Show welcome back message for existing users
+          Alert.alert('Welcome back!', 'Ready to make some memories?');
           setTimeout(() => {
             router.replace('/(tabs)');
             setNavigationReady(true);
