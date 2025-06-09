@@ -5,16 +5,38 @@ import Colors from "@/constants/colors";
 import { StatusBar } from "expo-status-bar";
 import { Platform, View, Text } from "react-native";
 import usePlansStore from "@/store/plansStore";
+import useHangStore from "@/store/hangStore";
+import useFriendsStore from "@/store/friendsStore";
 
 export default function TabLayout() {
   const { invitations } = usePlansStore();
   const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
+  
+  // GLOBAL REALTIME MANAGEMENT
+  const { startRealTimeUpdates: startHangRealtime, stopRealTimeUpdates: stopHangRealtime } = useHangStore();
+  const { startRealTimeUpdates: startFriendsRealtime, stopRealTimeUpdates: stopFriendsRealtime } = useFriendsStore();
   
   // Check for unread invitations
   useEffect(() => {
     const unreadCount = invitations.filter(plan => !plan.isRead).length;
     setHasUnreadInvitations(unreadCount > 0);
   }, [invitations]);
+
+  // 🌍 START GLOBAL REALTIME ON LAYOUT MOUNT
+  useEffect(() => {
+    console.log('🚀 Starting global realtime systems...');
+    
+    // Start both realtime systems
+    startHangRealtime();
+    startFriendsRealtime();
+    
+    // Cleanup when layout unmounts
+    return () => {
+      console.log('⏹️ Stopping global realtime systems...');
+      stopHangRealtime();
+      stopFriendsRealtime();
+    };
+  }, []);
   
   return (
     <>

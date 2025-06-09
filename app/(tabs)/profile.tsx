@@ -64,7 +64,7 @@ export default function ProfileScreen() {
     isLoading, 
     loadFriendRequests, 
     acceptFriendRequest, 
-    declineFriendRequest 
+    declineFriendRequest
   } = useFriendsStore();
   
   // Use real user data from hangStore, fallback to mock for missing fields
@@ -94,16 +94,7 @@ export default function ProfileScreen() {
     }
   }, [authUser]);
 
-  // Add real-time updates effect
-  useEffect(() => {
-    // Start real-time updates when component mounts
-    startRealTimeUpdates();
-    
-    // Cleanup when component unmounts
-    return () => {
-      stopRealTimeUpdates();
-    };
-  }, [startRealTimeUpdates, stopRealTimeUpdates]);
+  // Realtime is now managed globally in layout - no need to start/stop here
 
   const loadBlockedUsers = async () => {
     try {
