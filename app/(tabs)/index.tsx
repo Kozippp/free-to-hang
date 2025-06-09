@@ -46,6 +46,7 @@ import PlanSuggestionSheet from '@/components/plans/PlanSuggestionSheet';
 import FriendCard from '@/components/FriendCard';
 import AddFriendsModal from '@/components/friends/AddFriendsModal';
 import useHangStore from '@/store/hangStore';
+import useFriendsStore from '@/store/friendsStore';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function HangScreen() {
@@ -79,13 +80,20 @@ export default function HangScreen() {
   const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
-  // Load user data when component mounts or auth user changes
+  const friendsStore = useFriendsStore();
+  
+  // Load data and set up real-time updates
   useEffect(() => {
-    if (authUser) {
-      loadUserData();
-      loadFriends();
-    }
-  }, [authUser]);
+    const initializeData = async () => {
+      await loadUserData();
+      await loadFriends();
+      await friendsStore.loadFriendRequests();
+    };
+
+    initializeData();
+    
+    // Realtime is managed globally, not per tab
+  }, [loadUserData, loadFriends]);
   
   // Handle initial state when component mounts
   useEffect(() => {
@@ -103,17 +111,6 @@ export default function HangScreen() {
       }).start();
     }
   }, [isAvailable, fadeAnim]);
-  
-  // Add real-time updates effect
-  useEffect(() => {
-    // Start real-time updates when component mounts
-    startRealTimeUpdates();
-    
-    // Cleanup when component unmounts
-    return () => {
-      stopRealTimeUpdates();
-    };
-  }, [startRealTimeUpdates, stopRealTimeUpdates]);
   
   const handleToggle = () => {
     if (!isAvailable) {
@@ -174,7 +171,7 @@ export default function HangScreen() {
           avatar: friend.avatar,
           status: 'pinged' as const,
           activity: '',
-          lastActive: friend.lastSeen,
+          lastActive: friend.lastActive,
           responseStatus: 'pending' as const
         });
       }

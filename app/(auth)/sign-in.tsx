@@ -177,7 +177,7 @@ export default function SignInScreen() {
             <View style={styles.content}>
               {/* Brand Logo */}
               <View style={styles.logoContainer}>
-                <Text style={styles.logoText}></Text>
+                <Text style={styles.logoText}></Text> //free to hang käib siia
               </View>
 
               {/* Toggle */}

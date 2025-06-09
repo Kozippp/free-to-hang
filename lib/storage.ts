@@ -1,94 +1,90 @@
 import { supabase } from './supabase';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 
 export interface UploadResult {
   url?: string;
   error?: string;
 }
 
-export const uploadImage = async (
-  uri: string,
-  folder: string = 'avatars',
-  fileName?: string
-): Promise<UploadResult> => {
+export async function uploadImage(
+  uri: string, 
+  bucket: string = 'avatars', 
+  path?: string
+): Promise<UploadResult> {
   try {
-    console.log('Starting image upload for URI:', uri);
-    
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      console.error('User authentication error:', userError);
-      return { error: 'User not authenticated' };
+    console.log('Starting image upload:', { uri, bucket, path });
+
+    if (!uri) {
+      throw new Error('No image URI provided');
     }
 
-    console.log('User authenticated, proceeding with upload...');
+    // Generate unique filename if path not provided
+    const fileName = path || `avatar-${Date.now()}.jpg`;
+    console.log('Using filename:', fileName);
 
-    // Convert URI to blob
-    let blob: Blob;
-    try {
-      const response = await fetch(uri);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.statusText}`);
-      }
-      blob = await response.blob();
-      console.log('Image converted to blob, size:', blob.size);
-    } catch (fetchError) {
-      console.error('Error converting image to blob:', fetchError);
-      return { error: 'Failed to process image' };
-    }
+    // Read file as base64
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: 'base64',
+    });
+    console.log('File read as base64, length:', base64.length);
 
-    // Generate filename if not provided
-    const timestamp = Date.now();
-    const filename = fileName || `avatar_${timestamp}.jpg`;
-    const filePath = `${user.id}/${filename}`;
-    
-    console.log('Uploading to path:', filePath);
+    // Convert base64 to array buffer
+    const arrayBuffer = decode(base64);
+    console.log('Converted to array buffer, byte length:', arrayBuffer.byteLength);
 
-    // Upload to Supabase Storage
+    // Upload to Supabase storage
     const { data, error } = await supabase.storage
-      .from(folder)
-      .upload(filePath, blob, {
-        cacheControl: '3600',
-        upsert: true,
+      .from(bucket)
+      .upload(fileName, arrayBuffer, {
+        contentType: 'image/jpeg',
+        upsert: true
       });
 
     if (error) {
       console.error('Storage upload error:', error);
-      return { error: error.message };
+      throw error;
     }
 
-    console.log('Upload successful, getting public URL...');
+    console.log('Upload successful:', data);
 
     // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(folder)
-      .getPublicUrl(filePath);
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(fileName);
 
-    console.log('Public URL generated:', urlData.publicUrl);
-    
-    return { url: urlData.publicUrl };
+    console.log('Public URL generated:', publicUrl);
+
+    return { url: publicUrl };
+
   } catch (error) {
     console.error('Upload error:', error);
-    return { error: 'Failed to upload image' };
+    return { error: error instanceof Error ? error.message : 'Upload failed' };
   }
-};
+}
 
-export const deleteImage = async (
-  filePath: string,
-  folder: string = 'avatars'
-): Promise<{ error?: string }> => {
+export async function deleteImage(fileName: string, bucket: string = 'avatars'): Promise<boolean> {
   try {
     const { error } = await supabase.storage
-      .from(folder)
-      .remove([filePath]);
+      .from(bucket)
+      .remove([fileName]);
 
     if (error) {
-      console.error('Storage delete error:', error);
-      return { error: error.message };
+      console.error('Delete error:', error);
+      return false;
     }
 
-    return {};
+    return true;
   } catch (error) {
     console.error('Delete error:', error);
-    return { error: 'Failed to delete image' };
+    return false;
   }
-}; 
+}
+
+export function getPublicUrl(fileName: string, bucket: string = 'avatars'): string {
+  const { data: { publicUrl } } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(fileName);
+  
+  return publicUrl;
+} 

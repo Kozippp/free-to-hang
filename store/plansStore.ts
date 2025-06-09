@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { mockInvitations, mockActivePlans, mockCompletedPlans } from '@/constants/mockPlans';
+import { supabase } from '@/lib/supabase';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { useRouter } from 'expo-router';
 import { notifyPlanUpdate } from '@/utils/notifications';
 
@@ -67,12 +69,21 @@ interface PlansState {
   invitations: Plan[];
   activePlans: Plan[];
   completedPlans: Plan[];
+  isLoading: boolean;
+  
+  // Database actions
+  loadPlans: () => Promise<void>;
+  createPlan: (plan: Omit<Plan, 'id' | 'createdAt'>) => Promise<void>;
   
   // Actions
   markAsRead: (planId: string) => void;
   respondToPlan: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => void;
   addPlan: (plan: Plan) => void;
   checkConditionalDependencies: (planId: string) => void;
+  
+  // Real-time functions
+  startRealTimeUpdates: () => void;
+  stopRealTimeUpdates: () => void;
   
   // Update tracking actions
   markPlanUpdated: (planId: string, updateType: string) => void;
@@ -125,11 +136,235 @@ interface PlansState {
   updateAttendance: (planId: string, userId: string, attended: boolean) => void;
 }
 
+// Real-time subscription variable
+let plansChannel: RealtimeChannel | null = null;
+
 const usePlansStore = create<PlansState>((set, get) => ({
-  invitations: mockInvitations.map(ensurePlanDefaults),
-  activePlans: mockActivePlans.map(ensurePlanDefaults),
-  completedPlans: mockCompletedPlans.map(ensurePlanDefaults),
-  
+  invitations: [],
+  activePlans: [],
+  completedPlans: [],
+  isLoading: false,
+
+  loadPlans: async () => {
+    set({ isLoading: true });
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      // First, get plans where user is creator
+      const { data: creatorPlans, error: creatorError } = await supabase
+        .from('plans')
+        .select(`
+          *,
+          plan_participants (
+            user_id,
+            response,
+            users (
+              id,
+              name,
+              username,
+              avatar_url
+            )
+          )
+        `)
+        .eq('creator_id', currentUser.id);
+
+      // Then, get plans where user is participant
+      const { data: participantPlans, error: participantError } = await supabase
+        .from('plans')
+        .select(`
+          *,
+          plan_participants!inner (
+            user_id,
+            response,
+            users (
+              id,
+              name,
+              username,
+              avatar_url
+            )
+          )
+        `)
+        .eq('plan_participants.user_id', currentUser.id);
+
+      if (creatorError) {
+        console.error('Error loading creator plans:', creatorError);
+        return;
+      }
+      
+      if (participantError) {
+        console.error('Error loading participant plans:', participantError);
+        return;
+      }
+
+      // Combine and deduplicate plans
+      const allPlans = [...(creatorPlans || []), ...(participantPlans || [])];
+      const uniquePlans = allPlans.filter((plan, index, self) => 
+        index === self.findIndex(p => p.id === plan.id)
+      );
+
+      // Transform and categorize plans
+      const transformedPlans = uniquePlans.map((plan: any) => ({
+        id: plan.id,
+        title: plan.title,
+        description: plan.description || '',
+        type: plan.type || (plan.is_anonymous ? 'anonymous' : 'normal'),
+        creator: plan.creator_id ? {
+          id: plan.creator_id,
+          name: plan.creator_name || 'Unknown',
+          avatar: plan.creator_avatar || generateDefaultAvatar(plan.creator_name || 'Unknown', plan.creator_id)
+        } : null,
+        participants: plan.plan_participants?.map((p: any) => ({
+          id: p.user_id,
+          name: p.users?.name || 'Unknown',
+          avatar: p.users?.avatar_url || generateDefaultAvatar(p.users?.name || 'Unknown', p.user_id),
+          status: p.response // response maps to status in our interface
+        })) || [],
+        date: plan.date ? new Date(plan.date).toISOString().split('T')[0] : 'TBD',
+        location: plan.location || 'TBD',
+        isRead: plan.is_read || false,
+        createdAt: plan.created_at,
+        lastUpdatedAt: plan.updated_at,
+        hasUnreadUpdates: false
+      }));
+
+      // Categorize plans
+      const invitations = transformedPlans.filter((plan: Plan) => {
+        const userParticipant = plan.participants.find(p => p.id === currentUser.id);
+        return userParticipant?.status === 'pending';
+      });
+
+      const activePlans = transformedPlans.filter((plan: Plan) => {
+        const userParticipant = plan.participants.find(p => p.id === currentUser.id);
+        return ['accepted', 'maybe', 'conditional'].includes(userParticipant?.status || '');
+      });
+
+      set({ 
+        invitations: invitations.map(ensurePlanDefaults),
+        activePlans: activePlans.map(ensurePlanDefaults),
+        completedPlans: [] // Will implement completed plans later
+      });
+
+      console.log('Plans loaded successfully:', { 
+        invitations: invitations.length, 
+        activePlans: activePlans.length 
+      });
+
+    } catch (error) {
+      console.error('Error loading plans:', error);
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  createPlan: async (planData) => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      // Get current user data from database for proper names
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('name, avatar_url')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user data:', userError);
+        return;
+      }
+
+      // Convert date to proper timestamp format  
+      const planDate = planData.date === 'TBD' ? new Date() : new Date(planData.date);
+
+      // Create plan in database
+      const { data: plan, error: planError } = await supabase
+        .from('plans')
+        .insert([{
+          title: planData.title,
+          description: planData.description,
+          type: planData.type,
+          is_anonymous: planData.type === 'anonymous',
+          creator_id: planData.type === 'anonymous' ? null : currentUser.id,
+          creator_name: planData.type === 'anonymous' ? null : userData.name,
+          creator_avatar: planData.type === 'anonymous' ? null : userData.avatar_url,
+          date: planDate.toISOString(),
+          location: planData.location,
+          status: 'active'
+        }])
+        .select()
+        .single();
+
+      if (planError) throw planError;
+
+      // Add participants
+      const participantInserts = planData.participants.map(p => ({
+        plan_id: plan.id,
+        user_id: p.id,
+        response: p.status // map status to response for database
+      }));
+
+      const { error: participantError } = await supabase
+        .from('plan_participants')
+        .insert(participantInserts);
+
+      if (participantError) throw participantError;
+
+      console.log('Plan created successfully:', plan.id);
+
+      // Reload plans to get the updated list
+      await get().loadPlans();
+
+    } catch (error) {
+      console.error('Error creating plan:', error);
+      throw error;
+    }
+  },
+
+  startRealTimeUpdates: () => {
+    // Clean up existing channel
+    if (plansChannel) {
+      supabase.removeChannel(plansChannel);
+      plansChannel = null;
+    }
+
+    console.log('📅 Starting plans realtime...');
+
+    // Simple channel for plan updates
+    plansChannel = supabase
+      .channel('plans-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'plans' },
+        (payload: any) => {
+          console.log('📝 Plan changed');
+          get().loadPlans();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'plan_participants' },
+        (payload: any) => {
+          console.log('👤 Plan participants changed');
+          get().loadPlans();
+        }
+      )
+      .subscribe((status: any) => {
+        console.log('📡 Plans realtime status:', status);
+      });
+  },
+
+  stopRealTimeUpdates: () => {
+    console.log('Stopping real-time updates for plans...');
+    
+    if (plansChannel) {
+      plansChannel.unsubscribe();
+      plansChannel = null;
+    }
+    
+    console.log('Real-time subscriptions stopped for plans');
+  },
+
   markAsRead: (planId: string) => {
     set((state) => ({
       invitations: state.invitations.map(plan => 

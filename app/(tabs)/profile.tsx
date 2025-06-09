@@ -13,7 +13,9 @@ import {
   TextInput,
   ScrollView,
   Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  ActivityIndicator,
+  RefreshControl
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { 
@@ -59,13 +61,8 @@ import { uploadImage } from '@/lib/storage';
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
   const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData, startRealTimeUpdates, stopRealTimeUpdates } = useHangStore();
-  const { 
-    friendRequests, 
-    isLoading, 
-    loadFriendRequests, 
-    acceptFriendRequest, 
-    declineFriendRequest 
-  } = useFriendsStore();
+  const friendsStore = useFriendsStore();
+  const [refreshing, setRefreshing] = useState(false);
   
   // Use real user data from hangStore, fallback to mock for missing fields
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -86,24 +83,16 @@ export default function ProfileScreen() {
   
   // Load user data when component mounts
   useEffect(() => {
-    if (authUser) {
-      loadUserData();
-      loadFriends();
-      loadFriendRequests();
-      loadBlockedUsers();
-    }
-  }, [authUser]);
-
-  // Add real-time updates effect
-  useEffect(() => {
-    // Start real-time updates when component mounts
-    startRealTimeUpdates();
-    
-    // Cleanup when component unmounts
-    return () => {
-      stopRealTimeUpdates();
+    const initializeData = async () => {
+      await loadUserData();
+      await loadFriends();
+      await friendsStore.loadFriendRequests();
     };
-  }, [startRealTimeUpdates, stopRealTimeUpdates]);
+
+    initializeData();
+    
+    // Realtime is managed globally, not per tab
+  }, []);
 
   const loadBlockedUsers = async () => {
     try {
@@ -798,7 +787,7 @@ export default function ProfileScreen() {
 
   const handleAcceptRequest = async (requestId: string) => {
     try {
-      await acceptFriendRequest(requestId);
+      await friendsStore.acceptFriendRequest(requestId);
       setShowRequestProfile(false);
       setSelectedRequest(null);
       // Refresh friends list
@@ -810,7 +799,7 @@ export default function ProfileScreen() {
 
   const handleDeclineRequest = async (requestId: string) => {
     try {
-      await declineFriendRequest(requestId);
+      await friendsStore.declineFriendRequest(requestId);
       setShowRequestProfile(false);
       setSelectedRequest(null);
     } catch (error) {
@@ -905,7 +894,7 @@ export default function ProfileScreen() {
                 onPress={() => setActiveTab('requests')}
               >
                 <Text style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>
-                  Requests {friendRequests.length > 0 && `(${friendRequests.length})`}
+                  Requests {friendsStore.friendRequests.length > 0 && `(${friendsStore.friendRequests.length})`}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity 
@@ -943,9 +932,9 @@ export default function ProfileScreen() {
               )
             ) : (
               <View style={styles.requestsContent}>
-                {friendRequests.length > 0 ? (
+                {friendsStore.friendRequests.length > 0 ? (
                   <FlatList
-                    data={friendRequests}
+                    data={friendsStore.friendRequests}
                     renderItem={renderRequestItem}
                     keyExtractor={(item) => item.id}
                     scrollEnabled={false}
@@ -1216,7 +1205,7 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={styles.modalAcceptButton}
                     onPress={() => handleAcceptRequest(selectedRequest.id)}
-                    disabled={isLoading}
+                    disabled={friendsStore.isLoading}
                   >
                     <Check size={20} color="white" />
                     <Text style={styles.modalAcceptText}>Accept</Text>
@@ -1225,7 +1214,7 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={styles.modalDeclineButton}
                     onPress={() => handleDeclineRequest(selectedRequest.id)}
-                    disabled={isLoading}
+                    disabled={friendsStore.isLoading}
                   >
                     <X size={20} color={Colors.light.secondaryText} />
                     <Text style={styles.modalDeclineText}>Decline</Text>

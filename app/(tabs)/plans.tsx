@@ -12,6 +12,8 @@ import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 import { testNotifications } from '@/utils/notifications';
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
 export default function PlansScreen() {
   const [activeTab, setActiveTab] = useState('Invitations');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
@@ -21,20 +23,45 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
-  const { invitations, activePlans, completedPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance, getSortedPlans, markUpdatesAsRead } = usePlansStore();
-  const params = useLocalSearchParams();
+  const { 
+    invitations, 
+    activePlans, 
+    completedPlans, 
+    isLoading,
+    loadPlans,
+    startRealTimeUpdates,
+    stopRealTimeUpdates,
+    markAsRead, 
+    respondToPlan, 
+    processCompletedPlans, 
+    addDemoCompletedPlan, 
+    updateAttendance, 
+    getSortedPlans, 
+    markUpdatesAsRead 
+  } = usePlansStore();
+  
+  const { showCreatedModal } = useLocalSearchParams();
   const router = useRouter();
   
   const tabs = ['Invitations', 'Plan', 'Completed'];
-  const screenWidth = Dimensions.get('window').width;
   const translateX = useRef(new Animated.Value(0)).current;
   const newPlanAnimation = useRef(new Animated.Value(0)).current;
   const tabSwitchAnimation = useRef(new Animated.Value(0)).current;
   const dropInAnimation = useRef(new Animated.Value(-100)).current;
 
+  // Load plans and start real-time updates when component mounts
+  useEffect(() => {
+    const initializePlans = async () => {
+      await loadPlans();
+    };
+
+    initializePlans();
+    // Realtime is managed globally, not per tab
+  }, []);
+
   // Check for new plan creation
   useEffect(() => {
-    if (params.newPlan === 'true') {
+    if (showCreatedModal === 'true') {
       // Find the newest plan (highest timestamp)
       const allPlans = [...invitations, ...activePlans];
       const newestPlan = allPlans.reduce((newest, current) => {
@@ -89,12 +116,12 @@ export default function PlansScreen() {
         }, 1000);
       }
     }
-  }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation, dropInAnimation]);
+  }, [showCreatedModal, invitations, activePlans, router, tabSwitchAnimation, dropInAnimation]);
 
   // Handle highlighting when coming from invitation response
   useEffect(() => {
-    if (params.highlightPlan) {
-      const planId = typeof params.highlightPlan === 'string' ? params.highlightPlan : params.highlightPlan[0];
+    if (showCreatedModal === 'highlight') {
+      const planId = typeof showCreatedModal === 'string' ? showCreatedModal : showCreatedModal[0];
       
       // Set active tab to Plan since user responded to invitation
       setActiveTab('Plan');
@@ -112,7 +139,7 @@ export default function PlansScreen() {
         router.replace('/plans');
       }, 500);
     }
-  }, [params.highlightPlan, router]);
+  }, [showCreatedModal, router]);
 
   // Check for completed plans periodically
   useEffect(() => {
@@ -163,10 +190,10 @@ export default function PlansScreen() {
       let nextIndex = currentIndex;
       
       // Determine direction and threshold
-      if (translationX > screenWidth * 0.25 || velocityX > 500) {
+      if (translationX > SCREEN_WIDTH * 0.25 || velocityX > 500) {
         // Swipe right - go to previous tab
         nextIndex = Math.max(0, currentIndex - 1);
-      } else if (translationX < -screenWidth * 0.25 || velocityX < -500) {
+      } else if (translationX < -SCREEN_WIDTH * 0.25 || velocityX < -500) {
         // Swipe left - go to next tab
         nextIndex = Math.min(tabs.length - 1, currentIndex + 1);
       }

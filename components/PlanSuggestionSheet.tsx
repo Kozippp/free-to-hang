@@ -1,5 +1,4 @@
-git add .
-git commit -mimport React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,

@@ -5,10 +5,31 @@ import Colors from "@/constants/colors";
 import { StatusBar } from "expo-status-bar";
 import { Platform, View, Text } from "react-native";
 import usePlansStore from "@/store/plansStore";
+import useHangStore from "@/store/hangStore";
+import useFriendsStore from "@/store/friendsStore";
 
 export default function TabLayout() {
   const { invitations } = usePlansStore();
+  const { startRealTimeUpdates: startHangUpdates, stopRealTimeUpdates: stopHangUpdates } = useHangStore();
+  const { startRealTimeUpdates: startFriendsUpdates, stopRealTimeUpdates: stopFriendsUpdates } = useFriendsStore();
+  const { startRealTimeUpdates: startPlansUpdates, stopRealTimeUpdates: stopPlansUpdates } = usePlansStore();
   const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
+  
+  // 🌍 GLOBAL REALTIME - Start once when tabs load, stop when unmount
+  useEffect(() => {
+    console.log('🌍 Starting GLOBAL realtime for all features...');
+    
+    startHangUpdates();
+    startFriendsUpdates();
+    startPlansUpdates();
+    
+    return () => {
+      console.log('🌍 Stopping GLOBAL realtime...');
+      stopHangUpdates();
+      stopFriendsUpdates();
+      stopPlansUpdates();
+    };
+  }, []);
   
   // Check for unread invitations
   useEffect(() => {

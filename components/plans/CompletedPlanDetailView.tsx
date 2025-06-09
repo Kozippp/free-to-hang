@@ -170,7 +170,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
         id: participant.id,
         name: participant.name,
         avatar: participant.avatar,
-        status: 'online' as const, // Assume they're available for simplicity
+        status: 'available' as const, // Assume they're available for simplicity
         activity: '',
         lastActive: '',
         lastSeen: ''
