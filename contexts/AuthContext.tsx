@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.log('User signed in, keeping loading true until onboarding check completes');
             }
           } else {
-            setLoading(false);
+        setLoading(false);
             setNavigationReady(true);
           }
         }, 100);
@@ -276,7 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Show welcome back message for existing users
           Alert.alert('Welcome back!', 'Ready to make some memories?');
           setTimeout(() => {
-            router.replace('/(tabs)');
+      router.replace('/(tabs)');
             setNavigationReady(true);
             setLoading(false);
           }, 100);

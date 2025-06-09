@@ -258,10 +258,10 @@ export default function ProfileScreen() {
     });
 
     if (success) {
-      setUserProfile({
-        ...userProfile,
-        name: editName,
-        bio: editBio,
+    setUserProfile({
+      ...userProfile,
+      name: editName,
+      bio: editBio,
         avatar: editAvatar,
       });
       
@@ -281,7 +281,7 @@ export default function ProfileScreen() {
         }
       }
       
-      setShowEditProfile(false);
+    setShowEditProfile(false);
     } else {
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     }
@@ -829,7 +829,7 @@ export default function ProfileScreen() {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              <View style={styles.editForm}>
+            <View style={styles.editForm}>
               {/* Profile Picture */}
               <View style={styles.profilePictureSection}>
                 <TouchableOpacity 
@@ -847,7 +847,7 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
                 <Text style={styles.profilePictureText}>Tap image to change</Text>
               </View>
-
+              
               <Text style={styles.inputLabel}>Name</Text>
               <TextInput
                 style={styles.textInput}
@@ -856,7 +856,7 @@ export default function ProfileScreen() {
                 placeholder="Your name"
                 onFocus={() => scrollToInput(50)}
               />
-              
+
               <Text style={styles.inputLabel}>Username</Text>
               <TextInput
                 style={styles.textInput}

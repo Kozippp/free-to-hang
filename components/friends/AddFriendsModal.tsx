@@ -87,7 +87,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
 
   // Search users based on name and username
   const searchUsers = async (query: string) => {
-    if (!query.trim() || query.trim().length < 3) {
+    if (!query.trim()) {
       setSearchResults([]);
       return;
     }
@@ -147,7 +147,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           const matchingSearchUser = usersWithStatus.find((u: any) => u.id === contactUser.id);
           return matchingSearchUser ? { ...contactUser, friendRequestSent: matchingSearchUser.friendRequestSent } : contactUser;
         }));
-      }
+    }
     } catch (error) {
       console.error('Search users error:', error);
     } finally {
@@ -158,7 +158,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   // Search with debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      searchUsers(searchQuery);
+        searchUsers(searchQuery);
     }, 300);
 
     return () => clearTimeout(timeoutId);
@@ -354,7 +354,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           // Search by emails first
           if (contactEmails.length > 0) {
             const emailFilter = contactEmails.map(email => `email.eq.${email}`).join(',');
-            
+
             const { data: emailMatches, error: emailError } = await supabase
               .from('users')
               .select('id, name, username, avatar_url, vibe, email')
@@ -489,7 +489,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     return (
       <View style={styles.emptyStateContainer}>
         {/* Invite Friends Section - Always visible */}
-        <TouchableOpacity style={styles.actionCard} onPress={handleInviteFriends}>
+        <TouchableOpacity style={styles.inviteCard} onPress={handleInviteFriends}>
           <View style={styles.actionIconContainer}>
             <Share2 size={24} color={Colors.light.primary} />
           </View>
@@ -498,7 +498,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
             <Text style={styles.actionSubtitle}>
               freetohang.app/{currentUserUsername || 'mihkelkkk'}
             </Text>
-          </View>
+      </View>
           <ChevronRight size={20} color={Colors.light.secondaryText} />
         </TouchableOpacity>
 
@@ -513,8 +513,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
               <TouchableOpacity onPress={handleResetContacts} style={styles.resetButton}>
                 <RotateCcw size={16} color={Colors.light.secondaryText} />
                 <Text style={styles.resetText}>Reset</Text>
-              </TouchableOpacity>
-            </View>
+        </TouchableOpacity>
+      </View>
             
             {contactFriends.length > 0 ? (
               <FlatList
@@ -544,7 +544,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Find contacts</Text>
               <Text style={styles.actionSubtitle}>Find friends from your contacts</Text>
-            </View>
+    </View>
             <ChevronRight size={20} color={Colors.light.secondaryText} />
           </TouchableOpacity>
         ) : null}
@@ -555,15 +555,15 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
             <Search size={48} color={Colors.light.secondaryText} />
             <Text style={styles.emptyStateText}>Add friends</Text>
             <Text style={styles.emptyStateSubtext}>Just start typing a name or username</Text>
-          </View>
-        )}
       </View>
-    );
+        )}
+    </View>
+  );
 
 
   };
 
-  return (
+        return (
     <Modal
       visible={visible}
       animationType="slide"
@@ -596,29 +596,29 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
                 <ActivityIndicator size="small" color={Colors.light.primary} />
               )}
             </View>
-
+            
             {/* Search Results */}
             <View style={styles.content}>
               {searchQuery.trim() ? (
                 searchResults.length > 0 ? (
-                  <FlatList
-                    data={searchResults}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderSearchResult}
-                    showsVerticalScrollIndicator={false}
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.id}
+                renderItem={renderSearchResult}
+                showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.listContent}
                   />
                 ) : !isSearching ? (
-                  <View style={styles.emptyState}>
+                    <View style={styles.emptyState}>
                     <Search size={48} color={Colors.light.secondaryText} />
                     <Text style={styles.emptyStateText}>No users found</Text>
                     <Text style={styles.emptyStateSubtext}>Try a different search term</Text>
-                  </View>
-                ) : null
+                    </View>
+                  ) : null
               ) : (
                 renderEmptyState()
-              )}
-            </View>
+            )}
+          </View>
           </View>
         </TouchableWithoutFeedback>
 
@@ -714,7 +714,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
                   </Text>
 
                   {/* Allow Access Button */}
-                  <TouchableOpacity
+              <TouchableOpacity
                     onPress={handleRequestContactsAccess}
                     disabled={loadingContacts}
                     style={[styles.newContactsButton, loadingContacts && styles.disabledButton]}
@@ -727,11 +727,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
 
                   {/* Privacy Text */}
                   <Text style={styles.newPrivacyText}>
-                    We'll securely check your contacts to find friends. Your contacts remain private and are never stored.
-                  </Text>
-                </View>
+                    Your contacts remain private. Stop syncing anytime.
+                </Text>
+                  </View>
               </TouchableWithoutFeedback>
-            </View>
+        </View>
           </TouchableWithoutFeedback>
         </Modal>
       </SafeAreaView>
@@ -933,6 +933,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
+  inviteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 12,
+  },
   actionIconContainer: {
     width: 40,
     height: 40,
@@ -957,10 +963,10 @@ const styles = StyleSheet.create({
   },
   defaultEmptyState: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 40,
-    marginTop: 60,
+    marginTop: 120,
   },
   contactsModal: {
     backgroundColor: 'white',
