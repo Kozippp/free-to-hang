@@ -67,6 +67,10 @@ ALTER TABLE user_status ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own profile" ON users
   FOR SELECT USING (auth.uid() = id);
 
+-- Allow users to view basic info of other users for friend search
+CREATE POLICY "Users can view public profiles for friend search" ON users
+  FOR SELECT USING (onboarding_completed = true);
+
 CREATE POLICY "Users can update own profile" ON users
   FOR UPDATE USING (auth.uid() = id);
 
