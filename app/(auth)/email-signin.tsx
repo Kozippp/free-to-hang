@@ -36,6 +36,7 @@ export default function EmailSignInScreen() {
     setIsLoading(true);
     try {
       // Send OTP code via email using Supabase
+      console.log('Sending OTP code to:', email.trim());
       const { data, error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
@@ -47,10 +48,12 @@ export default function EmailSignInScreen() {
         throw error;
       }
 
-      // Go directly to verification screen
+      // Go to verification screen - user status will be determined after OTP verification
       router.push({
         pathname: '/(auth)/email-verification',
-        params: { email: email.trim() }
+        params: { 
+          email: email.trim()
+        }
       });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to send verification code. Please try again.');

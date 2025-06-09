@@ -39,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(false);
+  const [navigationReady, setNavigationReady] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
@@ -47,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // In mock mode, immediately set loading to false and no user
       setLoading(false);
       setUser(null);
+      setNavigationReady(true);
       return;
     }
 
@@ -58,7 +61,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (event === 'SIGNED_IN' && session?.user) {
-          setHasCheckedOnboarding(false); // Reset onboarding check for new login
+          // Don't reset onboarding status if it was already checked during signIn
+          console.log('SIGNED_IN event received, checking if onboarding was pre-checked');
+          if (!hasCheckedOnboarding) {
+            setHasCheckedOnboarding(false);
+            setIsCheckingOnboarding(false);
+            setNavigationReady(false);
+          }
+        }
+        
+        if (event === 'SIGNED_OUT') {
+          setHasCheckedOnboarding(false);
+          setIsCheckingOnboarding(false);
+          setNavigationReady(true);
         }
         
         if (event === 'TOKEN_REFRESHED' && __DEV__) {
@@ -66,7 +81,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         setUser(session?.user ?? null);
-        setLoading(false);
+        
+        // Small delay to ensure UI state is stable before navigation
+        setTimeout(() => {
+          // Keep loading true if we need to check onboarding
+          if (session?.user) {
+            // If onboarding was already checked during signIn, we can set loading to false
+            if (hasCheckedOnboarding) {
+              console.log('User signed in, onboarding already checked, setting loading false');
+              setLoading(false);
+            } else {
+              // Keep loading true until onboarding status is determined
+              console.log('User signed in, keeping loading true until onboarding check completes');
+            }
+          } else {
+            setLoading(false);
+            setNavigationReady(true);
+          }
+        }, 100);
       }
     );
 
@@ -142,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || isCheckingOnboarding) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboardingGroup = segments[0] === '(onboarding)';
@@ -153,31 +185,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         segments: segments[0], 
         hasCheckedOnboarding,
         inAuthGroup,
-        inOnboardingGroup
+        inOnboardingGroup,
+        navigationReady,
+        isCheckingOnboarding
       });
     }
 
-    if (!user && !inAuthGroup) {
+    if (!user && !inAuthGroup && navigationReady) {
       // User is not logged in and not in auth group
       setHasCheckedOnboarding(false);
       router.replace('/(auth)/sign-in');
-    } else if (user && inAuthGroup && !hasCheckedOnboarding) {
+    } else if (user && inAuthGroup && !hasCheckedOnboarding && !isCheckingOnboarding) {
       // User is logged in but in auth group - check onboarding status once
+      // DON'T navigate anywhere until we know where they should go
       console.log('Checking onboarding status from auth group');
       checkOnboardingStatus();
-    } else if (user && !inOnboardingGroup && !inAuthGroup && !hasCheckedOnboarding) {
+    } else if (user && !inOnboardingGroup && !inAuthGroup && !hasCheckedOnboarding && !isCheckingOnboarding) {
       // User is logged in and not in onboarding/auth - check if onboarding is completed once
       console.log('Checking onboarding status from main app');
       checkOnboardingStatus();
     }
-  }, [user, segments, loading, hasCheckedOnboarding]);
+  }, [user, segments, loading, hasCheckedOnboarding, navigationReady, isCheckingOnboarding]);
 
   const checkOnboardingStatus = async () => {
-    if (!user) return;
+    if (!user || isCheckingOnboarding) return;
 
+    setIsCheckingOnboarding(true);
     setHasCheckedOnboarding(true); // Mark that we've checked to prevent loops
+    console.log('Starting onboarding status check...');
 
     try {
+      // Small delay to ensure smooth transition
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       // First check if user exists in our users table
       const { data: userData, error } = await supabase
         .from('users')
@@ -189,13 +229,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // If user doesn't exist in users table (404/PGRST116), they need onboarding
         if (error.code === 'PGRST116') {
           console.log('User not found in users table. Directing to onboarding.');
-          router.replace('/(onboarding)/step-1');
+          // Another small delay before navigation
+          setTimeout(() => {
+            router.replace('/(onboarding)/step-1');
+            setNavigationReady(true);
+            setLoading(false);
+          }, 100);
           return;
         }
         
         console.error('Error checking user existence:', error);
         // On other errors, default to onboarding for safety
-        router.replace('/(onboarding)/step-1');
+        setTimeout(() => {
+          router.replace('/(onboarding)/step-1');
+          setNavigationReady(true);
+          setLoading(false);
+        }, 100);
         return;
       }
 
@@ -210,30 +259,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // If user has name and username, consider them onboarded (backward compatibility)
         if (userData.name && userData.username) {
-          console.log('User has name and username, directing to main app');
-          router.replace('/(tabs)');
+          console.log('User has name and username, directing to main app and setting loading false');
+          setTimeout(() => {
+            router.replace('/(tabs)');
+            setNavigationReady(true);
+            setLoading(false);
+          }, 100);
           return;
         }
         
         // If onboarding_completed field exists and is true, go to main app
         if (userData.onboarding_completed === true) {
-          console.log('User has onboarding_completed = true, directing to main app');
-          router.replace('/(tabs)');
+          console.log('User has onboarding_completed = true, directing to main app and setting loading false');
+          setTimeout(() => {
+            router.replace('/(tabs)');
+            setNavigationReady(true);
+            setLoading(false);
+          }, 100);
           return;
         } 
         
         // Otherwise, user needs onboarding
         console.log('User needs onboarding, directing to step-1');
-        router.replace('/(onboarding)/step-1');
+        setTimeout(() => {
+          router.replace('/(onboarding)/step-1');
+          setNavigationReady(true);
+          setLoading(false);
+        }, 100);
       } else {
         // No user data found, need onboarding
         console.log('No user data found, directing to onboarding');
-        router.replace('/(onboarding)/step-1');
+        setTimeout(() => {
+          router.replace('/(onboarding)/step-1');
+          setNavigationReady(true);
+          setLoading(false);
+        }, 100);
       }
     } catch (error) {
       console.error('Error in checkOnboardingStatus:', error);
       // On unexpected errors, default to onboarding for safety
-      router.replace('/(onboarding)/step-1');
+      setTimeout(() => {
+        router.replace('/(onboarding)/step-1');
+        setNavigationReady(true);
+        setLoading(false);
+      }, 100);
+    } finally {
+      setTimeout(() => {
+        setIsCheckingOnboarding(false);
+      }, 300);
     }
   };
 
@@ -260,6 +333,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Sign out the user if email is not confirmed
       await supabase.auth.signOut();
       throw new Error('Your email address is not yet confirmed. Please check your inbox and click the confirmation link before signing in.');
+    }
+
+    // If sign in was successful, check user's onboarding status IMMEDIATELY
+    if (data.user) {
+      console.log('Sign in successful, checking user onboarding status immediately...');
+      
+      try {
+        // Check if user exists in our users table
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (userError) {
+          // If user doesn't exist in users table, they need onboarding
+          if (userError.code === 'PGRST116') {
+            console.log('New user detected during sign in - will direct to onboarding');
+            // Set a flag that this user needs onboarding
+            setHasCheckedOnboarding(true);
+            setNavigationReady(true);
+            return; // The useEffect will handle navigation to onboarding
+          }
+          
+          console.error('Error checking user existence during sign in:', userError);
+          // On errors, default to onboarding for safety
+          setHasCheckedOnboarding(true);
+          setNavigationReady(true);
+          return;
+        }
+
+        // User exists, check if they need onboarding
+        if (userData) {
+          console.log('Existing user found during sign in:', { 
+            id: userData.id, 
+            name: userData.name, 
+            username: userData.username,
+            onboarding_completed: userData.onboarding_completed 
+          });
+          
+          // If user has name and username, they're ready for main app
+          if (userData.name && userData.username) {
+            console.log('Existing user is ready - will direct to main app');
+            setHasCheckedOnboarding(true);
+            setNavigationReady(true);
+            // Set a flag to go directly to main app
+            setTimeout(() => {
+              router.replace('/(tabs)');
+            }, 100);
+            return;
+          }
+          
+          // If onboarding_completed field exists and is true, go to main app
+          if (userData.onboarding_completed === true) {
+            console.log('Existing user onboarding completed - will direct to main app');
+            setHasCheckedOnboarding(true);
+            setNavigationReady(true);
+            setTimeout(() => {
+              router.replace('/(tabs)');
+            }, 100);
+            return;
+          } 
+          
+          // Otherwise, user needs onboarding
+          console.log('Existing user needs onboarding - will direct to onboarding');
+          setHasCheckedOnboarding(true);
+          setNavigationReady(true);
+          return;
+        } else {
+          // No user data found, need onboarding
+          console.log('No user data found during sign in - will direct to onboarding');
+          setHasCheckedOnboarding(true);
+          setNavigationReady(true);
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking user status during sign in:', error);
+        // On unexpected errors, default to onboarding for safety
+        setHasCheckedOnboarding(true);
+        setNavigationReady(true);
+        return;
+      }
     }
   };
 
