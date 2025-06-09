@@ -92,9 +92,14 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       if (!currentUser) return;
 
       const { error } = await supabase
-        .from('friends')
+        .from('friend_requests')
         .insert([
-          { user_id: currentUser.id, friend_id: friendId, status: 'pending' }
+          { 
+            sender_id: currentUser.id, 
+            receiver_id: friendId, 
+            status: 'pending',
+            created_at: new Date().toISOString()
+          }
         ]);
 
       if (error) {
@@ -123,27 +128,37 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) return;
 
-      // Update the existing request to accepted
-      const { error: updateError } = await supabase
-        .from('friends')
-        .update({ status: 'accepted' })
-        .eq('id', requestId);
-
-      if (updateError) throw updateError;
-
-      // Create reciprocal friendship
+      // Get the friend request details first
       const request = get().friendRequests.find(req => req.id === requestId);
-      if (request) {
-        const { error: reciprocalError } = await supabase
-          .from('friends')
-          .insert([
-            { user_id: currentUser.id, friend_id: request.user_id, status: 'accepted' }
-          ]);
-
-        if (reciprocalError) throw reciprocalError;
+      if (!request) {
+        throw new Error('Friend request not found');
       }
 
-      // Reload friend requests
+      // Delete the friend request from friend_requests table
+      const { error: deleteRequestError } = await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('id', requestId);
+
+      if (deleteRequestError) throw deleteRequestError;
+
+      // Add to friendships table (bidirectional)
+      const { error: friendshipError } = await supabase
+        .from('friendships')
+        .insert([
+          { user_id: currentUser.id, friend_id: request.user_id },
+          { user_id: request.user_id, friend_id: currentUser.id }
+        ]);
+
+      if (friendshipError) {
+        console.error('Friendship creation error:', friendshipError);
+        // If it's a duplicate key error, that means they're already friends
+        if (friendshipError.code !== '23505') {
+          throw friendshipError;
+        }
+      }
+
+      // Reload friend requests and friends
       await get().loadFriendRequests();
       
     } catch (error) {
@@ -185,22 +200,22 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       if (!currentUser) return;
 
       const { data: requests, error } = await supabase
-        .from('friends')
+        .from('friend_requests')
         .select(`
           id,
-          user_id,
-          friend_id,
+          sender_id,
+          receiver_id,
           status,
           created_at,
-          users!friends_user_id_fkey (
+          users!friend_requests_sender_id_fkey (
             id,
             name,
             username,
             avatar_url,
-            bio
+            vibe
           )
         `)
-        .eq('friend_id', currentUser.id)
+        .eq('receiver_id', currentUser.id)
         .eq('status', 'pending');
 
       if (error) {
@@ -210,7 +225,11 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
       // Transform the response to match our interface
       const transformedRequests = requests?.map((request: any) => ({
-        ...request,
+        id: request.id,
+        user_id: request.sender_id,
+        friend_id: request.receiver_id,
+        status: request.status,
+        created_at: request.created_at,
         users: Array.isArray(request.users) ? request.users[0] : request.users
       })) as FriendRequest[];
 

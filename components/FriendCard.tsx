@@ -11,7 +11,7 @@ interface FriendCardProps {
   lastActive?: string;
   selected: boolean;
   onSelect: (id: string) => void;
-  status?: 'online' | 'offline' | 'pinged';
+  status?: 'available' | 'offline' | 'pinged';
   responseStatus?: 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen';
 }
 
@@ -23,7 +23,7 @@ export default function FriendCard({
   lastActive,
   selected,
   onSelect,
-  status = 'online',
+  status = 'available',
   responseStatus = 'pending',
 }: FriendCardProps) {
   // Render the appropriate status indicator based on response status
@@ -58,11 +58,11 @@ export default function FriendCard({
           </View>
         );
       default:
-        // For online/offline/pinged status
+        // For available/offline/pinged status
         return (
           <View style={[
             styles.statusDot,
-            status === 'online' && styles.onlineDot,
+            status === 'available' && styles.onlineDot,
             status === 'offline' && styles.offlineDot,
             status === 'pinged' && styles.pingedDot,
           ]} />

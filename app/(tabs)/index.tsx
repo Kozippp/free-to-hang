@@ -64,7 +64,9 @@ export default function HangScreen() {
     isSelectedFriend,
     clearSelectedFriends,
     loadUserData,
-    loadFriends
+    loadFriends,
+    startRealTimeUpdates,
+    stopRealTimeUpdates
   } = useHangStore();
   
   const { user: authUser } = useAuth();
@@ -101,6 +103,17 @@ export default function HangScreen() {
       }).start();
     }
   }, [isAvailable, fadeAnim]);
+  
+  // Add real-time updates effect
+  useEffect(() => {
+    // Start real-time updates when component mounts
+    startRealTimeUpdates();
+    
+    // Cleanup when component unmounts
+    return () => {
+      stopRealTimeUpdates();
+    };
+  }, [startRealTimeUpdates, stopRealTimeUpdates]);
   
   const handleToggle = () => {
     if (!isAvailable) {
@@ -242,14 +255,14 @@ export default function HangScreen() {
                       lastActive={friend.lastActive}
                       selected={isSelectedFriend(friend.id)}
                       onSelect={handleFriendSelect}
-                      status={friend.status as 'online' | 'offline' | 'pinged'}
+                      status={friend.status as 'available' | 'offline' | 'pinged'}
                       responseStatus={friend.responseStatus as 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen'}
                     />
                   ))
                 ) : (
                   <View style={styles.emptyFriendsContainer}>
                     <Text style={styles.emptyFriendsTitle}>
-                      No friends online right now
+                      No friends available right now
                     </Text>
                     <Text style={styles.emptyFriendsDescription}>
                       Invite your friends to join Free to Hang so you can see when they're available.
@@ -320,7 +333,7 @@ export default function HangScreen() {
         selectedFriends={selectedFriendsData as any}
         isAnonymous={isAnonymousPlan}
         availableFriends={friends.filter(friend => 
-          !safeSelectedFriends.includes(friend.id) && friend.status === 'online'
+          !safeSelectedFriends.includes(friend.id) && friend.status === 'available'
         )}
         onPlanSubmitted={handlePlanSubmitted}
       />

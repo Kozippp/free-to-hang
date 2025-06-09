@@ -9,7 +9,7 @@ interface Friend {
   id: string;
   name: string;
   avatar: string;
-  status: 'online' | 'offline' | 'pinged';
+  status: 'available' | 'offline' | 'pinged';
   activity?: string;
   lastActive?: string;
   lastSeen?: string;
@@ -22,7 +22,7 @@ interface User {
   username?: string;
   vibe?: string;
   avatar: string;
-  status: 'online' | 'offline';
+  status: 'available' | 'offline';
   activity: string;
 }
 
@@ -46,6 +46,8 @@ interface HangState {
   loadUserData: () => Promise<void>;
   loadFriends: () => Promise<void>;
   updateUserData: (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => Promise<boolean>;
+  startRealTimeUpdates: () => void;
+  stopRealTimeUpdates: () => void;
 }
 
 // Remove old defaultUser object and create a function instead
@@ -55,6 +57,9 @@ const getDefaultAvatar = (name?: string, userId?: string) => {
   }
   return SILHOUETTE_AVATAR_URL;
 };
+
+// Add at the top of the file after imports
+let refreshInterval: NodeJS.Timeout | null = null;
 
 // Create the store with persistence
 const useHangStore = create<HangState>()(
@@ -76,22 +81,53 @@ const useHangStore = create<HangState>()(
       
       setActivity: (activity) => set({ activity }),
       
-      toggleAvailability: () => {
+      toggleAvailability: async () => {
         const currentStatus = get().isAvailable;
+        const newStatus = !currentStatus;
+        
         set({ 
-          isAvailable: !currentStatus,
+          isAvailable: newStatus,
           user: {
             ...get().user,
-            status: !currentStatus ? 'online' : 'offline'
+            status: newStatus ? 'available' : 'offline'
           }
         });
         
-        // If turning off availability, clear activity and selected friends
-        if (currentStatus) {
+        // Update status in database
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser) {
+            const { error } = await supabase
+              .from('users')
+              .update({ 
+                status: newStatus ? 'available' : 'offline',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', authUser.id);
+            
+            if (error) {
+              console.error('Error updating status in database:', error);
+              // Revert local state on error
+              set({ 
+                isAvailable: currentStatus,
+                user: {
+                  ...get().user,
+                  status: currentStatus ? 'available' : 'offline'
+                }
+              });
+            } else {
+              console.log('Status updated in database:', newStatus ? 'available' : 'offline');
+            }
+          }
+        } catch (error) {
+          console.error('Error updating status:', error);
+          // Revert local state on error
           set({ 
-            activity: '',
-            selectedFriends: [],
-            pingedFriends: []
+            isAvailable: currentStatus,
+            user: {
+              ...get().user,
+              status: currentStatus ? 'available' : 'offline'
+            }
           });
         }
       },
@@ -214,57 +250,101 @@ const useHangStore = create<HangState>()(
           const { data: { user: authUser } } = await supabase.auth.getUser();
           if (!authUser) return;
 
-          // Load friends with their status
-          const { data: friendsData, error } = await supabase
-            .from('friends')
+          // Query friendships table with proper joins
+          const { data: friendships, error: friendshipsError } = await supabase
+            .from('friendships')
             .select(`
               friend_id,
-              users!friends_friend_id_fkey (
+              friend_user:users!friendships_friend_id_fkey (
                 id,
                 name,
+                username,
                 avatar_url,
-                user_status (
-                  is_available,
-                  activity,
-                  last_seen
-                )
+                status
               )
             `)
-            .eq('user_id', authUser.id)
-            .eq('status', 'accepted');
+            .eq('user_id', authUser.id);
 
-          if (error) {
-            console.error('Error loading friends:', error);
+          if (friendshipsError) {
+            console.error('Error loading friendships:', friendshipsError);
             return;
           }
 
-          const friends: Friend[] = [];
-          const offlineFriends: Friend[] = [];
+          // Also query reverse friendships (where current user is the friend)
+          const { data: reverseFriendships, error: reverseError } = await supabase
+            .from('friendships')
+            .select(`
+              user_id,
+              user:users!friendships_user_id_fkey (
+                id,
+                name,
+                username,
+                avatar_url,
+                status
+              )
+            `)
+            .eq('friend_id', authUser.id);
 
-          friendsData?.forEach((friendship: any) => {
-            const friend = friendship.users;
-            if (friend) {
-              const friendData: Friend = {
-                id: friend.id,
-                name: friend.name,
-                avatar: friend.avatar_url || getDefaultAvatar(friend.name, friend.id),
-                status: friend.user_status?.is_available ? 'online' : 'offline',
-                activity: friend.user_status?.activity || '',
-                lastSeen: friend.user_status?.last_seen,
-                lastActive: friend.user_status?.last_seen
-              };
+          if (reverseError) {
+            console.error('Error loading reverse friendships:', reverseError);
+            return;
+          }
 
-              if (friendData.status === 'online') {
-                friends.push(friendData);
-              } else {
-                offlineFriends.push(friendData);
+          // Combine both directions and remove duplicates
+          const allFriendData: any[] = [];
+          const seenIds = new Set<string>();
+          
+          if (friendships) {
+            friendships.forEach((f: any) => {
+              if (f.friend_user && !seenIds.has(f.friend_user.id)) {
+                seenIds.add(f.friend_user.id);
+                allFriendData.push({
+                  id: f.friend_user.id,
+                  name: f.friend_user.name,
+                  username: f.friend_user.username,
+                  avatar: f.friend_user.avatar_url || getDefaultAvatar(f.friend_user.name, f.friend_user.id),
+                  status: f.friend_user.status === 'available' ? 'available' : 'offline',
+                  activity: '',
+                  lastActive: 'Recently'
+                });
               }
-            }
+            });
+          }
+
+          if (reverseFriendships) {
+            reverseFriendships.forEach((f: any) => {
+              if (f.user && !seenIds.has(f.user.id)) {
+                seenIds.add(f.user.id);
+                allFriendData.push({
+                  id: f.user.id,
+                  name: f.user.name,
+                  username: f.user.username,
+                  avatar: f.user.avatar_url || getDefaultAvatar(f.user.name, f.user.id),
+                  status: f.user.status === 'available' ? 'available' : 'offline',
+                  activity: '',
+                  lastActive: 'Recently'
+                });
+              }
+            });
+          }
+
+          // Separate available and offline friends
+          const availableFriends = allFriendData.filter(f => f.status === 'available');
+          const offlineFriends = allFriendData.filter(f => f.status === 'offline');
+
+          set({ 
+            friends: availableFriends,
+            offlineFriends: offlineFriends 
           });
 
-          set({ friends, offlineFriends });
+          console.log('Friends loaded successfully:', { available: availableFriends.length, offline: offlineFriends.length });
         } catch (error) {
-          console.error('Error in loadFriends:', error);
+          console.error('Error loading friends:', error);
+          // Set empty arrays on error to prevent UI issues
+          set({ 
+            friends: [],
+            offlineFriends: [] 
+          });
         }
       },
 
@@ -337,6 +417,25 @@ const useHangStore = create<HangState>()(
         } catch (error) {
           console.error('Error in updateUserData:', error);
           return false;
+        }
+      },
+
+      startRealTimeUpdates: () => {
+        // Clear any existing interval
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+        }
+        
+        // Start refreshing friends every second
+        refreshInterval = setInterval(() => {
+          get().loadFriends();
+        }, 1000);
+      },
+
+      stopRealTimeUpdates: () => {
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+          refreshInterval = null;
         }
       }
     }),

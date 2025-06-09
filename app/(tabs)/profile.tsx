@@ -15,7 +15,6 @@ import {
   Platform,
   KeyboardAvoidingView
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { 
   Settings, 
@@ -34,7 +33,9 @@ import {
   Search,
   Camera,
   EyeOff,
-  ChevronRight
+  ChevronRight,
+  Check,
+  User
 } from 'lucide-react-native';
 import { Stack } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -51,10 +52,20 @@ import { useAuth } from '@/contexts/AuthContext';
 import useHangStore from '@/store/hangStore';
 import { supabase } from '@/lib/supabase';
 import AddFriendsModal from '@/components/friends/AddFriendsModal';
+import useFriendsStore from '@/store/friendsStore';
+import { generateDefaultAvatar } from '@/constants/defaultImages';
+import { uploadImage } from '@/lib/storage';
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
-  const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
+  const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData, startRealTimeUpdates, stopRealTimeUpdates } = useHangStore();
+  const { 
+    friendRequests, 
+    isLoading, 
+    loadFriendRequests, 
+    acceptFriendRequest, 
+    declineFriendRequest 
+  } = useFriendsStore();
   
   // Use real user data from hangStore, fallback to mock for missing fields
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -70,13 +81,96 @@ export default function ProfileScreen() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [blockedUsers, setBlockedUsers] = useState<Friend[]>(mockBlockedUsers);
   
+  // Tab state for Friends/Requests
+  const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
+  
   // Load user data when component mounts
   useEffect(() => {
     if (authUser) {
       loadUserData();
       loadFriends();
+      loadFriendRequests();
+      loadBlockedUsers();
     }
   }, [authUser]);
+
+  // Add real-time updates effect
+  useEffect(() => {
+    // Start real-time updates when component mounts
+    startRealTimeUpdates();
+    
+    // Cleanup when component unmounts
+    return () => {
+      stopRealTimeUpdates();
+    };
+  }, [startRealTimeUpdates, stopRealTimeUpdates]);
+
+  const loadBlockedUsers = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // First check if blocked_users table exists by trying a simple query
+        const { data: blockedData, error: blockedError } = await supabase
+          .from('blocked_users')
+          .select('blocked_id')
+          .eq('blocker_id', user.id)
+          .limit(1);
+
+        if (blockedError) {
+          // Check for table not found errors
+          if (blockedError.code === '42P01' || blockedError.code === 'PGRST200') {
+            console.log('Blocked users table not yet created, skipping...');
+            setBlockedUsers([]);
+            return;
+          }
+          console.error('Error checking blocked users table:', blockedError);
+          return;
+        }
+
+        // If we have blocked users, get the full data
+        const { data: fullBlockedData, error: fullError } = await supabase
+          .from('blocked_users')
+          .select('blocked_id')
+          .eq('blocker_id', user.id);
+
+        if (fullError) {
+          console.error('Error loading blocked users:', fullError);
+          return;
+        }
+
+        if (!fullBlockedData || fullBlockedData.length === 0) {
+          setBlockedUsers([]);
+          return;
+        }
+
+        // Get user details for blocked users
+        const blockedIds = fullBlockedData.map((item: { blocked_id: string }) => item.blocked_id);
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('id, name, username, avatar_url')
+          .in('id', blockedIds);
+
+        if (usersError) {
+          console.error('Error loading blocked user details:', usersError);
+          return;
+        }
+
+        const blocked = usersData?.map((user: any) => ({
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          avatar: user.avatar_url || generateDefaultAvatar(user.name, user.id),
+          isBlocked: true
+        })) || [];
+
+        setBlockedUsers(blocked as Friend[]);
+        console.log('Blocked users loaded successfully:', blocked.length);
+      }
+    } catch (error) {
+      console.error('Error in loadBlockedUsers:', error);
+      setBlockedUsers([]);
+    }
+  };
 
   // Update local state when hangStore data changes
   useEffect(() => {
@@ -122,6 +216,8 @@ export default function ProfileScreen() {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [showFriendDetail, setShowFriendDetail] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [showRequestProfile, setShowRequestProfile] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<any>(null);
   
   // Edit profile states
   const [editUsername, setEditUsername] = useState('');
@@ -288,6 +384,33 @@ export default function ProfileScreen() {
   };
 
   const handleChangeProfilePicture = async () => {
+    const processAvatarUpdate = async (avatarUrl: string) => {
+      // Save to database first
+      const updateSuccess = await updateUserData({
+        avatar_url: avatarUrl,
+      });
+      
+      if (updateSuccess) {
+        // Force cache bust by adding timestamp
+        const cacheBustedUrl = `${avatarUrl}?v=${Date.now()}`;
+        
+        // Update UI after successful database save
+        setEditAvatar(cacheBustedUrl);
+        setUserProfile(prev => ({ ...prev, avatar: cacheBustedUrl }));
+        
+        // Reload user data to ensure everything is synced
+        await loadUserData();
+        
+        // Also reload friends to update their view of your avatar
+        await loadFriends();
+        
+        console.log('Avatar saved to database successfully');
+        Alert.alert('Success', 'Profile picture updated!');
+      } else {
+        Alert.alert('Error', 'Failed to update profile picture');
+      }
+    };
+
     Alert.alert(
       'Change Profile Picture',
       'Choose how you want to update your photo',
@@ -301,28 +424,30 @@ export default function ProfileScreen() {
               return;
             }
 
-                                      const result = await ImagePicker.launchCameraAsync({
+            const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: true,
               aspect: [1, 1],
               quality: 0.8,
-              base64: true,
             });
 
             if (!result.canceled && result.assets[0]) {
               const asset = result.assets[0];
-              const newAvatar = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-              console.log('New avatar selected from camera');
+              console.log('New avatar selected from camera:', asset.uri);
               
-              // Update UI immediately
-              setEditAvatar(newAvatar);
-              setUserProfile(prev => ({ ...prev, avatar: newAvatar }));
+              // Upload to storage first
+              const uploadResult = await uploadImage(asset.uri);
               
-              // Save to database immediately
-              await updateUserData({
-                avatar_url: newAvatar,
-              });
-              console.log('Avatar saved to database');
+              if (uploadResult.error) {
+                console.error('Upload error:', uploadResult.error);
+                Alert.alert('Upload Error', uploadResult.error);
+                return;
+              }
+              
+              const avatarUrl = uploadResult.url!;
+              console.log('Avatar uploaded successfully:', avatarUrl);
+              
+              await processAvatarUpdate(avatarUrl);
             }
           }
         },
@@ -340,23 +465,25 @@ export default function ProfileScreen() {
               allowsEditing: true,
               aspect: [1, 1],
               quality: 0.8,
-              base64: true,
             });
 
             if (!result.canceled && result.assets[0]) {
               const asset = result.assets[0];
-              const newAvatar = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-              console.log('New avatar selected from gallery');
+              console.log('New avatar selected from gallery:', asset.uri);
               
-              // Update UI immediately
-              setEditAvatar(newAvatar);
-              setUserProfile(prev => ({ ...prev, avatar: newAvatar }));
+              // Upload to storage first
+              const uploadResult = await uploadImage(asset.uri);
               
-              // Save to database immediately
-              await updateUserData({
-                avatar_url: newAvatar,
-              });
-              console.log('Avatar saved to database');
+              if (uploadResult.error) {
+                console.error('Upload error:', uploadResult.error);
+                Alert.alert('Upload Error', uploadResult.error);
+                return;
+              }
+              
+              const avatarUrl = uploadResult.url!;
+              console.log('Avatar uploaded successfully:', avatarUrl);
+              
+              await processAvatarUpdate(avatarUrl);
             }
           }
         },
@@ -372,29 +499,39 @@ export default function ProfileScreen() {
     setShowFriendDetail(true);
   };
 
-  const handleShareAvailabilityToggle = (friendId: string) => {
+  const handleGhostFriend = (friendId: string) => {
     Alert.alert(
-      'Share Availability',
-      'How long should this friend see when you\'re free to hang?',
+      'Ghost Friend',
+      'Choose how long you want to ghost each other:',
       [
-        { text: 'Never', onPress: () => updateShareAvailability(friendId, 'never') },
-        { text: 'Today Only', onPress: () => updateShareAvailability(friendId, 'today') },
-        { text: 'Next 7 Days', onPress: () => updateShareAvailability(friendId, 'week') },
-        { text: 'Forever', onPress: () => updateShareAvailability(friendId, 'forever') },
-        { text: 'Cancel', style: 'cancel' }
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Today', 
+          onPress: () => {
+            Alert.alert('Ghosted for Today', 'You and this friend won\'t see each other\'s status today.');
+            setShowFriendDetail(false);
+          }
+        },
+        { 
+          text: 'Next 7 days', 
+          onPress: () => {
+            Alert.alert('Ghosted for 7 Days', 'You and this friend won\'t see each other\'s status for the next 7 days.');
+            setShowFriendDetail(false);
+          }
+        },
+        { 
+          text: 'Forever', 
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Ghosted Forever', 'You and this friend will never see each other\'s status again.');
+            setShowFriendDetail(false);
+          }
+        }
       ]
     );
   };
 
-  const updateShareAvailability = (friendId: string, availability: Friend['shareAvailability']) => {
-    setAllFriends(allFriends.map(friend => 
-      friend.id === friendId 
-        ? { ...friend, shareAvailability: availability }
-        : friend
-    ));
-  };
-
-  const handleRemoveFriend = (friendId: string) => {
+  const handleRemoveFriend = async (friendId: string) => {
     Alert.alert(
       'Remove Friend',
       'Are you sure you want to remove this friend?',
@@ -403,30 +540,32 @@ export default function ProfileScreen() {
         { 
           text: 'Remove', 
           style: 'destructive',
-          onPress: () => {
-            setAllFriends(allFriends.filter(f => f.id !== friendId));
-            setShowFriendDetail(false);
-          }
-        }
-      ]
-    );
-  };
+          onPress: async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                // Delete the friendship connection from database
+                await supabase
+                  .from('friendships')
+                  .delete()
+                  .or(`and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`);
 
-  const handleBlockUser = (friendId: string) => {
-    Alert.alert(
-      'Block User',
-      'Are you sure you want to block this user?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Block', 
-          style: 'destructive',
-          onPress: () => {
-            const friendToBlock = allFriends.find(f => f.id === friendId);
-            if (friendToBlock) {
-              setBlockedUsers([...blockedUsers, { ...friendToBlock, isBlocked: true }]);
-              setAllFriends(allFriends.filter(f => f.id !== friendId));
+                // Also remove from friend_requests if there's a pending request
+                await supabase
+                  .from('friend_requests')
+                  .delete()
+                  .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`);
+                  
+                // Update local state
+                setAllFriends(allFriends.filter(f => f.id !== friendId));
+                loadFriends(); // Refresh friends list
+                
+                Alert.alert('Success', 'Friend removed successfully');
+              }
               setShowFriendDetail(false);
+            } catch (error) {
+              console.error('Error removing friend:', error);
+              Alert.alert('Error', 'Failed to remove friend');
             }
           }
         }
@@ -434,23 +573,52 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleHideStatus = (friendId: string) => {
+  const handleBlockUser = async (friendId: string) => {
     Alert.alert(
-      'Hide Status',
-      'Are you sure you want to hide your online status from this friend?',
+      'Block User',
+      'Are you sure you want to block this user? They won\'t be able to find you in search or send friend requests.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Hide Status', 
-          onPress: () => {
-            // In a real app, this would update the friend's settings
-            Alert.alert('Status Hidden', 'Your online status is now hidden from this friend.');
-            setShowFriendDetail(false);
+          text: 'Block', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                // Remove friendship first
+                await supabase
+                  .from('friendships')
+                  .delete()
+                  .or(`and(user_id.eq.${user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${user.id})`);
+
+                // Add to blocked users
+                await supabase
+                  .from('blocked_users')
+                  .insert({
+                    blocker_id: user.id,
+                    blocked_id: friendId,
+                    created_at: new Date().toISOString()
+                  });
+
+                // Update local state
+                setAllFriends(allFriends.filter(f => f.id !== friendId));
+                loadFriends(); // Refresh friends list
+                loadBlockedUsers(); // Refresh blocked users list
+                
+                Alert.alert('Success', 'User blocked successfully');
+              }
+            } catch (error) {
+              console.error('Error blocking user:', error);
+              Alert.alert('Error', 'Failed to block user');
+            }
           }
         }
       ]
     );
   };
+
+
 
   const handleUnblockUser = (userId: string) => {
     Alert.alert(
@@ -460,11 +628,23 @@ export default function ProfileScreen() {
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Unblock', 
-          onPress: () => {
-            const userToUnblock = blockedUsers.find(u => u.id === userId);
-            if (userToUnblock) {
-              setAllFriends([...allFriends, { ...userToUnblock, isBlocked: false }]);
-              setBlockedUsers(blockedUsers.filter(u => u.id !== userId));
+          onPress: async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                // Remove block record from database
+                await supabase
+                  .from('blocked_users')
+                  .delete()
+                  .eq('blocker_id', user.id)
+                  .eq('blocked_id', userId);
+                  
+                // Update local state
+                setBlockedUsers(blockedUsers.filter(u => u.id !== userId));
+              }
+            } catch (error) {
+              console.error('Error unblocking user:', error);
+              Alert.alert('Error', 'Failed to unblock user');
             }
           }
         }
@@ -522,15 +702,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const getAvailabilityText = (availability: Friend['shareAvailability']) => {
-    switch (availability) {
-      case 'today': return 'Today';
-      case 'week': return '7 days';
-      case 'forever': return 'Always';
-      case 'never': return 'Never';
-      default: return 'Never';
-    }
-  };
+
 
   const getFriendHangingPreference = (friendId: string) => {
     // Mock data for what friends like to do - in real app this would come from their profile
@@ -619,6 +791,64 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleRequestPress = (request: any) => {
+    setSelectedRequest(request);
+    setShowRequestProfile(true);
+  };
+
+  const handleAcceptRequest = async (requestId: string) => {
+    try {
+      await acceptFriendRequest(requestId);
+      setShowRequestProfile(false);
+      setSelectedRequest(null);
+      // Refresh friends list
+      loadFriends();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to accept friend request');
+    }
+  };
+
+  const handleDeclineRequest = async (requestId: string) => {
+    try {
+      await declineFriendRequest(requestId);
+      setShowRequestProfile(false);
+      setSelectedRequest(null);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to decline friend request');
+    }
+  };
+
+  const renderRequestItem = ({ item }: { item: any }) => (
+    <TouchableOpacity 
+      style={styles.userItem}
+      onPress={() => handleRequestPress(item)}
+    >
+      <Image 
+        source={{ uri: item.users.avatar_url || generateDefaultAvatar(item.users.name, item.users.id) }} 
+        style={styles.avatar} 
+      />
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{item.users.name}</Text>
+        <Text style={styles.userUsername}>@{item.users.username}</Text>
+{item.users.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.users.vibe}</Text>}
+      </View>
+      <View style={styles.requestActions}>
+        <TouchableOpacity 
+          style={styles.acceptQuickButton}
+          onPress={() => handleAcceptRequest(item.id)}
+        >
+          <Check size={18} color="white" />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.declineQuickButton}
+          onPress={() => handleDeclineRequest(item.id)}
+        >
+          <X size={18} color={Colors.light.secondaryText} />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <>
       <Stack.Screen 
@@ -660,11 +890,24 @@ export default function ProfileScreen() {
           
           {/* Friends Section */}
           <View style={styles.friendsSection}>
-            <View style={styles.friendsHeader}>
-              <View style={styles.friendsHeaderLeft}>
-                <Users size={20} color={Colors.light.text} />
-                <Text style={styles.friendsTitle}>Friends ({allFriends.length})</Text>
-              </View>
+            {/* Tab Header */}
+            <View style={styles.tabHeader}>
+              <TouchableOpacity 
+                style={[styles.tabButton, activeTab === 'friends' && styles.tabButtonActive]}
+                onPress={() => setActiveTab('friends')}
+              >
+                <Text style={[styles.tabText, activeTab === 'friends' && styles.tabTextActive]}>
+                  Friends ({allFriends.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.tabButton, activeTab === 'requests' && styles.tabButtonActive]}
+                onPress={() => setActiveTab('requests')}
+              >
+                <Text style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>
+                  Requests {friendRequests.length > 0 && `(${friendRequests.length})`}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.addFriendButton}
                 onPress={() => setShowAddFriend(true)}
@@ -674,26 +917,48 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             
-            {allFriends.length > 0 ? (
-              <FlatList
-                data={sortedFriends}
-                renderItem={renderFriendItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                contentContainerStyle={styles.friendsList}
-              />
+            {/* Tab Content */}
+            {activeTab === 'friends' ? (
+              allFriends.length > 0 ? (
+                <FlatList
+                  data={sortedFriends}
+                  renderItem={renderFriendItem}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                  contentContainerStyle={styles.friendsList}
+                />
+              ) : (
+                <View style={styles.emptyFriends}>
+                  <Users size={48} color={Colors.light.secondaryText} />
+                  <Text style={styles.emptyFriendsText}>Seems quiet here</Text>
+                  <Text style={styles.emptyFriendsSubtext}>Add more friends to see when they are available</Text>
+                  <TouchableOpacity 
+                    style={styles.emptyAddFriendButton}
+                    onPress={() => setShowAddFriend(true)}
+                  >
+                    <UserPlus size={18} color="white" />
+                    <Text style={styles.emptyAddFriendText}>Add friends</Text>
+                  </TouchableOpacity>
+                </View>
+              )
             ) : (
-              <View style={styles.emptyFriends}>
-                <Users size={48} color={Colors.light.secondaryText} />
-                <Text style={styles.emptyFriendsText}>Seems quiet here</Text>
-                <Text style={styles.emptyFriendsSubtext}>Add more friends to see when they are available</Text>
-                <TouchableOpacity 
-                  style={styles.emptyAddFriendButton}
-                  onPress={() => setShowAddFriend(true)}
-                >
-                  <UserPlus size={18} color="white" />
-                  <Text style={styles.emptyAddFriendText}>Add friends</Text>
-                </TouchableOpacity>
+              <View style={styles.requestsContent}>
+                {friendRequests.length > 0 ? (
+                  <FlatList
+                    data={friendRequests}
+                    renderItem={renderRequestItem}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                    contentContainerStyle={styles.requestsList}
+                    showsVerticalScrollIndicator={false}
+                  />
+                ) : (
+                  <View style={styles.emptyState}>
+                    <User size={48} color={Colors.light.secondaryText} />
+                    <Text style={styles.emptyStateText}>No friend requests</Text>
+                    <Text style={styles.emptyStateSubtext}>When people send you friend requests, they'll appear here</Text>
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -745,27 +1010,13 @@ export default function ProfileScreen() {
                 <View style={styles.friendActionsSection}>
                   <TouchableOpacity 
                     style={styles.friendActionButton}
-                    onPress={() => handleShareAvailabilityToggle(selectedFriend.id)}
-                  >
-                    <Share size={20} color={Colors.light.primary} />
-                    <View style={styles.friendActionTextContainer}>
-                      <Text style={styles.friendActionTitle}>Share Availability</Text>
-                      <Text style={styles.friendActionSubtitle}>
-                        Currently: {getAvailabilityText(selectedFriend.shareAvailability)}
-                      </Text>
-                    </View>
-                    <ChevronRight size={20} color={Colors.light.secondaryText} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.friendActionButton}
-                    onPress={() => handleHideStatus(selectedFriend.id)}
+                    onPress={() => handleGhostFriend(selectedFriend.id)}
                   >
                     <EyeOff size={20} color={Colors.light.secondaryText} />
                     <View style={styles.friendActionTextContainer}>
-                      <Text style={styles.friendActionTitle}>Hide Your Status</Text>
+                      <Text style={styles.friendActionTitle}>Ghost Friend</Text>
                       <Text style={styles.friendActionSubtitle}>
-                        Hide your online status from this friend
+                        Hide your status from each other
                       </Text>
                     </View>
                     <ChevronRight size={20} color={Colors.light.secondaryText} />
@@ -918,6 +1169,73 @@ export default function ProfileScreen() {
         visible={showAddFriend}
         onClose={() => setShowAddFriend(false)}
       />
+
+      {/* Friend Request Profile Modal */}
+      <Modal
+        visible={showRequestProfile}
+        animationType="fade"
+        transparent={true}
+      >
+        <TouchableOpacity 
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => setShowRequestProfile(false)}
+        >
+          <TouchableOpacity 
+            style={styles.profileModal}
+            activeOpacity={1}
+            onPress={() => {}} // Prevent closing when clicking inside modal
+          >
+            {selectedRequest && (
+              <>
+                {/* Close Button */}
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={() => setShowRequestProfile(false)}
+                >
+                  <X size={20} color={Colors.light.secondaryText} />
+                </TouchableOpacity>
+
+                {/* Profile Picture */}
+                <Image 
+                  source={{ uri: selectedRequest.users.avatar_url || generateDefaultAvatar(selectedRequest.users.name, selectedRequest.users.id) }} 
+                  style={styles.profileAvatar} 
+                />
+                
+                {/* Name & Username */}
+                <Text style={styles.profileName}>{selectedRequest.users.name}</Text>
+                <Text style={styles.profileUsername}>@{selectedRequest.users.username}</Text>
+                
+                {/* Vibe */}
+                {selectedRequest.users.vibe && (
+                  <Text style={styles.profileVibe}>{selectedRequest.users.vibe}</Text>
+                )}
+                
+                {/* Action Buttons - side by side */}
+                <View style={styles.modalActionButtons}>
+                  <TouchableOpacity
+                    style={styles.modalAcceptButton}
+                    onPress={() => handleAcceptRequest(selectedRequest.id)}
+                    disabled={isLoading}
+                  >
+                    <Check size={20} color="white" />
+                    <Text style={styles.modalAcceptText}>Accept</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={styles.modalDeclineButton}
+                    onPress={() => handleDeclineRequest(selectedRequest.id)}
+                    disabled={isLoading}
+                  >
+                    <X size={20} color={Colors.light.secondaryText} />
+                    <Text style={styles.modalDeclineText}>Decline</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
         
       {/* Settings Modal */}
       <Modal
@@ -960,28 +1278,7 @@ export default function ProfileScreen() {
               ))}
             </View>
             
-            {/* Privacy */}
-            <View style={styles.settingsSection}>
-              <View style={styles.sectionHeader}>
-                <Lock size={20} color={Colors.light.text} />
-                <Text style={styles.sectionTitle}>Privacy</Text>
-              </View>
-              
-              {Object.entries(settings.privacy).map(([key, value]) => (
-                <View key={key} style={styles.settingRow}>
-                  <Text style={styles.settingLabel}>
-                    {key === 'showOnlineStatus' && 'Show Online Status'}
-                    {key === 'allowAnonymousInvites' && 'Allow Anonymous Invites'}
-                  </Text>
-                  <Switch
-                    value={value}
-                    onValueChange={(newValue) => updatePrivacySetting(key as keyof AppSettings['privacy'], newValue)}
-                    trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
-                    thumbColor={value ? Colors.light.primary : '#F4F3F4'}
-                  />
-                </View>
-              ))}
-            </View>
+
             
             {/* Blocked Users */}
             <View style={styles.settingsSection}>
@@ -1556,36 +1853,25 @@ const styles = StyleSheet.create({
     color: Colors.light.destructive,
     marginLeft: 8,
   },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-    marginTop: 16,
-  },
+
   blockedUserCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: Colors.light.background,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.light.buttonBackground,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.buttonBackground,
   },
   unblockButton: {
     backgroundColor: Colors.light.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   unblockButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.background,
+    color: 'white',
   },
   usernameIndicator: {
     marginTop: 8,
@@ -1614,5 +1900,289 @@ const styles = StyleSheet.create({
   },
   keyboardAvoidingContainer: {
     flex: 1,
+  },
+  // Tab styles
+  tabHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.buttonBackground,
+  },
+  tabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  tabButtonActive: {
+    backgroundColor: Colors.light.primary + '20',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+  },
+  tabTextActive: {
+    color: Colors.light.primary,
+  },
+  // Request styles
+  requestCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    backgroundColor: Colors.light.background,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.buttonBackground,
+  },
+  requestInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  requestDetails: {
+    flex: 1,
+  },
+  requestUsername: {
+    fontSize: 14,
+    color: Colors.light.primary,
+    marginTop: 2,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  acceptButton: {
+    backgroundColor: Colors.light.primary,
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  declineButton: {
+    backgroundColor: Colors.light.buttonBackground,
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Request modal styles
+  friendDetailBio: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  requestModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 32,
+    paddingHorizontal: 20,
+  },
+  acceptRequestButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  acceptRequestText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  declineRequestButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.buttonBackground,
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  declineRequestText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+  },
+  // AddFriendsModal style components for requests
+  requestsContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  requestsList: {
+    paddingBottom: 20,
+  },
+  userItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.buttonBackground,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    backgroundColor: Colors.light.buttonBackground,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  userUsername: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginBottom: 2,
+  },
+  userVibe: {
+    fontSize: 12,
+    color: Colors.light.secondaryText,
+    fontStyle: 'italic',
+  },
+  acceptQuickButton: {
+    backgroundColor: Colors.light.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  declineQuickButton: {
+    backgroundColor: Colors.light.buttonBackground,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+  },
+  // Modal styles from AddFriendsModal
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  profileModal: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 300,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: Colors.light.buttonBackground,
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginTop: 20,
+    marginBottom: 16,
+    backgroundColor: Colors.light.buttonBackground,
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  profileUsername: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  profileVibe: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  modalActionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    width: '100%',
+  },
+  modalAcceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  modalAcceptText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  modalDeclineButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.buttonBackground,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  modalDeclineText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
   },
 });
