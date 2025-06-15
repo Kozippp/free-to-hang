@@ -1,9 +1,7 @@
 import { create } from 'zustand';
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { supabase } from '@/lib/supabase';
-import { generateDefaultAvatar, SILHOUETTE_AVATAR_URL } from '@/constants/defaultImages';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
 
 interface Friend {
   id: string;
@@ -50,25 +48,53 @@ interface HangState {
   stopRealTimeUpdates: () => void;
 }
 
-// Remove old defaultUser object and create a function instead
-const getDefaultAvatar = (name?: string, userId?: string) => {
-  if (name && userId) {
-    return generateDefaultAvatar(name, userId);
-  }
-  return SILHOUETTE_AVATAR_URL;
-};
-
-// Add at the top of the file after imports
 let refreshInterval: NodeJS.Timeout | null = null;
 
-// Create the store with persistence
+const getDefaultAvatar = (name?: string, userId?: string) => {
+  if (!name && !userId) return 'https://via.placeholder.com/150/cccccc/ffffff?text=?';
+  
+  const displayName = name || 'User';
+  const initials = displayName
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase())
+    .join('')
+    .substring(0, 2);
+  
+  // Use a consistent color based on user ID or name
+  const colors = ['FF6B6B', '4ECDC4', '45B7D1', '96CEB4', 'FFEAA7', 'DDA0DD', 'FFB347', '87CEEB'];
+  const colorIndex = (userId || name || '').length % colors.length;
+  const bgColor = colors[colorIndex];
+  
+  return `https://via.placeholder.com/150/${bgColor}/ffffff?text=${initials}`;
+};
+
+// Helper function to make backend calls with timeout
+const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = 5000): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+};
+
 const useHangStore = create<HangState>()(
   persist(
     (set, get) => ({
       user: {
         id: '',
-        name: 'User',
-        avatar: getDefaultAvatar(),
+        name: '',
+        username: '',
+        vibe: '',
+        avatar: '',
         status: 'offline',
         activity: ''
       },
@@ -78,119 +104,55 @@ const useHangStore = create<HangState>()(
       pingedFriends: [],
       isAvailable: false,
       activity: '',
+
+      setActivity: (activity: string) => set({ activity }),
       
-      setActivity: (activity) => set({ activity }),
+      toggleAvailability: () => set((state) => ({ isAvailable: !state.isAvailable })),
       
-      toggleAvailability: async () => {
-        const currentStatus = get().isAvailable;
-        const newStatus = !currentStatus;
-        
-        set({ 
-          isAvailable: newStatus,
-          user: {
-            ...get().user,
-            status: newStatus ? 'available' : 'offline'
-          }
-        });
-        
-        // Update status in database
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser) {
-            const { error } = await supabase
-              .from('users')
-              .update({ 
-                status: newStatus ? 'available' : 'offline',
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', authUser.id);
-            
-            if (error) {
-              console.error('Error updating status in database:', error);
-              // Revert local state on error
-              set({ 
-                isAvailable: currentStatus,
-                user: {
-                  ...get().user,
-                  status: currentStatus ? 'available' : 'offline'
-                }
-              });
-            } else {
-              console.log('Status updated in database:', newStatus ? 'available' : 'offline');
-            }
-          }
-        } catch (error) {
-          console.error('Error updating status:', error);
-          // Revert local state on error
-          set({ 
-            isAvailable: currentStatus,
-            user: {
-              ...get().user,
-              status: currentStatus ? 'available' : 'offline'
-            }
-          });
-        }
-      },
+      selectFriend: (id: string) => set((state) => ({
+        selectedFriends: [...state.selectedFriends, id]
+      })),
       
-      selectFriend: (id) => {
-        const { selectedFriends } = get();
-        const safeFriends = selectedFriends || [];
-        if (!safeFriends.includes(id)) {
-          set({ selectedFriends: [...safeFriends, id] });
-        }
-      },
-      
-      unselectFriend: (id) => {
-        const { selectedFriends } = get();
-        const safeFriends = selectedFriends || [];
-        set({ 
-          selectedFriends: safeFriends.filter(friendId => friendId !== id) 
-        });
-      },
+      unselectFriend: (id: string) => set((state) => ({
+        selectedFriends: state.selectedFriends.filter(friendId => friendId !== id)
+      })),
       
       clearSelectedFriends: () => set({ selectedFriends: [] }),
       
-      isSelectedFriend: (id) => {
-        const { selectedFriends } = get();
-        const safeFriends = selectedFriends || [];
-        return safeFriends.includes(id);
+      isSelectedFriend: (id: string) => {
+        const state = get();
+        return state.selectedFriends.includes(id);
       },
       
-      pingFriend: (id) => {
-        const { pingedFriends } = get();
-        const safePinged = pingedFriends || [];
-        if (!safePinged.includes(id)) {
-          set({ pingedFriends: [...safePinged, id] });
-        }
-      },
+      pingFriend: (id: string) => set((state) => ({
+        pingedFriends: [...state.pingedFriends, id]
+      })),
       
-      unpingFriend: (id) => {
-        const { pingedFriends } = get();
-        const safePinged = pingedFriends || [];
-        set({
-          pingedFriends: safePinged.filter(friendId => friendId !== id)
-        });
-      },
+      unpingFriend: (id: string) => set((state) => ({
+        pingedFriends: state.pingedFriends.filter(friendId => friendId !== id)
+      })),
       
-      isPingedFriend: (id) => {
-        const { pingedFriends } = get();
-        const safePinged = pingedFriends || [];
-        return safePinged.includes(id);
+      isPingedFriend: (id: string) => {
+        const state = get();
+        return state.pingedFriends.includes(id);
       },
 
       loadUserData: async () => {
         try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (!authUser) return;
+          const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+          if (authError || !authUser) {
+            console.error('Auth error:', authError);
+            return;
+          }
 
-          const { data: userData, error } = await supabase
+          const { data: userData, error: userError } = await supabase
             .from('users')
             .select('*')
             .eq('id', authUser.id)
-            .maybeSingle();
+            .single();
 
-          if (error) {
-            console.error('Error loading user data:', error);
+          if (userError) {
+            console.error('Error loading user data:', userError);
             return;
           }
 
@@ -198,7 +160,7 @@ const useHangStore = create<HangState>()(
             set({
               user: {
                 id: userData.id,
-                name: userData.name,
+                name: userData.name || authUser.email?.split('@')[0] || 'User',
                 username: userData.username,
                 vibe: userData.vibe,
                 avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
@@ -206,39 +168,6 @@ const useHangStore = create<HangState>()(
                 activity: ''
               }
             });
-          } else {
-            // User profile doesn't exist, create one
-            console.log('No user profile found, creating one...');
-            const { data: newUserData, error: createError } = await supabase
-              .from('users')
-              .insert([
-                {
-                  id: authUser.id,
-                  email: authUser.email || '',
-                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                  username: authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'user'
-                }
-              ])
-              .select()
-              .single();
-
-            if (createError) {
-              console.error('Error creating user profile:', createError);
-              return;
-            }
-
-            if (newUserData) {
-              set({
-                user: {
-                  id: newUserData.id,
-                  name: newUserData.name,
-                  username: newUserData.username,
-                  avatar: newUserData.avatar_url || getDefaultAvatar(newUserData.name, newUserData.id),
-                  status: 'offline',
-                  activity: ''
-                }
-              });
-            }
           }
         } catch (error) {
           console.error('Error in loadUserData:', error);
@@ -247,10 +176,13 @@ const useHangStore = create<HangState>()(
 
       loadFriends: async () => {
         try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (!authUser) return;
+          const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+          if (authError || !authUser) {
+            console.error('Auth error:', authError);
+            return;
+          }
 
-          // Query friendships table with proper joins
+          // Query friendships where current user is the user_id
           const { data: friendships, error: friendshipsError } = await supabase
             .from('friendships')
             .select(`
@@ -350,62 +282,72 @@ const useHangStore = create<HangState>()(
 
       updateUserData: async (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => {
         try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (!authUser) return false;
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) return false;
 
-          const { data: userData, error } = await supabase
-            .from('users')
-            .update(updates)
-            .eq('id', authUser.id)
-            .select()
-            .single();
+          // Try backend API first with timeout, but don't block if it fails
+          let backendSuccess = false;
+          try {
+            const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://web-production-ac8a.up.railway.app';
+            const response = await fetchWithTimeout(`${backendUrl}/user/me`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+              },
+              body: JSON.stringify(updates)
+            }, 5000); // 5 second timeout
 
-          if (error) {
-            console.error('Error updating user data:', error);
-            return false;
+            if (response.ok) {
+              const responseData = await response.json();
+              const userData = responseData.user;
+
+              if (userData) {
+                set({
+                  user: {
+                    id: userData.id,
+                    name: userData.name,
+                    username: userData.username,
+                    vibe: userData.vibe,
+                    avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
+                    status: 'offline',
+                    activity: ''
+                  }
+                });
+                backendSuccess = true;
+              }
+            } else {
+              console.warn('Backend API returned error status:', response.status);
+            }
+          } catch (backendError) {
+            console.warn('Backend API call failed, falling back to direct database update:', backendError);
           }
 
-          if (userData) {
-            set({
-              user: {
-                id: userData.id,
-                name: userData.name,
-                username: userData.username,
-                vibe: userData.vibe,
-                avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
-                status: 'offline',
-                activity: ''
-              }
-            });
-            return true;
-          } else {
-            // User profile doesn't exist, create one
-            console.log('No user profile found, creating one...');
-            const { data: newUserData, error: createError } = await supabase
+          // If backend failed, use direct database update
+          if (!backendSuccess) {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) return false;
+
+            const { data: userData, error } = await supabase
               .from('users')
-              .insert([
-                {
-                  id: authUser.id,
-                  email: authUser.email || '',
-                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                  username: authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'user'
-                }
-              ])
+              .update(updates)
+              .eq('id', authUser.id)
               .select()
               .single();
 
-            if (createError) {
-              console.error('Error creating user profile:', createError);
+            if (error) {
+              console.error('Error updating user data directly:', error);
               return false;
             }
 
-            if (newUserData) {
+            if (userData) {
               set({
                 user: {
-                  id: newUserData.id,
-                  name: newUserData.name,
-                  username: newUserData.username,
-                  avatar: newUserData.avatar_url || getDefaultAvatar(newUserData.name, newUserData.id),
+                  id: userData.id,
+                  name: userData.name,
+                  username: userData.username,
+                  vibe: userData.vibe,
+                  avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
                   status: 'offline',
                   activity: ''
                 }
@@ -413,7 +355,8 @@ const useHangStore = create<HangState>()(
               return true;
             }
           }
-          return false;
+
+          return backendSuccess;
         } catch (error) {
           console.error('Error in updateUserData:', error);
           return false;
