@@ -1,14 +1,16 @@
 import { create } from 'zustand';
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { generateDefaultAvatar, SILHOUETTE_AVATAR_URL } from '@/constants/defaultImages';
+
+let refreshInterval: NodeJS.Timeout | null = null;
 
 interface Friend {
   id: string;
   name: string;
   avatar: string;
-  status: 'online' | 'offline' | 'pinged';
+  status: 'available' | 'offline' | 'pinged';
   activity?: string;
   lastActive?: string;
   lastSeen?: string;
@@ -18,8 +20,10 @@ interface Friend {
 interface User {
   id: string;
   name: string;
+  username?: string;
+  vibe?: string;
   avatar: string;
-  status: 'online' | 'offline';
+  status: 'available' | 'offline';
   activity: string;
 }
 
@@ -42,95 +46,79 @@ interface HangState {
   isPingedFriend: (id: string) => boolean;
   loadUserData: () => Promise<void>;
   loadFriends: () => Promise<void>;
+  updateUserData: (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => Promise<boolean>;
+  startRealTimeUpdates: () => void;
+  stopRealTimeUpdates: () => void;
 }
 
-// Default user data
-const defaultUser: User = {
-  id: '',
-  name: 'User',
-  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&h=120&fit=crop&crop=face',
-  status: 'offline',
-  activity: ''
+const getDefaultAvatar = (name?: string, userId?: string) => {
+  if (name && userId) {
+    return generateDefaultAvatar(name, userId);
+  } else {
+    return SILHOUETTE_AVATAR_URL;
+  }
 };
 
-// Create the store with persistence
-const useHangStore = create<HangState>()(
+const useHangStore = create<HangState>(
   persist(
     (set, get) => ({
-      user: defaultUser,
+      user: {
+        id: '',
+        name: '',
+        username: '',
+        vibe: '',
+        avatar: getDefaultAvatar(),
+        status: 'offline',
+        activity: ''
+      },
       friends: [],
       offlineFriends: [],
       selectedFriends: [],
       pingedFriends: [],
       isAvailable: false,
       activity: '',
-      
-      setActivity: (activity) => set({ activity }),
-      
+
+      setActivity: (activity: string) => set({ activity }),
+
       toggleAvailability: () => {
-        const currentStatus = get().isAvailable;
-        set({ 
-          isAvailable: !currentStatus,
-          user: {
-            ...get().user,
-            status: !currentStatus ? 'online' : 'offline'
-          }
-        });
-        
-        // If turning off availability, clear activity and selected friends
-        if (currentStatus) {
-          set({ 
-            activity: '',
-            selectedFriends: [],
-            pingedFriends: []
-          });
+        const { isAvailable } = get();
+        set({ isAvailable: !isAvailable });
+      },
+
+      selectFriend: (id: string) => {
+        const { selectedFriends } = get();
+        if (!selectedFriends.includes(id)) {
+          set({ selectedFriends: [...selectedFriends, id] });
         }
       },
-      
-      selectFriend: (id) => {
+
+      unselectFriend: (id: string) => {
         const { selectedFriends } = get();
-        const safeFriends = selectedFriends || [];
-        if (!safeFriends.includes(id)) {
-          set({ selectedFriends: [...safeFriends, id] });
-        }
+        set({ selectedFriends: selectedFriends.filter(friendId => friendId !== id) });
       },
-      
-      unselectFriend: (id) => {
-        const { selectedFriends } = get();
-        const safeFriends = selectedFriends || [];
-        set({ 
-          selectedFriends: safeFriends.filter(friendId => friendId !== id) 
-        });
-      },
-      
+
       clearSelectedFriends: () => set({ selectedFriends: [] }),
-      
-      isSelectedFriend: (id) => {
+
+      isSelectedFriend: (id: string) => {
         const { selectedFriends } = get();
-        const safeFriends = selectedFriends || [];
-        return safeFriends.includes(id);
+        return selectedFriends.includes(id);
       },
-      
-      pingFriend: (id) => {
+
+      pingFriend: (id: string) => {
         const { pingedFriends } = get();
-        const safePinged = pingedFriends || [];
-        if (!safePinged.includes(id)) {
-          set({ pingedFriends: [...safePinged, id] });
+        if (!pingedFriends.includes(id)) {
+          set({ pingedFriends: [...pingedFriends, id] });
         }
       },
-      
-      unpingFriend: (id) => {
+
+      unpingFriend: (id: string) => {
         const { pingedFriends } = get();
-        const safePinged = pingedFriends || [];
-        set({
-          pingedFriends: safePinged.filter(friendId => friendId !== id)
-        });
+        set({ pingedFriends: pingedFriends.filter(friendId => friendId !== id) });
       },
-      
-      isPingedFriend: (id) => {
+
+      isPingedFriend: (id: string) => {
         const { pingedFriends } = get();
-        const safePinged = pingedFriends || [];
-        return safePinged.includes(id);
+        return pingedFriends.includes(id);
       },
 
       loadUserData: async () => {
@@ -142,7 +130,7 @@ const useHangStore = create<HangState>()(
             .from('users')
             .select('*')
             .eq('id', authUser.id)
-            .maybeSingle();
+            .single();
 
           if (error) {
             console.error('Error loading user data:', error);
@@ -154,7 +142,9 @@ const useHangStore = create<HangState>()(
               user: {
                 id: userData.id,
                 name: userData.name,
-                avatar: userData.avatar_url || defaultUser.avatar,
+                username: userData.username,
+                vibe: userData.vibe,
+                avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
                 status: 'offline',
                 activity: ''
               }
@@ -185,7 +175,9 @@ const useHangStore = create<HangState>()(
                 user: {
                   id: newUserData.id,
                   name: newUserData.name,
-                  avatar: newUserData.avatar_url || defaultUser.avatar,
+                  username: newUserData.username,
+                  vibe: newUserData.vibe,
+                  avatar: newUserData.avatar_url || getDefaultAvatar(newUserData.name, newUserData.id),
                   status: 'offline',
                   activity: ''
                 }
@@ -202,57 +194,203 @@ const useHangStore = create<HangState>()(
           const { data: { user: authUser } } = await supabase.auth.getUser();
           if (!authUser) return;
 
-          // Load friends with their status
-          const { data: friendsData, error } = await supabase
-            .from('friends')
+          // Query friendships table with proper joins
+          const { data: friendships, error: friendshipsError } = await supabase
+            .from('friendships')
             .select(`
               friend_id,
-              users!friends_friend_id_fkey (
+              friend_user:users!friendships_friend_id_fkey (
                 id,
                 name,
+                username,
                 avatar_url,
-                user_status (
-                  is_available,
-                  activity,
-                  last_seen
-                )
+                status
               )
             `)
-            .eq('user_id', authUser.id)
-            .eq('status', 'accepted');
+            .eq('user_id', authUser.id);
 
-          if (error) {
-            console.error('Error loading friends:', error);
+          if (friendshipsError) {
+            console.error('Error loading friendships:', friendshipsError);
             return;
           }
 
-          const friends: Friend[] = [];
-          const offlineFriends: Friend[] = [];
+          // Also query reverse friendships (where current user is the friend)
+          const { data: reverseFriendships, error: reverseError } = await supabase
+            .from('friendships')
+            .select(`
+              user_id,
+              user:users!friendships_user_id_fkey (
+                id,
+                name,
+                username,
+                avatar_url,
+                status
+              )
+            `)
+            .eq('friend_id', authUser.id);
 
-          friendsData?.forEach((friendship: any) => {
-            const friend = friendship.users;
-            if (friend) {
-              const friendData: Friend = {
-                id: friend.id,
-                name: friend.name,
-                avatar: friend.avatar_url || defaultUser.avatar,
-                status: friend.user_status?.is_available ? 'online' : 'offline',
-                activity: friend.user_status?.activity || '',
-                lastSeen: friend.user_status?.last_seen,
-                lastActive: friend.user_status?.last_seen
-              };
+          if (reverseError) {
+            console.error('Error loading reverse friendships:', reverseError);
+            return;
+          }
 
-              if (friendData.status === 'online') {
-                friends.push(friendData);
-              } else {
-                offlineFriends.push(friendData);
+          // Combine both directions and remove duplicates
+          const allFriendData: any[] = [];
+          const seenIds = new Set<string>();
+          
+          if (friendships) {
+            friendships.forEach((f: any) => {
+              if (f.friend_user && !seenIds.has(f.friend_user.id)) {
+                seenIds.add(f.friend_user.id);
+                allFriendData.push({
+                  id: f.friend_user.id,
+                  name: f.friend_user.name,
+                  username: f.friend_user.username,
+                  avatar: f.friend_user.avatar_url || getDefaultAvatar(f.friend_user.name, f.friend_user.id),
+                  status: f.friend_user.status === 'available' ? 'available' : 'offline',
+                  activity: '',
+                  lastActive: 'Recently'
+                });
               }
-            }
+            });
+          }
+
+          if (reverseFriendships) {
+            reverseFriendships.forEach((f: any) => {
+              if (f.user && !seenIds.has(f.user.id)) {
+                seenIds.add(f.user.id);
+                allFriendData.push({
+                  id: f.user.id,
+                  name: f.user.name,
+                  username: f.user.username,
+                  avatar: f.user.avatar_url || getDefaultAvatar(f.user.name, f.user.id),
+                  status: f.user.status === 'available' ? 'available' : 'offline',
+                  activity: '',
+                  lastActive: 'Recently'
+                });
+              }
+            });
+          }
+
+          // Separate available and offline friends
+          const availableFriends = allFriendData.filter(f => f.status === 'available');
+          const offlineFriends = allFriendData.filter(f => f.status === 'offline');
+
+          set({ 
+            friends: availableFriends,
+            offlineFriends: offlineFriends 
           });
 
-          set({ friends, offlineFriends });
+          console.log('Friends loaded successfully:', { available: availableFriends.length, offline: offlineFriends.length });
         } catch (error) {
-          console.error('Error in loadFriends:', error);
+          console.error('Error loading friends:', error);
+          // Set empty arrays on error to prevent UI issues
+          set({ 
+            friends: [],
+            offlineFriends: [] 
+          });
+        }
+      },
+
+      updateUserData: async (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) return false;
+
+          // Use backend API to update user data
+          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+          const response = await fetch(`${backendUrl}/user/me`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify(updates)
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Error updating user via backend:', errorData);
+            return false;
+          }
+
+          const responseData = await response.json();
+          const userData = responseData.user;
+
+          if (userData) {
+            set({
+              user: {
+                id: userData.id,
+                name: userData.name,
+                username: userData.username,
+                vibe: userData.vibe,
+                avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
+                status: 'offline',
+                activity: ''
+              }
+            });
+            return true;
+          }
+
+          return false;
+        } catch (error) {
+          console.error('Error in updateUserData:', error);
+          
+          // Fallback to direct database update if backend fails
+          try {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) return false;
+
+            const { data: userData, error } = await supabase
+              .from('users')
+              .update(updates)
+              .eq('id', authUser.id)
+              .select()
+              .single();
+
+            if (error) {
+              console.error('Error updating user data directly:', error);
+              return false;
+            }
+
+            if (userData) {
+              set({
+                user: {
+                  id: userData.id,
+                  name: userData.name,
+                  username: userData.username,
+                  vibe: userData.vibe,
+                  avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
+                  status: 'offline',
+                  activity: ''
+                }
+              });
+              return true;
+            }
+          } catch (fallbackError) {
+            console.error('Fallback update also failed:', fallbackError);
+          }
+
+          return false;
+        }
+      },
+
+      startRealTimeUpdates: () => {
+        // Clear any existing interval
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+        }
+        
+        // Start refreshing friends every second
+        refreshInterval = setInterval(() => {
+          get().loadFriends();
+        }, 1000);
+      },
+
+      stopRealTimeUpdates: () => {
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+          refreshInterval = null;
         }
       }
     }),
