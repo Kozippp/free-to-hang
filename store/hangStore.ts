@@ -68,26 +68,7 @@ const getDefaultAvatar = (name?: string, userId?: string) => {
   return `https://via.placeholder.com/150/${bgColor}/ffffff?text=${initials}`;
 };
 
-// Helper function to make backend calls with timeout
-const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = 5000): Promise<Response> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    throw error;
-  }
-};
-
-const useHangStore = create<HangState>()(
-  persist(
+const useHangStore = create<HangState>()(n  persist(
     (set, get) => ({
       user: {
         id: '',
@@ -282,81 +263,44 @@ const useHangStore = create<HangState>()(
 
       updateUserData: async (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) return false;
+          console.log('Attempting to update user data:', updates);
+          
+          // Try direct database update first (more reliable)
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) {
+            console.error('No authenticated user found');
+            return false;
+          }
 
-          // Try backend API first with timeout, but don't block if it fails
-          let backendSuccess = false;
-          try {
-            const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://web-production-ac8a.up.railway.app';
-            const response = await fetchWithTimeout(`${backendUrl}/user/me`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`
-              },
-              body: JSON.stringify(updates)
-            }, 5000); // 5 second timeout
+          const { data: userData, error } = await supabase
+            .from('users')
+            .update(updates)
+            .eq('id', authUser.id)
+            .select()
+            .single();
 
-            if (response.ok) {
-              const responseData = await response.json();
-              const userData = responseData.user;
+          if (error) {
+            console.error('Error updating user data directly:', error);
+            return false;
+          }
 
-              if (userData) {
-                set({
-                  user: {
-                    id: userData.id,
-                    name: userData.name,
-                    username: userData.username,
-                    vibe: userData.vibe,
-                    avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
-                    status: 'offline',
-                    activity: ''
-                  }
-                });
-                backendSuccess = true;
+          if (userData) {
+            console.log('User data updated successfully:', userData);
+            set({
+              user: {
+                id: userData.id,
+                name: userData.name,
+                username: userData.username,
+                vibe: userData.vibe,
+                avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
+                status: 'offline',
+                activity: ''
               }
-            } else {
-              console.warn('Backend API returned error status:', response.status);
-            }
-          } catch (backendError) {
-            console.warn('Backend API call failed, falling back to direct database update:', backendError);
+            });
+            return true;
           }
 
-          // If backend failed, use direct database update
-          if (!backendSuccess) {
-            const { data: { user: authUser } } = await supabase.auth.getUser();
-            if (!authUser) return false;
-
-            const { data: userData, error } = await supabase
-              .from('users')
-              .update(updates)
-              .eq('id', authUser.id)
-              .select()
-              .single();
-
-            if (error) {
-              console.error('Error updating user data directly:', error);
-              return false;
-            }
-
-            if (userData) {
-              set({
-                user: {
-                  id: userData.id,
-                  name: userData.name,
-                  username: userData.username,
-                  vibe: userData.vibe,
-                  avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
-                  status: 'offline',
-                  activity: ''
-                }
-              });
-              return true;
-            }
-          }
-
-          return backendSuccess;
+          return false;
         } catch (error) {
           console.error('Error in updateUserData:', error);
           return false;
