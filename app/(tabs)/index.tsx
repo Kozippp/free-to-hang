@@ -3,66 +3,87 @@ import {
   StyleSheet, 
   View, 
   Text, 
-  SafeAreaView, 
-  ScrollView, 
+  FlatList, 
   TouchableOpacity, 
+  SafeAreaView, 
+  Image,
   Animated,
+  LayoutAnimation,
   Platform,
+  Alert,
+  Modal,
+  TextInput,
+  ScrollView,
+  PanResponder,
+  Dimensions,
   RefreshControl
 } from 'react-native';
+import { 
+  MessageCircle, 
+  MoreHorizontal, 
+  Activity, 
+  Clock, 
+  Search, 
+  UserPlus, 
+  X,
+  Check,
+  Volume2,
+  VolumeX,
+  Archive,
+  Heart,
+  ArrowUpRight,
+  Vibrate,
+  Settings
+} from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Settings, UserPlus } from 'lucide-react-native';
-
 import Colors from '@/constants/colors';
 import StatusToggle from '@/components/StatusToggle';
 import UserStatusBar from '@/components/UserStatusBar';
-import FriendCard from '@/components/FriendCard';
 import ActivityModal from '@/components/ActivityModal';
-import PlanBuilderSheet from '@/components/PlanBuilderSheet';
+import PingOfflineModal from '@/components/PingOfflineModal';
+import InviteShareModal from '@/components/InviteShareModal';
+import PlanSuggestionSheet from '@/components/plans/PlanSuggestionSheet';
+import FriendCard from '@/components/FriendCard';
 import AddFriendsModal from '@/components/friends/AddFriendsModal';
 import useHangStore from '@/store/hangStore';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function HangScreen() {
-  const router = useRouter();
-  const { user: authUser } = useAuth();
   const { 
-    user,
+    user, 
     friends, 
     offlineFriends,
+    isAvailable, 
+    activity, 
     selectedFriends,
     pingedFriends,
-    isAvailable, 
-    activity,
+    toggleAvailability, 
     setActivity,
-    toggleAvailability,
     selectFriend,
     unselectFriend,
     isSelectedFriend,
+    clearSelectedFriends,
     loadUserData,
     loadFriends,
     startRealTimeUpdates,
     stopRealTimeUpdates
   } = useHangStore();
   
+  const { user: authUser } = useAuth();
+  const router = useRouter();
+  
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
-  const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  
+  const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
   // Load user data when component mounts or auth user changes
   useEffect(() => {
     if (authUser) {
-      // Add a small delay to ensure everything is ready
-      const timer = setTimeout(() => {
-        loadUserData();
-        loadFriends();
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+      loadUserData();
+      loadFriends();
     }
   }, [authUser]);
   
@@ -85,18 +106,14 @@ export default function HangScreen() {
   
   // Add real-time updates effect
   useEffect(() => {
-    if (authUser) {
-      // Start real-time updates only after user is authenticated and data is loaded
-      const timer = setTimeout(() => {
-        startRealTimeUpdates();
-      }, 2000);
-      
-      return () => {
-        clearTimeout(timer);
-        stopRealTimeUpdates();
-      };
-    }
-  }, [authUser, startRealTimeUpdates, stopRealTimeUpdates]);
+    // Start real-time updates when component mounts
+    startRealTimeUpdates();
+    
+    // Cleanup when component unmounts
+    return () => {
+      stopRealTimeUpdates();
+    };
+  }, [startRealTimeUpdates, stopRealTimeUpdates]);
   
   const handleToggle = () => {
     if (!isAvailable) {
@@ -260,53 +277,71 @@ export default function HangScreen() {
                   </View>
                 )}
                 
-                {/* Plan Builder Button */}
-                {safeSelectedFriends.length > 0 && (
-                  <View style={styles.planBuilderContainer}>
+                {/* Add invite friends section at the bottom */}
+                {getAllFriends().length > 0 && (
+                  <View style={styles.inviteFriendsSection}>
+                    <Text style={styles.inviteFriendsTitle}>
+                      Want to see more friends here?
+                    </Text>
                     <TouchableOpacity 
-                      style={styles.planBuilderButton}
-                      onPress={() => handleOpenPlanBuilder(false)}
+                      style={styles.inviteFriendsButtonSmall}
+                      onPress={() => setShowAddFriendsModal(true)}
                     >
-                      <Text style={styles.planBuilderButtonText}>
-                        Suggest a hang with {safeSelectedFriends.length} friend{safeSelectedFriends.length > 1 ? 's' : ''}
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={styles.anonymousPlanButton}
-                      onPress={() => handleOpenPlanBuilder(true)}
-                    >
-                      <Text style={styles.anonymousPlanButtonText}>
-                        Send anonymous hang suggestion
-                      </Text>
+                      <UserPlus size={16} color={Colors.light.primary} style={styles.inviteFriendsIconSmall} />
+                      <Text style={styles.inviteFriendsTextSmall}>Add Friends</Text>
                     </TouchableOpacity>
                   </View>
                 )}
               </ScrollView>
             </Animated.View>
           )}
+          
+          {isAvailable && safeSelectedFriends.length > 0 && (
+            <View style={styles.actionButtonsContainer}>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.suggestButton, styles.buttonFlex]}
+                  onPress={() => handleOpenPlanBuilder(false)}
+                >
+                  <Text style={styles.suggestButtonText}>Create Plan</Text>
+                </TouchableOpacity>
+                
+                {safeSelectedFriends.length >= 2 && (
+                  <TouchableOpacity
+                    style={[styles.anonymousButton, styles.buttonFlex]}
+                    onPress={() => handleOpenPlanBuilder(true)}
+                  >
+                    <Text style={styles.anonymousButtonText}>Anonymous Plan</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
         </ScrollView>
-        
-        {/* Modals */}
-        <ActivityModal
-          visible={showActivityModal}
-          onClose={() => setShowActivityModal(false)}
-          onSubmit={handleActivitySubmit}
-        />
-        
-        <PlanBuilderSheet
-          visible={showPlanSheet}
-          onClose={handleClosePlanSheet}
-          selectedFriends={selectedFriendsData}
-          isAnonymous={isAnonymousPlan}
-          onPlanSubmitted={handlePlanSubmitted}
-        />
-        
-        <AddFriendsModal
-          visible={showAddFriendsModal}
-          onClose={() => setShowAddFriendsModal(false)}
-        />
       </SafeAreaView>
+      
+      <ActivityModal
+        visible={showActivityModal}
+        onClose={() => setShowActivityModal(false)}
+        onSubmit={handleActivitySubmit}
+        initialActivity={activity}
+      />
+      
+      <PlanSuggestionSheet
+        visible={showPlanSheet}
+        onClose={handleClosePlanSheet}
+        selectedFriends={selectedFriendsData as any}
+        isAnonymous={isAnonymousPlan}
+        availableFriends={friends.filter(friend => 
+          !safeSelectedFriends.includes(friend.id) && friend.status === 'available'
+        )}
+        onPlanSubmitted={handlePlanSubmitted}
+      />
+      
+      <AddFriendsModal
+        visible={showAddFriendsModal}
+        onClose={() => setShowAddFriendsModal(false)}
+      />
     </>
   );
 }
@@ -314,36 +349,33 @@ export default function HangScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.background,
+    padding: 16,
   },
   scrollView: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
+    padding: 16,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: Colors.light.primary,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   addFriendsButton: {
-    backgroundColor: Colors.light.primary,
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: Colors.light.primary,
+    padding: 8,
+    borderRadius: 10,
   },
   profileButton: {
     padding: 8,
@@ -352,37 +384,36 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 60,
+    gap: 40,
   },
   offlineTitle: {
     fontSize: 18,
-    textAlign: 'center',
+    fontWeight: '500',
     color: Colors.light.text,
-    marginBottom: 40,
-    lineHeight: 24,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    lineHeight: 26,
   },
   onlineContainer: {
     flex: 1,
-    paddingHorizontal: 20,
   },
   friendsTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-    marginTop: 30,
     marginBottom: 8,
   },
   friendsDescription: {
-    fontSize: 16,
-    color: Colors.light.textSecondary,
-    marginBottom: 20,
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginBottom: 16,
   },
   friendsList: {
     flex: 1,
   },
   emptyFriendsContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 40,
     paddingHorizontal: 20,
   },
@@ -390,61 +421,94 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-    textAlign: 'center',
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptyFriendsDescription: {
-    fontSize: 16,
-    color: Colors.light.textSecondary,
+    fontSize: 14,
+    color: Colors.light.secondaryText,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   inviteFriendsButton: {
-    backgroundColor: Colors.light.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
   },
   inviteFriendsIcon: {
-    marginRight: 4,
+    marginRight: 8,
   },
   inviteFriendsText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  planBuilderContainer: {
+  inviteFriendsSection: {
     marginTop: 20,
     marginBottom: 40,
-    gap: 12,
-  },
-  planBuilderButton: {
-    backgroundColor: Colors.light.primary,
+    alignItems: 'center',
     paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  inviteFriendsTitle: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  inviteFriendsButtonSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.light.primary}10`,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  inviteFriendsIconSmall: {
+    marginRight: 6,
+  },
+  inviteFriendsTextSmall: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  actionButtonsContainer: {
+    padding: 16,
+    backgroundColor: Colors.light.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  buttonFlex: {
+    flex: 1,
+  },
+  suggestButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  planBuilderButtonText: {
+  suggestButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  anonymousPlanButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: Colors.light.primary,
+  anonymousButton: {
+    backgroundColor: Colors.light.secondary,
     paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  anonymousPlanButtonText: {
-    color: Colors.light.primary,
+  anonymousButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
