@@ -1,24 +1,68 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 const userRoutes = require('./routes/user');
+const friendsRoutes = require('./routes/friends');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
 
+// Security middleware
+app.use(helmet());
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Liiga palju päringuid, proovi hiljem uuesti'
+});
+app.use(limiter);
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://your-expo-app.com'] // Asenda oma äpi URL-iga
+    : ['http://localhost:8081', 'http://localhost:19006', 'exp://localhost:8081'],
+  credentials: true
+};
+app.use(cors(corsOptions));
+
+app.use(express.json({ limit: '10mb' }));
+
+// Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Health check endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'Server töötab!' });
+  res.json({ 
+    message: 'Free to Hang API töötab!',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
 });
 
+// API routes
 app.use('/user', userRoutes);
+app.use('/friends', friendsRoutes);
 
-app.listen(3000, () => {
-  console.log('Server kuulab pordil 3000');
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint ei leitud' });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Serveri viga' });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server töötab pordil ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 }); 
