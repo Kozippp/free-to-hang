@@ -17,7 +17,9 @@
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-community/datetimepicker": "8.3.0",
     "@react-navigation/native": "^7.1.6",
-    "@supabase/supabase-js": "^2.49.10",
+    "@supabase/supabase-js": "^2.50.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
     "expo": "^53.0.11",
     "expo-blur": "^14.1.5",
     "expo-clipboard": "^7.1.4",
@@ -36,6 +38,7 @@
     "expo-symbols": "^0.4.5",
     "expo-system-ui": "^5.0.8",
     "expo-web-browser": "~14.1.6",
+    "express": "^5.1.0",
     "lucide-react-native": "^0.294.0",
     "nativewind": "^4.1.23",
     "prop-types": "^15.8.1",
@@ -57,5 +60,22 @@
     "@types/react": "~19.0.10",
     "typescript": "~5.8.3"
   },
-  "private": true
+  "private": true,
+  "description": "Eesti keelne sotsiaalse planeerimise äpp, mis aitab sõpradel leida aega ühiseks kohtumiseks.",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kozippp/free-to-hang.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Kozippp/free-to-hang/issues"
+  },
+  "homepage": "https://github.com/Kozippp/free-to-hang#readme"
 }
