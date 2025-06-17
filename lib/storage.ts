@@ -21,10 +21,10 @@ export async function uploadImage(
       throw new Error('User not authenticated');
     }
 
-    // Create unique filename
+    // Create unique filename with user ID folder structure
     const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-    const fileName = `${user.id}_${Date.now()}.${fileExt}`;
-    const filePath = `${folder}/${fileName}`;
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = `${user.id}/${fileName}`;
 
     // Convert URI to blob for upload
     const response = await fetch(uri);

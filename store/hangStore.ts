@@ -350,20 +350,28 @@ const useHangStore = create<HangState>()(
 
       updateUserData: async (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => {
         try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (!authUser) return false;
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) return false;
 
-          const { data: userData, error } = await supabase
-            .from('users')
-            .update(updates)
-            .eq('id', authUser.id)
-            .select()
-            .single();
+          // Use backend API to update user data
+          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://web-production-ac8a.up.railway.app';
+          const response = await fetch(`${backendUrl}/user/me`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify(updates)
+          });
 
-          if (error) {
-            console.error('Error updating user data:', error);
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Error updating user via backend:', errorData);
             return false;
           }
+
+          const responseData = await response.json();
+          const userData = responseData.user;
 
           if (userData) {
             set({
@@ -378,44 +386,47 @@ const useHangStore = create<HangState>()(
               }
             });
             return true;
-          } else {
-            // User profile doesn't exist, create one
-            console.log('No user profile found, creating one...');
-            const { data: newUserData, error: createError } = await supabase
+          }
+
+          return false;
+        } catch (error) {
+          console.error('Error in updateUserData:', error);
+          
+          // Fallback to direct database update if backend fails
+          try {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) return false;
+
+            const { data: userData, error } = await supabase
               .from('users')
-              .insert([
-                {
-                  id: authUser.id,
-                  email: authUser.email || '',
-                  name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-                  username: authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'user'
-                }
-              ])
+              .update(updates)
+              .eq('id', authUser.id)
               .select()
               .single();
 
-            if (createError) {
-              console.error('Error creating user profile:', createError);
+            if (error) {
+              console.error('Error updating user data directly:', error);
               return false;
             }
 
-            if (newUserData) {
+            if (userData) {
               set({
                 user: {
-                  id: newUserData.id,
-                  name: newUserData.name,
-                  username: newUserData.username,
-                  avatar: newUserData.avatar_url || getDefaultAvatar(newUserData.name, newUserData.id),
+                  id: userData.id,
+                  name: userData.name,
+                  username: userData.username,
+                  vibe: userData.vibe,
+                  avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
                   status: 'offline',
                   activity: ''
                 }
               });
               return true;
             }
+          } catch (fallbackError) {
+            console.error('Fallback update also failed:', fallbackError);
           }
-          return false;
-        } catch (error) {
-          console.error('Error in updateUserData:', error);
+
           return false;
         }
       },
