@@ -350,30 +350,27 @@ const useHangStore = create<HangState>()(
 
       updateUserData: async (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) return false;
-
-          // Use backend API to update user data
-          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://web-production-ac8a.up.railway.app';
-          const response = await fetch(`${backendUrl}/user/me`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify(updates)
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Error updating user via backend:', errorData);
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) {
+            console.error('No authenticated user found');
             return false;
           }
 
-          const responseData = await response.json();
-          const userData = responseData.user;
+          // Direct Supabase update - simple and reliable
+          const { data: userData, error } = await supabase
+            .from('users')
+            .update(updates)
+            .eq('id', authUser.id)
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error updating user data:', error);
+            return false;
+          }
 
           if (userData) {
+            // Update local state with new data
             set({
               user: {
                 id: userData.id,
@@ -385,48 +382,14 @@ const useHangStore = create<HangState>()(
                 activity: ''
               }
             });
+            
+            console.log('User data updated successfully:', userData);
             return true;
           }
 
           return false;
         } catch (error) {
           console.error('Error in updateUserData:', error);
-          
-          // Fallback to direct database update if backend fails
-          try {
-            const { data: { user: authUser } } = await supabase.auth.getUser();
-            if (!authUser) return false;
-
-            const { data: userData, error } = await supabase
-              .from('users')
-              .update(updates)
-              .eq('id', authUser.id)
-              .select()
-              .single();
-
-            if (error) {
-              console.error('Error updating user data directly:', error);
-              return false;
-            }
-
-            if (userData) {
-              set({
-                user: {
-                  id: userData.id,
-                  name: userData.name,
-                  username: userData.username,
-                  vibe: userData.vibe,
-                  avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
-                  status: 'offline',
-                  activity: ''
-                }
-              });
-              return true;
-            }
-          } catch (fallbackError) {
-            console.error('Fallback update also failed:', fallbackError);
-          }
-
           return false;
         }
       },
