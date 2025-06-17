@@ -24,7 +24,7 @@ app.use(limiter);
 // CORS configuration
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-expo-app.com'] // Asenda oma äpi URL-iga
+    ? true // Allow all origins in production for Expo Go compatibility
     : ['http://localhost:8081', 'http://localhost:19006', 'exp://localhost:8081'],
   credentials: true
 };
