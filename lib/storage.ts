@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 export interface UploadResult {
   url: string;
@@ -26,9 +27,21 @@ export async function uploadImage(
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `${user.id}/${fileName}`;
 
-    // Convert URI to blob for upload
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    // Read file as base64 and convert to blob (Expo-compatible way)
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    
+    // Convert base64 to blob
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: `image/${fileExt}` });
+
+    console.log('Uploading image:', { filePath, size: blob.size, type: blob.type });
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
@@ -39,6 +52,7 @@ export async function uploadImage(
       });
 
     if (error) {
+      console.error('Supabase upload error:', error);
       throw error;
     }
 
@@ -46,6 +60,8 @@ export async function uploadImage(
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
       .getPublicUrl(filePath);
+
+    console.log('Image uploaded successfully:', publicUrl);
 
     return {
       url: publicUrl,
