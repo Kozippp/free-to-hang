@@ -55,7 +55,7 @@ import AddFriendsModal from '@/components/friends/AddFriendsModal';
 import UserProfileModal from '@/components/UserProfileModal';
 import useFriendsStore from '@/store/friendsStore';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
-import { uploadImage } from '@/lib/storage';
+import { uploadImage, deleteImage } from '@/lib/storage';
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
@@ -303,8 +303,20 @@ export default function ProfileScreen() {
     }
   };
 
+  // Helper function to extract file path from Supabase URL
+  const extractPathFromUrl = (url: string): string | null => {
+    try {
+      // Extract path from Supabase Storage URL
+      const urlParts = url.split('/storage/v1/object/public/avatars/');
+      return urlParts[1] || null;
+    } catch (error) {
+      console.error('Error extracting path from URL:', error);
+      return null;
+    }
+  };
+
   const handleChangeProfilePicture = async () => {
-    const processAvatarUpdate = async (avatarUrl: string) => {
+    const processAvatarUpdate = async (avatarUrl: string, oldAvatarUrl?: string) => {
       // Save to database first
       const updateSuccess = await updateUserData({
         avatar_url: avatarUrl,
@@ -324,10 +336,33 @@ export default function ProfileScreen() {
         // Also reload friends to update their view of your avatar
         await loadFriends();
         
+        // Delete old avatar if it exists and is not a default avatar
+        if (oldAvatarUrl && !oldAvatarUrl.includes('gravatar') && !oldAvatarUrl.includes('default')) {
+          try {
+            const oldPath = extractPathFromUrl(oldAvatarUrl);
+            if (oldPath) {
+              await deleteImage(oldPath);
+              console.log('Old avatar deleted successfully');
+            }
+          } catch (error) {
+            console.error('Failed to delete old avatar:', error);
+          }
+        }
+        
         console.log('Avatar saved to database successfully');
-        Alert.alert('Success', 'Profile picture updated!');
+        Alert.alert('Success!', 'Profile picture updated!');
       } else {
-        Alert.alert('Error', 'Failed to update profile picture');
+        // Rollback: delete the uploaded image since database update failed
+        try {
+          const uploadedPath = extractPathFromUrl(avatarUrl);
+          if (uploadedPath) {
+            await deleteImage(uploadedPath);
+            console.log('Uploaded image deleted due to database update failure');
+          }
+        } catch (deleteError) {
+          console.error('Failed to delete uploaded image during rollback:', deleteError);
+        }
+        Alert.alert('Error', 'Failed to update profile picture. Please try again.');
       }
     };
 
@@ -355,19 +390,18 @@ export default function ProfileScreen() {
               const asset = result.assets[0];
               console.log('New avatar selected from camera:', asset.uri);
               
-              // Upload to storage first
-              const uploadResult = await uploadImage(asset.uri);
-              
-              if (uploadResult.error) {
-                console.error('Upload error:', uploadResult.error);
-                Alert.alert('Upload Error', uploadResult.error);
+              try {
+                // Upload to storage first
+                const uploadResult = await uploadImage(asset.uri);
+                const avatarUrl = uploadResult.url;
+                console.log('Avatar uploaded successfully:', avatarUrl);
+                
+                await processAvatarUpdate(avatarUrl, user.avatar);
+              } catch (error) {
+                console.error('Upload error:', error);
+                Alert.alert('Upload Error', 'Failed to upload image. Please try again.');
                 return;
               }
-              
-              const avatarUrl = uploadResult.url!;
-              console.log('Avatar uploaded successfully:', avatarUrl);
-              
-              await processAvatarUpdate(avatarUrl);
             }
           }
         },
@@ -391,19 +425,18 @@ export default function ProfileScreen() {
               const asset = result.assets[0];
               console.log('New avatar selected from gallery:', asset.uri);
               
-              // Upload to storage first
-              const uploadResult = await uploadImage(asset.uri);
-              
-              if (uploadResult.error) {
-                console.error('Upload error:', uploadResult.error);
-                Alert.alert('Upload Error', uploadResult.error);
+              try {
+                // Upload to storage first
+                const uploadResult = await uploadImage(asset.uri);
+                const avatarUrl = uploadResult.url;
+                console.log('Avatar uploaded successfully:', avatarUrl);
+                
+                await processAvatarUpdate(avatarUrl, user.avatar);
+              } catch (error) {
+                console.error('Upload error:', error);
+                Alert.alert('Upload Error', 'Failed to upload image. Please try again.');
                 return;
               }
-              
-              const avatarUrl = uploadResult.url!;
-              console.log('Avatar uploaded successfully:', avatarUrl);
-              
-              await processAvatarUpdate(avatarUrl);
             }
           }
         },
@@ -444,18 +477,18 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     Alert.alert(
-      'Logi välja',
-      'Kas oled kindel, et tahad välja logida?',
+      'Log out',
+      'Are you sure you want to log out?',
       [
-        { text: 'Tühista', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Logi välja', 
+          text: 'Log out', 
           style: 'destructive',
           onPress: async () => {
             try {
               await signOut();
             } catch (error) {
-              Alert.alert('Viga', 'Väljalogimine ebaõnnestus');
+              Alert.alert('Error', 'Failed to log out');
             }
           }
         }
