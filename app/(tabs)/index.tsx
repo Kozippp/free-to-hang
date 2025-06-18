@@ -64,9 +64,7 @@ export default function HangScreen() {
     isSelectedFriend,
     clearSelectedFriends,
     loadUserData,
-    loadFriends,
-    startRealTimeUpdates,
-    stopRealTimeUpdates
+    loadFriends
   } = useHangStore();
   
   const { user: authUser } = useAuth();

@@ -59,7 +59,7 @@ import { uploadImage, deleteImage } from '@/lib/storage';
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
-  const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData, startRealTimeUpdates, stopRealTimeUpdates } = useHangStore();
+  const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
   const { 
     friendRequests,
     friends: storeFriends,

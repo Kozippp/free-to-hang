@@ -24,7 +24,11 @@ export default function TabLayout() {
 
   // 🌍 START GLOBAL REALTIME ON LAYOUT MOUNT
   useEffect(() => {
+    let isMounted = true;
+    
     const startRealtime = async () => {
+      if (!isMounted) return;
+      
       console.log('🚀 Starting global realtime systems...');
       
       // Start both realtime systems
@@ -36,6 +40,7 @@ export default function TabLayout() {
     
     // Cleanup when layout unmounts
     return () => {
+      isMounted = false;
       console.log('⏹️ Stopping global realtime systems...');
       stopHangRealtime();
       stopFriendsRealtime();

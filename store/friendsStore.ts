@@ -80,6 +80,7 @@ interface FriendsState {
 let relationshipsChannel: any = null;
 let ghostingChannel: any = null;
 let isStartingRealTime = false; // Flag to prevent multiple simultaneous starts
+let isSubscribed = false; // Flag to track subscription status
 
 const useFriendsStore = create<FriendsState>((set, get) => ({
   friends: [],
@@ -421,8 +422,8 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
   // Improved real-time subscriptions - Fixed infinite retry loop
   startRealTimeUpdates: async () => {
     // Prevent multiple simultaneous subscription attempts
-    if (isStartingRealTime) {
-      console.log('🛑 Real-time subscription already in progress, skipping...');
+    if (isStartingRealTime || isSubscribed) {
+      console.log('🛑 Real-time subscription already active or in progress, skipping...');
       return;
     }
     
@@ -506,12 +507,18 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           
           if (status === 'SUBSCRIBED') {
             console.log('✅ Real-time updates active');
+            isSubscribed = true;
           } else if (status === 'CHANNEL_ERROR') {
             console.log('❌ Real-time channel error - will NOT retry to prevent spam');
+            isSubscribed = false;
             // DO NOT retry automatically to prevent infinite loops
             // User can manually refresh if needed
           } else if (status === 'CLOSED') {
             console.log('📡 Channel closed');
+            isSubscribed = false;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Channel timed out');
+            isSubscribed = false;
           }
         });
 
@@ -521,6 +528,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       console.log('✅ Real-time subscription started');
     } catch (error) {
       console.error('❌ Error starting real-time updates:', error);
+      isSubscribed = false;
       // DO NOT retry automatically to prevent infinite loops
     } finally {
       isStartingRealTime = false;
@@ -530,17 +538,28 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
   stopRealTimeUpdates: () => {
     console.log('🛑 Stopping real-time updates...');
     
-    // Reset the flag
+    // Reset the flags
     isStartingRealTime = false;
+    isSubscribed = false;
     
     if (relationshipsChannel) {
-      supabase.removeChannel(relationshipsChannel);
-      relationshipsChannel = null;
-      console.log('✅ Real-time updates stopped');
+      try {
+        supabase.removeChannel(relationshipsChannel);
+        relationshipsChannel = null;
+        console.log('✅ Real-time updates stopped');
+      } catch (error) {
+        console.error('Error removing channel:', error);
+        relationshipsChannel = null;
+      }
     }
     if (ghostingChannel) {
-      supabase.removeChannel(ghostingChannel);
-      ghostingChannel = null;
+      try {
+        supabase.removeChannel(ghostingChannel);
+        ghostingChannel = null;
+      } catch (error) {
+        console.error('Error removing ghosting channel:', error);
+        ghostingChannel = null;
+      }
     }
   },
 
