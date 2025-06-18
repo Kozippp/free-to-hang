@@ -76,9 +76,10 @@ interface FriendsState {
   validateAndSyncState: () => Promise<void>;
 }
 
-// Realtime channel variables
-let relationshipsChannel: RealtimeChannel | null = null;
-let ghostingChannel: RealtimeChannel | null = null;
+// Global variables for real-time subscriptions
+let relationshipsChannel: any = null;
+let ghostingChannel: any = null;
+let isStartingRealTime = false; // Flag to prevent multiple simultaneous starts
 
 const useFriendsStore = create<FriendsState>((set, get) => ({
   friends: [],
@@ -417,16 +418,24 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     return ghostedFriends.find(ghost => ghost.ghosted_id === userId) || null;
   },
 
-  // Improved real-time subscriptions - Fixed for reliability
+  // Improved real-time subscriptions - Fixed infinite retry loop
   startRealTimeUpdates: async () => {
+    // Prevent multiple simultaneous subscription attempts
+    if (isStartingRealTime) {
+      console.log('🛑 Real-time subscription already in progress, skipping...');
+      return;
+    }
+    
     try {
+      isStartingRealTime = true;
+      
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         console.log('❌ No authenticated user for real-time updates');
         return;
       }
 
-      // Stop existing subscriptions first
+      // Stop existing subscriptions first - IMPORTANT: This prevents multiple subscriptions
       get().stopRealTimeUpdates();
 
       console.log('🚀 Starting real-time updates for user:', currentUser.id);
@@ -434,9 +443,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       // Load initial data
       await get().loadAllRelationships();
 
-      // Create a single channel for all friend-related updates
+      // Create a FRESH channel with unique name each time to avoid reuse
+      const channelName = `friends_realtime_${currentUser.id}_${Date.now()}`;
       const friendsChannel = supabase
-        .channel(`friends_realtime_${currentUser.id}`)
+        .channel(channelName)
         .on(
           'postgres_changes',
           {
@@ -445,7 +455,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             table: 'friend_requests'
           },
           (payload) => {
-            console.log('🔄 Friend request change:', payload.eventType, payload);
+            console.log('🔄 Friend request change:', payload.eventType);
             
             // Only process if it involves the current user
             const newData = payload.new as any;
@@ -472,7 +482,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             table: 'friendships'
           },
           (payload) => {
-            console.log('🔄 Friendship change:', payload.eventType, payload);
+            console.log('🔄 Friendship change:', payload.eventType);
             
             // Only process if it involves the current user
             const newData = payload.new as any;
@@ -493,14 +503,15 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         )
         .subscribe((status) => {
           console.log('📡 Friends channel status:', status);
+          
           if (status === 'SUBSCRIBED') {
             console.log('✅ Real-time updates active');
           } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Real-time channel error, attempting reconnect...');
-            // Retry connection after a delay
-            setTimeout(() => {
-              get().startRealTimeUpdates();
-            }, 3000);
+            console.log('❌ Real-time channel error - will NOT retry to prevent spam');
+            // DO NOT retry automatically to prevent infinite loops
+            // User can manually refresh if needed
+          } else if (status === 'CLOSED') {
+            console.log('📡 Channel closed');
           }
         });
 
@@ -510,16 +521,18 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       console.log('✅ Real-time subscription started');
     } catch (error) {
       console.error('❌ Error starting real-time updates:', error);
-      // Retry after a delay
-      setTimeout(() => {
-        console.log('🔄 Retrying real-time subscription...');
-        get().startRealTimeUpdates();
-      }, 5000);
+      // DO NOT retry automatically to prevent infinite loops
+    } finally {
+      isStartingRealTime = false;
     }
   },
 
   stopRealTimeUpdates: () => {
     console.log('🛑 Stopping real-time updates...');
+    
+    // Reset the flag
+    isStartingRealTime = false;
+    
     if (relationshipsChannel) {
       supabase.removeChannel(relationshipsChannel);
       relationshipsChannel = null;
