@@ -504,8 +504,9 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
               data={sentRequests.filter(req => !cancelledRequestIds.has(req.id))}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => {
-                // item is already a User object from friendsStore
-                return renderSearchResult({ item });
+                // Add the relationshipStatus for pending sent requests
+                const itemWithStatus = { ...item, relationshipStatus: 'pending_sent' as const };
+                return renderSearchResult({ item: itemWithStatus });
               }}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.contactsList}
