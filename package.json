@@ -10,7 +10,9 @@
     "test-email": "node scripts/test-email.js",
     "check-database": "node scripts/check-database.js",
     "debug-registration": "node scripts/debug-registration.js",
-    "migrate-onboarding": "node scripts/migrate-onboarding.js"
+    "migrate-onboarding": "node scripts/migrate-onboarding.js",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",

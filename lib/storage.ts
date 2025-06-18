@@ -27,21 +27,23 @@ export async function uploadImage(
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `${user.id}/${fileName}`;
 
-    // Read file as base64 and convert to blob (Expo-compatible way)
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    // Use FormData for React Native compatibility
+    const formData = new FormData();
     
-    // Convert base64 to blob
-    const byteCharacters = atob(base64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: `image/${fileExt}` });
+    // Create file object for React Native
+    const fileObject = {
+      uri: uri,
+      type: `image/${fileExt}`,
+      name: fileName,
+    } as any;
+    
+    formData.append('file', fileObject);
 
-    console.log('Uploading image:', { filePath, size: blob.size, type: blob.type });
+    console.log('Uploading image:', { filePath, fileName, type: `image/${fileExt}` });
+
+    // For React Native, we need to use the file URI directly
+    const response = await fetch(uri);
+    const blob = await response.blob();
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
@@ -108,7 +110,7 @@ export async function pickImage(): Promise<string | null> {
 
     // Launch image picker
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -139,6 +141,7 @@ export async function takePhoto(): Promise<string | null> {
 
     // Launch camera
     const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
