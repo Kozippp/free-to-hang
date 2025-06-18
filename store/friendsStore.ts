@@ -113,21 +113,22 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     const request = newRecord as any;
     
     if (request.receiver_id === currentUserId) {
-      // Incoming request
+      // Incoming request - someone sent me a request
       console.log('📥 New incoming friend request received');
       invalidateCache('incoming');
-      throttledUpdate('incoming', () => {
-        const store = useFriendsStore.getState();
-        store.loadIncomingRequests();
-      }, 500);
+      
+      // Immediately reload incoming requests
+      const store = useFriendsStore.getState();
+      store.loadIncomingRequests();
+      
     } else if (request.sender_id === currentUserId) {
-      // Outgoing request
+      // Outgoing request - I sent a request
       console.log('📤 New outgoing friend request sent');
       invalidateCache('outgoing');
-      throttledUpdate('outgoing', () => {
-        const store = useFriendsStore.getState();
-        store.loadOutgoingRequests();
-      }, 500);
+      
+      // Immediately reload outgoing requests
+      const store = useFriendsStore.getState();
+      store.loadOutgoingRequests();
     }
     
   } else if (eventType === 'UPDATE') {
@@ -138,8 +139,8 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
       console.log('✅ Friend request accepted - updating friends list');
       
       // Remove from appropriate request list
-      const store = useFriendsStore.getState();
-      const { incomingRequests, outgoingRequests } = store;
+      const currentStore = useFriendsStore.getState();
+      const { incomingRequests, outgoingRequests } = currentStore;
       
       if (request.receiver_id === currentUserId) {
         // I accepted someone's request
@@ -155,10 +156,7 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
       
       // Refresh friends list to include new friend
       invalidateCache('friends');
-      throttledUpdate('friends', () => {
-        const store = useFriendsStore.getState();
-        store.loadFriends();
-      }, 500);
+      currentStore.loadFriends();
     }
     
   } else if (eventType === 'DELETE') {
@@ -166,8 +164,8 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     const request = oldRecord as any;
     
     console.log('🗑️ Friend request deleted/declined');
-    const store = useFriendsStore.getState();
-    const { incomingRequests, outgoingRequests, friends } = store;
+    const deleteStore = useFriendsStore.getState();
+    const { incomingRequests, outgoingRequests, friends } = deleteStore;
     
     if (request.receiver_id === currentUserId) {
       // Someone cancelled their request to me
@@ -227,6 +225,8 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.sendFriendRequest(userId);
       if (success) {
+        console.log('🚀 Friend request sent, updating UI immediately...');
+        
         // Invalidate cache to force fresh data
         invalidateCache('outgoing');
         
@@ -240,8 +240,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           )
         });
         
-        // Force reload outgoing requests
+        // Force reload outgoing requests immediately
         await get().loadOutgoingRequests();
+        
+        console.log('✅ UI updated after sending friend request');
       }
       return success;
     } catch (error) {
