@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import useFriendsStore from '@/store/friendsStore';
 import { relationshipService, RelationshipStatus } from '@/lib/relationship-service';
-import GhostSelectionModal from '@/components/GhostSelectionModal';
+
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -121,33 +121,9 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   };
 
   const handleGhostSelection = async (duration: '1_day' | '3_days' | 'forever') => {
-    if (!user) return;
-    
+    // Ghost functionality temporarily disabled
     setShowGhostModal(false);
-    setActionLoading(true);
-    
-    try {
-      await ghostFriend(user.id, duration);
-    } catch (error) {
-      console.error('Ghost friend error:', error);
-      Alert.alert('Error', 'Failed to ghost friend');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const getGhostButtonText = () => {
-    if (!user) return 'Ghost';
-    const ghostStatus = getGhostStatus(user.id);
-    if (ghostStatus) {
-      switch (ghostStatus.duration_type) {
-        case '1_day': return 'Ghosted (1 day)';
-        case '3_days': return 'Ghosted (3 days)';
-        case 'forever': return 'Ghosted (forever)';
-        default: return 'Ghosted';
-      }
-    }
-    return 'Ghost';
+    setActionLoading(false);
   };
 
   const handleBlockUser = async () => {
@@ -435,11 +411,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
         </View>
       </SafeAreaView>
 
-      <GhostSelectionModal
-        visible={showGhostModal}
-        onClose={() => setShowGhostModal(false)}
-        onSelectDuration={handleGhostSelection}
-      />
+
     </Modal>
   );
 }
