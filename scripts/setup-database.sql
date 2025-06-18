@@ -200,6 +200,172 @@ CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver_id ON friend_requests(re
 CREATE INDEX IF NOT EXISTS idx_blocked_users_blocker_id ON blocked_users(blocker_id);
 CREATE INDEX IF NOT EXISTS idx_blocked_users_blocked_id ON blocked_users(blocked_id);
 
+-- Database functions for relationship management
+
+-- Function to handle friend request sending/accepting
+CREATE OR REPLACE FUNCTION upsert_relationship(
+  user1_id UUID,
+  user2_id UUID,
+  new_status TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Prevent self-friendship
+  IF user1_id = user2_id THEN
+    RAISE EXCEPTION 'Cannot create relationship with yourself';
+  END IF;
+  
+  -- Handle different relationship statuses
+  CASE new_status
+    WHEN 'pending_sent' THEN
+      -- Send friend request
+      INSERT INTO friend_requests (sender_id, receiver_id, status)
+      VALUES (user1_id, user2_id, 'pending')
+      ON CONFLICT (sender_id, receiver_id) 
+      DO UPDATE SET status = 'pending', created_at = NOW();
+      
+    WHEN 'friends' THEN
+      -- Accept friend request - create bidirectional friendship
+      -- First, remove any existing friend request
+      DELETE FROM friend_requests 
+      WHERE (sender_id = user1_id AND receiver_id = user2_id) 
+         OR (sender_id = user2_id AND receiver_id = user1_id);
+      
+      -- Create bidirectional friendship
+      INSERT INTO friendships (user_id, friend_id)
+      VALUES (user1_id, user2_id), (user2_id, user1_id)
+      ON CONFLICT (user_id, friend_id) DO NOTHING;
+      
+    WHEN 'blocked_by_me' THEN
+      -- Block user
+      -- Remove any existing relationships
+      DELETE FROM friendships 
+      WHERE (user_id = user1_id AND friend_id = user2_id) 
+         OR (user_id = user2_id AND friend_id = user1_id);
+      DELETE FROM friend_requests 
+      WHERE (sender_id = user1_id AND receiver_id = user2_id) 
+         OR (sender_id = user2_id AND receiver_id = user1_id);
+      
+      -- Add to blocked users
+      INSERT INTO blocked_users (blocker_id, blocked_id)
+      VALUES (user1_id, user2_id)
+      ON CONFLICT (blocker_id, blocked_id) DO NOTHING;
+      
+    ELSE
+      RAISE EXCEPTION 'Invalid relationship status: %', new_status;
+  END CASE;
+END;
+$$;
+
+-- Function to delete/decline relationships
+CREATE OR REPLACE FUNCTION delete_relationship(
+  user1_id UUID,
+  user2_id UUID
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Remove friendships (bidirectional)
+  DELETE FROM friendships 
+  WHERE (user_id = user1_id AND friend_id = user2_id) 
+     OR (user_id = user2_id AND friend_id = user1_id);
+  
+  -- Remove friend requests (both directions)
+  DELETE FROM friend_requests 
+  WHERE (sender_id = user1_id AND receiver_id = user2_id) 
+     OR (sender_id = user2_id AND receiver_id = user1_id);
+END;
+$$;
+
+-- Function to get user relationships (compatible with the existing code)
+CREATE OR REPLACE FUNCTION get_user_relationships(user_id UUID)
+RETURNS TABLE(
+  friends JSONB,
+  friend_requests JSONB,
+  sent_requests JSONB,
+  blocked_users JSONB
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    -- Friends
+    COALESCE(
+      (SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'username', u.username,
+          'avatar_url', u.avatar_url,
+          'vibe', u.vibe
+        )
+      )
+      FROM friendships f
+      JOIN users u ON u.id = f.friend_id
+      WHERE f.user_id = get_user_relationships.user_id),
+      '[]'::jsonb
+    ) as friends,
+    
+    -- Friend requests received
+    COALESCE(
+      (SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'username', u.username,
+          'avatar_url', u.avatar_url,
+          'vibe', u.vibe
+        )
+      )
+      FROM friend_requests fr
+      JOIN users u ON u.id = fr.sender_id
+      WHERE fr.receiver_id = get_user_relationships.user_id AND fr.status = 'pending'),
+      '[]'::jsonb
+    ) as friend_requests,
+    
+    -- Friend requests sent
+    COALESCE(
+      (SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'username', u.username,
+          'avatar_url', u.avatar_url,
+          'vibe', u.vibe
+        )
+      )
+      FROM friend_requests fr
+      JOIN users u ON u.id = fr.receiver_id
+      WHERE fr.sender_id = get_user_relationships.user_id AND fr.status = 'pending'),
+      '[]'::jsonb
+    ) as sent_requests,
+    
+    -- Blocked users
+    COALESCE(
+      (SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'username', u.username,
+          'avatar_url', u.avatar_url,
+          'vibe', u.vibe
+        )
+      )
+      FROM blocked_users bu
+      JOIN users u ON u.id = bu.blocked_id
+      WHERE bu.blocker_id = get_user_relationships.user_id),
+      '[]'::jsonb
+    ) as blocked_users;
+END;
+$$;
+
 -- Insert some test data if needed (optional)
 -- You can remove this section in production
 /*

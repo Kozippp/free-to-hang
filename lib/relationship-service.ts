@@ -8,34 +8,76 @@ export type RelationshipStatus =
   | 'blocked_by_me'     // I blocked them
   | 'blocked_by_them';  // They blocked me
 
-export interface RelationshipData {
-  id: string;
-  user_a_id: string;
-  user_b_id: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
+// Single relationship status check
+async function getRelationshipStatus(currentUserId: string, targetUserId: string): Promise<RelationshipStatus> {
+  try {
+    // Check if blocked by me
+    const { data: blockedByMe } = await supabase
+      .from('blocked_users')
+      .select('id')
+      .eq('blocker_id', currentUserId)
+      .eq('blocked_id', targetUserId)
+      .single();
+    
+    if (blockedByMe) return 'blocked_by_me';
+    
+    // Check if blocked by them
+    const { data: blockedByThem } = await supabase
+      .from('blocked_users')
+      .select('id')
+      .eq('blocker_id', targetUserId)
+      .eq('blocked_id', currentUserId)
+      .single();
+    
+    if (blockedByThem) return 'blocked_by_them';
+    
+    // Check if friends
+    const { data: friendship } = await supabase
+      .from('friendships')
+      .select('id')
+      .eq('user_id', currentUserId)
+      .eq('friend_id', targetUserId)
+      .single();
+    
+    if (friendship) return 'friends';
+    
+    // Check if I sent a friend request
+    const { data: sentRequest } = await supabase
+      .from('friend_requests')
+      .select('id')
+      .eq('sender_id', currentUserId)
+      .eq('receiver_id', targetUserId)
+      .eq('status', 'pending')
+      .single();
+    
+    if (sentRequest) return 'pending_sent';
+    
+    // Check if I received a friend request
+    const { data: receivedRequest } = await supabase
+      .from('friend_requests')
+      .select('id')
+      .eq('sender_id', targetUserId)
+      .eq('receiver_id', currentUserId)
+      .eq('status', 'pending')
+      .single();
+    
+    if (receivedRequest) return 'pending_received';
+    
+    return 'none';
+  } catch (error) {
+    console.error('Error checking relationship status:', error);
+    return 'none';
+  }
 }
 
 class RelationshipService {
-  // Get relationship status between current user and target user (single query!)
+  // Get relationship status between current user and target user
   async getRelationshipStatus(targetUserId: string): Promise<RelationshipStatus> {
     try {
       const { data: currentUser } = await supabase.auth.getUser();
       if (!currentUser.user) return 'none';
 
-      const { data, error } = await supabase
-        .rpc('get_relationship_status', {
-          user1_id: currentUser.user.id,
-          user2_id: targetUserId
-        });
-
-      if (error) {
-        console.error('Error getting relationship status:', error);
-        return 'none';
-      }
-
-      return data as RelationshipStatus;
+      return await getRelationshipStatus(currentUser.user.id, targetUserId);
     } catch (error) {
       console.error('Error in getRelationshipStatus:', error);
       return 'none';
@@ -152,11 +194,12 @@ class RelationshipService {
       const { data: currentUser } = await supabase.auth.getUser();
       if (!currentUser.user) return false;
 
+      // Simply delete the blocked relationship
       const { error } = await supabase
-        .rpc('delete_relationship', {
-          user1_id: currentUser.user.id,
-          user2_id: targetUserId
-        });
+        .from('blocked_users')
+        .delete()
+        .eq('blocker_id', currentUser.user.id)
+        .eq('blocked_id', targetUserId);
 
       if (error) {
         console.error('Error unblocking user:', error);
@@ -183,64 +226,26 @@ class RelationshipService {
         return { friends: [], pendingSent: [], pendingReceived: [], blockedByMe: [] };
       }
 
-      // Get all relationships involving current user
-      const { data: relationships, error } = await supabase
-        .from('relationships')
-        .select(`
-          *,
-          user_a:users!relationships_user_a_id_fkey(id, name, avatar_url),
-          user_b:users!relationships_user_b_id_fkey(id, name, avatar_url)
-        `)
-        .or(`user_a_id.eq.${currentUser.user.id},user_b_id.eq.${currentUser.user.id}`);
+      // Use the database function to get all relationships
+      const { data, error } = await supabase
+        .rpc('get_user_relationships', { user_id: currentUser.user.id });
 
       if (error) {
         console.error('Error getting relationships:', error);
         return { friends: [], pendingSent: [], pendingReceived: [], blockedByMe: [] };
       }
 
-      const result = {
-        friends: [] as any[],
-        pendingSent: [] as any[],
-        pendingReceived: [] as any[],
-        blockedByMe: [] as any[]
+      const result = data?.[0];
+      if (!result) {
+        return { friends: [], pendingSent: [], pendingReceived: [], blockedByMe: [] };
+      }
+
+      return {
+        friends: result.friends || [],
+        pendingSent: result.sent_requests || [],
+        pendingReceived: result.friend_requests || [],
+        blockedByMe: result.blocked_users || []
       };
-
-      relationships?.forEach((rel: any) => {
-        const isUserA = rel.user_a_id === currentUser.user.id;
-        const otherUser = isUserA ? rel.user_b : rel.user_a;
-
-        switch (rel.status) {
-          case 'friends':
-            result.friends.push(otherUser);
-            break;
-          case 'pending_a_to_b':
-            if (isUserA) {
-              result.pendingSent.push(otherUser);
-            } else {
-              result.pendingReceived.push(otherUser);
-            }
-            break;
-          case 'pending_b_to_a':
-            if (isUserA) {
-              result.pendingReceived.push(otherUser);
-            } else {
-              result.pendingSent.push(otherUser);
-            }
-            break;
-          case 'blocked_by_a':
-            if (isUserA) {
-              result.blockedByMe.push(otherUser);
-            }
-            break;
-          case 'blocked_by_b':
-            if (!isUserA) {
-              result.blockedByMe.push(otherUser);
-            }
-            break;
-        }
-      });
-
-      return result;
     } catch (error) {
       console.error('Error in getAllRelationships:', error);
       return { friends: [], pendingSent: [], pendingReceived: [], blockedByMe: [] };

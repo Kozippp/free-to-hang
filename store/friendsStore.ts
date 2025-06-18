@@ -320,75 +320,98 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     // Realtime subscriptions
   startRealTimeUpdates: async () => {
     try {
-      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
-      
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
       // Stop existing subscriptions
       get().stopRealTimeUpdates();
-      
-      if (error || !currentUser) {
-        console.log('No authenticated user for relationships real-time, skipping...');
-        return;
-      }
 
-      console.log('Starting real-time updates for relationships...');
-
-      // Subscribe to relationships table
-      relationshipsChannel = supabase
-        .channel('relationships-changes')
+      // Subscribe to friend_requests table for real-time friend request updates
+      const friendRequestsChannel = supabase
+        .channel('friend_requests_changes')
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
-            table: 'relationships',
-            filter: `or(user_a_id.eq.${currentUser.id},user_b_id.eq.${currentUser.id})`
+            table: 'friend_requests',
+            filter: `or(sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id})`
           },
-          async (payload: any) => {
-            console.log('Relationship change detected:', payload.eventType);
-            // Refresh all relationship data
-            await get().loadAllRelationships();
+          (payload) => {
+            console.log('Friend request change detected:', payload);
+            // Reload relationships when friend requests change
+            get().loadAllRelationships();
           }
         )
         .subscribe();
 
-      // Subscribe to ghost_friends table  
-      ghostingChannel = supabase
-        .channel('ghosting-changes')
+      // Subscribe to friendships table for real-time friendship updates
+      const friendshipsChannel = supabase
+        .channel('friendships_changes')
         .on(
           'postgres_changes',
           {
             event: '*',
-            schema: 'public', 
-            table: 'ghost_friends',
-            filter: `ghoster_id.eq.${currentUser.id}`
+            schema: 'public',
+            table: 'friendships',
+            filter: `or(user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id})`
           },
-          async () => {
-            console.log('Ghosting change detected');
-            await get().loadGhostedFriends();
+          (payload) => {
+            console.log('Friendship change detected:', payload);
+            // Reload relationships when friendships change
+            get().loadAllRelationships();
           }
         )
         .subscribe();
 
-      console.log('Real-time subscriptions established for relationships');
+      // Subscribe to blocked_users table for real-time blocking updates
+      const blockedUsersChannel = supabase
+        .channel('blocked_users_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'blocked_users',
+            filter: `or(blocker_id.eq.${currentUser.id},blocked_id.eq.${currentUser.id})`
+          },
+          (payload) => {
+            console.log('Blocked users change detected:', payload);
+            // Reload relationships when blocking changes
+            get().loadAllRelationships();
+          }
+        )
+        .subscribe();
+
+      // Store channel references for cleanup
+      relationshipsChannel = friendRequestsChannel;
+      // We'll store the additional channels in a more organized way
+      (relationshipsChannel as any).friendshipsChannel = friendshipsChannel;
+      (relationshipsChannel as any).blockedUsersChannel = blockedUsersChannel;
+
+      console.log('Real-time updates started for friend relationships');
     } catch (error) {
       console.error('Error starting real-time updates:', error);
     }
   },
 
   stopRealTimeUpdates: () => {
-    console.log('Stopping real-time updates for relationships...');
-    
     if (relationshipsChannel) {
       supabase.removeChannel(relationshipsChannel);
+      // Clean up additional channels
+      if ((relationshipsChannel as any).friendshipsChannel) {
+        supabase.removeChannel((relationshipsChannel as any).friendshipsChannel);
+      }
+      if ((relationshipsChannel as any).blockedUsersChannel) {
+        supabase.removeChannel((relationshipsChannel as any).blockedUsersChannel);
+      }
       relationshipsChannel = null;
     }
-    
     if (ghostingChannel) {
       supabase.removeChannel(ghostingChannel);
       ghostingChannel = null;
     }
-    
-    console.log('Real-time subscriptions stopped for relationships');
+    console.log('Real-time updates stopped');
   },
 }));
 
