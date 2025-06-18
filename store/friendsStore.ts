@@ -385,20 +385,29 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.removeFriend(friendId);
       if (success) {
-        // Remove from friends list
-        const { friends } = get();
+        console.log('🚀 Friend removed, updating UI immediately...');
+        
+        // Remove from friends list immediately
+        const { friends, searchResults } = get();
         set({
-          friends: friends.filter(friend => friend.friend_id !== friendId)
-        });
-        // Update search results if the user is in search
-        const { searchResults } = get();
-        set({
+          friends: friends.filter(friend => friend.friend_id !== friendId),
           searchResults: searchResults.map(user => 
             user.id === friendId 
               ? { ...user, relationshipStatus: 'none' as RelationshipStatus }
               : user
           )
         });
+        
+        // Force reload friends list to ensure consistency (bypass cache)
+        try {
+          console.log('👥 Force loading friends (bypass cache)...');
+          const freshFriends = await relationshipService.getFriends();
+          set({ friends: freshFriends });
+          lastLoadTimes['friends'] = Date.now();
+          console.log('✅ Friends force loaded:', freshFriends.length);
+        } catch (error) {
+          console.error('❌ Error force loading friends:', error);
+        }
       }
       return success;
     } catch (error) {

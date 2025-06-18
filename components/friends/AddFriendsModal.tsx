@@ -141,8 +141,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       await sendFriendRequest(user.id);
       console.log('✅ Friend request sent successfully');
       
-      // Reload outgoing requests to update UI
-      await loadOutgoingRequests();
+      // The sendFriendRequest already bypasses cache and updates the store
+      // No need to reload here as it's already done in the store
       
       // Refresh search results to update relationship status if we have an active search
       if (searchQuery.trim().length >= 2) {
@@ -161,8 +161,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       await cancelFriendRequest(user.id);
       console.log('✅ Friend request cancelled successfully');
       
-      // Reload outgoing requests to update UI
-      await loadOutgoingRequests();
+      // The cancelFriendRequest already bypasses cache and updates the store
+      // No need to reload here as it's already done in the store
       
       // Refresh search results to update relationship status if we have an active search
       if (searchQuery.trim().length >= 2) {
