@@ -31,7 +31,7 @@ interface User {
   avatar_url: string;
   bio?: string;
   vibe?: string;
-  relationshipStatus?: 'none' | 'pending_sent' | 'pending_received' | 'friends' | 'blocked_by_me' | 'blocked_by_them';
+  relationshipStatus?: 'none' | 'pending_sent' | 'pending_received' | 'accepted_sent' | 'accepted_received' | 'declined_sent' | 'declined_received' | 'friends' | 'blocked_by_me' | 'blocked_by_them';
 }
 
 interface AddFriendsModalProps {
@@ -43,14 +43,14 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   // Use friendsStore for search and send requests
   const { 
     searchResults,
-    sentRequests,
+    outgoingRequests,
+    incomingRequests,
     isSearching,
     searchUsers,
     sendFriendRequest,
-    cancelSentRequest,
-    clearSearchResults,
-    friendRequests,
-    acceptFriendRequest
+    cancelFriendRequest,
+    loadOutgoingRequests,
+    loadIncomingRequests
   } = useFriendsStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -105,8 +105,6 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     const timeoutId = setTimeout(() => {
       if (searchQuery.trim().length >= 2) {
         searchUsers(searchQuery);
-      } else {
-        clearSearchResults();
       }
     }, 300);
 
@@ -117,11 +115,18 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   useEffect(() => {
     if (!visible) {
       setSearchQuery('');
-      clearSearchResults();
       setSelectedUser(null);
       setShowUserProfile(false);
       setShowContactsModal(false);
       setCancelledRequestIds(new Set());
+    }
+  }, [visible]);
+
+  // Load outgoing requests when modal opens
+  useEffect(() => {
+    if (visible) {
+      loadOutgoingRequests();
+      loadIncomingRequests();
     }
   }, [visible]);
 
@@ -142,11 +147,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
 
   // Check if user has a pending request (sent OR received)
   const userHasPendingRequest = (userId: string) => {
-    return sentRequests.some(req => req.id === userId);
+    return outgoingRequests.some(req => req.receiver_id === userId);
   };
 
   const userHasIncomingRequest = (userId: string) => {
-    return friendRequests.some(req => req.id === userId);
+    return incomingRequests.some(req => req.sender_id === userId);
   };
 
   const handleInviteFriends = async () => {
@@ -280,14 +285,13 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           console.log('Found matching users from contacts:', matchingUsers.length);
           
           // Use friendsStore to check relationship status instead of direct DB queries
-          const { friends, sentRequests, blockedUsers } = useFriendsStore.getState();
+          const { friends, outgoingRequests } = useFriendsStore.getState();
           
-          const blockedIds = blockedUsers.map(u => u.id);
-          const friendIds = friends.map(u => u.id);
-          const pendingIds = sentRequests.map(u => u.id);
+          const friendIds = friends.map(u => u.friend_id);
+          const pendingIds = outgoingRequests.map(u => u.receiver_id);
 
           const availableUsers = matchingUsers.filter((user: any) => 
-            !blockedIds.includes(user.id) && !friendIds.includes(user.id)
+            !friendIds.includes(user.id)
           );
           
           // Mark users with pending requests
@@ -352,6 +356,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
         buttonContent = <Text style={styles.acceptText}>Accept</Text>;
         break;
         
+      case 'accepted_sent':
+      case 'accepted_received':
       case 'friends':
         buttonText = 'Friends';
         buttonAction = () => {}; // No action for existing friends
@@ -478,21 +484,28 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
         ) : null}
 
         {/* PENDING REQUESTS SECTION - now comes after contacts */}
-        {sentRequests.length > 0 && (
+        {outgoingRequests.length > 0 && (
           <View style={styles.contactsContainer}>
             <View style={styles.contactsHeader}>
               <Text style={styles.contactsTitle}>
-                Pending Requests ({sentRequests.filter(req => !cancelledRequestIds.has(req.id)).length})
+                Pending Requests ({outgoingRequests.filter(req => !cancelledRequestIds.has(req.request_id)).length})
               </Text>
             </View>
             
             <FlatList
-              data={sentRequests.filter(req => !cancelledRequestIds.has(req.id))}
-              keyExtractor={(item) => item.id}
+              data={outgoingRequests.filter(req => !cancelledRequestIds.has(req.request_id))}
+              keyExtractor={(item) => item.request_id}
               renderItem={({ item }) => {
-                // Add the relationshipStatus for pending sent requests
-                const itemWithStatus = { ...item, relationshipStatus: 'pending_sent' as const };
-                return renderSearchResult({ item: itemWithStatus });
+                // Convert FriendRequest to User format for rendering
+                const userItem: User = {
+                  id: item.receiver_id,
+                  name: item.receiver_name || 'Unknown',
+                  username: item.receiver_username || 'unknown',
+                  avatar_url: item.receiver_avatar_url || '',
+                  vibe: item.receiver_vibe,
+                  relationshipStatus: 'pending_sent' as const
+                };
+                return renderSearchResult({ item: userItem });
               }}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.contactsList}
@@ -501,7 +514,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
         )}
 
         {/* Default empty state - only show when no contacts and no pending requests */}
-        {!showContactsList && sentRequests.length === 0 && (
+        {!showContactsList && outgoingRequests.length === 0 && (
           <View style={styles.defaultEmptyState}>
             <Search size={48} color={Colors.light.secondaryText} />
             <Text style={styles.emptyStateText}>Add friends</Text>
