@@ -31,7 +31,7 @@ interface User {
   avatar_url: string;
   bio?: string;
   vibe?: string;
-  friendRequestSent?: boolean;
+  relationshipStatus?: 'none' | 'pending_sent' | 'pending_received' | 'friends' | 'blocked_by_me' | 'blocked_by_them';
 }
 
 interface AddFriendsModalProps {
@@ -342,36 +342,54 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   };
 
   const renderSearchResult = ({ item }: { item: User }) => {
-    const hasSentRequest = userHasPendingRequest(item.id);
-    const hasIncomingRequest = userHasIncomingRequest(item.id);
+    // Use the relationship status from the search results (which now includes status)
+    const relationshipStatus = item.relationshipStatus || 'none';
     
-    // Check if this request was cancelled (for pending requests section)
-    const sentRequest = sentRequests.find(req => req.id === item.id);
-    const wasCancelled = sentRequest && cancelledRequestIds.has(sentRequest.id);
-    
-    // Determine button state and action
+    // Determine button state and action based on relationship status
     let buttonText = '';
     let buttonAction = () => {};
-    let isSpecialState = false;
+    let buttonStyle = styles.quickAddButton;
+    let buttonContent = null;
     
-    if (hasSentRequest && !wasCancelled) {
-      buttonText = 'Pending';
-      buttonAction = () => handleUndoFriendRequest(item);
-      isSpecialState = true;
-    } else if (hasIncomingRequest) {
-      buttonText = 'Accept';
-      buttonAction = () => {
-        // Find the incoming request and accept it
-        const incomingRequest = friendRequests.find(req => req.id === item.id);
-        if (incomingRequest) {
-          acceptFriendRequest(incomingRequest.id);
-        }
-      };
-      isSpecialState = true;
-    } else {
-      buttonText = 'Add';
-      buttonAction = () => handleAddFriend(item);
-      isSpecialState = false;
+    switch (relationshipStatus) {
+      case 'pending_sent':
+        buttonText = 'Pending';
+        buttonAction = () => handleUndoFriendRequest(item);
+        buttonStyle = [styles.quickAddButton, styles.pendingButton] as any;
+        buttonContent = <Text style={styles.pendingText}>Pending</Text>;
+        break;
+        
+      case 'pending_received':
+        buttonText = 'Accept';
+        buttonAction = () => acceptFriendRequest(item.id);
+        buttonStyle = [styles.quickAddButton, styles.acceptButton] as any;
+        buttonContent = <Text style={styles.acceptText}>Accept</Text>;
+        break;
+        
+      case 'friends':
+        buttonText = 'Friends';
+        buttonAction = () => {}; // No action for existing friends
+        buttonStyle = [styles.quickAddButton, styles.friendsButton] as any;
+        buttonContent = <Text style={styles.friendsText}>Friends</Text>;
+        break;
+        
+      case 'blocked_by_me':
+        buttonText = 'Blocked';
+        buttonAction = () => {}; // Handle unblocking in profile modal
+        buttonStyle = [styles.quickAddButton, styles.blockedButton] as any;
+        buttonContent = <Text style={styles.blockedText}>Blocked</Text>;
+        break;
+        
+      case 'blocked_by_them':
+        // Don't show blocked users in search
+        return null;
+        
+      default: // 'none'
+        buttonText = 'Add';
+        buttonAction = () => handleAddFriend(item);
+        buttonStyle = styles.quickAddButton;
+        buttonContent = <UserPlus size={18} color="white" />;
+        break;
     }
     
     return (
@@ -389,20 +407,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           {item.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.vibe}</Text>}
         </View>
         <TouchableOpacity
-          style={[
-            styles.quickAddButton, 
-            (hasSentRequest && !wasCancelled) && styles.pendingButton,
-            hasIncomingRequest && styles.acceptButton
-          ]}
+          style={buttonStyle}
           onPress={buttonAction}
+          disabled={relationshipStatus === 'friends' || relationshipStatus === 'blocked_by_me'}
         >
-          {hasSentRequest && !wasCancelled ? (
-            <Text style={styles.pendingText}>Pending</Text>
-          ) : hasIncomingRequest ? (
-            <Text style={styles.acceptText}>Accept</Text>
-          ) : (
-            <UserPlus size={18} color="white" />
-          )}
+          {buttonContent}
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -722,6 +731,8 @@ const styles = StyleSheet.create({
     width: 60,
     height: 28,
     borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pendingText: {
     fontSize: 12,
@@ -958,8 +969,36 @@ const styles = StyleSheet.create({
     width: 60,
     height: 28,
     borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   acceptText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+  },
+  friendsButton: {
+    backgroundColor: '#4CAF50',
+    width: 60,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  friendsText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+  },
+  blockedButton: {
+    backgroundColor: '#757575',
+    width: 60,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blockedText: {
     fontSize: 12,
     fontWeight: '600',
     color: 'white',

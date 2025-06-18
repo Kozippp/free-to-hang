@@ -21,13 +21,17 @@ interface GhostedFriend {
   created_at: string;
 }
 
+interface UserWithStatus extends User {
+  relationshipStatus?: RelationshipStatus;
+}
+
 interface FriendsState {
   // Data
   friends: User[];
   friendRequests: User[];
   sentRequests: User[];
   blockedUsers: User[];
-  searchResults: User[];
+  searchResults: UserWithStatus[];
   ghostedFriends: GhostedFriend[];
   
   // Loading states
@@ -60,6 +64,10 @@ interface FriendsState {
   // Realtime
   startRealTimeUpdates: () => Promise<void>;
   stopRealTimeUpdates: () => void;
+  
+  // New methods for better UX
+  refreshRelationshipStatus: (userId: string) => Promise<void>;
+  updateSearchResultStatus: (userId: string, status: RelationshipStatus) => void;
 }
 
 // Realtime channel variables
@@ -88,7 +96,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) return;
 
-      // Simple search - let the UI handle relationship status checking
+      // Search for users
       const { data: users, error } = await supabase
         .from('users')
         .select('id, name, username, avatar_url, bio, vibe')
@@ -98,7 +106,15 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
       if (error) throw error;
 
-      set({ searchResults: users || [] });
+      // Get relationship status for each user
+      const usersWithStatus: UserWithStatus[] = await Promise.all(
+        (users || []).map(async (user) => {
+          const status = await relationshipService.getRelationshipStatus(user.id);
+          return { ...user, relationshipStatus: status };
+        })
+      );
+
+      set({ searchResults: usersWithStatus });
       
     } catch (error) {
       console.error('Search users error:', error);
@@ -112,8 +128,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.sendFriendRequest(friendId);
       if (success) {
-        // Refresh data
-        await get().loadAllRelationships();
+        // Update search results immediately
+        get().updateSearchResultStatus(friendId, 'pending_sent');
+        // Refresh data in background
+        setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
     } catch (error) {
@@ -126,8 +144,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.acceptFriendRequest(friendId);
       if (success) {
-        // Refresh data
-        await get().loadAllRelationships();
+        // Update search results immediately
+        get().updateSearchResultStatus(friendId, 'friends');
+        // Refresh data in background
+        setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
     } catch (error) {
@@ -140,8 +160,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.declineFriendRequest(friendId);
       if (success) {
-        // Refresh data
-        await get().loadAllRelationships();
+        // Update search results immediately
+        get().updateSearchResultStatus(friendId, 'none');
+        // Refresh data in background
+        setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
     } catch (error) {
@@ -154,8 +176,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.declineFriendRequest(friendId);
       if (success) {
-        // Refresh data
-        await get().loadAllRelationships();
+        // Update search results immediately
+        get().updateSearchResultStatus(friendId, 'none');
+        // Refresh data in background
+        setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
     } catch (error) {
@@ -168,8 +192,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.removeFriend(friendId);
       if (success) {
-        // Refresh data
-        await get().loadAllRelationships();
+        // Update search results immediately
+        get().updateSearchResultStatus(friendId, 'none');
+        // Refresh data in background
+        setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
     } catch (error) {
@@ -182,8 +208,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.blockUser(userId);
       if (success) {
-        // Refresh data
-        await get().loadAllRelationships();
+        // Update search results immediately
+        get().updateSearchResultStatus(userId, 'blocked_by_me');
+        // Refresh data in background
+        setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
     } catch (error) {
@@ -196,8 +224,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.unblockUser(userId);
       if (success) {
-        // Refresh data
-        await get().loadAllRelationships();
+        // Update search results immediately
+        get().updateSearchResultStatus(userId, 'none');
+        // Refresh data in background
+        setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
     } catch (error) {
@@ -245,6 +275,24 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       console.error('Error getting relationship status:', error);
       return 'none';
     }
+  },
+
+  // New helper methods
+  refreshRelationshipStatus: async (userId: string) => {
+    try {
+      const status = await relationshipService.getRelationshipStatus(userId);
+      get().updateSearchResultStatus(userId, status);
+    } catch (error) {
+      console.error('Error refreshing relationship status:', error);
+    }
+  },
+
+  updateSearchResultStatus: (userId: string, status: RelationshipStatus) => {
+    const { searchResults } = get();
+    const updatedResults = searchResults.map(user => 
+      user.id === userId ? { ...user, relationshipStatus: status } : user
+    );
+    set({ searchResults: updatedResults });
   },
 
   // Ghosting functionality (unchanged)
@@ -317,7 +365,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     return ghostedFriends.find(ghost => ghost.ghosted_id === userId) || null;
   },
 
-    // Realtime subscriptions
+  // Improved real-time subscriptions
   startRealTimeUpdates: async () => {
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -326,9 +374,11 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       // Stop existing subscriptions
       get().stopRealTimeUpdates();
 
+      console.log('Starting real-time updates for user:', currentUser.id);
+
       // Subscribe to friend_requests table for real-time friend request updates
       const friendRequestsChannel = supabase
-        .channel('friend_requests_changes')
+        .channel('friend_requests_realtime')
         .on(
           'postgres_changes',
           {
@@ -338,16 +388,18 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             filter: `or(sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id})`
           },
           (payload) => {
-            console.log('Friend request change detected:', payload);
-            // Reload relationships when friend requests change
+            console.log('🔄 Friend request change detected:', payload.eventType, payload.new);
+            // Immediate reload for faster updates
             get().loadAllRelationships();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Friend requests subscription status:', status);
+        });
 
       // Subscribe to friendships table for real-time friendship updates
       const friendshipsChannel = supabase
-        .channel('friendships_changes')
+        .channel('friendships_realtime')
         .on(
           'postgres_changes',
           {
@@ -357,16 +409,18 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             filter: `or(user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id})`
           },
           (payload) => {
-            console.log('Friendship change detected:', payload);
-            // Reload relationships when friendships change
+            console.log('🔄 Friendship change detected:', payload.eventType, payload.new);
+            // Immediate reload for faster updates
             get().loadAllRelationships();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Friendships subscription status:', status);
+        });
 
       // Subscribe to blocked_users table for real-time blocking updates
       const blockedUsersChannel = supabase
-        .channel('blocked_users_changes')
+        .channel('blocked_users_realtime')
         .on(
           'postgres_changes',
           {
@@ -376,26 +430,28 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             filter: `or(blocker_id.eq.${currentUser.id},blocked_id.eq.${currentUser.id})`
           },
           (payload) => {
-            console.log('Blocked users change detected:', payload);
-            // Reload relationships when blocking changes
+            console.log('🔄 Blocked users change detected:', payload.eventType, payload.new);
+            // Immediate reload for faster updates
             get().loadAllRelationships();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Blocked users subscription status:', status);
+        });
 
       // Store channel references for cleanup
       relationshipsChannel = friendRequestsChannel;
-      // We'll store the additional channels in a more organized way
       (relationshipsChannel as any).friendshipsChannel = friendshipsChannel;
       (relationshipsChannel as any).blockedUsersChannel = blockedUsersChannel;
 
-      console.log('Real-time updates started for friend relationships');
+      console.log('✅ Real-time updates started for friend relationships');
     } catch (error) {
-      console.error('Error starting real-time updates:', error);
+      console.error('❌ Error starting real-time updates:', error);
     }
   },
 
   stopRealTimeUpdates: () => {
+    console.log('🛑 Stopping real-time updates...');
     if (relationshipsChannel) {
       supabase.removeChannel(relationshipsChannel);
       // Clean up additional channels
@@ -411,7 +467,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       supabase.removeChannel(ghostingChannel);
       ghostingChannel = null;
     }
-    console.log('Real-time updates stopped');
+    console.log('✅ Real-time updates stopped');
   },
 }));
 
