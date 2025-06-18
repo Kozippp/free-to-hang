@@ -257,7 +257,7 @@ class RelationshipService {
       // Try using the new efficient bulk query function
       const { data: relationships, error } = await supabase
         .rpc('get_user_relationships_bulk', {
-          user_id: currentUser.user.id
+          current_user_id: currentUser.user.id
         });
 
       if (error) {
