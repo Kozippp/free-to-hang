@@ -83,30 +83,30 @@ export async function uploadImage(
 
       console.log('File size:', uint8Array.length, 'bytes');
 
-      const { data, error } = await supabase.storage
-        .from(bucket)
+    const { data, error } = await supabase.storage
+      .from(bucket)
         .upload(filePath, uint8Array, {
-          contentType: `image/${fileExt}`,
-          upsert: true
-        });
+        contentType: `image/${fileExt}`,
+        upsert: true
+      });
 
-      if (error) {
+    if (error) {
         console.error('Supabase client upload error:', error);
-        throw error;
-      }
+      throw error;
+    }
 
       console.log('Upload successful via Supabase client');
-      
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(filePath);
 
-      console.log('Image uploaded successfully:', publicUrl);
-      return {
-        url: publicUrl,
-        path: filePath
-      };
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+    console.log('Image uploaded successfully:', publicUrl);
+    return {
+      url: publicUrl,
+      path: filePath
+    };
     }
 
   } catch (error) {
