@@ -60,14 +60,20 @@ import { uploadImage, deleteImage } from '@/lib/storage';
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
   const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
-  // Temporarily disable friend store to prevent crashes
-  const incomingRequests: any[] = [];
-  const storeFriends: any[] = [];
+  
+  // Use real friends store for friend requests and relationships
+  const { 
+    incomingRequests,
+    outgoingRequests,
+    friends: storeFriends,
+    isLoading,
+    acceptFriendRequest,
+    declineFriendRequest,
+    loadAllRelationships
+  } = useFriendsStore();
+  
+  // Blocked users functionality not implemented yet
   const blockedUsers: any[] = [];
-  const isLoading = false;
-  const loadAllRelationships = () => {};
-  const acceptFriendRequest = () => {};
-  const declineFriendRequest = () => {};
   const unblockUser = (userId: string) => {};
   
   // Use real user data from hangStore, fallback to mock for missing fields
@@ -621,15 +627,37 @@ export default function ProfileScreen() {
   };
 
   const handleAcceptRequest = async (requestId: string) => {
-    console.log('🚫 Accept friend request disabled (frontend only)');
-    setShowRequestProfile(false);
-    setSelectedRequest(null);
+    try {
+      console.log('✅ Accepting friend request:', requestId);
+      const success = await acceptFriendRequest(requestId);
+      if (success) {
+        console.log('✅ Friend request accepted successfully');
+        setShowRequestProfile(false);
+        setSelectedRequest(null);
+      } else {
+        Alert.alert('Error', 'Failed to accept friend request. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error accepting friend request:', error);
+      Alert.alert('Error', 'Failed to accept friend request. Please try again.');
+    }
   };
 
   const handleDeclineRequest = async (requestId: string) => {
-    console.log('🚫 Decline friend request disabled (frontend only)');
-    setShowRequestProfile(false);
-    setSelectedRequest(null);
+    try {
+      console.log('❌ Declining friend request:', requestId);
+      const success = await declineFriendRequest(requestId);
+      if (success) {
+        console.log('✅ Friend request declined successfully');
+        setShowRequestProfile(false);
+        setSelectedRequest(null);
+      } else {
+        Alert.alert('Error', 'Failed to decline friend request. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error declining friend request:', error);
+      Alert.alert('Error', 'Failed to decline friend request. Please try again.');
+    }
   };
 
   const renderRequestItem = ({ item }: { item: any }) => (
@@ -638,24 +666,24 @@ export default function ProfileScreen() {
       onPress={() => handleRequestPress(item)}
     >
       <Image 
-        source={{ uri: item.avatar_url || generateDefaultAvatar(item.name, item.id) }} 
+        source={{ uri: item.sender_avatar_url || generateDefaultAvatar(item.sender_name, item.sender_id) }} 
         style={styles.avatar} 
       />
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.name}</Text>
-        <Text style={styles.userUsername}>@{item.username}</Text>
-        {item.vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.vibe}</Text>}
+        <Text style={styles.userName}>{item.sender_name}</Text>
+        <Text style={styles.userUsername}>@{item.sender_username}</Text>
+        {item.sender_vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.sender_vibe}</Text>}
       </View>
       <View style={styles.requestActions}>
         <TouchableOpacity 
           style={styles.acceptQuickButton}
-          onPress={() => handleAcceptRequest(item.id)}
+          onPress={() => handleAcceptRequest(item.request_id)}
         >
           <Check size={18} color="white" />
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.declineQuickButton}
-          onPress={() => handleDeclineRequest(item.id)}
+          onPress={() => handleDeclineRequest(item.request_id)}
         >
           <X size={18} color={Colors.light.secondaryText} />
         </TouchableOpacity>
@@ -766,7 +794,7 @@ export default function ProfileScreen() {
                 <FlatList
                   data={incomingRequests}
                     renderItem={renderRequestItem}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={(item) => item.request_id}
                     scrollEnabled={false}
                     contentContainerStyle={styles.requestsList}
                     showsVerticalScrollIndicator={false}
@@ -933,24 +961,24 @@ export default function ProfileScreen() {
 
                 {/* Profile Picture */}
                 <Image 
-                  source={{ uri: selectedRequest.avatar_url || generateDefaultAvatar(selectedRequest.name, selectedRequest.id) }} 
+                  source={{ uri: selectedRequest.sender_avatar_url || generateDefaultAvatar(selectedRequest.sender_name, selectedRequest.sender_id) }} 
                   style={styles.profileAvatar} 
                 />
                 
                 {/* Name & Username */}
-                <Text style={styles.profileName}>{selectedRequest.name}</Text>
-                <Text style={styles.profileUsername}>@{selectedRequest.username}</Text>
+                <Text style={styles.profileName}>{selectedRequest.sender_name}</Text>
+                <Text style={styles.profileUsername}>@{selectedRequest.sender_username}</Text>
                 
                 {/* Vibe */}
-                {selectedRequest.vibe && (
-                  <Text style={styles.profileVibe}>{selectedRequest.vibe}</Text>
+                {selectedRequest.sender_vibe && (
+                  <Text style={styles.profileVibe}>{selectedRequest.sender_vibe}</Text>
                 )}
                 
                 {/* Action Buttons - side by side */}
                 <View style={styles.modalActionButtons}>
                   <TouchableOpacity
                     style={styles.modalAcceptButton}
-                    onPress={() => handleAcceptRequest(selectedRequest.id)}
+                    onPress={() => handleAcceptRequest(selectedRequest.request_id)}
                     disabled={isLoading}
                   >
                     <Check size={20} color="white" />
@@ -959,7 +987,7 @@ export default function ProfileScreen() {
                   
                   <TouchableOpacity
                     style={styles.modalDeclineButton}
-                    onPress={() => handleDeclineRequest(selectedRequest.id)}
+                    onPress={() => handleDeclineRequest(selectedRequest.request_id)}
                     disabled={isLoading}
                   >
                     <X size={20} color={Colors.light.secondaryText} />
