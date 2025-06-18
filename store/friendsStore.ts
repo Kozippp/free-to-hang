@@ -114,21 +114,29 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     
     if (request.receiver_id === currentUserId) {
       // Incoming request - someone sent me a request
-      console.log('📥 New incoming friend request received');
-      invalidateCache('incoming');
+      console.log('📥 New incoming friend request received via real-time');
       
-      // Immediately reload incoming requests
-      const store = useFriendsStore.getState();
-      store.loadIncomingRequests();
+      // Force reload incoming requests (bypass cache)
+      relationshipService.getIncomingRequests().then(requests => {
+        useFriendsStore.setState({ incomingRequests: requests });
+        lastLoadTimes['incoming'] = Date.now();
+        console.log('✅ Incoming requests updated via real-time:', requests.length);
+      }).catch(error => {
+        console.error('❌ Error updating incoming requests via real-time:', error);
+      });
       
     } else if (request.sender_id === currentUserId) {
       // Outgoing request - I sent a request
-      console.log('📤 New outgoing friend request sent');
-      invalidateCache('outgoing');
+      console.log('📤 New outgoing friend request sent via real-time');
       
-      // Immediately reload outgoing requests
-      const store = useFriendsStore.getState();
-      store.loadOutgoingRequests();
+      // Force reload outgoing requests (bypass cache)
+      relationshipService.getOutgoingRequests().then(requests => {
+        useFriendsStore.setState({ outgoingRequests: requests });
+        lastLoadTimes['outgoing'] = Date.now();
+        console.log('✅ Outgoing requests updated via real-time:', requests.length);
+      }).catch(error => {
+        console.error('❌ Error updating outgoing requests via real-time:', error);
+      });
     }
     
   } else if (eventType === 'UPDATE') {
@@ -154,9 +162,14 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
         });
       }
       
-      // Refresh friends list to include new friend
-      invalidateCache('friends');
-      currentStore.loadFriends();
+      // Force reload friends list to include new friend (bypass cache)
+      relationshipService.getFriends().then(friends => {
+        useFriendsStore.setState({ friends });
+        lastLoadTimes['friends'] = Date.now();
+        console.log('✅ Friends updated via real-time:', friends.length);
+      }).catch(error => {
+        console.error('❌ Error updating friends via real-time:', error);
+      });
     }
     
   } else if (eventType === 'DELETE') {
@@ -227,9 +240,6 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       if (success) {
         console.log('🚀 Friend request sent, updating UI immediately...');
         
-        // Invalidate cache to force fresh data
-        invalidateCache('outgoing');
-        
         // Update search results to show pending status immediately
         const { searchResults } = get();
         set({
@@ -240,8 +250,16 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           )
         });
         
-        // Force reload outgoing requests immediately
-        await get().loadOutgoingRequests();
+        // Force reload outgoing requests immediately (bypass cache)
+        try {
+          console.log('📤 Force loading outgoing requests (bypass cache)...');
+          const requests = await relationshipService.getOutgoingRequests();
+          set({ outgoingRequests: requests });
+          lastLoadTimes['outgoing'] = Date.now();
+          console.log('✅ Outgoing requests force loaded:', requests.length);
+        } catch (error) {
+          console.error('❌ Error force loading outgoing requests:', error);
+        }
         
         console.log('✅ UI updated after sending friend request');
       }
@@ -257,11 +275,37 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.acceptFriendRequest(requestId);
       if (success) {
-        // Invalidate all caches to force fresh data
-        invalidateCache();
+        console.log('🚀 Friend request accepted, updating UI immediately...');
         
-        // Force reload all data
-        await get().loadAllRelationships();
+        // Force reload all data immediately (bypass cache)
+        try {
+          console.log('🔄 Force loading all relationships (bypass cache)...');
+          
+          const [friends, incomingRequests, outgoingRequests] = await Promise.all([
+            relationshipService.getFriends(),
+            relationshipService.getIncomingRequests(),
+            relationshipService.getOutgoingRequests(),
+          ]);
+          
+          set({ 
+            friends, 
+            incomingRequests, 
+            outgoingRequests 
+          });
+          
+          // Update cache times
+          lastLoadTimes['friends'] = Date.now();
+          lastLoadTimes['incoming'] = Date.now();
+          lastLoadTimes['outgoing'] = Date.now();
+          
+          console.log('✅ All relationships force loaded:', {
+            friends: friends.length,
+            incoming: incomingRequests.length,
+            outgoing: outgoingRequests.length
+          });
+        } catch (error) {
+          console.error('❌ Error force loading relationships:', error);
+        }
       }
       return success;
     } catch (error) {
@@ -275,8 +319,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.declineFriendRequest(requestId);
       if (success) {
-        // Invalidate cache and update immediately
-        invalidateCache('incoming');
+        console.log('🚀 Friend request declined, updating UI immediately...');
         
         // Remove from incoming requests immediately
         const { incomingRequests } = get();
@@ -284,8 +327,16 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           incomingRequests: incomingRequests.filter(req => req.request_id !== requestId)
         });
         
-        // Force reload to ensure consistency
-        await get().loadIncomingRequests();
+        // Force reload incoming requests to ensure consistency (bypass cache)
+        try {
+          console.log('📥 Force loading incoming requests (bypass cache)...');
+          const requests = await relationshipService.getIncomingRequests();
+          set({ incomingRequests: requests });
+          lastLoadTimes['incoming'] = Date.now();
+          console.log('✅ Incoming requests force loaded:', requests.length);
+        } catch (error) {
+          console.error('❌ Error force loading incoming requests:', error);
+        }
       }
       return success;
     } catch (error) {
@@ -299,8 +350,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.cancelFriendRequest(receiverId);
       if (success) {
-        // Invalidate cache to force fresh data
-        invalidateCache('outgoing');
+        console.log('🚀 Friend request cancelled, updating UI immediately...');
         
         // Update search results immediately
         const { searchResults } = get();
@@ -312,8 +362,16 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           )
         });
         
-        // Force reload outgoing requests
-        await get().loadOutgoingRequests();
+        // Force reload outgoing requests immediately (bypass cache)
+        try {
+          console.log('📤 Force loading outgoing requests (bypass cache)...');
+          const requests = await relationshipService.getOutgoingRequests();
+          set({ outgoingRequests: requests });
+          lastLoadTimes['outgoing'] = Date.now();
+          console.log('✅ Outgoing requests force loaded:', requests.length);
+        } catch (error) {
+          console.error('❌ Error force loading outgoing requests:', error);
+        }
       }
       return success;
     } catch (error) {
