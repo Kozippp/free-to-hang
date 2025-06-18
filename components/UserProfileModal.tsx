@@ -102,9 +102,8 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
         console.log('✅ Friend request sent successfully');
         setRelationshipStatus('pending_sent');
         
-        // Reload friends data
-        const { loadAllRelationships } = useFriendsStore.getState();
-        await loadAllRelationships();
+        // The sendFriendRequest already bypasses cache and updates the store
+        // No need to reload here as it's already done in the store
       } else {
         Alert.alert('Error', 'Failed to send friend request. Please try again.');
       }
@@ -127,9 +126,8 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
         console.log('✅ Friend request cancelled successfully');
         setRelationshipStatus('none');
         
-        // Reload friends data
-        const { loadAllRelationships } = useFriendsStore.getState();
-        await loadAllRelationships();
+        // The cancelFriendRequest already bypasses cache and updates the store
+        // No need to reload here as it's already done in the store
       } else {
         Alert.alert('Error', 'Failed to cancel friend request. Please try again.');
       }
@@ -178,9 +176,8 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
                   console.log('✅ Friend removed successfully');
                   setRelationshipStatus('none');
                   
-                  // Reload friends data
-                  const { loadAllRelationships } = useFriendsStore.getState();
-                  await loadAllRelationships();
+                  // The removeFriend already bypasses cache and updates the store
+                  // No need to reload here as it's already done in the store
                   
                   Alert.alert('Success', `${user.name} has been removed from your friends.`);
                 } else {
