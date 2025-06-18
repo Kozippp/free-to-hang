@@ -1,429 +1,70 @@
-import { supabase } from './supabase';
-
+// Keep only the type definitions for frontend compatibility
 export type RelationshipStatus = 
   | 'none'
   | 'pending_sent'      // I sent a friend request
   | 'pending_received'  // I received a friend request
   | 'friends'
   | 'blocked_by_me'     // I blocked them
-  | 'blocked_by_them';  // They blocked me
+  | 'blocked_by_them';
 
-// Enhanced single relationship status check using efficient database function
-async function getRelationshipStatus(currentUserId: string, targetUserId: string): Promise<RelationshipStatus> {
-  try {
-    // Use the new efficient database function
-    const { data, error } = await supabase
-      .rpc('get_relationship_status_efficient', {
-        current_user_id: currentUserId,
-        target_user_id: targetUserId
-      });
-
-    if (error) {
-      console.error('Error in efficient relationship status check:', error);
-      // Fallback to original method
-      return await getRelationshipStatusFallback(currentUserId, targetUserId);
-    }
-
-    return (data as RelationshipStatus) || 'none';
-  } catch (error) {
-    console.error('Error checking relationship status:', error);
-    return 'none';
-  }
-}
-
-// Fallback method (original implementation)
-async function getRelationshipStatusFallback(currentUserId: string, targetUserId: string): Promise<RelationshipStatus> {
-  try {
-    // Check if blocked by me
-    const { data: blockedByMe } = await supabase
-      .from('blocked_users')
-      .select('id')
-      .eq('blocker_id', currentUserId)
-      .eq('blocked_id', targetUserId)
-      .single();
-    
-    if (blockedByMe) return 'blocked_by_me';
-    
-    // Check if blocked by them
-    const { data: blockedByThem } = await supabase
-      .from('blocked_users')
-      .select('id')
-      .eq('blocker_id', targetUserId)
-      .eq('blocked_id', currentUserId)
-      .single();
-    
-    if (blockedByThem) return 'blocked_by_them';
-    
-    // Check if friends (updated for single friendship record structure)
-    const { data: friendship } = await supabase
-      .from('friendships')
-      .select('id')
-      .eq('user_id', currentUserId < targetUserId ? currentUserId : targetUserId)
-      .eq('friend_id', currentUserId < targetUserId ? targetUserId : currentUserId)
-      .single();
-    
-    if (friendship) return 'friends';
-    
-    // Check if I sent a friend request
-    const { data: sentRequest } = await supabase
-      .from('friend_requests')
-      .select('id')
-      .eq('sender_id', currentUserId)
-      .eq('receiver_id', targetUserId)
-      .eq('status', 'pending')
-      .single();
-    
-    if (sentRequest) return 'pending_sent';
-    
-    // Check if I received a friend request
-    const { data: receivedRequest } = await supabase
-      .from('friend_requests')
-      .select('id')
-      .eq('sender_id', targetUserId)
-      .eq('receiver_id', currentUserId)
-      .eq('status', 'pending')
-      .single();
-    
-    if (receivedRequest) return 'pending_received';
-    
-    return 'none';
-  } catch (error) {
-    console.error('Error checking relationship status (fallback):', error);
-    return 'none';
-  }
-}
-
+// Simplified relationship service - no backend operations
 class RelationshipService {
-  // Get relationship status between current user and target user
+  // Always return 'none' status - no relationship checking
   async getRelationshipStatus(targetUserId: string): Promise<RelationshipStatus> {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser.user) return 'none';
-
-      return await getRelationshipStatus(currentUser.user.id, targetUserId);
-    } catch (error) {
-      console.error('Error in getRelationshipStatus:', error);
-      return 'none';
-    }
+    console.log('🚫 Relationship status check disabled (frontend only)');
+    return 'none';
   }
 
-  // Send friend request
+  // Mock friend request - does nothing but logs
   async sendFriendRequest(targetUserId: string): Promise<boolean> {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser.user) return false;
-
-      const { error } = await supabase
-        .rpc('upsert_relationship', {
-          user1_id: currentUser.user.id,
-          user2_id: targetUserId,
-          new_status: 'pending_sent'
-        });
-
-      if (error) {
-        console.error('Error sending friend request:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in sendFriendRequest:', error);
-      return false;
-    }
+    console.log('🚫 Send friend request disabled (frontend only)');
+    return true; // Return true to prevent UI errors
   }
 
-  // Accept friend request
+  // Mock accept request - does nothing but logs
   async acceptFriendRequest(targetUserId: string): Promise<boolean> {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser.user) return false;
-
-      const { error } = await supabase
-        .rpc('upsert_relationship', {
-          user1_id: currentUser.user.id,
-          user2_id: targetUserId,
-          new_status: 'friends'
-        });
-
-      if (error) {
-        console.error('Error accepting friend request:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in acceptFriendRequest:', error);
-      return false;
-    }
+    console.log('🚫 Accept friend request disabled (frontend only)');
+    return true;
   }
 
-  // Decline/cancel friend request
+  // Mock decline request - does nothing but logs
   async declineFriendRequest(targetUserId: string): Promise<boolean> {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser.user) return false;
-
-      const { error } = await supabase
-        .rpc('delete_relationship', {
-          user1_id: currentUser.user.id,
-          user2_id: targetUserId
-        });
-
-      if (error) {
-        console.error('Error declining friend request:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in declineFriendRequest:', error);
-      return false;
-    }
+    console.log('🚫 Decline friend request disabled (frontend only)');
+    return true;
   }
 
-  // Remove friend
+  // Mock remove friend - does nothing but logs
   async removeFriend(targetUserId: string): Promise<boolean> {
-    return this.declineFriendRequest(targetUserId);
+    console.log('🚫 Remove friend disabled (frontend only)');
+    return true;
   }
 
-  // Block user
+  // Mock block user - does nothing but logs
   async blockUser(targetUserId: string): Promise<boolean> {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser.user) return false;
-
-      const { error } = await supabase
-        .rpc('upsert_relationship', {
-          user1_id: currentUser.user.id,
-          user2_id: targetUserId,
-          new_status: 'blocked_by_me'
-        });
-
-      if (error) {
-        console.error('Error blocking user:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in blockUser:', error);
-      return false;
-    }
+    console.log('🚫 Block user disabled (frontend only)');
+    return true;
   }
 
-  // Unblock user
+  // Mock unblock user - does nothing but logs
   async unblockUser(targetUserId: string): Promise<boolean> {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser.user) return false;
-
-      // Simply delete the blocked relationship
-      const { error } = await supabase
-        .from('blocked_users')
-        .delete()
-        .eq('blocker_id', currentUser.user.id)
-        .eq('blocked_id', targetUserId);
-
-      if (error) {
-        console.error('Error unblocking user:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in unblockUser:', error);
-      return false;
-    }
+    console.log('🚫 Unblock user disabled (frontend only)');
+    return true;
   }
 
-  // Enhanced bulk relationship loading using efficient database function
+  // Return empty relationships - no backend loading
   async getAllRelationships(): Promise<{
     friends: any[];
     pendingSent: any[];
     pendingReceived: any[];
     blockedByMe: any[];
   }> {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser.user) {
-        return {
-          friends: [],
-          pendingSent: [],
-          pendingReceived: [],
-          blockedByMe: []
-        };
-      }
-
-      // Try using the new efficient bulk query function
-      const { data: relationships, error } = await supabase
-        .rpc('get_user_relationships_bulk', {
-          current_user_id: currentUser.user.id
-        });
-
-      if (error) {
-        console.error('Error in bulk relationship query, falling back:', error);
-        return await this.getAllRelationshipsFallback();
-      }
-
-      // Group the results by relationship type
-      const friends = relationships?.filter((r: any) => r.relationship_type === 'friends') || [];
-      const pendingSent = relationships?.filter((r: any) => r.relationship_type === 'pending_sent') || [];
-      const pendingReceived = relationships?.filter((r: any) => r.relationship_type === 'pending_received') || [];
-      const blockedByMe = relationships?.filter((r: any) => r.relationship_type === 'blocked_by_me') || [];
-
-      // Transform to match expected format
-      const transformUser = (rel: any) => ({
-        id: rel.other_user_id,
-        name: rel.other_user_name,
-        username: rel.other_user_username,
-        avatar_url: rel.other_user_avatar,
-        created_at: rel.created_at
-      });
-
-      return {
-        friends: friends.map(transformUser),
-        pendingSent: pendingSent.map(transformUser),
-        pendingReceived: pendingReceived.map(transformUser),
-        blockedByMe: blockedByMe.map(transformUser)
-      };
-    } catch (error) {
-      console.error('Error in getAllRelationships:', error);
-      return await this.getAllRelationshipsFallback();
-    }
-  }
-
-  // Fallback method for bulk relationship loading (original implementation)
-  async getAllRelationshipsFallback(): Promise<{
-    friends: any[];
-    pendingSent: any[];
-    pendingReceived: any[];
-    blockedByMe: any[];
-  }> {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser.user) {
-        return {
-          friends: [],
-          pendingSent: [],
-          pendingReceived: [],
-          blockedByMe: []
-        };
-      }
-
-      const userId = currentUser.user.id;
-
-      // Get all relationship data in parallel
-      const [friendsResult, sentRequestsResult, receivedRequestsResult, blockedResult] = await Promise.all([
-        // Friends (updated for single friendship record structure)
-        // Need to check both directions since friendship could be stored either way
-        supabase
-          .from('friendships')
-          .select(`
-            user_id,
-            friend_id,
-            created_at,
-            user:users!friendships_user_id_fkey (
-              id, name, username, avatar_url
-            ),
-            friend:users!friendships_friend_id_fkey (
-              id, name, username, avatar_url
-            )
-          `)
-          .or(`user_id.eq.${userId},friend_id.eq.${userId}`),
-
-        // Sent friend requests
-        supabase
-          .from('friend_requests')
-          .select(`
-            receiver_id,
-            created_at,
-            users!friend_requests_receiver_id_fkey (
-              id, name, username, avatar_url
-            )
-          `)
-          .eq('sender_id', userId)
-          .eq('status', 'pending'),
-
-        // Received friend requests
-        supabase
-          .from('friend_requests')
-          .select(`
-            sender_id,
-            created_at,
-            users!friend_requests_sender_id_fkey (
-              id, name, username, avatar_url
-            )
-          `)
-          .eq('receiver_id', userId)
-          .eq('status', 'pending'),
-
-        // Blocked users
-        supabase
-          .from('blocked_users')
-          .select(`
-            blocked_id,
-            created_at,
-            users!blocked_users_blocked_id_fkey (
-              id, name, username, avatar_url
-            )
-          `)
-          .eq('blocker_id', userId)
-      ]);
-
-      // Transform the data to a consistent format
-      // For friendships, determine which user is the "other" user
-      const friends = (friendsResult.data || []).map((item: any) => {
-        const isCurrentUserFirst = item.user_id === userId;
-        const otherUser = isCurrentUserFirst ? item.friend : item.user;
-        
-        return {
-          id: otherUser?.id || (isCurrentUserFirst ? item.friend_id : item.user_id),
-          name: otherUser?.name || 'Unknown',
-          username: otherUser?.username || 'unknown',
-          avatar_url: otherUser?.avatar_url || '',
-          created_at: item.created_at
-        };
-      });
-
-      const pendingSent = (sentRequestsResult.data || []).map((item: any) => ({
-        id: item.users?.id || item.receiver_id,
-        name: item.users?.name || 'Unknown',
-        username: item.users?.username || 'unknown',
-        avatar_url: item.users?.avatar_url || '',
-        created_at: item.created_at
-      }));
-
-      const pendingReceived = (receivedRequestsResult.data || []).map((item: any) => ({
-        id: item.users?.id || item.sender_id,
-        name: item.users?.name || 'Unknown',
-        username: item.users?.username || 'unknown',
-        avatar_url: item.users?.avatar_url || '',
-        created_at: item.created_at
-      }));
-
-      const blockedByMe = (blockedResult.data || []).map((item: any) => ({
-        id: item.users?.id || item.blocked_id,
-        name: item.users?.name || 'Unknown',
-        username: item.users?.username || 'unknown',
-        avatar_url: item.users?.avatar_url || '',
-        created_at: item.created_at
-      }));
-
-      return {
-        friends,
-        pendingSent,
-        pendingReceived,
-        blockedByMe
-      };
-    } catch (error) {
-      console.error('Error in getAllRelationshipsFallback:', error);
-      return {
-        friends: [],
-        pendingSent: [],
-        pendingReceived: [],
-        blockedByMe: []
-      };
-    }
+    console.log('🚫 Load relationships disabled (frontend only)');
+    return {
+      friends: [],
+      pendingSent: [],
+      pendingReceived: [],
+      blockedByMe: []
+    };
   }
 }
 

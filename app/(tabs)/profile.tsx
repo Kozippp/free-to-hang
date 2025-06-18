@@ -85,10 +85,7 @@ export default function ProfileScreen() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
   
-  // Load data on component mount
-  useEffect(() => {
-    loadAllRelationships();
-  }, []);
+  // Friend relationships disabled - no loading needed
 
   // Realtime is now managed globally in layout - no need to start/stop here
 

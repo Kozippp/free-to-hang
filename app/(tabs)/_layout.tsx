@@ -6,15 +6,13 @@ import { StatusBar } from "expo-status-bar";
 import { Platform, View, Text } from "react-native";
 import usePlansStore from "@/store/plansStore";
 import useHangStore from "@/store/hangStore";
-import useFriendsStore from "@/store/friendsStore";
 
 export default function TabLayout() {
   const { invitations } = usePlansStore();
   const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
   
-  // GLOBAL REALTIME MANAGEMENT
+  // Only keep hang real-time management (remove friends real-time)
   const { startRealTimeUpdates: startHangRealtime, stopRealTimeUpdates: stopHangRealtime } = useHangStore();
-  const { startRealTimeUpdates: startFriendsRealtime, stopRealTimeUpdates: stopFriendsRealtime } = useFriendsStore();
   
   // Check for unread invitations
   useEffect(() => {
@@ -22,18 +20,17 @@ export default function TabLayout() {
     setHasUnreadInvitations(unreadCount > 0);
   }, [invitations]);
 
-  // 🌍 START GLOBAL REALTIME ON LAYOUT MOUNT
+  // Start only hang real-time system (friends real-time removed)
   useEffect(() => {
     let isMounted = true;
     
     const startRealtime = async () => {
       if (!isMounted) return;
       
-      console.log('🚀 Starting global realtime systems...');
+      console.log('🚀 Starting hang realtime system...');
       
-      // Start both realtime systems
+      // Start only hang realtime system
       startHangRealtime();
-      await startFriendsRealtime();
     };
     
     startRealtime();
@@ -41,9 +38,8 @@ export default function TabLayout() {
     // Cleanup when layout unmounts
     return () => {
       isMounted = false;
-      console.log('⏹️ Stopping global realtime systems...');
+      console.log('⏹️ Stopping hang realtime system...');
       stopHangRealtime();
-      stopFriendsRealtime();
     };
   }, []);
   
