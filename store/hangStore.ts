@@ -332,12 +332,21 @@ const useHangStore = create<HangState>()(
           const availableFriends = allFriendData.filter(f => f.status === 'available');
           const offlineFriends = allFriendData.filter(f => f.status === 'offline');
 
+          // Only log if there are changes to avoid console spam
+          const currentState = get();
+          const hasChanges = 
+            currentState.friends.length !== availableFriends.length ||
+            currentState.offlineFriends.length !== offlineFriends.length;
+
           set({ 
             friends: availableFriends,
             offlineFriends: offlineFriends 
           });
 
-          console.log('Friends loaded successfully:', { available: availableFriends.length, offline: offlineFriends.length });
+          // Only log when there are actual changes to reduce console spam
+          if (hasChanges) {
+            console.log('Friends loaded successfully:', { available: availableFriends.length, offline: offlineFriends.length });
+          }
         } catch (error) {
           console.error('Error loading friends:', error);
           // Set empty arrays on error to prevent UI issues
@@ -401,12 +410,21 @@ const useHangStore = create<HangState>()(
         // Clear any existing interval
         if (refreshInterval) {
           clearInterval(refreshInterval);
+          refreshInterval = null;
         }
         
-        // Start refreshing friends every second
+        // Load friends once initially
+        get().loadFriends();
+        
+        // Set up real-time subscription for user status changes instead of polling
+        // This is much more efficient than polling every second
+        console.log('🚀 Starting real-time friend status updates...');
+        
+        // TODO: Implement proper real-time subscription to users table for status changes
+        // For now, refresh every 30 seconds instead of every 1 second
         refreshInterval = setInterval(() => {
           get().loadFriends();
-        }, 1000);
+        }, 30000); // 30 seconds instead of 1 second
       },
 
       stopRealTimeUpdates: () => {
@@ -414,6 +432,7 @@ const useHangStore = create<HangState>()(
           clearInterval(refreshInterval);
           refreshInterval = null;
         }
+        console.log('🛑 Stopped real-time friend status updates');
       }
     }),
     {
