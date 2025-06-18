@@ -186,19 +186,26 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     const deleteStore = useFriendsStore.getState();
     const { incomingRequests, outgoingRequests, friends } = deleteStore;
     
-    if (request.receiver_id === currentUserId) {
-      // Someone cancelled their request to me
-      useFriendsStore.setState({
-        incomingRequests: incomingRequests.filter(req => req.request_id !== request.id)
-      });
-    } else if (request.sender_id === currentUserId) {
-      // I cancelled my request or it was declined
-      useFriendsStore.setState({
-        outgoingRequests: outgoingRequests.filter(req => req.request_id !== request.id)
-      });
+    // Handle pending request deletions (cancellations/declines)
+    if (request.status === 'pending') {
+      if (request.receiver_id === currentUserId) {
+        // Someone cancelled their request to me
+        console.log('🚫 Removing cancelled incoming request via real-time');
+        useFriendsStore.setState({
+          incomingRequests: incomingRequests.filter(req => req.request_id !== request.id)
+        });
+        console.log('✅ Incoming request removed via real-time');
+      } else if (request.sender_id === currentUserId) {
+        // I cancelled my request or it was declined
+        console.log('🚫 Removing cancelled outgoing request via real-time');
+        useFriendsStore.setState({
+          outgoingRequests: outgoingRequests.filter(req => req.request_id !== request.id)
+        });
+        console.log('✅ Outgoing request removed via real-time');
+      }
     }
     
-    // If this was an accepted friendship being removed, force reload friends list
+    // Handle accepted friendship deletions (friend removals)
     if (request.status === 'accepted') {
       console.log('🗑️ Friendship deleted via real-time - force reloading friends list');
       
@@ -543,7 +550,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         return;
       }
 
-      // Create new channel for friend_requests table with user-specific filtering
+      // Create new channel for friend_requests table with comprehensive filtering
       friendRequestsChannel = supabase
         .channel(`friend_requests_${user.id}_${Date.now()}`)
         .on(
@@ -572,6 +579,23 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             console.log('📡 Friend request change (incoming):', payload);
             // Handle incoming request changes
             handleRealtimeChange(payload, user.id);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'friend_requests'
+          },
+          (payload) => {
+            console.log('📡 Friend request DELETE event (global):', payload);
+            // Handle DELETE events globally to catch friendship removals
+            const oldRecord = payload.old;
+            if (oldRecord && (oldRecord.sender_id === user.id || oldRecord.receiver_id === user.id)) {
+              console.log('📡 DELETE event affects current user, processing...');
+              handleRealtimeChange(payload, user.id);
+            }
           }
         )
         .subscribe((status) => {
