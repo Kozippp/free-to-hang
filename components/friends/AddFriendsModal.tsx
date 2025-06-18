@@ -347,7 +347,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
         
       case 'pending_received':
         buttonText = 'Accept';
-        buttonAction = () => acceptFriendRequest(item.id);
+        buttonAction = () => console.log('🚫 Accept friend request disabled (frontend only)');
         buttonStyle = [styles.quickAddButton, styles.acceptButton] as any;
         buttonContent = <Text style={styles.acceptText}>Accept</Text>;
         break;

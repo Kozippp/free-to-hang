@@ -100,112 +100,28 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   };
 
   const handleAddFriend = async () => {
-    if (!user) return;
-    setActionLoading(true);
-    try {
-      const success = await relationshipService.sendFriendRequest(user.id);
-      if (success) {
-        await loadAllRelationships(); // Refresh store data
-        await determineRelationshipStatus(); // Refresh local status
-      } else {
-        Alert.alert('Error', 'Failed to send friend request');
-      }
-    } catch (error) {
-      console.error('Add friend error:', error);
-      Alert.alert('Error', 'Failed to send friend request');
-    } finally {
-      setActionLoading(false);
-    }
+    console.log('🚫 Add friend disabled (frontend only)');
+    setActionLoading(false);
   };
 
   const handleCancelRequest = async () => {
-    if (!user) return;
-    setActionLoading(true);
-    try {
-      const success = await relationshipService.declineFriendRequest(user.id);
-      if (success) {
-        await loadAllRelationships(); // Refresh store data
-        await determineRelationshipStatus(); // Refresh local status
-      } else {
-        Alert.alert('Error', 'Failed to cancel friend request');
-      }
-    } catch (error) {
-      console.error('Cancel request error:', error);
-      Alert.alert('Error', 'Failed to cancel friend request');
-    } finally {
-      setActionLoading(false);
-    }
+    console.log('🚫 Cancel friend request disabled (frontend only)');
+    setActionLoading(false);
   };
 
   const handleAcceptRequest = async () => {
-    if (!user) return;
-    setActionLoading(true);
-    try {
-      const success = await relationshipService.acceptFriendRequest(user.id);
-      if (success) {
-        await loadAllRelationships(); // Refresh store data
-        await determineRelationshipStatus(); // Refresh local status
-      } else {
-        Alert.alert('Error', 'Failed to accept friend request');
-      }
-    } catch (error) {
-      console.error('Accept request error:', error);
-      Alert.alert('Error', 'Failed to accept friend request');
-    } finally {
-      setActionLoading(false);
-    }
+    console.log('🚫 Accept friend request disabled (frontend only)');
+    setActionLoading(false);
   };
 
   const handleDeclineRequest = async () => {
-    if (!user) return;
-    setActionLoading(true);
-    try {
-      const success = await relationshipService.declineFriendRequest(user.id);
-      if (success) {
-        await loadAllRelationships(); // Refresh store data
-        await determineRelationshipStatus(); // Refresh local status
-      } else {
-        Alert.alert('Error', 'Failed to decline friend request');
-      }
-    } catch (error) {
-      console.error('Decline request error:', error);
-      Alert.alert('Error', 'Failed to decline friend request');
-    } finally {
-      setActionLoading(false);
-    }
+    console.log('🚫 Decline friend request disabled (frontend only)');
+    setActionLoading(false);
   };
 
   const handleRemoveFriend = async () => {
-    if (!user) return;
-    
-    Alert.alert(
-      'Remove Friend',
-      `Are you sure you want to remove ${user.name} from your friends?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setActionLoading(true);
-            try {
-              const success = await relationshipService.removeFriend(user.id);
-              if (success) {
-                await loadAllRelationships(); // Refresh store data
-                await determineRelationshipStatus(); // Refresh local status
-              } else {
-                Alert.alert('Error', 'Failed to remove friend');
-              }
-            } catch (error) {
-              console.error('Remove friend error:', error);
-              Alert.alert('Error', 'Failed to remove friend');
-            } finally {
-              setActionLoading(false);
-            }
-          }
-        }
-      ]
-    );
+    console.log('🚫 Remove friend disabled (frontend only)');
+    setActionLoading(false);
   };
 
   const handleGhostFriend = async () => {
@@ -243,55 +159,13 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   };
 
   const handleBlockUser = async () => {
-    if (!user) return;
-    
-    Alert.alert(
-      'Block User',
-      `Are you sure you want to block ${user.name}? They won't be able to send you messages or friend requests.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: async () => {
-            setActionLoading(true);
-            try {
-              const success = await relationshipService.blockUser(user.id);
-              if (success) {
-                await loadAllRelationships(); // Refresh store data
-                await determineRelationshipStatus(); // Refresh local status
-              } else {
-                Alert.alert('Error', 'Failed to block user');
-              }
-            } catch (error) {
-              console.error('Block user error:', error);
-              Alert.alert('Error', 'Failed to block user');
-            } finally {
-              setActionLoading(false);
-            }
-          }
-        }
-      ]
-    );
+    console.log('🚫 Block user disabled (frontend only)');
+    setActionLoading(false);
   };
 
   const handleUnblockUser = async () => {
-    if (!user) return;
-    setActionLoading(true);
-    try {
-      const success = await relationshipService.unblockUser(user.id);
-      if (success) {
-        await loadAllRelationships(); // Refresh store data
-        await determineRelationshipStatus(); // Refresh local status
-      } else {
-        Alert.alert('Error', 'Failed to unblock user');
-      }
-    } catch (error) {
-      console.error('Unblock user error:', error);
-      Alert.alert('Error', 'Failed to unblock user');
-    } finally {
-      setActionLoading(false);
-    }
+    console.log('🚫 Unblock user disabled (frontend only)');
+    setActionLoading(false);
   };
 
   const getAvailabilityText = () => {
