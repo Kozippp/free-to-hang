@@ -8,27 +8,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// GET /friends - Saab kõik sõbrad
-router.get('/', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    
-    const { data, error } = await supabase
-      .rpc('get_user_relationships', { user_id: userId });
-    
-    if (error) throw error;
-    
-    res.json({
-      friends: data.friends || [],
-      friendRequests: data.friend_requests || [],
-      sentRequests: data.sent_requests || [],
-      blockedUsers: data.blocked_users || []
-    });
-  } catch (error) {
-    console.error('Error fetching friends:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+
 
 // POST /friends/request - Send friend request
 router.post('/request', verifyToken, async (req, res) => {
