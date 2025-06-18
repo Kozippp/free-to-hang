@@ -60,16 +60,15 @@ import { uploadImage, deleteImage } from '@/lib/storage';
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
   const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
-  const { 
-    friendRequests,
-    friends: storeFriends,
-    blockedUsers,
-    isLoading, 
-    loadAllRelationships,
-    acceptFriendRequest, 
-    declineFriendRequest,
-    unblockUser
-  } = useFriendsStore();
+  // Temporarily disable friend store to prevent crashes
+  const incomingRequests: any[] = [];
+  const storeFriends: any[] = [];
+  const blockedUsers: any[] = [];
+  const isLoading = false;
+  const loadAllRelationships = () => {};
+  const acceptFriendRequest = () => {};
+  const declineFriendRequest = () => {};
+  const unblockUser = (userId: string) => {};
   
   // Use real user data from hangStore, fallback to mock for missing fields
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -725,7 +724,7 @@ export default function ProfileScreen() {
                 onPress={() => setActiveTab('requests')}
               >
                 <Text style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>
-                  Requests {friendRequests.length > 0 && `(${friendRequests.length})`}
+                  Requests {incomingRequests.length > 0 && `(${incomingRequests.length})`}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity 
@@ -763,9 +762,9 @@ export default function ProfileScreen() {
               )
             ) : (
               <View style={styles.requestsContent}>
-                {friendRequests.length > 0 ? (
-                  <FlatList
-                    data={friendRequests}
+                              {incomingRequests.length > 0 ? (
+                <FlatList
+                  data={incomingRequests}
                     renderItem={renderRequestItem}
                     keyExtractor={(item) => item.id}
                     scrollEnabled={false}
