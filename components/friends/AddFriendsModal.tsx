@@ -136,13 +136,31 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   };
 
   const handleAddFriend = async (user: User) => {
-    console.log('🚫 Add friend disabled (frontend only)');
-    // No backend operation - just log the action
+    try {
+      console.log('📤 Sending friend request to:', user.name);
+      await sendFriendRequest(user.id);
+      console.log('✅ Friend request sent successfully');
+      
+      // Reload outgoing requests to update UI
+      await loadOutgoingRequests();
+    } catch (error) {
+      console.error('❌ Error sending friend request:', error);
+      Alert.alert('Error', 'Failed to send friend request. Please try again.');
+    }
   };
 
   const handleUndoFriendRequest = async (user: User) => {
-    console.log('🚫 Undo friend request disabled (frontend only)');
-    // No backend operation - just log the action
+    try {
+      console.log('🔄 Cancelling friend request to:', user.name);
+      await cancelFriendRequest(user.id);
+      console.log('✅ Friend request cancelled successfully');
+      
+      // Reload outgoing requests to update UI
+      await loadOutgoingRequests();
+    } catch (error) {
+      console.error('❌ Error cancelling friend request:', error);
+      Alert.alert('Error', 'Failed to cancel friend request. Please try again.');
+    }
   };
 
   // Check if user has a pending request (sent OR received)
