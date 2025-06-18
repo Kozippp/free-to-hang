@@ -143,6 +143,12 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       
       // Reload outgoing requests to update UI
       await loadOutgoingRequests();
+      
+      // Refresh search results to update relationship status if we have an active search
+      if (searchQuery.trim().length >= 2) {
+        console.log('🔄 Refreshing search results after friend request');
+        await searchUsers(searchQuery);
+      }
     } catch (error) {
       console.error('❌ Error sending friend request:', error);
       Alert.alert('Error', 'Failed to send friend request. Please try again.');
@@ -157,6 +163,12 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       
       // Reload outgoing requests to update UI
       await loadOutgoingRequests();
+      
+      // Refresh search results to update relationship status if we have an active search
+      if (searchQuery.trim().length >= 2) {
+        console.log('🔄 Refreshing search results after cancelling friend request');
+        await searchUsers(searchQuery);
+      }
     } catch (error) {
       console.error('❌ Error cancelling friend request:', error);
       Alert.alert('Error', 'Failed to cancel friend request. Please try again.');
