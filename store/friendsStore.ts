@@ -68,6 +68,12 @@ interface FriendsState {
   // New methods for better UX
   refreshRelationshipStatus: (userId: string) => Promise<void>;
   updateSearchResultStatus: (userId: string, status: RelationshipStatus) => void;
+  
+  // Add new method to force refresh specific relationship states
+  refreshSpecificRelationship: (userId: string) => Promise<void>;
+  
+  // Add method to validate and sync state with database
+  validateAndSyncState: () => Promise<void>;
 }
 
 // Realtime channel variables
@@ -133,26 +139,18 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         const targetUser = currentState.searchResults.find(user => user.id === friendId);
         
         if (targetUser) {
-          // Add to sentRequests immediately
-          const newSentRequest = {
-            id: targetUser.id,
-            name: targetUser.name,
-            username: targetUser.username,
-            avatar_url: targetUser.avatar_url,
-            bio: targetUser.bio,
-            vibe: targetUser.vibe
-          };
-          
           set({
-            sentRequests: [...currentState.sentRequests, newSentRequest]
+            sentRequests: [...currentState.sentRequests, targetUser],
+            searchResults: currentState.searchResults.map(user => 
+              user.id === friendId 
+                ? { ...user, relationshipStatus: 'pending_sent' as const }
+                : user
+            )
           });
         }
         
-        // Update search results immediately
-        get().updateSearchResultStatus(friendId, 'pending_sent');
-        
-        // Refresh data in background to ensure consistency
-        setTimeout(() => get().loadAllRelationships(), 100);
+        // Force a complete refresh to ensure consistency
+        setTimeout(() => get().validateAndSyncState(), 500);
       }
       return success;
     } catch (error) {
@@ -172,15 +170,17 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         if (acceptedRequest) {
           set({
             friendRequests: currentState.friendRequests.filter(req => req.id !== friendId),
-            friends: [...currentState.friends, acceptedRequest]
+            friends: [...currentState.friends, acceptedRequest],
+            searchResults: currentState.searchResults.map(user => 
+              user.id === friendId 
+                ? { ...user, relationshipStatus: 'friends' as const }
+                : user
+            )
           });
         }
         
-        // Update search results immediately
-        get().updateSearchResultStatus(friendId, 'friends');
-        
-        // Refresh data in background to ensure consistency
-        setTimeout(() => get().loadAllRelationships(), 100);
+        // Force a complete refresh to ensure consistency
+        setTimeout(() => get().validateAndSyncState(), 500);
       }
       return success;
     } catch (error) {
@@ -193,18 +193,20 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.declineFriendRequest(friendId);
       if (success) {
-        // Immediately remove from friendRequests and sentRequests arrays
+        // Immediately remove from both arrays and update search results
         const currentState = get();
         set({
           friendRequests: currentState.friendRequests.filter(req => req.id !== friendId),
-          sentRequests: currentState.sentRequests.filter(req => req.id !== friendId)
+          sentRequests: currentState.sentRequests.filter(req => req.id !== friendId),
+          searchResults: currentState.searchResults.map(user => 
+            user.id === friendId 
+              ? { ...user, relationshipStatus: 'none' as const }
+              : user
+          )
         });
         
-        // Update search results immediately
-        get().updateSearchResultStatus(friendId, 'none');
-        
-        // Refresh data in background to ensure consistency
-        setTimeout(() => get().loadAllRelationships(), 100);
+        // Force a complete refresh to ensure consistency
+        setTimeout(() => get().validateAndSyncState(), 500);
       }
       return success;
     } catch (error) {
@@ -217,17 +219,19 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.declineFriendRequest(friendId);
       if (success) {
-        // Immediately remove from sentRequests array
+        // Immediately remove from sent requests and update search results
         const currentState = get();
         set({
-          sentRequests: currentState.sentRequests.filter(req => req.id !== friendId)
+          sentRequests: currentState.sentRequests.filter(req => req.id !== friendId),
+          searchResults: currentState.searchResults.map(user => 
+            user.id === friendId 
+              ? { ...user, relationshipStatus: 'none' as const }
+              : user
+          )
         });
         
-        // Update search results immediately
-        get().updateSearchResultStatus(friendId, 'none');
-        
-        // Refresh data in background to ensure consistency
-        setTimeout(() => get().loadAllRelationships(), 100);
+        // Force a complete refresh to ensure consistency
+        setTimeout(() => get().validateAndSyncState(), 500);
       }
       return success;
     } catch (error) {
@@ -533,6 +537,46 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       ghostingChannel = null;
     }
     console.log('✅ Real-time updates stopped');
+  },
+
+  // New method to refresh specific relationship
+  refreshSpecificRelationship: async (userId: string) => {
+    try {
+      const status = await relationshipService.getRelationshipStatus(userId);
+      const currentState = get();
+      
+      set({
+        searchResults: currentState.searchResults.map(user => 
+          user.id === userId 
+            ? { ...user, relationshipStatus: status }
+            : user
+        )
+      });
+    } catch (error) {
+      console.error('Error refreshing specific relationship:', error);
+    }
+  },
+
+  // New method to validate and sync state with database
+  validateAndSyncState: async () => {
+    try {
+      console.log('🔄 Validating and syncing friend state with database...');
+      
+      // Get fresh data from database
+      const relationships = await relationshipService.getAllRelationships();
+      
+      set({
+        friends: relationships.friends,
+        friendRequests: relationships.pendingReceived,
+        sentRequests: relationships.pendingSent,
+        blockedUsers: relationships.blockedByMe,
+        isLoading: false
+      });
+      
+      console.log('✅ Friend state synchronized with database');
+    } catch (error) {
+      console.error('❌ Error validating friend state:', error);
+    }
   },
 }));
 
