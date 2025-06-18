@@ -8,14 +8,19 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  Dimensions,
+  SafeAreaView,
 } from 'react-native';
-import { X, UserPlus, UserMinus, UserX, Eye, EyeOff } from 'lucide-react-native';
+import { X, UserPlus, UserMinus, UserX, Eye, EyeOff, Clock, MapPin, Calendar, Heart, MessageCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import useFriendsStore from '@/store/friendsStore';
 import { relationshipService, RelationshipStatus } from '@/lib/relationship-service';
 import GhostSelectionModal from '@/components/GhostSelectionModal';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface User {
   id: string;
@@ -25,6 +30,8 @@ interface User {
   bio?: string;
   vibe?: string;
   status?: 'available' | 'busy' | 'offline';
+  created_at?: string;
+  last_seen?: string;
 }
 
 interface UserProfileModalProps {
@@ -66,7 +73,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     try {
       const { data: userData, error } = await supabase
         .from('users')
-        .select('id, name, username, avatar_url, bio, vibe, status')
+        .select('id, name, username, avatar_url, bio, vibe, status, created_at, last_seen')
         .eq('id', userId)
         .single();
 
@@ -208,8 +215,10 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
   const handleGhostSelection = async (duration: '1_day' | '3_days' | 'forever') => {
     if (!user) return;
+    
     setShowGhostModal(false);
     setActionLoading(true);
+    
     try {
       await ghostFriend(user.id, duration);
     } catch (error) {
@@ -222,20 +231,16 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
   const getGhostButtonText = () => {
     if (!user) return 'Ghost';
-    
     const ghostStatus = getGhostStatus(user.id);
-    if (!ghostStatus) return 'Ghost';
-    
-    switch (ghostStatus.duration_type) {
-      case '1_day':
-        return 'Ghosted (1 day)';
-      case '3_days':
-        return 'Ghosted (3 days)';
-      case 'forever':
-        return 'Ghosted (forever)';
-      default:
-        return 'Ghost';
+    if (ghostStatus) {
+      switch (ghostStatus.duration_type) {
+        case '1_day': return 'Ghosted (1 day)';
+        case '3_days': return 'Ghosted (3 days)';
+        case 'forever': return 'Ghosted (forever)';
+        default: return 'Ghosted';
+      }
     }
+    return 'Ghost';
   };
 
   const handleBlockUser = async () => {
@@ -243,7 +248,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     
     Alert.alert(
       'Block User',
-      `Are you sure you want to block ${user.name}? This will remove them from your friends and prevent them from contacting you.`,
+      `Are you sure you want to block ${user.name}? They won't be able to send you messages or friend requests.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -256,7 +261,6 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
               if (success) {
                 await loadAllRelationships(); // Refresh store data
                 await determineRelationshipStatus(); // Refresh local status
-                onClose(); // Close modal after successful blocking
               } else {
                 Alert.alert('Error', 'Failed to block user');
               }
@@ -293,16 +297,61 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
   const getAvailabilityText = () => {
     if (!user?.status) return '';
-    
     switch (user.status) {
-      case 'available':
-        return 'Available to hang';
-      case 'busy':
-        return 'Busy';
-      case 'offline':
-        return 'Offline';
-      default:
-        return '';
+      case 'available': return 'Available to hang';
+      case 'busy': return 'Busy';
+      case 'offline': return 'Offline';
+      default: return '';
+    }
+  };
+
+  const getStatusColor = () => {
+    if (!user?.status) return '#999';
+    switch (user.status) {
+      case 'available': return '#4CAF50';
+      case 'busy': return '#FF9800';
+      case 'offline': return '#999';
+      default: return '#999';
+    }
+  };
+
+  const formatJoinDate = (dateString?: string) => {
+    if (!dateString) return 'Recently joined';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 30) {
+      return `Joined ${diffDays} days ago`;
+    } else if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30);
+      return `Joined ${months} month${months > 1 ? 's' : ''} ago`;
+    } else {
+      const years = Math.floor(diffDays / 365);
+      return `Joined ${years} year${years > 1 ? 's' : ''} ago`;
+    }
+  };
+
+  const getRelationshipStatusText = () => {
+    switch (relationshipStatus) {
+      case 'friends': return '👥 Friends';
+      case 'pending_sent': return '⏳ Request sent';
+      case 'pending_received': return '📨 Wants to be friends';
+      case 'blocked_by_me': return '🚫 Blocked';
+      case 'blocked_by_them': return '❌ Has blocked you';
+      default: return '';
+    }
+  };
+
+  const getRelationshipColor = () => {
+    switch (relationshipStatus) {
+      case 'friends': return Colors.light.primary;
+      case 'pending_sent': return '#FF9800';
+      case 'pending_received': return Colors.light.primary;
+      case 'blocked_by_me': return Colors.light.destructive;
+      case 'blocked_by_them': return Colors.light.destructive;
+      default: return Colors.light.secondaryText;
     }
   };
 
@@ -374,7 +423,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
                   <EyeOff size={18} color={Colors.light.primary} />
                 )}
                 <Text style={styles.secondaryButtonText}>
-                  {isGhosted ? 'Unghost' : getGhostButtonText()}
+                  {isGhosted ? 'Unghost' : 'Ghost'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -426,68 +475,126 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color={Colors.light.secondaryText} />
-          </TouchableOpacity>
+      <SafeAreaView style={styles.overlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modal}>
+            {/* Close Button */}
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <View style={styles.closeButtonBg}>
+                <X size={20} color={Colors.light.secondaryText} />
+              </View>
+            </TouchableOpacity>
 
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={Colors.light.primary} />
-              <Text style={styles.loadingText}>Loading profile...</Text>
-            </View>
-          ) : user ? (
-            <View style={styles.content}>
-              <View style={styles.header}>
-                <Image
-                  source={{ uri: user.avatar_url || generateDefaultAvatar(user.name) }}
-                  style={styles.avatar}
-                />
-                <View style={styles.userInfo}>
-                  <Text style={styles.name}>{user.name}</Text>
-                  <Text style={styles.username}>@{user.username}</Text>
-                  {user.status && (
-                    <Text style={styles.availability}>{getAvailabilityText()}</Text>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={Colors.light.primary} />
+                <Text style={styles.loadingText}>Loading profile...</Text>
+              </View>
+            ) : user ? (
+              <ScrollView 
+                style={styles.scrollContainer}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+                {/* Header with Avatar and Basic Info */}
+                <View style={styles.header}>
+                  <View style={styles.avatarContainer}>
+                    <Image
+                      source={{ uri: user.avatar_url || generateDefaultAvatar(user.name, user.id) }}
+                      style={styles.avatar}
+                    />
+                    {user.status && (
+                      <View style={[styles.statusIndicator, { backgroundColor: getStatusColor() }]} />
+                    )}
+                  </View>
+                  
+                  <View style={styles.userBasicInfo}>
+                    <Text style={styles.name}>{user.name}</Text>
+                    <Text style={styles.username}>@{user.username}</Text>
+                    
+                    {/* Relationship Status Badge */}
+                    {relationshipStatus !== 'none' && (
+                      <View style={[styles.relationshipBadge, { backgroundColor: getRelationshipColor() + '20' }]}>
+                        <Text style={[styles.relationshipText, { color: getRelationshipColor() }]}>
+                          {getRelationshipStatusText()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Status */}
+                {user.status && (
+                  <View style={styles.statusContainer}>
+                    <View style={styles.statusRow}>
+                      <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
+                      <Text style={[styles.statusText, { color: getStatusColor() }]}>
+                        {getAvailabilityText()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* User Info Cards */}
+                <View style={styles.infoCards}>
+                  {/* Bio Card */}
+                  {user.bio && (
+                    <View style={styles.infoCard}>
+                      <View style={styles.cardHeader}>
+                        <Heart size={16} color={Colors.light.primary} />
+                        <Text style={styles.cardTitle}>About</Text>
+                      </View>
+                      <Text style={styles.cardContent}>{user.bio}</Text>
+                    </View>
+                  )}
+
+                  {/* Vibe Card */}
+                  {user.vibe && (
+                    <View style={styles.infoCard}>
+                      <View style={styles.cardHeader}>
+                        <MessageCircle size={16} color={Colors.light.primary} />
+                        <Text style={styles.cardTitle}>Current Vibe</Text>
+                      </View>
+                      <Text style={styles.cardContent}>{user.vibe}</Text>
+                    </View>
+                  )}
+
+                  {/* Join Date Card */}
+                  <View style={styles.infoCard}>
+                    <View style={styles.cardHeader}>
+                      <Calendar size={16} color={Colors.light.primary} />
+                      <Text style={styles.cardTitle}>Member Since</Text>
+                    </View>
+                    <Text style={styles.cardContent}>{formatJoinDate(user.created_at)}</Text>
+                  </View>
+                </View>
+
+                {/* Action Buttons */}
+                <View style={styles.actions}>
+                  {actionLoading ? (
+                    <View style={styles.actionLoadingContainer}>
+                      <ActivityIndicator size="small" color={Colors.light.primary} />
+                      <Text style={styles.actionLoadingText}>Processing...</Text>
+                    </View>
+                  ) : (
+                    renderActionButtons()
                   )}
                 </View>
+              </ScrollView>
+            ) : (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>Failed to load user profile</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={loadUserData}>
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
               </View>
-
-              {user.bio && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Bio</Text>
-                  <Text style={styles.bio}>{user.bio}</Text>
-                </View>
-              )}
-
-              {user.vibe && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Vibe</Text>
-                  <Text style={styles.vibe}>{user.vibe}</Text>
-                </View>
-              )}
-
-              <View style={styles.actions}>
-                {actionLoading ? (
-                  <View style={styles.actionLoadingContainer}>
-                    <ActivityIndicator size="small" color={Colors.light.primary} />
-                    <Text style={styles.actionLoadingText}>Processing...</Text>
-                  </View>
-                ) : (
-                  renderActionButtons()
-                )}
-              </View>
-            </View>
-          ) : (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>Failed to load user profile</Text>
-            </View>
-          )}
+            )}
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
 
       <GhostSelectionModal
         visible={showGhostModal}
@@ -516,114 +623,212 @@ export const setOpenUserModalFunction = (fn: (userId: string) => void) => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    width: screenWidth * 0.9,
+    maxWidth: 400,
+    maxHeight: screenHeight * 0.85,
   },
   modal: {
     backgroundColor: Colors.light.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
   },
   closeButton: {
-    alignSelf: 'flex-end',
-    padding: 10,
-    marginBottom: 10,
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+  },
+  closeButtonBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollContainer: {
+    maxHeight: screenHeight * 0.75,
   },
   loadingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    padding: 60,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
     fontSize: 16,
     color: Colors.light.secondaryText,
-  },
-  content: {
-    flex: 1,
+    fontWeight: '500',
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingTop: 32,
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginRight: 15,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  userInfo: {
-    flex: 1,
+  statusIndicator: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 3,
+    borderColor: 'white',
+  },
+  userBasicInfo: {
+    alignItems: 'center',
   },
   name: {
     fontSize: 24,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 2,
+    marginBottom: 4,
+    textAlign: 'center',
   },
   username: {
     fontSize: 16,
     color: Colors.light.secondaryText,
-    marginBottom: 2,
-  },
-  availability: {
-    fontSize: 14,
-    color: Colors.light.primary,
+    marginBottom: 12,
     fontWeight: '500',
   },
-  section: {
+  relationshipBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  relationshipText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  statusContainer: {
+    paddingHorizontal: 24,
     marginBottom: 20,
   },
-  sectionTitle: {
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  infoCards: {
+    paddingHorizontal: 24,
+    marginBottom: 24,
+  },
+  infoCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cardTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginLeft: 8,
   },
-  bio: {
-    fontSize: 16,
+  cardContent: {
+    fontSize: 15,
     color: Colors.light.text,
     lineHeight: 22,
-  },
-  vibe: {
-    fontSize: 16,
-    color: Colors.light.text,
-    lineHeight: 22,
-    textAlign: 'left',
   },
   actions: {
-    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
   },
   actionLoadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
+    paddingVertical: 20,
   },
   actionLoadingText: {
-    marginLeft: 10,
+    marginLeft: 12,
     fontSize: 16,
     color: Colors.light.secondaryText,
+    fontWeight: '500',
   },
   primaryButton: {
     backgroundColor: Colors.light.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginBottom: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: Colors.light.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   secondaryButton: {
@@ -633,15 +838,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginBottom: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    marginBottom: 12,
   },
   secondaryButtonText: {
     color: Colors.light.primary,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   dangerButton: {
@@ -649,15 +854,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginBottom: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    marginBottom: 12,
   },
   dangerButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   blockButton: {
@@ -665,20 +870,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 16,
   },
   blockButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 8,
   },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   halfButton: {
     flex: 0.48,
@@ -688,21 +893,37 @@ const styles = StyleSheet.create({
   },
   blockedContainer: {
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 16,
   },
   blockedText: {
     fontSize: 16,
     color: Colors.light.secondaryText,
     textAlign: 'center',
+    fontWeight: '500',
   },
   errorContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    padding: 60,
   },
   errorText: {
     fontSize: 16,
     color: Colors.light.destructive,
     textAlign: 'center',
+    marginBottom: 20,
+    fontWeight: '500',
+  },
+  retryButton: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 
