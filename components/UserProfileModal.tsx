@@ -112,8 +112,54 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   };
 
   const handleRemoveFriend = async () => {
-    console.log('🚫 Remove friend disabled (frontend only)');
-    setActionLoading(false);
+    if (!userId || !user) return;
+    
+    setActionLoading(true);
+    try {
+      console.log('💔 Removing friend:', user.name);
+      
+      // Show confirmation dialog
+      Alert.alert(
+        'Remove Friend',
+        `Are you sure you want to remove ${user.name} from your friends?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => setActionLoading(false)
+          },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const success = await relationshipService.removeFriend(userId);
+                if (success) {
+                  console.log('✅ Friend removed successfully');
+                  setRelationshipStatus('none');
+                  
+                  // Reload friends data
+                  const { loadAllRelationships } = useFriendsStore.getState();
+                  await loadAllRelationships();
+                  
+                  Alert.alert('Success', `${user.name} has been removed from your friends.`);
+                } else {
+                  Alert.alert('Error', 'Failed to remove friend. Please try again.');
+                }
+              } catch (error) {
+                console.error('❌ Error removing friend:', error);
+                Alert.alert('Error', 'Failed to remove friend. Please try again.');
+              } finally {
+                setActionLoading(false);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('❌ Error in handleRemoveFriend:', error);
+      setActionLoading(false);
+    }
   };
 
   const handleGhostFriend = async () => {
@@ -176,22 +222,20 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
   const getRelationshipStatusText = () => {
     switch (relationshipStatus) {
-      case 'friends': return '👥 Friends';
+      case 'accepted_sent':
+      case 'accepted_received': return '👥 Friends';
       case 'pending_sent': return '⏳ Request sent';
       case 'pending_received': return '📨 Wants to be friends';
-      case 'blocked_by_me': return '🚫 Blocked';
-      case 'blocked_by_them': return '❌ Has blocked you';
       default: return '';
     }
   };
 
   const getRelationshipColor = () => {
     switch (relationshipStatus) {
-      case 'friends': return Colors.light.primary;
+      case 'accepted_sent':
+      case 'accepted_received': return Colors.light.primary;
       case 'pending_sent': return '#FF9800';
       case 'pending_received': return Colors.light.primary;
-      case 'blocked_by_me': return Colors.light.destructive;
-      case 'blocked_by_them': return Colors.light.destructive;
       default: return Colors.light.secondaryText;
     }
   };
@@ -258,24 +302,6 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
               <UserMinus size={18} color="white" />
               <Text style={styles.dangerButtonText}>Remove Friend</Text>
             </TouchableOpacity>
-          </View>
-        );
-
-      case 'blocked_by_me':
-        return (
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleUnblockUser}
-            disabled={actionLoading}
-          >
-            <Text style={styles.primaryButtonText}>Unblock User</Text>
-          </TouchableOpacity>
-        );
-
-      case 'blocked_by_them':
-        return (
-          <View style={styles.blockedContainer}>
-            <Text style={styles.blockedText}>This user has blocked you</Text>
           </View>
         );
 
