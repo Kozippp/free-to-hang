@@ -176,48 +176,40 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     // Friend request declined/cancelled or friendship removed
     const request = oldRecord as any;
     
-    console.log('🗑️ Friend request deleted/declined via real-time:', {
+    console.log('🗑️ Friend request deleted via real-time:', {
       id: request.id,
-      sender_id: request.sender_id,
-      receiver_id: request.receiver_id,
-      status: request.status,
+      available_data: Object.keys(request),
       currentUserId
     });
-    const deleteStore = useFriendsStore.getState();
-    const { incomingRequests, outgoingRequests, friends } = deleteStore;
     
-    // Handle pending request deletions (cancellations/declines)
-    if (request.status === 'pending') {
-      if (request.receiver_id === currentUserId) {
-        // Someone cancelled their request to me
-        console.log('🚫 Removing cancelled incoming request via real-time');
-        useFriendsStore.setState({
-          incomingRequests: incomingRequests.filter(req => req.request_id !== request.id)
-        });
-        console.log('✅ Incoming request removed via real-time');
-      } else if (request.sender_id === currentUserId) {
-        // I cancelled my request or it was declined
-        console.log('🚫 Removing cancelled outgoing request via real-time');
-        useFriendsStore.setState({
-          outgoingRequests: outgoingRequests.filter(req => req.request_id !== request.id)
-        });
-        console.log('✅ Outgoing request removed via real-time');
-      }
-    }
+    // Since DELETE events don't include full record data (sender_id, receiver_id, status),
+    // we need to force refresh all relationship data to ensure consistency
+    console.log('🔄 DELETE event detected - force refreshing all relationship data');
     
-    // Handle accepted friendship deletions (friend removals)
-    if (request.status === 'accepted') {
-      console.log('🗑️ Friendship deleted via real-time - force reloading friends list');
-      
-      // Force reload friends list to ensure both users get updated
-      relationshipService.getFriends().then(updatedFriends => {
-        useFriendsStore.setState({ friends: updatedFriends });
-        lastLoadTimes['friends'] = Date.now();
-        console.log('✅ Friends list updated via real-time after deletion:', updatedFriends.length);
-      }).catch(error => {
-        console.error('❌ Error updating friends list via real-time:', error);
+    Promise.all([
+      relationshipService.getFriends(),
+      relationshipService.getIncomingRequests(),
+      relationshipService.getOutgoingRequests(),
+    ]).then(([friends, incomingRequests, outgoingRequests]) => {
+      useFriendsStore.setState({ 
+        friends, 
+        incomingRequests, 
+        outgoingRequests 
       });
-    }
+      
+      // Update cache times
+      lastLoadTimes['friends'] = Date.now();
+      lastLoadTimes['incoming'] = Date.now();
+      lastLoadTimes['outgoing'] = Date.now();
+      
+      console.log('✅ All relationships refreshed via real-time after DELETE:', {
+        friends: friends.length,
+        incoming: incomingRequests.length,
+        outgoing: outgoingRequests.length
+      });
+    }).catch(error => {
+      console.error('❌ Error refreshing relationships after DELETE:', error);
+    });
   }
 }
 
@@ -590,12 +582,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           },
           (payload) => {
             console.log('📡 Friend request DELETE event (global):', payload);
-            // Handle DELETE events globally to catch friendship removals
-            const oldRecord = payload.old;
-            if (oldRecord && (oldRecord.sender_id === user.id || oldRecord.receiver_id === user.id)) {
-              console.log('📡 DELETE event affects current user, processing...');
-              handleRealtimeChange(payload, user.id);
-            }
+            // Since DELETE events only contain the ID, we can't filter by user
+            // So we process all DELETE events and let the handler refresh data
+            console.log('📡 Processing DELETE event for potential relationship changes...');
+            handleRealtimeChange(payload, user.id);
           }
         )
         .subscribe((status) => {
