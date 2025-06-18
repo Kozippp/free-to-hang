@@ -54,12 +54,12 @@ async function getRelationshipStatusFallback(currentUserId: string, targetUserId
     
     if (blockedByThem) return 'blocked_by_them';
     
-    // Check if friends
+    // Check if friends (updated for single friendship record structure)
     const { data: friendship } = await supabase
       .from('friendships')
       .select('id')
-      .eq('user_id', currentUserId)
-      .eq('friend_id', targetUserId)
+      .eq('user_id', currentUserId < targetUserId ? currentUserId : targetUserId)
+      .eq('friend_id', currentUserId < targetUserId ? targetUserId : currentUserId)
       .single();
     
     if (friendship) return 'friends';
@@ -314,17 +314,22 @@ class RelationshipService {
 
       // Get all relationship data in parallel
       const [friendsResult, sentRequestsResult, receivedRequestsResult, blockedResult] = await Promise.all([
-        // Friends
+        // Friends (updated for single friendship record structure)
+        // Need to check both directions since friendship could be stored either way
         supabase
           .from('friendships')
           .select(`
+            user_id,
             friend_id,
             created_at,
-            users!friendships_friend_id_fkey (
+            user:users!friendships_user_id_fkey (
+              id, name, username, avatar_url
+            ),
+            friend:users!friendships_friend_id_fkey (
               id, name, username, avatar_url
             )
           `)
-          .eq('user_id', userId),
+          .or(`user_id.eq.${userId},friend_id.eq.${userId}`),
 
         // Sent friend requests
         supabase
@@ -366,13 +371,19 @@ class RelationshipService {
       ]);
 
       // Transform the data to a consistent format
-      const friends = (friendsResult.data || []).map((item: any) => ({
-        id: item.users?.id || item.friend_id,
-        name: item.users?.name || 'Unknown',
-        username: item.users?.username || 'unknown',
-        avatar_url: item.users?.avatar_url || '',
-        created_at: item.created_at
-      }));
+      // For friendships, determine which user is the "other" user
+      const friends = (friendsResult.data || []).map((item: any) => {
+        const isCurrentUserFirst = item.user_id === userId;
+        const otherUser = isCurrentUserFirst ? item.friend : item.user;
+        
+        return {
+          id: otherUser?.id || (isCurrentUserFirst ? item.friend_id : item.user_id),
+          name: otherUser?.name || 'Unknown',
+          username: otherUser?.username || 'unknown',
+          avatar_url: otherUser?.avatar_url || '',
+          created_at: item.created_at
+        };
+      });
 
       const pendingSent = (sentRequestsResult.data || []).map((item: any) => ({
         id: item.users?.id || item.receiver_id,
