@@ -131,27 +131,13 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   };
 
   const handleAddFriend = async (user: User) => {
-    const success = await sendFriendRequest(user.id);
-    if (success) {
-      const sentRequest = sentRequests.find(req => req.id === user.id);
-      if (sentRequest) {
-        setCancelledRequestIds(prev => new Set(prev).add(sentRequest.id));
-      }
-    }
+    console.log('🚫 Add friend disabled (frontend only)');
+    // No backend operation - just log the action
   };
 
   const handleUndoFriendRequest = async (user: User) => {
-    const success = await cancelSentRequest(user.id);
-    if (success) {
-      setCancelledRequestIds(prev => {
-        const newSet = new Set(prev);
-        const sentRequest = sentRequests.find(req => req.id === user.id);
-        if (sentRequest) {
-          newSet.add(sentRequest.id);
-        }
-        return newSet;
-      });
-    }
+    console.log('🚫 Undo friend request disabled (frontend only)');
+    // No backend operation - just log the action
   };
 
   // Check if user has a pending request (sent OR received)
