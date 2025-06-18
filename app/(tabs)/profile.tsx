@@ -13,7 +13,8 @@ import {
   TextInput,
   ScrollView,
   Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  RefreshControl
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { 
@@ -69,7 +70,8 @@ export default function ProfileScreen() {
     isLoading,
     acceptFriendRequest,
     declineFriendRequest,
-    loadAllRelationships
+    loadAllRelationships,
+    forceRefresh
   } = useFriendsStore();
   
   // Blocked users functionality not implemented yet
@@ -89,6 +91,7 @@ export default function ProfileScreen() {
   const [allFriends, setAllFriends] = useState<Friend[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
+  const [refreshing, setRefreshing] = useState(false);
   
   // Friend relationships disabled - no loading needed
 
@@ -660,6 +663,19 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await forceRefresh();
+      await loadUserData(); // Also refresh user data
+      await loadFriends(); // Refresh hang store friends
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const renderRequestItem = ({ item }: { item: any }) => (
     <TouchableOpacity 
       style={styles.userItem}
@@ -715,7 +731,18 @@ export default function ProfileScreen() {
       />
       
       <SafeAreaView style={styles.container}>
-        <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollContainer} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={Colors.light.primary}
+              colors={[Colors.light.primary]}
+            />
+          }
+        >
           {/* Profile Preview Section */}
           <TouchableOpacity 
             style={styles.profilePreview}

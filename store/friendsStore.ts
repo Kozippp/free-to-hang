@@ -45,6 +45,9 @@ interface FriendsState {
   // Real-time subscriptions
   startRealTimeUpdates: () => Promise<void>;
   stopRealTimeUpdates: () => void;
+  
+  // Manual refresh
+  forceRefresh: () => Promise<void>;
 }
 
 // Global variables for real-time subscriptions
@@ -67,6 +70,16 @@ function shouldRefreshData(key: string): boolean {
   const now = Date.now();
   const lastLoad = lastLoadTimes[key] || 0;
   return (now - lastLoad) > CACHE_DURATION_MS;
+}
+
+function invalidateCache(key?: string) {
+  if (key) {
+    delete lastLoadTimes[key];
+    console.log(`🗑️ Cache invalidated for: ${key}`);
+  } else {
+    lastLoadTimes = {};
+    console.log('🗑️ All cache invalidated');
+  }
 }
 
 function throttledUpdate(key: string, updateFn: () => void, delay: number = UPDATE_THROTTLE_MS) {
@@ -102,6 +115,7 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     if (request.receiver_id === currentUserId) {
       // Incoming request
       console.log('📥 New incoming friend request received');
+      invalidateCache('incoming');
       throttledUpdate('incoming', () => {
         const store = useFriendsStore.getState();
         store.loadIncomingRequests();
@@ -109,6 +123,7 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     } else if (request.sender_id === currentUserId) {
       // Outgoing request
       console.log('📤 New outgoing friend request sent');
+      invalidateCache('outgoing');
       throttledUpdate('outgoing', () => {
         const store = useFriendsStore.getState();
         store.loadOutgoingRequests();
@@ -139,6 +154,7 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
       }
       
       // Refresh friends list to include new friend
+      invalidateCache('friends');
       throttledUpdate('friends', () => {
         const store = useFriendsStore.getState();
         store.loadFriends();
@@ -211,7 +227,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.sendFriendRequest(userId);
       if (success) {
-        // Update search results to show pending status
+        // Invalidate cache to force fresh data
+        invalidateCache('outgoing');
+        
+        // Update search results to show pending status immediately
         const { searchResults } = get();
         set({
           searchResults: searchResults.map(user => 
@@ -220,8 +239,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
               : user
           )
         });
-        // Reload outgoing requests
-        get().loadOutgoingRequests();
+        
+        // Force reload outgoing requests
+        await get().loadOutgoingRequests();
       }
       return success;
     } catch (error) {
@@ -235,8 +255,11 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.acceptFriendRequest(requestId);
       if (success) {
-        // Reload all data
-        get().loadAllRelationships();
+        // Invalidate all caches to force fresh data
+        invalidateCache();
+        
+        // Force reload all data
+        await get().loadAllRelationships();
       }
       return success;
     } catch (error) {
@@ -250,11 +273,17 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.declineFriendRequest(requestId);
       if (success) {
-        // Remove from incoming requests
+        // Invalidate cache and update immediately
+        invalidateCache('incoming');
+        
+        // Remove from incoming requests immediately
         const { incomingRequests } = get();
         set({
           incomingRequests: incomingRequests.filter(req => req.request_id !== requestId)
         });
+        
+        // Force reload to ensure consistency
+        await get().loadIncomingRequests();
       }
       return success;
     } catch (error) {
@@ -268,7 +297,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.cancelFriendRequest(receiverId);
       if (success) {
-        // Update search results
+        // Invalidate cache to force fresh data
+        invalidateCache('outgoing');
+        
+        // Update search results immediately
         const { searchResults } = get();
         set({
           searchResults: searchResults.map(user => 
@@ -277,8 +309,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
               : user
           )
         });
-        // Reload outgoing requests
-        get().loadOutgoingRequests();
+        
+        // Force reload outgoing requests
+        await get().loadOutgoingRequests();
       }
       return success;
     } catch (error) {
@@ -485,6 +518,19 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     isSubscribed = false;
     isStartingRealTime = false;
     console.log('✅ Friend real-time updates stopped');
+  },
+
+  // Force refresh all data (for pull-to-refresh)
+  forceRefresh: async () => {
+    console.log('🔄 Force refreshing all friend data...');
+    
+    // Clear all cache
+    invalidateCache();
+    
+    // Reload all data
+    await get().loadAllRelationships();
+    
+    console.log('✅ Force refresh completed');
   },
 }));
 
