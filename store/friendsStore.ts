@@ -59,6 +59,16 @@ const UPDATE_THROTTLE_MS = 1000; // Max 1 update per second
 // Debouncing for data loading
 let loadTimeouts: { [key: string]: NodeJS.Timeout } = {};
 
+// Cache to prevent unnecessary API calls
+let lastLoadTimes: { [key: string]: number } = {};
+const CACHE_DURATION_MS = 2000; // Cache data for 2 seconds
+
+function shouldRefreshData(key: string): boolean {
+  const now = Date.now();
+  const lastLoad = lastLoadTimes[key] || 0;
+  return (now - lastLoad) > CACHE_DURATION_MS;
+}
+
 function throttledUpdate(key: string, updateFn: () => void, delay: number = UPDATE_THROTTLE_MS) {
   const now = Date.now();
   
@@ -306,11 +316,17 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
   // Load friends
   loadFriends: async () => {
+    if (!shouldRefreshData('friends')) {
+      console.log('⚡ Using cached friends data');
+      return;
+    }
+    
     set({ isLoadingFriends: true });
     try {
       console.log('👥 Loading friends...');
       const friends = await relationshipService.getFriends();
       set({ friends });
+      lastLoadTimes['friends'] = Date.now();
       console.log('✅ Friends loaded:', friends.length);
     } catch (error) {
       console.error('❌ Error loading friends:', error);
@@ -322,11 +338,17 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
   // Load incoming requests
   loadIncomingRequests: async () => {
+    if (!shouldRefreshData('incoming')) {
+      console.log('⚡ Using cached incoming requests data');
+      return;
+    }
+    
     set({ isLoadingRequests: true });
     try {
       console.log('📥 Loading incoming requests...');
       const requests = await relationshipService.getIncomingRequests();
       set({ incomingRequests: requests });
+      lastLoadTimes['incoming'] = Date.now();
       console.log('✅ Incoming requests loaded:', requests.length);
     } catch (error) {
       console.error('❌ Error loading incoming requests:', error);
@@ -338,10 +360,16 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
   // Load outgoing requests
   loadOutgoingRequests: async () => {
+    if (!shouldRefreshData('outgoing')) {
+      console.log('⚡ Using cached outgoing requests data');
+      return;
+    }
+    
     try {
       console.log('📤 Loading outgoing requests...');
       const requests = await relationshipService.getOutgoingRequests();
       set({ outgoingRequests: requests });
+      lastLoadTimes['outgoing'] = Date.now();
       console.log('✅ Outgoing requests loaded:', requests.length);
     } catch (error) {
       console.error('❌ Error loading outgoing requests:', error);
