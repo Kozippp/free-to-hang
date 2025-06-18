@@ -52,6 +52,119 @@ let friendRequestsChannel: any = null;
 let isStartingRealTime = false;
 let isSubscribed = false;
 
+// Throttling for real-time updates
+let lastUpdateTime = 0;
+const UPDATE_THROTTLE_MS = 1000; // Max 1 update per second
+
+// Debouncing for data loading
+let loadTimeouts: { [key: string]: NodeJS.Timeout } = {};
+
+function throttledUpdate(key: string, updateFn: () => void, delay: number = UPDATE_THROTTLE_MS) {
+  const now = Date.now();
+  
+  // Clear existing timeout
+  if (loadTimeouts[key]) {
+    clearTimeout(loadTimeouts[key]);
+  }
+  
+  // If enough time has passed, update immediately
+  if (now - lastUpdateTime > delay) {
+    lastUpdateTime = now;
+    updateFn();
+  } else {
+    // Otherwise, schedule update
+    loadTimeouts[key] = setTimeout(() => {
+      lastUpdateTime = Date.now();
+      updateFn();
+      delete loadTimeouts[key];
+    }, delay - (now - lastUpdateTime));
+  }
+}
+
+// Handle real-time changes efficiently
+function handleRealtimeChange(payload: any, currentUserId: string) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+  
+  if (eventType === 'INSERT') {
+    // New friend request created
+    const request = newRecord as any;
+    
+    if (request.receiver_id === currentUserId) {
+      // Incoming request
+      console.log('📥 New incoming friend request received');
+      throttledUpdate('incoming', () => {
+        const store = useFriendsStore.getState();
+        store.loadIncomingRequests();
+      }, 500);
+    } else if (request.sender_id === currentUserId) {
+      // Outgoing request
+      console.log('📤 New outgoing friend request sent');
+      throttledUpdate('outgoing', () => {
+        const store = useFriendsStore.getState();
+        store.loadOutgoingRequests();
+      }, 500);
+    }
+    
+  } else if (eventType === 'UPDATE') {
+    // Friend request status changed
+    const request = newRecord as any;
+    
+    if (request.status === 'accepted') {
+      console.log('✅ Friend request accepted - updating friends list');
+      
+      // Remove from appropriate request list
+      const store = useFriendsStore.getState();
+      const { incomingRequests, outgoingRequests } = store;
+      
+      if (request.receiver_id === currentUserId) {
+        // I accepted someone's request
+        useFriendsStore.setState({
+          incomingRequests: incomingRequests.filter(req => req.request_id !== request.id)
+        });
+      } else if (request.sender_id === currentUserId) {
+        // Someone accepted my request
+        useFriendsStore.setState({
+          outgoingRequests: outgoingRequests.filter(req => req.request_id !== request.id)
+        });
+      }
+      
+      // Refresh friends list to include new friend
+      throttledUpdate('friends', () => {
+        const store = useFriendsStore.getState();
+        store.loadFriends();
+      }, 500);
+    }
+    
+  } else if (eventType === 'DELETE') {
+    // Friend request declined/cancelled or friendship removed
+    const request = oldRecord as any;
+    
+    console.log('🗑️ Friend request deleted/declined');
+    const store = useFriendsStore.getState();
+    const { incomingRequests, outgoingRequests, friends } = store;
+    
+    if (request.receiver_id === currentUserId) {
+      // Someone cancelled their request to me
+      useFriendsStore.setState({
+        incomingRequests: incomingRequests.filter(req => req.request_id !== request.id)
+      });
+    } else if (request.sender_id === currentUserId) {
+      // I cancelled my request or it was declined
+      useFriendsStore.setState({
+        outgoingRequests: outgoingRequests.filter(req => req.request_id !== request.id)
+      });
+    }
+    
+    // If this was an accepted friendship being removed, update friends list
+    if (request.status === 'accepted') {
+      const friendIdToRemove = request.sender_id === currentUserId ? request.receiver_id : request.sender_id;
+      useFriendsStore.setState({
+        friends: friends.filter(friend => friend.friend_id !== friendIdToRemove)
+      });
+    }
+  }
+}
+
 const useFriendsStore = create<FriendsState>((set, get) => ({
   friends: [],
   incomingRequests: [],
@@ -272,22 +385,42 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         friendRequestsChannel = null;
       }
 
-      // Create new channel for friend_requests table
+      // Get current user ID for filtering
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('❌ No authenticated user for real-time subscription');
+        return;
+      }
+
+      // Create new channel for friend_requests table with user-specific filtering
       friendRequestsChannel = supabase
-        .channel(`friend_requests_${Date.now()}`)
+        .channel(`friend_requests_${user.id}_${Date.now()}`)
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
-            table: 'friend_requests'
+            table: 'friend_requests',
+            filter: `sender_id=eq.${user.id}`
           },
           (payload) => {
-            console.log('📡 Friend request change:', payload);
-            
-            // Reload data when changes occur
-            const { loadAllRelationships } = get();
-            loadAllRelationships();
+            console.log('📡 Friend request change (outgoing):', payload);
+            // Handle outgoing request changes
+            handleRealtimeChange(payload, user.id);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'friend_requests',
+            filter: `receiver_id=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('📡 Friend request change (incoming):', payload);
+            // Handle incoming request changes
+            handleRealtimeChange(payload, user.id);
           }
         )
         .subscribe((status) => {
