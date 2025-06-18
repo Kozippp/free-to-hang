@@ -622,25 +622,15 @@ export default function ProfileScreen() {
   };
 
   const handleAcceptRequest = async (requestId: string) => {
-    try {
-      await acceptFriendRequest(requestId);
-      setShowRequestProfile(false);
-      setSelectedRequest(null);
-      // Refresh friends list
-      loadFriends();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to accept friend request');
-    }
+    console.log('🚫 Accept friend request disabled (frontend only)');
+    setShowRequestProfile(false);
+    setSelectedRequest(null);
   };
 
   const handleDeclineRequest = async (requestId: string) => {
-    try {
-      await declineFriendRequest(requestId);
-      setShowRequestProfile(false);
-      setSelectedRequest(null);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to decline friend request');
-    }
+    console.log('🚫 Decline friend request disabled (frontend only)');
+    setShowRequestProfile(false);
+    setSelectedRequest(null);
   };
 
   const renderRequestItem = ({ item }: { item: any }) => (
