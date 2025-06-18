@@ -128,9 +128,30 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.sendFriendRequest(friendId);
       if (success) {
+        // Find the user from search results to add to sent requests
+        const currentState = get();
+        const targetUser = currentState.searchResults.find(user => user.id === friendId);
+        
+        if (targetUser) {
+          // Add to sentRequests immediately
+          const newSentRequest = {
+            id: targetUser.id,
+            name: targetUser.name,
+            username: targetUser.username,
+            avatar_url: targetUser.avatar_url,
+            bio: targetUser.bio,
+            vibe: targetUser.vibe
+          };
+          
+          set({
+            sentRequests: [...currentState.sentRequests, newSentRequest]
+          });
+        }
+        
         // Update search results immediately
         get().updateSearchResultStatus(friendId, 'pending_sent');
-        // Refresh data in background
+        
+        // Refresh data in background to ensure consistency
         setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
@@ -144,9 +165,21 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.acceptFriendRequest(friendId);
       if (success) {
+        // Immediately move from friendRequests to friends
+        const currentState = get();
+        const acceptedRequest = currentState.friendRequests.find(req => req.id === friendId);
+        
+        if (acceptedRequest) {
+          set({
+            friendRequests: currentState.friendRequests.filter(req => req.id !== friendId),
+            friends: [...currentState.friends, acceptedRequest]
+          });
+        }
+        
         // Update search results immediately
         get().updateSearchResultStatus(friendId, 'friends');
-        // Refresh data in background
+        
+        // Refresh data in background to ensure consistency
         setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
@@ -160,9 +193,17 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.declineFriendRequest(friendId);
       if (success) {
+        // Immediately remove from friendRequests and sentRequests arrays
+        const currentState = get();
+        set({
+          friendRequests: currentState.friendRequests.filter(req => req.id !== friendId),
+          sentRequests: currentState.sentRequests.filter(req => req.id !== friendId)
+        });
+        
         // Update search results immediately
         get().updateSearchResultStatus(friendId, 'none');
-        // Refresh data in background
+        
+        // Refresh data in background to ensure consistency
         setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
@@ -176,9 +217,16 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await relationshipService.declineFriendRequest(friendId);
       if (success) {
+        // Immediately remove from sentRequests array
+        const currentState = get();
+        set({
+          sentRequests: currentState.sentRequests.filter(req => req.id !== friendId)
+        });
+        
         // Update search results immediately
         get().updateSearchResultStatus(friendId, 'none');
-        // Refresh data in background
+        
+        // Refresh data in background to ensure consistency
         setTimeout(() => get().loadAllRelationships(), 100);
       }
       return success;
@@ -388,9 +436,26 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             filter: `or(sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id})`
           },
           (payload) => {
-            console.log('🔄 Friend request change detected:', payload.eventType, payload.new);
-            // Immediate reload for faster updates
-            get().loadAllRelationships();
+            console.log('🔄 Friend request change detected:', payload.eventType, payload.new, payload.old);
+            
+            // Handle different events more specifically
+            if (payload.eventType === 'DELETE' && payload.old) {
+              // Request was declined or cancelled - remove immediately
+              const deletedRequest = payload.old as any;
+              const currentState = get();
+              
+              set({
+                friendRequests: currentState.friendRequests.filter(req => 
+                  !(req.id === deletedRequest.sender_id || req.id === deletedRequest.receiver_id)
+                ),
+                sentRequests: currentState.sentRequests.filter(req => 
+                  !(req.id === deletedRequest.sender_id || req.id === deletedRequest.receiver_id)
+                )
+              });
+            }
+            
+            // Always do a full reload to ensure consistency, but with a slight delay
+            setTimeout(() => get().loadAllRelationships(), 200);
           }
         )
         .subscribe((status) => {
