@@ -4,12 +4,12 @@ export const API_CONFIG = {
   DEV_BASE_URL: 'http://localhost:3000',
   
   // Production (Railway)
-  PROD_BASE_URL: 'https://your-railway-app.railway.app', // Asenda oma Railway URL-iga
+  PROD_BASE_URL: 'https://free-to-hang-production.up.railway.app',
   
   // Current environment
   BASE_URL: __DEV__ 
     ? 'http://localhost:3000' 
-    : 'https://your-railway-app.railway.app', // Asenda oma Railway URL-iga
+    : 'https://free-to-hang-production.up.railway.app',
 };
 
 // API Endpoints
