@@ -417,164 +417,104 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     return ghostedFriends.find(ghost => ghost.ghosted_id === userId) || null;
   },
 
-  // Improved real-time subscriptions
+  // Improved real-time subscriptions - Fixed for reliability
   startRealTimeUpdates: async () => {
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) return;
+      if (!currentUser) {
+        console.log('❌ No authenticated user for real-time updates');
+        return;
+      }
 
-      // Stop existing subscriptions
+      // Stop existing subscriptions first
       get().stopRealTimeUpdates();
 
-      console.log('Starting real-time updates for user:', currentUser.id);
+      console.log('🚀 Starting real-time updates for user:', currentUser.id);
 
       // Load initial data
       await get().loadAllRelationships();
 
-      // Subscribe to friend_requests table for real-time friend request updates
-      const friendRequestsChannel = supabase
-        .channel('friend_requests_realtime')
+      // Create a single channel for all friend-related updates
+      const friendsChannel = supabase
+        .channel(`friends_realtime_${currentUser.id}`)
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
-            table: 'friend_requests',
-            filter: `or(sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id})`
+            table: 'friend_requests'
           },
           (payload) => {
-            console.log('🔄 Friend request change detected:', payload.eventType, payload.new, payload.old);
+            console.log('🔄 Friend request change:', payload.eventType, payload);
             
-            // Handle immediate UI updates for better UX
-            if (payload.eventType === 'INSERT' && payload.new) {
-              const newRequest = payload.new as any;
-              const currentState = get();
-              
-              if (newRequest.receiver_id === currentUser.id) {
-                // New incoming request - add to friendRequests immediately
-                const requestExists = currentState.friendRequests.some(req => req.id === newRequest.sender_id);
-                if (!requestExists) {
-                  // We need to fetch the sender's user data
-                  supabase
-                    .from('users')
-                    .select('id, name, username, avatar_url, vibe')
-                    .eq('id', newRequest.sender_id)
-                    .single()
-                    .then(({ data: userData }) => {
-                      if (userData) {
-                        const currentState = get();
-                        set({
-                          friendRequests: [...currentState.friendRequests, userData]
-                        });
-                      }
-                    });
-                }
-              }
-            } else if (payload.eventType === 'DELETE' && payload.old) {
-              // Request was declined, cancelled, or accepted - remove immediately
-              const deletedRequest = payload.old as any;
-              const currentState = get();
-              
-              set({
-                friendRequests: currentState.friendRequests.filter(req => 
-                  req.id !== deletedRequest.sender_id
-                ),
-                sentRequests: currentState.sentRequests.filter(req => 
-                  req.id !== deletedRequest.receiver_id
-                )
-              });
+            // Only process if it involves the current user
+            const newData = payload.new as any;
+            const oldData = payload.old as any;
+            
+            const isRelevant = 
+              (newData && (newData.sender_id === currentUser.id || newData.receiver_id === currentUser.id)) ||
+              (oldData && (oldData.sender_id === currentUser.id || oldData.receiver_id === currentUser.id));
+            
+            if (isRelevant) {
+              // Reload relationships after a short delay to ensure consistency
+              setTimeout(() => {
+                console.log('🔄 Reloading relationships due to friend request change');
+                get().loadAllRelationships();
+              }, 500);
             }
-            
-            // Full reload with a slight delay to ensure consistency
-            setTimeout(() => get().loadAllRelationships(), 300);
           }
         )
-        .subscribe((status) => {
-          console.log('Friend requests subscription status:', status);
-        });
-
-      // Subscribe to friendships table for real-time friendship updates
-      const friendshipsChannel = supabase
-        .channel('friendships_realtime')
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
-            table: 'friendships',
-            filter: `or(user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id})`
+            table: 'friendships'
           },
           (payload) => {
-            console.log('🔄 Friendship change detected:', payload.eventType, payload.new);
+            console.log('🔄 Friendship change:', payload.eventType, payload);
             
-            // Handle immediate UI updates
-            if (payload.eventType === 'INSERT' && payload.new) {
-              const newFriendship = payload.new as any;
-              const friendId = newFriendship.user_id === currentUser.id ? newFriendship.friend_id : newFriendship.user_id;
-              
-              // Remove from pending requests immediately
-              const currentState = get();
-              set({
-                friendRequests: currentState.friendRequests.filter(req => req.id !== friendId),
-                sentRequests: currentState.sentRequests.filter(req => req.id !== friendId)
-              });
-              
-              // Fetch friend data and add to friends list
-              supabase
-                .from('users')
-                .select('id, name, username, avatar_url, vibe')
-                .eq('id', friendId)
-                .single()
-                .then(({ data: userData }) => {
-                  if (userData) {
-                    const currentState = get();
-                    const friendExists = currentState.friends.some(friend => friend.id === userData.id);
-                    if (!friendExists) {
-                      set({
-                        friends: [...currentState.friends, userData]
-                      });
-                    }
-                  }
-                });
+            // Only process if it involves the current user
+            const newData = payload.new as any;
+            const oldData = payload.old as any;
+            
+            const isRelevant = 
+              (newData && (newData.user_id === currentUser.id || newData.friend_id === currentUser.id)) ||
+              (oldData && (oldData.user_id === currentUser.id || oldData.friend_id === currentUser.id));
+            
+            if (isRelevant) {
+              // Reload relationships after a short delay
+              setTimeout(() => {
+                console.log('🔄 Reloading relationships due to friendship change');
+                get().loadAllRelationships();
+              }, 500);
             }
-            
-            // Full reload with a slight delay
-            setTimeout(() => get().loadAllRelationships(), 300);
           }
         )
         .subscribe((status) => {
-          console.log('Friendships subscription status:', status);
-        });
-
-      // Subscribe to blocked_users table for real-time blocking updates
-      const blockedUsersChannel = supabase
-        .channel('blocked_users_realtime')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'blocked_users',
-            filter: `or(blocker_id.eq.${currentUser.id},blocked_id.eq.${currentUser.id})`
-          },
-          (payload) => {
-            console.log('🔄 Blocked users change detected:', payload.eventType, payload.new);
-            // Immediate reload for blocking changes
-            get().loadAllRelationships();
+          console.log('📡 Friends channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Real-time updates active');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Real-time channel error, attempting reconnect...');
+            // Retry connection after a delay
+            setTimeout(() => {
+              get().startRealTimeUpdates();
+            }, 3000);
           }
-        )
-        .subscribe((status) => {
-          console.log('Blocked users subscription status:', status);
         });
 
-      // Store channel references for cleanup
-      relationshipsChannel = friendRequestsChannel;
-      (relationshipsChannel as any).friendshipsChannel = friendshipsChannel;
-      (relationshipsChannel as any).blockedUsersChannel = blockedUsersChannel;
+      // Store channel reference for cleanup
+      relationshipsChannel = friendsChannel;
 
-      console.log('✅ Real-time updates started for friend relationships');
+      console.log('✅ Real-time subscription started');
     } catch (error) {
       console.error('❌ Error starting real-time updates:', error);
+      // Retry after a delay
+      setTimeout(() => {
+        console.log('🔄 Retrying real-time subscription...');
+        get().startRealTimeUpdates();
+      }, 5000);
     }
   },
 
@@ -582,20 +522,13 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     console.log('🛑 Stopping real-time updates...');
     if (relationshipsChannel) {
       supabase.removeChannel(relationshipsChannel);
-      // Clean up additional channels
-      if ((relationshipsChannel as any).friendshipsChannel) {
-        supabase.removeChannel((relationshipsChannel as any).friendshipsChannel);
-      }
-      if ((relationshipsChannel as any).blockedUsersChannel) {
-        supabase.removeChannel((relationshipsChannel as any).blockedUsersChannel);
-      }
       relationshipsChannel = null;
+      console.log('✅ Real-time updates stopped');
     }
     if (ghostingChannel) {
       supabase.removeChannel(ghostingChannel);
       ghostingChannel = null;
     }
-    console.log('✅ Real-time updates stopped');
   },
 
   // New method to refresh specific relationship
