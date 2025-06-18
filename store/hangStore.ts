@@ -402,11 +402,11 @@ const useHangStore = create<HangState>()(
         // This is much more efficient than polling every second
         console.log('🚀 Starting real-time friend status updates...');
         
-        // TODO: Implement proper real-time subscription to users table for status changes
-        // For now, refresh every 30 seconds instead of every 1 second
+        // Note: Friend relationships are now managed by friendsStore with real-time updates
+        // We only need to refresh occasionally for status changes (available/offline)
         refreshInterval = setInterval(() => {
           get().loadFriends();
-        }, 30000); // 30 seconds instead of 1 second
+        }, 60000); // 60 seconds - only for status updates, not friend relationships
       },
 
       stopRealTimeUpdates: () => {

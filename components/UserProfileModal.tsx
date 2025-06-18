@@ -171,13 +171,13 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
             style: 'destructive',
             onPress: async () => {
               try {
-                const success = await relationshipService.removeFriend(userId);
+                const { removeFriend } = useFriendsStore.getState();
+                const success = await removeFriend(userId);
                 if (success) {
                   console.log('✅ Friend removed successfully');
                   setRelationshipStatus('none');
                   
-                  // The removeFriend already bypasses cache and updates the store
-                  // No need to reload here as it's already done in the store
+                  // The store's removeFriend already handles UI updates and cache bypass
                   
                   Alert.alert('Success', `${user.name} has been removed from your friends.`);
                 } else {

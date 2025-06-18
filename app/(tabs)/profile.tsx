@@ -120,19 +120,19 @@ export default function ProfileScreen() {
     setOriginalAvatar(user.avatar || userProfile.avatar);
   }, [user, userProfile]);
 
-  // Combine friends from hangStore
+  // Use friends from friendsStore (real-time updates with instant cache bypass)
   useEffect(() => {
-    const combinedFriends = [...friends, ...offlineFriends].map(friend => ({
-      id: friend.id,
-      name: friend.name,
-      avatar: friend.avatar,
-      status: friend.status === 'pinged' ? 'offline' as const : friend.status,
-      lastAvailable: friend.lastActive || 'Unknown',
+    const friendsFromStore = storeFriends.map(friend => ({
+      id: friend.friend_id,
+      name: friend.friend_name,
+      avatar: friend.friend_avatar_url || generateDefaultAvatar(friend.friend_name, friend.friend_id),
+      status: 'offline' as const, // Friends are just relationships, status tracking is separate
+      lastAvailable: 'Recently',
       shareAvailability: 'week' as const, // Default value
       isBlocked: false
     }));
-    setAllFriends(combinedFriends);
-  }, [friends, offlineFriends]);
+    setAllFriends(friendsFromStore);
+  }, [storeFriends]);
   
   // Modal states
   const [showSettings, setShowSettings] = useState(false);
@@ -668,7 +668,7 @@ export default function ProfileScreen() {
     try {
       await forceRefresh();
       await loadUserData(); // Also refresh user data
-      await loadFriends(); // Refresh hang store friends
+      // Note: hangStore friends are updated via real-time, no need to reload manually
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
