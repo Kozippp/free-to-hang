@@ -176,7 +176,13 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     // Friend request declined/cancelled or friendship removed
     const request = oldRecord as any;
     
-    console.log('🗑️ Friend request deleted/declined');
+    console.log('🗑️ Friend request deleted/declined via real-time:', {
+      id: request.id,
+      sender_id: request.sender_id,
+      receiver_id: request.receiver_id,
+      status: request.status,
+      currentUserId
+    });
     const deleteStore = useFriendsStore.getState();
     const { incomingRequests, outgoingRequests, friends } = deleteStore;
     
@@ -192,11 +198,17 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
       });
     }
     
-    // If this was an accepted friendship being removed, update friends list
+    // If this was an accepted friendship being removed, force reload friends list
     if (request.status === 'accepted') {
-      const friendIdToRemove = request.sender_id === currentUserId ? request.receiver_id : request.sender_id;
-      useFriendsStore.setState({
-        friends: friends.filter(friend => friend.friend_id !== friendIdToRemove)
+      console.log('🗑️ Friendship deleted via real-time - force reloading friends list');
+      
+      // Force reload friends list to ensure both users get updated
+      relationshipService.getFriends().then(updatedFriends => {
+        useFriendsStore.setState({ friends: updatedFriends });
+        lastLoadTimes['friends'] = Date.now();
+        console.log('✅ Friends list updated via real-time after deletion:', updatedFriends.length);
+      }).catch(error => {
+        console.error('❌ Error updating friends list via real-time:', error);
       });
     }
   }
@@ -383,20 +395,27 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
   // Remove friend
   removeFriend: async (friendId: string): Promise<boolean> => {
     try {
+      console.log('💔 Starting friend removal process for:', friendId);
       const success = await relationshipService.removeFriend(friendId);
       if (success) {
-        console.log('🚀 Friend removed, updating UI immediately...');
+        console.log('🚀 Friend removed from backend, updating UI immediately...');
         
         // Remove from friends list immediately
         const { friends, searchResults } = get();
+        console.log('👥 Current friends before removal:', friends.length);
+        const updatedFriends = friends.filter(friend => friend.friend_id !== friendId);
+        console.log('👥 Friends after filtering:', updatedFriends.length);
+        
         set({
-          friends: friends.filter(friend => friend.friend_id !== friendId),
+          friends: updatedFriends,
           searchResults: searchResults.map(user => 
             user.id === friendId 
               ? { ...user, relationshipStatus: 'none' as RelationshipStatus }
               : user
           )
         });
+        
+        console.log('✅ Friend removed from UI immediately');
         
         // Force reload friends list to ensure consistency (bypass cache)
         try {
@@ -408,6 +427,8 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         } catch (error) {
           console.error('❌ Error force loading friends:', error);
         }
+      } else {
+        console.log('❌ Backend friend removal failed');
       }
       return success;
     } catch (error) {
