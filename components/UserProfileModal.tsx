@@ -92,22 +92,62 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   };
 
   const handleAddFriend = async () => {
-    console.log('🚫 Add friend disabled (frontend only)');
-    setActionLoading(false);
+    if (!userId || !user) return;
+    
+    setActionLoading(true);
+    try {
+      console.log('📤 Sending friend request to:', user.name);
+      const success = await relationshipService.sendFriendRequest(userId);
+      if (success) {
+        console.log('✅ Friend request sent successfully');
+        setRelationshipStatus('pending_sent');
+        
+        // Reload friends data
+        const { loadAllRelationships } = useFriendsStore.getState();
+        await loadAllRelationships();
+      } else {
+        Alert.alert('Error', 'Failed to send friend request. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error sending friend request:', error);
+      Alert.alert('Error', 'Failed to send friend request. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleCancelRequest = async () => {
-    console.log('🚫 Cancel friend request disabled (frontend only)');
-    setActionLoading(false);
+    if (!userId || !user) return;
+    
+    setActionLoading(true);
+    try {
+      console.log('🔄 Cancelling friend request to:', user.name);
+      const success = await relationshipService.cancelFriendRequest(userId);
+      if (success) {
+        console.log('✅ Friend request cancelled successfully');
+        setRelationshipStatus('none');
+        
+        // Reload friends data
+        const { loadAllRelationships } = useFriendsStore.getState();
+        await loadAllRelationships();
+      } else {
+        Alert.alert('Error', 'Failed to cancel friend request. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error cancelling friend request:', error);
+      Alert.alert('Error', 'Failed to cancel friend request. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleAcceptRequest = async () => {
-    console.log('🚫 Accept friend request disabled (frontend only)');
+    console.log('🚫 Accept friend request disabled - use profile screen instead');
     setActionLoading(false);
   };
 
   const handleDeclineRequest = async () => {
-    console.log('🚫 Decline friend request disabled (frontend only)');
+    console.log('🚫 Decline friend request disabled - use profile screen instead');
     setActionLoading(false);
   };
 
