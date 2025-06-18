@@ -250,21 +250,21 @@ const useHangStore = create<HangState>()(
           const { data: { user: authUser } } = await supabase.auth.getUser();
           if (!authUser) return;
 
-          // Use the new single friendship record structure
-          // Query friendships where the current user is either user_id or friend_id
-          const { data: friendships, error: friendshipsError } = await supabase
-            .from('friendships')
+          // Use the new friend_requests table to get accepted friendships
+          // Query friend_requests where status is 'accepted' and current user is involved
+          const { data: friendRequests, error: friendRequestsError } = await supabase
+            .from('friend_requests')
             .select(`
-              user_id,
-              friend_id,
-              user:users!friendships_user_id_fkey (
+              sender_id,
+              receiver_id,
+              sender:users!friend_requests_sender_id_fkey (
                 id,
                 name,
                 username,
                 avatar_url,
                 status
               ),
-              friend_user:users!friendships_friend_id_fkey (
+              receiver:users!friend_requests_receiver_id_fkey (
                 id,
                 name,
                 username,
@@ -272,10 +272,11 @@ const useHangStore = create<HangState>()(
                 status
               )
             `)
-            .or(`user_id.eq.${authUser.id},friend_id.eq.${authUser.id}`);
+            .eq('status', 'accepted')
+            .or(`sender_id.eq.${authUser.id},receiver_id.eq.${authUser.id}`);
 
-          if (friendshipsError) {
-            console.error('Error loading friendships:', friendshipsError);
+          if (friendRequestsError) {
+            console.error('Error loading friend requests:', friendRequestsError);
             return;
           }
 
@@ -283,15 +284,15 @@ const useHangStore = create<HangState>()(
           const allFriendData: any[] = [];
           const seenIds = new Set<string>();
           
-          if (friendships) {
-            friendships.forEach((f: any) => {
+          if (friendRequests) {
+            friendRequests.forEach((f: any) => {
               let friendData = null;
               
               // Determine which user is the friend (not the current user)
-              if (f.user_id === authUser.id && f.friend_user) {
-                friendData = f.friend_user;
-              } else if (f.friend_id === authUser.id && f.user) {
-                friendData = f.user;
+              if (f.sender_id === authUser.id && f.receiver) {
+                friendData = f.receiver;
+              } else if (f.receiver_id === authUser.id && f.sender) {
+                friendData = f.sender;
               }
               
               if (friendData && !seenIds.has(friendData.id)) {
