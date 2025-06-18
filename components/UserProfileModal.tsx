@@ -46,13 +46,6 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   const [actionLoading, setActionLoading] = useState(false);
   const [showGhostModal, setShowGhostModal] = useState(false);
 
-  const { 
-    ghostFriend,
-    unghostFriend,
-    getGhostStatus,
-    loadAllRelationships
-  } = useFriendsStore();
-
   // Load user data and relationship status when modal opens
   useEffect(() => {
     if (visible && userId) {
@@ -86,7 +79,6 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     }
   };
 
-  // Simple single-query relationship status check
   const determineRelationshipStatus = async () => {
     if (!userId) return;
     
@@ -231,9 +223,6 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   const renderActionButtons = () => {
     if (!user) return null;
 
-    const ghostStatus = getGhostStatus(user.id);
-    const isGhosted = !!ghostStatus;
-
     switch (relationshipStatus) {
       case 'none':
         return (
@@ -281,40 +270,17 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
           </View>
         );
 
-      case 'friends':
+      case 'accepted_sent':
+      case 'accepted_received':
         return (
           <View style={styles.friendButtonsContainer}>
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={[styles.secondaryButton, styles.halfButton]}
-                onPress={isGhosted ? () => unghostFriend(user.id) : handleGhostFriend}
-                disabled={actionLoading}
-              >
-                {isGhosted ? (
-                  <Eye size={18} color={Colors.light.primary} />
-                ) : (
-                  <EyeOff size={18} color={Colors.light.primary} />
-                )}
-                <Text style={styles.secondaryButtonText}>
-                  {isGhosted ? 'Unghost' : 'Ghost'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dangerButton, styles.halfButton]}
-                onPress={handleRemoveFriend}
-                disabled={actionLoading}
-              >
-                <UserMinus size={18} color="white" />
-                <Text style={styles.dangerButtonText}>Remove</Text>
-              </TouchableOpacity>
-            </View>
             <TouchableOpacity
-              style={styles.blockButton}
-              onPress={handleBlockUser}
+              style={styles.dangerButton}
+              onPress={handleRemoveFriend}
               disabled={actionLoading}
             >
-              <UserX size={20} color="white" />
-              <Text style={styles.blockButtonText}>Block User</Text>
+              <UserMinus size={18} color="white" />
+              <Text style={styles.dangerButtonText}>Remove Friend</Text>
             </TouchableOpacity>
           </View>
         );
