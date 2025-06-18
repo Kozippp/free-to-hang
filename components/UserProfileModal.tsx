@@ -31,7 +31,6 @@ interface User {
   vibe?: string;
   status?: 'available' | 'busy' | 'offline';
   created_at?: string;
-  last_seen?: string;
 }
 
 interface UserProfileModalProps {
@@ -73,7 +72,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     try {
       const { data: userData, error } = await supabase
         .from('users')
-        .select('id, name, username, avatar_url, bio, vibe, status, created_at, last_seen')
+        .select('id, name, username, avatar_url, bio, vibe, status, created_at')
         .eq('id', userId)
         .single();
 
