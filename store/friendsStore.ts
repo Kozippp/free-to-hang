@@ -428,6 +428,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
       console.log('Starting real-time updates for user:', currentUser.id);
 
+      // Load initial data
+      await get().loadAllRelationships();
+
       // Subscribe to friend_requests table for real-time friend request updates
       const friendRequestsChannel = supabase
         .channel('friend_requests_realtime')
@@ -442,24 +445,48 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           (payload) => {
             console.log('🔄 Friend request change detected:', payload.eventType, payload.new, payload.old);
             
-            // Handle different events more specifically
-            if (payload.eventType === 'DELETE' && payload.old) {
-              // Request was declined or cancelled - remove immediately
+            // Handle immediate UI updates for better UX
+            if (payload.eventType === 'INSERT' && payload.new) {
+              const newRequest = payload.new as any;
+              const currentState = get();
+              
+              if (newRequest.receiver_id === currentUser.id) {
+                // New incoming request - add to friendRequests immediately
+                const requestExists = currentState.friendRequests.some(req => req.id === newRequest.sender_id);
+                if (!requestExists) {
+                  // We need to fetch the sender's user data
+                  supabase
+                    .from('users')
+                    .select('id, name, username, avatar_url, vibe')
+                    .eq('id', newRequest.sender_id)
+                    .single()
+                    .then(({ data: userData }) => {
+                      if (userData) {
+                        const currentState = get();
+                        set({
+                          friendRequests: [...currentState.friendRequests, userData]
+                        });
+                      }
+                    });
+                }
+              }
+            } else if (payload.eventType === 'DELETE' && payload.old) {
+              // Request was declined, cancelled, or accepted - remove immediately
               const deletedRequest = payload.old as any;
               const currentState = get();
               
               set({
                 friendRequests: currentState.friendRequests.filter(req => 
-                  !(req.id === deletedRequest.sender_id || req.id === deletedRequest.receiver_id)
+                  req.id !== deletedRequest.sender_id
                 ),
                 sentRequests: currentState.sentRequests.filter(req => 
-                  !(req.id === deletedRequest.sender_id || req.id === deletedRequest.receiver_id)
+                  req.id !== deletedRequest.receiver_id
                 )
               });
             }
             
-            // Always do a full reload to ensure consistency, but with a slight delay
-            setTimeout(() => get().loadAllRelationships(), 200);
+            // Full reload with a slight delay to ensure consistency
+            setTimeout(() => get().loadAllRelationships(), 300);
           }
         )
         .subscribe((status) => {
@@ -479,8 +506,40 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           },
           (payload) => {
             console.log('🔄 Friendship change detected:', payload.eventType, payload.new);
-            // Immediate reload for faster updates
-            get().loadAllRelationships();
+            
+            // Handle immediate UI updates
+            if (payload.eventType === 'INSERT' && payload.new) {
+              const newFriendship = payload.new as any;
+              const friendId = newFriendship.user_id === currentUser.id ? newFriendship.friend_id : newFriendship.user_id;
+              
+              // Remove from pending requests immediately
+              const currentState = get();
+              set({
+                friendRequests: currentState.friendRequests.filter(req => req.id !== friendId),
+                sentRequests: currentState.sentRequests.filter(req => req.id !== friendId)
+              });
+              
+              // Fetch friend data and add to friends list
+              supabase
+                .from('users')
+                .select('id, name, username, avatar_url, vibe')
+                .eq('id', friendId)
+                .single()
+                .then(({ data: userData }) => {
+                  if (userData) {
+                    const currentState = get();
+                    const friendExists = currentState.friends.some(friend => friend.id === userData.id);
+                    if (!friendExists) {
+                      set({
+                        friends: [...currentState.friends, userData]
+                      });
+                    }
+                  }
+                });
+            }
+            
+            // Full reload with a slight delay
+            setTimeout(() => get().loadAllRelationships(), 300);
           }
         )
         .subscribe((status) => {
@@ -500,7 +559,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           },
           (payload) => {
             console.log('🔄 Blocked users change detected:', payload.eventType, payload.new);
-            // Immediate reload for faster updates
+            // Immediate reload for blocking changes
             get().loadAllRelationships();
           }
         )

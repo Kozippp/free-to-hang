@@ -250,11 +250,20 @@ const useHangStore = create<HangState>()(
           const { data: { user: authUser } } = await supabase.auth.getUser();
           if (!authUser) return;
 
-          // Query friendships table with proper joins
+          // Use the new single friendship record structure
+          // Query friendships where the current user is either user_id or friend_id
           const { data: friendships, error: friendshipsError } = await supabase
             .from('friendships')
             .select(`
+              user_id,
               friend_id,
+              user:users!friendships_user_id_fkey (
+                id,
+                name,
+                username,
+                avatar_url,
+                status
+              ),
               friend_user:users!friendships_friend_id_fkey (
                 id,
                 name,
@@ -263,64 +272,36 @@ const useHangStore = create<HangState>()(
                 status
               )
             `)
-            .eq('user_id', authUser.id);
+            .or(`user_id.eq.${authUser.id},friend_id.eq.${authUser.id}`);
 
           if (friendshipsError) {
             console.error('Error loading friendships:', friendshipsError);
             return;
           }
 
-          // Also query reverse friendships (where current user is the friend)
-          const { data: reverseFriendships, error: reverseError } = await supabase
-            .from('friendships')
-            .select(`
-              user_id,
-              user:users!friendships_user_id_fkey (
-                id,
-                name,
-                username,
-                avatar_url,
-                status
-              )
-            `)
-            .eq('friend_id', authUser.id);
-
-          if (reverseError) {
-            console.error('Error loading reverse friendships:', reverseError);
-            return;
-          }
-
-          // Combine both directions and remove duplicates
+          // Extract friend data based on which field contains the current user
           const allFriendData: any[] = [];
           const seenIds = new Set<string>();
           
           if (friendships) {
             friendships.forEach((f: any) => {
-              if (f.friend_user && !seenIds.has(f.friend_user.id)) {
-                seenIds.add(f.friend_user.id);
-                allFriendData.push({
-                  id: f.friend_user.id,
-                  name: f.friend_user.name,
-                  username: f.friend_user.username,
-                  avatar: f.friend_user.avatar_url || getDefaultAvatar(f.friend_user.name, f.friend_user.id),
-                  status: f.friend_user.status === 'available' ? 'available' : 'offline',
-                  activity: '',
-                  lastActive: 'Recently'
-                });
+              let friendData = null;
+              
+              // Determine which user is the friend (not the current user)
+              if (f.user_id === authUser.id && f.friend_user) {
+                friendData = f.friend_user;
+              } else if (f.friend_id === authUser.id && f.user) {
+                friendData = f.user;
               }
-            });
-          }
-
-          if (reverseFriendships) {
-            reverseFriendships.forEach((f: any) => {
-              if (f.user && !seenIds.has(f.user.id)) {
-                seenIds.add(f.user.id);
+              
+              if (friendData && !seenIds.has(friendData.id)) {
+                seenIds.add(friendData.id);
                 allFriendData.push({
-                  id: f.user.id,
-                  name: f.user.name,
-                  username: f.user.username,
-                  avatar: f.user.avatar_url || getDefaultAvatar(f.user.name, f.user.id),
-                  status: f.user.status === 'available' ? 'available' : 'offline',
+                  id: friendData.id,
+                  name: friendData.name,
+                  username: friendData.username,
+                  avatar: friendData.avatar_url || getDefaultAvatar(friendData.name, friendData.id),
+                  status: friendData.status === 'available' ? 'available' : 'offline',
                   activity: '',
                   lastActive: 'Recently'
                 });

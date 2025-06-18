@@ -104,17 +104,6 @@ export default function HangScreen() {
     }
   }, [isAvailable, fadeAnim]);
   
-  // Add real-time updates effect
-  useEffect(() => {
-    // Start real-time updates when component mounts
-    startRealTimeUpdates();
-    
-    // Cleanup when component unmounts
-    return () => {
-      stopRealTimeUpdates();
-    };
-  }, [startRealTimeUpdates, stopRealTimeUpdates]);
-  
   const handleToggle = () => {
     if (!isAvailable) {
       setShowActivityModal(true);
