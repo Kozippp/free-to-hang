@@ -206,10 +206,17 @@ class RelationshipService {
         headers,
       });
 
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('❌ Error getting relationship status: Invalid response type:', contentType);
+        return 'none';
+      }
+
       const data = await response.json();
       
       if (!response.ok) {
-        console.error('❌ Error getting relationship status:', data.error);
+        console.error('❌ Error getting relationship status:', data.error || 'Unknown error');
         return 'none';
       }
 
@@ -229,10 +236,17 @@ class RelationshipService {
         headers,
       });
 
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('❌ Error getting friends: Invalid response type:', contentType);
+        return [];
+      }
+
       const data = await response.json();
       
       if (!response.ok) {
-        console.error('❌ Error getting friends:', data.error);
+        console.error('❌ Error getting friends:', data.error || 'Unknown error');
         return [];
       }
 
@@ -252,10 +266,17 @@ class RelationshipService {
         headers,
       });
 
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('❌ Error getting incoming requests: Invalid response type:', contentType);
+        return [];
+      }
+
       const data = await response.json();
       
       if (!response.ok) {
-        console.error('❌ Error getting incoming requests:', data.error);
+        console.error('❌ Error getting incoming requests:', data.error || 'Unknown error');
         return [];
       }
 
@@ -275,10 +296,17 @@ class RelationshipService {
         headers,
       });
 
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('❌ Error getting outgoing requests: Invalid response type:', contentType);
+        return [];
+      }
+
       const data = await response.json();
       
       if (!response.ok) {
-        console.error('❌ Error getting outgoing requests:', data.error);
+        console.error('❌ Error getting outgoing requests:', data.error || 'Unknown error');
         return [];
       }
 
@@ -310,10 +338,17 @@ class RelationshipService {
         headers,
       });
 
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('❌ Error searching users: Invalid response type:', contentType);
+        return [];
+      }
+
       const data = await response.json();
       
       if (!response.ok) {
-        console.error('❌ Error searching users:', data.error);
+        console.error('❌ Error searching users:', data.error || 'Unknown error');
         return [];
       }
 
