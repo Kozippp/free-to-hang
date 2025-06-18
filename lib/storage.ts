@@ -27,48 +27,87 @@ export async function uploadImage(
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `${user.id}/${fileName}`;
 
-    // Use FormData for React Native compatibility
-    const formData = new FormData();
-    
-    // Create file object for React Native
-    const fileObject = {
-      uri: uri,
-      type: `image/${fileExt}`,
-      name: fileName,
-    } as any;
-    
-    formData.append('file', fileObject);
+    console.log('Uploading image:', { filePath, fileName, type: `image/${fileExt}`, uri });
 
-    console.log('Uploading image:', { filePath, fileName, type: `image/${fileExt}` });
+    // Try method 1: Direct REST API with FormData (preferred for React Native)
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: uri,
+        type: `image/${fileExt}`,
+        name: fileName,
+      } as any);
 
-    // For React Native, we need to use the file URI directly
-    const response = await fetch(uri);
-    const blob = await response.blob();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
+      }
 
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, blob, {
-        contentType: `image/${fileExt}`,
-        upsert: true
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${filePath}`;
+
+      console.log('Attempting upload to:', uploadUrl);
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: formData,
       });
 
-    if (error) {
-      console.error('Supabase upload error:', error);
-      throw error;
+      if (uploadResponse.ok) {
+        console.log('Upload successful via REST API');
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(filePath);
+
+        console.log('Image uploaded successfully:', publicUrl);
+        return {
+          url: publicUrl,
+          path: filePath
+        };
+      } else {
+        const errorText = await uploadResponse.text();
+        console.log('REST API upload failed, trying fallback method:', errorText);
+        throw new Error(`REST API failed: ${uploadResponse.status}`);
+      }
+    } catch (restError) {
+      console.log('REST API method failed, trying Supabase client method:', restError);
+      
+      // Method 2: Fallback using Supabase client with ArrayBuffer
+      const response = await fetch(uri);
+      const arrayBuffer = await response.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      console.log('File size:', uint8Array.length, 'bytes');
+
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, uint8Array, {
+          contentType: `image/${fileExt}`,
+          upsert: true
+        });
+
+      if (error) {
+        console.error('Supabase client upload error:', error);
+        throw error;
+      }
+
+      console.log('Upload successful via Supabase client');
+      
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+      console.log('Image uploaded successfully:', publicUrl);
+      return {
+        url: publicUrl,
+        path: filePath
+      };
     }
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
-
-    console.log('Image uploaded successfully:', publicUrl);
-
-    return {
-      url: publicUrl,
-      path: filePath
-    };
 
   } catch (error) {
     console.error('Error uploading image:', error);
