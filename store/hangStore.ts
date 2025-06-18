@@ -356,6 +356,8 @@ const useHangStore = create<HangState>()(
             return false;
           }
 
+          console.log('Updating user data with:', updates);
+
           // Direct Supabase update - simple and reliable
           const { data: userData, error } = await supabase
             .from('users')
@@ -371,19 +373,20 @@ const useHangStore = create<HangState>()(
 
           if (userData) {
             // Update local state with new data
-            set({
-              user: {
-                id: userData.id,
-                name: userData.name,
-                username: userData.username,
-                vibe: userData.vibe,
-                avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
-                status: 'offline',
-                activity: ''
-              }
-            });
+            const newUserState = {
+              id: userData.id,
+              name: userData.name,
+              username: userData.username,
+              vibe: userData.vibe,
+              avatar: userData.avatar_url || getDefaultAvatar(userData.name, userData.id),
+              status: get().user.status || 'offline',
+              activity: get().user.activity || ''
+            };
+            
+            set({ user: newUserState });
             
             console.log('User data updated successfully:', userData);
+            console.log('New user state:', newUserState);
             return true;
           }
 

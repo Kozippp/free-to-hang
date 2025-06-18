@@ -317,51 +317,56 @@ export default function ProfileScreen() {
 
   const handleChangeProfilePicture = async () => {
     const processAvatarUpdate = async (avatarUrl: string, oldAvatarUrl?: string) => {
-      // Save to database first
-      const updateSuccess = await updateUserData({
-        avatar_url: avatarUrl,
-      });
-      
-      if (updateSuccess) {
-        // Force cache bust by adding timestamp
+      try {
+        // Force cache bust by adding timestamp to the URL that will be saved
         const cacheBustedUrl = `${avatarUrl}?v=${Date.now()}`;
         
-        // Update UI after successful database save
-        setEditAvatar(cacheBustedUrl);
-        setUserProfile(prev => ({ ...prev, avatar: cacheBustedUrl }));
+        // Save cache-busted URL to database
+        const updateSuccess = await updateUserData({
+          avatar_url: cacheBustedUrl,
+        });
         
-        // Reload user data to ensure everything is synced
-        await loadUserData();
-        
-        // Also reload friends to update their view of your avatar
-        await loadFriends();
-        
-        // Delete old avatar if it exists and is not a default avatar
-        if (oldAvatarUrl && !oldAvatarUrl.includes('gravatar') && !oldAvatarUrl.includes('default')) {
-          try {
-            const oldPath = extractPathFromUrl(oldAvatarUrl);
-            if (oldPath) {
-              await deleteImage(oldPath);
-              console.log('Old avatar deleted successfully');
+        if (updateSuccess) {
+          // Update UI state immediately
+          setEditAvatar(cacheBustedUrl);
+          setUserProfile(prev => ({ ...prev, avatar: cacheBustedUrl }));
+          
+          // Force reload user data to ensure everything is synced
+          await loadUserData();
+          
+          // Also reload friends to update their view of your avatar
+          await loadFriends();
+          
+          // Delete old avatar if it exists and is not a default avatar
+          if (oldAvatarUrl && !oldAvatarUrl.includes('gravatar') && !oldAvatarUrl.includes('default') && !oldAvatarUrl.includes('ui-avatars')) {
+            try {
+              const oldPath = extractPathFromUrl(oldAvatarUrl);
+              if (oldPath) {
+                await deleteImage(oldPath);
+                console.log('Old avatar deleted successfully');
+              }
+            } catch (error) {
+              console.error('Failed to delete old avatar:', error);
             }
-          } catch (error) {
-            console.error('Failed to delete old avatar:', error);
           }
-        }
-        
-        console.log('Avatar saved to database successfully');
-        Alert.alert('Success!', 'Profile picture updated!');
-      } else {
-        // Rollback: delete the uploaded image since database update failed
-        try {
-          const uploadedPath = extractPathFromUrl(avatarUrl);
-          if (uploadedPath) {
-            await deleteImage(uploadedPath);
-            console.log('Uploaded image deleted due to database update failure');
+          
+          console.log('Avatar saved to database successfully with URL:', cacheBustedUrl);
+          Alert.alert('Success!', 'Profile picture updated!');
+        } else {
+          // Rollback: delete the uploaded image since database update failed
+          try {
+            const uploadedPath = extractPathFromUrl(avatarUrl);
+            if (uploadedPath) {
+              await deleteImage(uploadedPath);
+              console.log('Uploaded image deleted due to database update failure');
+            }
+          } catch (deleteError) {
+            console.error('Failed to delete uploaded image during rollback:', deleteError);
           }
-        } catch (deleteError) {
-          console.error('Failed to delete uploaded image during rollback:', deleteError);
+          Alert.alert('Error', 'Failed to update profile picture. Please try again.');
         }
+      } catch (error) {
+        console.error('Error in processAvatarUpdate:', error);
         Alert.alert('Error', 'Failed to update profile picture. Please try again.');
       }
     };
