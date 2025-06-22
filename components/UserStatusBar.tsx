@@ -6,6 +6,7 @@ import { MapPin } from 'lucide-react-native';
 
 interface UserStatusBarProps {
   avatar: string;
+  name: string;
   isAvailable: boolean;
   activity?: string;
   onToggle: () => void;
@@ -13,6 +14,7 @@ interface UserStatusBarProps {
 
 export default function UserStatusBar({ 
   avatar, 
+  name,
   isAvailable, 
   activity, 
   onToggle 
@@ -28,6 +30,9 @@ export default function UserStatusBar({
           ]} />
         </View>
         <View style={styles.statusContainer}>
+          <View style={styles.statusRow}>
+            <Text style={styles.userName}>{name}</Text>
+          </View>
           <View style={styles.statusRow}>
             <Text style={styles.statusText}>
               {isAvailable ? 'Free to hang' : 'Unavailable'}
@@ -110,10 +115,15 @@ const styles = StyleSheet.create({
   statusOffline: {
     backgroundColor: Colors.light.offlineGray,
   },
-  statusText: {
-    fontSize: 14,
+  userName: {
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.secondaryText,
   },
   activityContainer: {
     flexDirection: 'row',
