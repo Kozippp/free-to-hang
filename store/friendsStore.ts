@@ -538,7 +538,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       // Get current user ID for filtering
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.error('❌ No authenticated user for real-time subscription');
+        console.log('⏸️ No authenticated user - skipping real-time subscription');
         return;
       }
 
