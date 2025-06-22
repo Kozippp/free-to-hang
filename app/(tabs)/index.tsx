@@ -177,25 +177,24 @@ export default function HangScreen() {
   
   return (
     <>
-      <Stack.Screen options={{ title: 'Free to Hang', headerShown: false }} />
+      <Stack.Screen options={{ title: 'Hang', headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Free to Hang</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={styles.addFriendsButton}
-                onPress={() => setShowAddFriendsModal(true)}
-              >
-                <UserPlus size={24} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/profile')}>
-                <Settings size={24} color={Colors.light.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Hang</Text>
+        </View>
 
+        <ScrollView 
+          style={styles.scrollView} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.light.primary}
+            />
+          }
+        >
           {!isAvailable ? (
             <View style={styles.offlineContainer}>
               <Text style={styles.offlineTitle}>
@@ -212,99 +211,93 @@ export default function HangScreen() {
             >
               <UserStatusBar 
                 avatar={user.avatar}
+                name={user.name}
                 isAvailable={isAvailable}
                 activity={activity}
                 onToggle={handleToggle}
               />
               
-              <Text style={styles.friendsTitle}>Friends available to hang</Text>
-              <Text style={styles.friendsDescription}>Choose the people to suggest a hang.</Text>
-              
-              <ScrollView 
-                style={styles.friendsList}
-                showsVerticalScrollIndicator={Platform.OS === 'web'}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    tintColor={Colors.light.primary}
-                  />
-                }
-              >
-                {getAllFriends().length > 0 ? (
-                  getAllFriends().map((friend) => (
-                    <FriendCard
-                      key={friend.id}
-                      id={friend.id}
-                      name={friend.name}
-                      avatar={friend.avatar}
-                      activity={friend.activity}
-                      lastActive={friend.lastActive}
-                      selected={isSelectedFriend(friend.id)}
-                      onSelect={handleFriendSelect}
-                      status={friend.status as 'available' | 'offline' | 'pinged'}
-                      responseStatus={friend.responseStatus as 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen'}
-                    />
-                  ))
-                ) : (
-                  <View style={styles.emptyFriendsContainer}>
-                    <Text style={styles.emptyFriendsTitle}>
-                      No friends available right now
-                    </Text>
-                    <Text style={styles.emptyFriendsDescription}>
-                      Invite your friends to join Free to Hang so you can see when they're available.
-                    </Text>
-                    <TouchableOpacity 
-                      style={styles.inviteFriendsButton}
-                      onPress={() => setShowAddFriendsModal(true)}
-                    >
-                      <UserPlus size={18} color="white" style={styles.inviteFriendsIcon} />
-                      <Text style={styles.inviteFriendsText}>Add Friends</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+              <View style={styles.friendsSection}>
+                <Text style={styles.friendsTitle}>Friends available to hang</Text>
+                <Text style={styles.friendsDescription}>Choose the people to suggest a hang.</Text>
                 
-                {/* Add invite friends section at the bottom */}
-                {getAllFriends().length > 0 && (
-                  <View style={styles.inviteFriendsSection}>
-                    <Text style={styles.inviteFriendsTitle}>
-                      Want to see more friends here?
-                    </Text>
-                    <TouchableOpacity 
-                      style={styles.inviteFriendsButtonSmall}
-                      onPress={() => setShowAddFriendsModal(true)}
-                    >
-                      <UserPlus size={16} color={Colors.light.primary} style={styles.inviteFriendsIconSmall} />
-                      <Text style={styles.inviteFriendsTextSmall}>Add Friends</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </ScrollView>
+                <View style={styles.friendsList}>
+                  {getAllFriends().length > 0 ? (
+                    getAllFriends().map((friend) => (
+                      <FriendCard
+                        key={friend.id}
+                        id={friend.id}
+                        name={friend.name}
+                        avatar={friend.avatar}
+                        activity={friend.activity}
+                        lastActive={friend.lastActive}
+                        selected={isSelectedFriend(friend.id)}
+                        onSelect={handleFriendSelect}
+                        status={friend.status as 'available' | 'offline' | 'pinged'}
+                        responseStatus={friend.responseStatus as 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen'}
+                      />
+                    ))
+                  ) : (
+                    <View style={styles.emptyFriendsContainer}>
+                      <Text style={styles.emptyFriendsTitle}>
+                        No friends available right now
+                      </Text>
+                      <Text style={styles.emptyFriendsDescription}>
+                        Invite your friends to join Free to Hang so you can see when they're available.
+                      </Text>
+                      <TouchableOpacity 
+                        style={styles.inviteFriendsButton}
+                        onPress={() => setShowAddFriendsModal(true)}
+                      >
+                        <UserPlus size={18} color="white" style={styles.inviteFriendsIcon} />
+                        <Text style={styles.inviteFriendsText}>Add Friends</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  
+                  {/* Add invite friends section at the bottom */}
+                  {getAllFriends().length > 0 && (
+                    <View style={styles.inviteFriendsSection}>
+                      <Text style={styles.inviteFriendsTitle}>
+                        Want to see more friends here?
+                      </Text>
+                      <TouchableOpacity 
+                        style={styles.inviteFriendsButtonSmall}
+                        onPress={() => setShowAddFriendsModal(true)}
+                      >
+                        <UserPlus size={16} color={Colors.light.primary} style={styles.inviteFriendsIconSmall} />
+                        <Text style={styles.inviteFriendsTextSmall}>Add Friends</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </View>
             </Animated.View>
           )}
-          
-          {isAvailable && safeSelectedFriends.length > 0 && (
-            <View style={styles.actionButtonsContainer}>
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={[styles.suggestButton, styles.buttonFlex]}
-                  onPress={() => handleOpenPlanBuilder(false)}
-                >
-                  <Text style={styles.suggestButtonText}>Create Plan</Text>
-                </TouchableOpacity>
-                
-                {safeSelectedFriends.length >= 2 && (
-                  <TouchableOpacity
-                    style={[styles.anonymousButton, styles.buttonFlex]}
-                    onPress={() => handleOpenPlanBuilder(true)}
-                  >
-                    <Text style={styles.anonymousButtonText}>Anonymous Plan</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          )}
         </ScrollView>
+        
+        {/* Fixed bottom buttons */}
+        {isAvailable && safeSelectedFriends.length > 0 && (
+          <View style={styles.actionButtonsContainer}>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.suggestButton, styles.buttonFlex]}
+                onPress={() => handleOpenPlanBuilder(false)}
+              >
+                <Text style={styles.suggestButtonText}>Create Plan</Text>
+              </TouchableOpacity>
+              
+              {safeSelectedFriends.length >= 2 && (
+                <TouchableOpacity
+                  style={[styles.anonymousButton, styles.buttonFlex]}
+                  onPress={() => handleOpenPlanBuilder(true)}
+                >
+                  <Text style={styles.anonymousButtonText}>Anonymous Plan</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
       </SafeAreaView>
       
       <ActivityModal
@@ -337,66 +330,64 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
-    padding: 16,
   },
   scrollView: {
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.light.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
-    color: Colors.light.primary,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  addFriendsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.primary,
-    padding: 8,
-    borderRadius: 10,
-  },
-  profileButton: {
-    padding: 8,
+    color: Colors.light.text,
   },
   offlineContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 40,
+    paddingHorizontal: 20,
+    minHeight: 400,
   },
   offlineTitle: {
     fontSize: 18,
     fontWeight: '500',
     color: Colors.light.text,
     textAlign: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 20,
     lineHeight: 26,
   },
   onlineContainer: {
     flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  friendsSection: {
+    flex: 1,
+    marginTop: 20,
   },
   friendsTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 8,
+    paddingHorizontal: 4,
   },
   friendsDescription: {
     fontSize: 14,
     color: Colors.light.secondaryText,
     marginBottom: 16,
+    paddingHorizontal: 4,
   },
   friendsList: {
     flex: 1,
+    paddingHorizontal: 4,
   },
   emptyFriendsContainer: {
     alignItems: 'center',
@@ -465,23 +456,40 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   actionButtonsContainer: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: Colors.light.background,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   buttonFlex: {
     flex: 1,
   },
   suggestButton: {
     backgroundColor: Colors.light.primary,
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   suggestButtonText: {
     color: 'white',
@@ -490,9 +498,14 @@ const styles = StyleSheet.create({
   },
   anonymousButton: {
     backgroundColor: Colors.light.secondary,
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: Colors.light.secondary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   anonymousButtonText: {
     color: 'white',
