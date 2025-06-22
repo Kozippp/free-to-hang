@@ -7,8 +7,10 @@ import { Platform, View, Text } from "react-native";
 import usePlansStore from "@/store/plansStore";
 import useHangStore from "@/store/hangStore";
 import useFriendsStore from "@/store/friendsStore";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function TabLayout() {
+  const { user } = useAuth();
   const { invitations } = usePlansStore();
   const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
   
@@ -22,12 +24,15 @@ export default function TabLayout() {
     setHasUnreadInvitations(unreadCount > 0);
   }, [invitations]);
 
-  // Start both hang and friends real-time systems
+  // Start both hang and friends real-time systems - only when user is authenticated
   useEffect(() => {
     let isMounted = true;
     
     const startRealtime = async () => {
-      if (!isMounted) return;
+      if (!isMounted || !user) {
+        console.log('⏸️ Skipping realtime start - no authenticated user');
+        return;
+      }
       
       console.log('🚀 Starting global realtime systems...');
       
@@ -36,16 +41,18 @@ export default function TabLayout() {
       await startFriendsRealtime();
     };
     
-    startRealtime();
+    if (user) {
+      startRealtime();
+    }
     
-    // Cleanup when layout unmounts
+    // Cleanup when layout unmounts or user signs out
     return () => {
       isMounted = false;
       console.log('⏹️ Stopping global realtime systems...');
       stopHangRealtime();
       stopFriendsRealtime();
     };
-  }, []);
+  }, [user]); // Add user as dependency
   
   return (
     <>
