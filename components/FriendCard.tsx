@@ -82,15 +82,18 @@ export default function FriendCard({
       </View>
       
       <View style={styles.infoContainer}>
-        <Text style={styles.name}>{name}</Text>
-        <View style={styles.activityContainer}>
-          {activity ? (
-            <Text style={styles.activity}>{activity}</Text>
-          ) : null}
-          {lastActive ? (
-            <Text style={styles.lastActive}>{lastActive}</Text>
-          ) : null}
+        <View style={styles.nameContainer}>
+          <Text style={styles.name}>{name}</Text>
+          {lastActive && status === 'available' && (
+            <Text style={styles.timeAgo}>{lastActive}</Text>
+          )}
         </View>
+        {activity && (
+          <Text style={styles.activity}>{activity}</Text>
+        )}
+        {status === 'offline' && lastActive && (
+          <Text style={styles.lastSeen}>Last seen {lastActive}</Text>
+        )}
       </View>
       
       {selected && (
@@ -188,25 +191,35 @@ const styles = StyleSheet.create({
   infoContainer: {
     flex: 1,
   },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
   name: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 4,
+    flex: 1,
   },
-  activityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  timeAgo: {
+    fontSize: 11,
+    color: Colors.light.secondaryText,
+    opacity: 0.7,
+    fontWeight: '400',
   },
   activity: {
     fontSize: 14,
-    color: Colors.light.secondaryText,
-    marginRight: 8,
+    color: Colors.light.primary,
+    fontWeight: '500',
+    marginTop: 2,
   },
-  lastActive: {
+  lastSeen: {
     fontSize: 12,
     color: Colors.light.secondaryText,
     opacity: 0.8,
+    marginTop: 2,
   },
   selectedIndicator: {
     width: 20,

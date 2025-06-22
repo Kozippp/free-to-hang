@@ -13,6 +13,7 @@ interface Friend {
   activity?: string;
   lastActive?: string;
   lastSeen?: string;
+  statusChangedAt?: string;
   responseStatus?: 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen';
 }
 
@@ -58,8 +59,29 @@ const getDefaultAvatar = (name?: string, userId?: string) => {
   return SILHOUETTE_AVATAR_URL;
 };
 
+// Helper function to format time ago
+const formatTimeAgo = (timestamp: string): string => {
+  const now = new Date();
+  const time = new Date(timestamp);
+  const diffInSeconds = Math.floor((now.getTime() - time.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) {
+    return 'just now';
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes}m ago`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours}h ago`;
+  } else {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days}d ago`;
+  }
+};
+
 // Add at the top of the file after imports
-let refreshInterval: NodeJS.Timeout | null = null;
+let refreshInterval: ReturnType<typeof setInterval> | null = null;
+let statusChannel: any = null;
 
 // Create the store with persistence
 const useHangStore = create<HangState>()(
@@ -84,6 +106,7 @@ const useHangStore = create<HangState>()(
       toggleAvailability: async () => {
         const currentStatus = get().isAvailable;
         const newStatus = !currentStatus;
+        const currentActivity = get().activity;
         
         set({ 
           isAvailable: newStatus,
@@ -93,17 +116,15 @@ const useHangStore = create<HangState>()(
           }
         });
         
-        // Update status in database
+        // Update status in database using our new function
         try {
           const { data: { user: authUser } } = await supabase.auth.getUser();
           if (authUser) {
-            const { error } = await supabase
-              .from('users')
-              .update({ 
-                status: newStatus ? 'available' : 'offline',
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', authUser.id);
+            const { data, error } = await supabase.rpc('update_user_status', {
+              user_id: authUser.id,
+              new_status: newStatus ? 'available' : 'offline',
+              activity: newStatus && currentActivity ? currentActivity : null
+            });
             
             if (error) {
               console.error('Error updating status in database:', error);
@@ -117,6 +138,9 @@ const useHangStore = create<HangState>()(
               });
             } else {
               console.log('Status updated in database:', newStatus ? 'available' : 'offline');
+              if (currentActivity && newStatus) {
+                console.log('Activity set:', currentActivity);
+              }
             }
           }
         } catch (error) {
@@ -262,14 +286,20 @@ const useHangStore = create<HangState>()(
                 name,
                 username,
                 avatar_url,
-                status
+                status,
+                current_activity,
+                status_changed_at,
+                last_seen_at
               ),
               receiver:users!friend_requests_receiver_id_fkey (
                 id,
                 name,
                 username,
                 avatar_url,
-                status
+                status,
+                current_activity,
+                status_changed_at,
+                last_seen_at
               )
             `)
             .eq('status', 'accepted')
@@ -303,8 +333,9 @@ const useHangStore = create<HangState>()(
                   username: friendData.username,
                   avatar: friendData.avatar_url || getDefaultAvatar(friendData.name, friendData.id),
                   status: friendData.status === 'available' ? 'available' : 'offline',
-                  activity: '',
-                  lastActive: 'Recently'
+                  activity: friendData.current_activity || '',
+                  lastActive: friendData.last_seen_at ? formatTimeAgo(friendData.last_seen_at) : 'Recently',
+                  statusChangedAt: friendData.status_changed_at
                 });
               }
             });
@@ -389,30 +420,56 @@ const useHangStore = create<HangState>()(
       },
 
       startRealTimeUpdates: () => {
-        // Clear any existing interval
+        // Clear any existing subscriptions
         if (refreshInterval) {
           clearInterval(refreshInterval);
           refreshInterval = null;
+        }
+        if (statusChannel) {
+          supabase.removeChannel(statusChannel);
+          statusChannel = null;
         }
         
         // Load friends once initially
         get().loadFriends();
         
-        // Set up real-time subscription for user status changes instead of polling
-        // This is much more efficient than polling every second
         console.log('🚀 Starting real-time friend status updates...');
         
-        // Note: Friend relationships are now managed by friendsStore with real-time updates
-        // We only need to refresh occasionally for status changes (available/offline)
+        // Set up real-time subscription for user status changes
+        statusChannel = supabase
+          .channel('user_status_changes')
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'users',
+              filter: 'status=neq.null'
+            },
+            (payload) => {
+              console.log('📡 User status change detected:', payload);
+              // Reload friends data when any user status changes
+              get().loadFriends();
+            }
+          )
+          .subscribe((status) => {
+            console.log('📡 Status channel status:', status);
+          });
+        
+        // Backup polling every 30 seconds (reduced from 60)
         refreshInterval = setInterval(() => {
           get().loadFriends();
-        }, 60000); // 60 seconds - only for status updates, not friend relationships
+        }, 30000);
       },
 
       stopRealTimeUpdates: () => {
         if (refreshInterval) {
           clearInterval(refreshInterval);
           refreshInterval = null;
+        }
+        if (statusChannel) {
+          supabase.removeChannel(statusChannel);
+          statusChannel = null;
         }
         console.log('🛑 Stopped real-time friend status updates');
       }
