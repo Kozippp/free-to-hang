@@ -8,6 +8,13 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Debug logging for Railway
+console.log('🔍 Environment variables:');
+console.log('PORT:', process.env.PORT);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('🔑 Supabase URL:', process.env.SUPABASE_URL ? 'Configured' : 'Missing');
+console.log('🔑 Supabase Service Role Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Configured' : 'Missing');
+
 // Security middleware
 app.use(helmet());
 
@@ -38,9 +45,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-console.log('🔑 Supabase URL:', process.env.SUPABASE_URL ? 'Configured' : 'Missing');
-console.log('🔑 Supabase Service Role Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Configured' : 'Missing');
-
 // Make supabase available globally
 global.supabase = supabase;
 
@@ -49,12 +53,21 @@ const userRoutes = require('./routes/user');
 const friendsRoutes = require('./routes/friends');
 const plansRoutes = require('./routes/plans');
 
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`📡 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  next();
+});
+
 // Health check endpoint
 app.get('/', (req, res) => {
+  console.log('🏥 Health check requested');
   res.json({ 
     message: 'Free to Hang API töötab!',
     version: '1.0.0',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    env: process.env.NODE_ENV
   });
 });
 
@@ -78,7 +91,8 @@ app.use((err, req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server töötab pordil ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}`);
+  console.log(`🔗 Health check: http://0.0.0.0:${PORT}`);
+  console.log(`📡 Server kuulab kõikidel IP-del pordil ${PORT}`);
 });
 
 // Export supabase for use in routes
