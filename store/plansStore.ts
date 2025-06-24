@@ -293,9 +293,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
     try {
       console.log('📝 Responding to plan via API...', planId, response);
       
-      // Call API to update status (map conditional to maybe for now)
-      const apiResponse = response === 'conditional' ? 'maybe' : response;
-      const updatedPlan = await plansService.respondToPlan(planId, apiResponse);
+      // Call API to update status with conditional friends
+      const updatedPlan = await plansService.respondToPlan(planId, response, conditionalFriends);
       console.log('✅ Plan response updated via API');
       
       // Transform API response to store format
