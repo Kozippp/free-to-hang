@@ -147,6 +147,11 @@ class PlansService {
       if (error instanceof Error && error.message.includes('Authentication')) {
         throw error;
       }
+      // Preserve the actual error for better debugging
+      console.error('🌐 API request failed:', error);
+      if (error instanceof Error) {
+        throw error;
+      }
       throw new Error('Failed to fetch plans');
     }
   }

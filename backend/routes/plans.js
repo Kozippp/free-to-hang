@@ -287,10 +287,10 @@ const getPlanWithDetails = async (planId, userId = null) => {
       );
       
       // Determine actual status - if user has conditional data and response is 'maybe', it's actually 'conditional'
-      let actualStatus = p.response;
+      let actualStatus = p.status;
       let conditionalFriends = undefined;
       
-      if (conditionalData && p.response === 'maybe') {
+      if (conditionalData && p.status === 'maybe') {
         actualStatus = 'conditional';
         conditionalFriends = conditionalData.metadata?.conditional_friends;
       }
@@ -363,7 +363,7 @@ const processConditionalDependencies = async (planId) => {
       
       for (const participant of participants) {
         // Skip if not conditional or already accepted
-        if (participant.response !== 'maybe' || !conditionalMap.has(participant.user_id)) {
+        if (participant.status !== 'maybe' || !conditionalMap.has(participant.user_id)) {
           continue;
         }
         
@@ -375,7 +375,7 @@ const processConditionalDependencies = async (planId) => {
         // Check if all conditional friends are accepted
         const allFriendsAccepted = conditionalFriends.every(friendId => {
           const friend = participants.find(p => p.user_id === friendId);
-          return friend && friend.response === 'accepted';
+          return friend && friend.status === 'accepted';
         });
         
         if (allFriendsAccepted) {
@@ -385,7 +385,7 @@ const processConditionalDependencies = async (planId) => {
           const { error: updateError } = await supabase
             .from('plan_participants')
             .update({ 
-              response: 'accepted',
+              status: 'accepted',
               updated_at: new Date().toISOString()
             })
             .eq('plan_id', planId)
@@ -401,7 +401,7 @@ const processConditionalDependencies = async (planId) => {
               .eq('triggered_by', participant.user_id);
             
             // Update local data
-            participant.response = 'accepted';
+            participant.status = 'accepted';
             conditionalMap.delete(participant.user_id);
             iterationChanges = true;
             hasChanges = true;
@@ -426,6 +426,48 @@ const processConditionalDependencies = async (planId) => {
     console.error('❌ Error processing conditional dependencies:', error);
   }
 };
+
+// GET /plans/debug-schema - Debug database schema (temporary, no auth required)
+router.get('/debug-schema', async (req, res) => {
+  try {
+    // Check the actual structure of plan_participants table
+    const { data: tableInfo, error: tableError } = await supabase
+      .from('plan_participants')
+      .select('*')
+      .limit(1);
+    
+    if (tableError) {
+      console.error('Error querying plan_participants:', tableError);
+      return res.json({ 
+        error: 'Failed to query table',
+        details: tableError,
+        suggestion: 'Check if plan_participants table exists and has correct permissions'
+      });
+    }
+    
+    // Get table columns by trying to describe the table structure
+    const { data: columnInfo, error: columnError } = await supabase.rpc('exec', {
+      sql: `
+        SELECT column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns 
+        WHERE table_name = 'plan_participants' 
+        AND table_schema = 'public'
+        ORDER BY ordinal_position;
+      `
+    }).catch(() => ({ data: null, error: 'RPC not available' }));
+    
+    return res.json({
+      tableExists: !tableError,
+      sampleData: tableInfo,
+      columnInfo: columnInfo || 'Could not fetch column info',
+      columnError: columnError || null,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Debug schema error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // GET /plans/debug - Debug authentication (temporary)
 router.get('/debug', async (req, res) => {
@@ -805,7 +847,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
 
     // Prepare the participant data
     const participantData = {
-      response: responseMapping[response] || response, // Use 'response' field as per schema
+      status: responseMapping[response] || response, // Use 'status' field as per actual schema
       updated_at: new Date().toISOString()
     };
 
