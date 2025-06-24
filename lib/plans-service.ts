@@ -193,19 +193,20 @@ class PlansService {
   }
 
   // Mark plan as seen (not_seen -> seen)
-  async markPlanAsSeen(planId: string): Promise<Plan> {
-    try {
-      console.log('👁️ Marking plan as seen:', planId);
-      const plan = await this.apiRequest(`/plans/${planId}/mark-seen`, {
-        method: 'POST'
-      });
-      console.log('✅ Plan marked as seen successfully');
-      return plan;
-    } catch (error) {
-      console.error('❌ Error marking plan as seen:', error);
-      throw error;
-    }
-  }
+  // TODO: Enable when backend endpoint is available
+  // async markPlanAsSeen(planId: string): Promise<Plan> {
+  //   try {
+  //     console.log('👁️ Marking plan as seen:', planId);
+  //     const plan = await this.apiRequest(`/plans/${planId}/mark-seen`, {
+  //       method: 'POST'
+  //     });
+  //     console.log('✅ Plan marked as seen successfully');
+  //     return plan;
+  //   } catch (error) {
+  //     console.error('❌ Error marking plan as seen:', error);
+  //     throw error;
+  //   }
+  // }
 
   // Respond to plan invitation
   async respondToPlan(planId: string, response: 'accepted' | 'maybe' | 'declined' | 'pending'): Promise<Plan> {

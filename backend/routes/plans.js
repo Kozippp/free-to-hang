@@ -691,50 +691,51 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
 });
 
 // POST /plans/:id/mark-seen - Mark plan as seen (not_seen -> seen)
-router.post('/:id/mark-seen', requireAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
+// TODO: Enable when database schema includes seen_at column
+// router.post('/:id/mark-seen', requireAuth, async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const userId = req.user.id;
 
-    // Check if participant exists
-    const { data: existingParticipant, error: checkError } = await supabase
-      .from('plan_participants')
-      .select('status')
-      .eq('plan_id', id)
-      .eq('user_id', userId)
-      .single();
+//     // Check if participant exists
+//     const { data: existingParticipant, error: checkError } = await supabase
+//       .from('plan_participants')
+//       .select('status')
+//       .eq('plan_id', id)
+//       .eq('user_id', userId)
+//       .single();
 
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking participant:', checkError);
-      return res.status(500).json({ error: 'Failed to check participant' });
-    }
+//     if (checkError && checkError.code !== 'PGRST116') {
+//       console.error('Error checking participant:', checkError);
+//       return res.status(500).json({ error: 'Failed to check participant' });
+//     }
 
-    // Only update if participant exists and is currently pending (not_seen)
-    if (existingParticipant && existingParticipant.status === 'pending') {
-      // Update status to 'seen' - we'll use a special field for this
-      const { data: participant, error } = await supabase
-        .from('plan_participants')
-        .update({
-          seen_at: new Date().toISOString()
-        })
-        .eq('plan_id', id)
-        .eq('user_id', userId)
-        .select()
-        .single();
+//     // Only update if participant exists and is currently pending (not_seen)
+//     if (existingParticipant && existingParticipant.status === 'pending') {
+//       // Update status to 'seen' - we'll use a special field for this
+//       const { data: participant, error } = await supabase
+//         .from('plan_participants')
+//         .update({
+//           seen_at: new Date().toISOString()
+//         })
+//         .eq('plan_id', id)
+//         .eq('user_id', userId)
+//         .select()
+//         .single();
 
-      if (error) {
-        console.error('Error marking plan as seen:', error);
-        return res.status(500).json({ error: 'Failed to mark as seen' });
-      }
-    }
+//       if (error) {
+//         console.error('Error marking plan as seen:', error);
+//         return res.status(500).json({ error: 'Failed to mark as seen' });
+//       }
+//     }
 
-    const fullPlan = await getPlanWithDetails(id, userId);
-    res.json(fullPlan);
-  } catch (error) {
-    console.error('Error in POST /plans/:id/mark-seen:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+//     const fullPlan = await getPlanWithDetails(id, userId);
+//     res.json(fullPlan);
+//   } catch (error) {
+//     console.error('Error in POST /plans/:id/mark-seen:', error);
+//     res.status(500).json({ error: 'Internal server error' });
+//   }
+// });
 
 // POST /plans/:id/polls - Create poll for plan
 router.post('/:id/polls', requireAuth, async (req, res) => {
