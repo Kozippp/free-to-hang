@@ -15,6 +15,14 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('🔑 Supabase URL:', process.env.SUPABASE_URL ? 'Configured' : 'Missing');
 console.log('🔑 Supabase Service Role Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Configured' : 'Missing');
 
+// Check for required environment variables
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Missing required environment variables:');
+  if (!process.env.SUPABASE_URL) console.error('   - SUPABASE_URL');
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) console.error('   - SUPABASE_SERVICE_ROLE_KEY');
+  console.error('🚨 Server will start but Supabase functionality will be disabled');
+}
+
 // Security middleware
 app.use(helmet());
 
@@ -39,19 +47,24 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Supabase client with error handling
+let supabase = null;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    console.log('✅ Supabase client initialized');
+  } else {
+    console.log('⚠️ Supabase client not initialized - missing environment variables');
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize Supabase client:', error.message);
+}
 
 // Make supabase available globally
 global.supabase = supabase;
-
-// Import routes after setting up supabase
-const userRoutes = require('./routes/user');
-const friendsRoutes = require('./routes/friends');
-const plansRoutes = require('./routes/plans');
 
 // Add request logging middleware
 app.use((req, res, next) => {
@@ -67,14 +80,27 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     port: PORT,
-    env: process.env.NODE_ENV
+    env: process.env.NODE_ENV,
+    supabase: supabase ? 'Connected' : 'Not connected'
   });
 });
 
-// API routes
-app.use('/api/user', userRoutes);
-app.use('/api/friends', friendsRoutes);
-app.use('/api/plans', plansRoutes);
+// Import routes after setting up supabase (with error handling)
+try {
+  const userRoutes = require('./routes/user');
+  const friendsRoutes = require('./routes/friends');
+  const plansRoutes = require('./routes/plans');
+
+  // API routes
+  app.use('/api/user', userRoutes);
+  app.use('/api/friends', friendsRoutes);
+  app.use('/api/plans', plansRoutes);
+  
+  console.log('✅ Routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load routes:', error.message);
+  console.log('🚨 Server will start but API routes will not be available');
+}
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -88,11 +114,27 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Serveri viga' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+// Start server with error handling
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server töötab pordil ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://0.0.0.0:${PORT}`);
   console.log(`📡 Server kuulab kõikidel IP-del pordil ${PORT}`);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('❌ Server failed to start:', error.message);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
 });
 
 // Export supabase for use in routes
