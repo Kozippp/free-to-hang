@@ -73,6 +73,7 @@ interface PlansState {
   // API Actions
   loadPlans: (userId?: string) => Promise<void>;
   createPlan: (planData: any) => Promise<void>;
+  markPlanAsSeen: (planId: string) => Promise<void>;
   
   // Real-time subscriptions
   startRealTimeUpdates: (userId: string) => void;
@@ -80,7 +81,7 @@ interface PlansState {
   
   // Actions
   markAsRead: (planId: string) => void;
-  respondToPlan: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => void;
+  respondToPlan: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => Promise<void>;
   addPlan: (plan: Plan) => void;
   checkConditionalDependencies: (planId: string) => void;
   
@@ -257,6 +258,26 @@ const usePlansStore = create<PlansState>((set, get) => ({
     }
   },
   
+  // Mark plan as seen via API
+  markPlanAsSeen: async (planId: string) => {
+    try {
+      console.log('👁️ Marking plan as seen via API...');
+      await plansService.markPlanAsSeen(planId);
+      console.log('✅ Plan marked as seen via API');
+      
+      // Update local state to mark as read
+      set(state => ({
+        invitations: state.invitations.map(plan => 
+          plan.id === planId ? { ...plan, isRead: true } : plan
+        )
+      }));
+      
+    } catch (error) {
+      console.error('❌ Error marking plan as seen:', error);
+      throw error;
+    }
+  },
+  
   markAsRead: (planId: string) => {
     set((state) => ({
       invitations: state.invitations.map(plan => 
@@ -268,79 +289,87 @@ const usePlansStore = create<PlansState>((set, get) => ({
     }));
   },
   
-  respondToPlan: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
-    set((state) => {
-      // Find the plan in either invitations or activePlans
-      const invitation = state.invitations.find(p => p.id === planId);
-      const activePlan = state.activePlans.find(p => p.id === planId);
-      const plan = invitation || activePlan;
+  respondToPlan: async (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
+    try {
+      console.log('📝 Responding to plan via API...', planId, response);
       
-      if (!plan) return state;
+      // Call API to update status (map conditional to maybe for now)
+      const apiResponse = response === 'conditional' ? 'maybe' : response;
+      const updatedPlan = await plansService.respondToPlan(planId, apiResponse);
+      console.log('✅ Plan response updated via API');
       
-      const updatedPlan: Plan = {
-        ...plan,
-        participants: plan.participants.map(participant =>
-          participant.id === 'current'
-            ? { 
-                ...participant, 
-                status: response,
-                conditionalFriends: response === 'conditional' ? conditionalFriends : undefined
-              }
-            : participant
-        )
+      // Transform API response to store format
+      const transformedPlan: Plan = {
+        id: updatedPlan.id,
+        title: updatedPlan.title,
+        description: updatedPlan.description,
+        type: updatedPlan.isAnonymous ? 'anonymous' : 'normal',
+        creator: updatedPlan.creator ? {
+          id: updatedPlan.creator.id,
+          name: updatedPlan.creator.name,
+          avatar: updatedPlan.creator.avatar_url || ''
+        } : null,
+        participants: updatedPlan.participants.map(p => ({
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar || '',
+          status: p.status as ParticipantStatus
+        })),
+        date: updatedPlan.date,
+        location: updatedPlan.location,
+        isRead: true,
+        createdAt: updatedPlan.createdAt,
+        lastUpdatedAt: updatedPlan.updatedAt,
+        hasUnreadUpdates: false,
+        completionVotes: [],
+        polls: []
       };
       
-      // Remove completion vote if user is no longer "accepted"
-      if (response !== 'accepted' && updatedPlan.completionVotes?.includes('current')) {
-        updatedPlan.completionVotes = updatedPlan.completionVotes.filter(id => id !== 'current');
-      }
-      
-      // If the plan is already in activePlans, just update it there
-      if (activePlan) {
-        return {
-          invitations: state.invitations,
-          activePlans: state.activePlans.map(p => p.id === planId ? updatedPlan : p),
-          completedPlans: state.completedPlans
-        };
-      }
-      
-      // If response is 'accepted' or 'maybe' or 'conditional', move to activePlans
-      if (response === 'accepted' || response === 'maybe' || response === 'conditional') {
-        const newState = {
-          invitations: state.invitations.filter(p => p.id !== planId),
-          activePlans: [...state.activePlans, updatedPlan],
-          completedPlans: state.completedPlans
-        };
+      // Update local state based on response
+      set((state) => {
+        // Find the plan in either invitations or activePlans
+        const invitation = state.invitations.find(p => p.id === planId);
+        const activePlan = state.activePlans.find(p => p.id === planId);
         
-        // Mark plan as updated when current user joins
-        setTimeout(() => {
-          get().markPlanUpdated(planId, 'participant_joined');
-        }, 0);
+        // If the plan is already in activePlans, just update it there
+        if (activePlan) {
+          return {
+            invitations: state.invitations,
+            activePlans: state.activePlans.map(p => p.id === planId ? transformedPlan : p),
+            completedPlans: state.completedPlans
+          };
+        }
         
-        return newState;
-      }
-      
-      // If response is 'declined', remove from invitations
-      if (response === 'declined') {
+        // If response is 'accepted' or 'maybe', move to activePlans
+        if (response === 'accepted' || response === 'maybe') {
+          return {
+            invitations: state.invitations.filter(p => p.id !== planId),
+            activePlans: [...state.activePlans, transformedPlan],
+            completedPlans: state.completedPlans
+          };
+        }
+        
+        // If response is 'declined', remove from invitations
+        if (response === 'declined') {
+          return {
+            invitations: state.invitations.filter(p => p.id !== planId),
+            activePlans: state.activePlans,
+            completedPlans: state.completedPlans
+          };
+        }
+        
+        // If response is 'pending', keep in invitations but update the status
         return {
-          invitations: state.invitations.filter(p => p.id !== planId),
+          invitations: state.invitations.map(p => p.id === planId ? transformedPlan : p),
           activePlans: state.activePlans,
           completedPlans: state.completedPlans
         };
-      }
+      });
       
-      // If response is 'pending', keep in invitations but update the status
-      return {
-        invitations: state.invitations.map(p => p.id === planId ? updatedPlan : p),
-        activePlans: state.activePlans,
-        completedPlans: state.completedPlans
-      };
-    });
-    
-    // Check for conditional dependencies after updating
-    setTimeout(() => {
-      get().checkConditionalDependencies(planId);
-    }, 0);
+    } catch (error) {
+      console.error('❌ Error responding to plan:', error);
+      throw error;
+    }
   },
   
   addPlan: (plan: Plan) => {
