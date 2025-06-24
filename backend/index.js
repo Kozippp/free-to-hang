@@ -4,9 +4,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
-const userRoutes = require('./routes/user');
-const friendsRoutes = require('./routes/friends');
-const plansRoutes = require('./routes/plans');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +41,14 @@ const supabase = createClient(
 console.log('🔑 Supabase URL:', process.env.SUPABASE_URL ? 'Configured' : 'Missing');
 console.log('🔑 Supabase Service Role Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Configured' : 'Missing');
 
+// Make supabase available globally
+global.supabase = supabase;
+
+// Import routes after setting up supabase
+const userRoutes = require('./routes/user');
+const friendsRoutes = require('./routes/friends');
+const plansRoutes = require('./routes/plans');
+
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ 
@@ -54,9 +59,9 @@ app.get('/', (req, res) => {
 });
 
 // API routes
-app.use('/user', userRoutes);
-app.use('/friends', friendsRoutes);
-app.use('/plans', plansRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/friends', friendsRoutes);
+app.use('/api/plans', plansRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
