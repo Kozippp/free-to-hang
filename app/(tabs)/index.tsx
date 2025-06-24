@@ -394,10 +394,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   emptyFriendsContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
     paddingHorizontal: 20,
+    minHeight: 400,
   },
   emptyFriendsTitle: {
     fontSize: 18,
