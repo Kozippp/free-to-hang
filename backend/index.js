@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 const userRoutes = require('./routes/user');
 const friendsRoutes = require('./routes/friends');
+const plansRoutes = require('./routes/plans');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,6 +56,7 @@ app.get('/', (req, res) => {
 // API routes
 app.use('/user', userRoutes);
 app.use('/friends', friendsRoutes);
+app.use('/plans', plansRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -72,4 +74,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Server töötab pordil ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}`);
-}); 
+});
+
+// Export supabase for use in routes
+module.exports = { supabase }; 

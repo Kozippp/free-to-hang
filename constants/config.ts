@@ -30,4 +30,7 @@ export const API_ENDPOINTS = {
 // Helper function to build full URL
 export const buildApiUrl = (endpoint: string) => {
   return `${API_CONFIG.BASE_URL}${endpoint}`;
-}; 
+};
+
+// Export API_URL for backwards compatibility
+export const API_URL = API_CONFIG.BASE_URL; 
