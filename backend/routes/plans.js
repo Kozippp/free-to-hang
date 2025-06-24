@@ -386,24 +386,9 @@ router.get('/', requireAuth, async (req, res) => {
     console.log('🔍 Request headers:', JSON.stringify(req.headers, null, 2));
     console.log('🔍 Request query:', JSON.stringify(req.query, null, 2));
 
-    // Create a client with the user's auth context
-    const { createClient } = require('@supabase/supabase-js');
-    const userSupabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY
-    );
-
-    // Set the auth session for this user
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (token) {
-      await userSupabase.auth.setSession({
-        access_token: token,
-        refresh_token: '' // Not needed for this operation
-      });
-    }
-
+    // Use service role but with explicit user filtering to avoid RLS recursion
     // Get plans where user is creator
-    let creatorQuery = userSupabase
+    let creatorQuery = supabase
       .from('plans')
       .select('*')
       .eq('creator_id', userId)
@@ -422,7 +407,7 @@ router.get('/', requireAuth, async (req, res) => {
     }
 
     // Get plan IDs where user is participant
-    const { data: participantRecords, error: participantError } = await userSupabase
+    const { data: participantRecords, error: participantError } = await supabase
       .from('plan_participants')
       .select('plan_id')
       .eq('user_id', userId);
@@ -437,7 +422,7 @@ router.get('/', requireAuth, async (req, res) => {
     if (participantRecords.length > 0) {
       const participantPlanIds = participantRecords.map(p => p.plan_id);
       
-      let participantQuery = userSupabase
+      let participantQuery = supabase
         .from('plans')
         .select('*')
         .in('id', participantPlanIds)
@@ -472,7 +457,7 @@ router.get('/', requireAuth, async (req, res) => {
 
     // Get participants for all plans
     const planIds = plans.map(p => p.id);
-    const { data: allParticipants, error: participantsError } = await userSupabase
+    const { data: allParticipants, error: participantsError } = await supabase
       .from('plan_participants')
       .select('*')
       .in('plan_id', planIds);
@@ -486,7 +471,7 @@ router.get('/', requireAuth, async (req, res) => {
     const participantUserIds = [...new Set(allParticipants.map(p => p.user_id))];
     let participantUsers = [];
     if (participantUserIds.length > 0) {
-      const { data: userData, error: userError } = await userSupabase
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('id, name, username, avatar_url')
         .in('id', participantUserIds);
@@ -502,7 +487,7 @@ router.get('/', requireAuth, async (req, res) => {
     // Fetch creator information
     let creators = {};
     if (creatorIds.length > 0) {
-      const { data: creatorData, error: creatorError } = await userSupabase
+      const { data: creatorData, error: creatorError } = await supabase
         .from('users')
         .select('id, name, username, avatar_url')
         .in('id', creatorIds);
