@@ -7,8 +7,9 @@ const supabase = global.supabase;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseAnonKey) {
-  console.error('❌ SUPABASE_ANON_KEY environment variable is required');
-  process.exit(1);
+  console.error('❌ SUPABASE_ANON_KEY environment variable is missing');
+  console.error('🚨 JWT authentication will not work properly');
+  console.error('💡 Please set SUPABASE_ANON_KEY in Railway environment variables');
 }
 
 // Helper function to get user from token
@@ -24,15 +25,18 @@ const getUserFromToken = async (req) => {
     // For JWT validation, we need to use the anon key, not service role key
     const { createClient } = require('@supabase/supabase-js');
     
-    // Use anon key from environment
-    const anonKey = supabaseAnonKey;
+    // Check if anon key is available
+    if (!supabaseAnonKey) {
+      console.log('🔑 No anon key available, cannot validate JWT');
+      return null;
+    }
     
-    console.log('🔑 Using anon key from:', process.env.SUPABASE_ANON_KEY ? 'environment' : 'hardcoded fallback');
+    console.log('🔑 Using anon key from environment');
     console.log('🔑 Supabase URL:', process.env.SUPABASE_URL);
     
     const clientSupabase = createClient(
       process.env.SUPABASE_URL,
-      anonKey
+      supabaseAnonKey
     );
     
     const { data: { user }, error } = await clientSupabase.auth.getUser(token);
@@ -300,14 +304,36 @@ router.get('/debug', async (req, res) => {
     console.log('🔍 Debug endpoint called');
     console.log('🔍 Token received:', !!token);
     
+    const debugInfo = {
+      environment: {
+        hasSupabaseUrl: !!process.env.SUPABASE_URL,
+        hasSupabaseAnonKey: !!process.env.SUPABASE_ANON_KEY,
+        hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        nodeEnv: process.env.NODE_ENV,
+        port: process.env.PORT,
+        supabaseUrl: process.env.SUPABASE_URL ? 'Configured' : 'Missing'
+      },
+      token: {
+        hasToken: !!token,
+        tokenLength: token ? token.length : 0
+      }
+    };
+    
     if (!token) {
-      return res.json({ error: 'No token provided', hasToken: false });
+      return res.json({ 
+        ...debugInfo,
+        error: 'No token provided' 
+      });
     }
     
     // Try to decode token without verification first
     const tokenParts = token.split('.');
     if (tokenParts.length !== 3) {
-      return res.json({ error: 'Invalid token format', tokenParts: tokenParts.length });
+      return res.json({ 
+        ...debugInfo,
+        error: 'Invalid token format', 
+        tokenParts: tokenParts.length 
+      });
     }
     
     try {
@@ -320,7 +346,7 @@ router.get('/debug', async (req, res) => {
       const user = await getUserFromToken(req);
       
       return res.json({
-        hasToken: true,
+        ...debugInfo,
         tokenValid: !!user,
         header,
         payload: {
@@ -328,15 +354,20 @@ router.get('/debug', async (req, res) => {
           aud: payload.aud,
           exp: payload.exp,
           iat: payload.iat,
-          sub: payload.sub,
-          email: payload.email
+          sub: payload.sub ? '[REDACTED]' : undefined,
+          email: payload.email ? '[REDACTED]' : undefined
         },
         user: user ? { id: user.id, email: user.email } : null,
         currentTime: Math.floor(Date.now() / 1000),
-        isExpired: payload.exp < Math.floor(Date.now() / 1000)
+        isExpired: payload.exp < Math.floor(Date.now() / 1000),
+        expiresAt: new Date(payload.exp * 1000).toISOString()
       });
     } catch (decodeError) {
-      return res.json({ error: 'Token decode failed', decodeError: decodeError.message });
+      return res.json({ 
+        ...debugInfo,
+        error: 'Token decode failed', 
+        decodeError: decodeError.message 
+      });
     }
   } catch (error) {
     console.error('🔍 Debug endpoint error:', error);
