@@ -4,10 +4,10 @@ export const API_CONFIG = {
   LOCAL_BASE_URL: 'http://192.168.0.24:3001/api',
   
   // Production (Railway) - Updated with correct URL
-  PROD_BASE_URL: 'https://free-to-hang-production-up.railway.app/api',
+  PROD_BASE_URL: 'https://free-to-hang-production.up.railway.app/api',
   
-  // Current environment - Use local for testing since Railway has issues
-  BASE_URL: 'http://192.168.0.24:3001/api',
+  // Current environment - Using Railway production
+  BASE_URL: 'https://free-to-hang-production.up.railway.app/api',
 };
 
 // API Endpoints
