@@ -529,15 +529,17 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       console.log('🚀 Starting friend real-time updates...');
       
+      // Stop any existing channel first
+      if (friendRequestsChannel) {
+        console.log('🛑 Stopping existing friend real-time subscription...');
+        await supabase.removeChannel(friendRequestsChannel);
+        friendRequestsChannel = null;
+        isSubscribed = false;
+      }
+      
       // Load initial data immediately when real-time starts
       console.log('📊 Loading initial friend data...');
       await get().loadAllRelationships();
-      
-      // Stop any existing channel
-      if (friendRequestsChannel) {
-        await supabase.removeChannel(friendRequestsChannel);
-        friendRequestsChannel = null;
-      }
 
       // Get current user ID for filtering
       const { data: { user } } = await supabase.auth.getUser();

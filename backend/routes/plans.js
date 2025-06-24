@@ -17,9 +17,12 @@ const getUserFromToken = async (req) => {
     // For JWT validation, we need to use the anon key, not service role key
     const { createClient } = require('@supabase/supabase-js');
     
-    // Try to get anon key from environment, fallback to service role for now
+    // Try to get anon key from environment, fallback to hardcoded for now
     const anonKey = process.env.SUPABASE_ANON_KEY || 
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5memJ2dXludHpnc3pxZGxzdXNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMxNjE5ODYsImV4cCI6MjA0ODczNzk4Nn0.ZNLQfEzBKZI5uxZQBbP5SIFEcDCdLuNEQGgJXCOWfTk';
+    
+    console.log('🔑 Using anon key from:', process.env.SUPABASE_ANON_KEY ? 'environment' : 'hardcoded fallback');
+    console.log('🔑 Supabase URL:', process.env.SUPABASE_URL);
     
     const clientSupabase = createClient(
       process.env.SUPABASE_URL,
@@ -30,6 +33,7 @@ const getUserFromToken = async (req) => {
     console.log('🔑 Token validation result:', error ? 'Failed' : 'Success');
     if (error) {
       console.log('🔑 Token validation error:', error.message);
+      console.log('🔑 Error details:', JSON.stringify(error, null, 2));
     }
     if (user) {
       console.log('🔑 User from token:', user.id, user.email);
