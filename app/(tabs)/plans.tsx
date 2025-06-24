@@ -38,6 +38,7 @@ export default function PlansScreen() {
   useEffect(() => {
     if (user?.id) {
       console.log('🔄 Loading plans for user:', user.id);
+      console.log('🔄 User object:', { id: user.id, email: user.email });
       loadPlans(user.id);
       startRealTimeUpdates(user.id);
     }
