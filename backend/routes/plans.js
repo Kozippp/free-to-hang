@@ -640,18 +640,9 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to add vote' });
     }
 
-    // Check if this vote creates a winner
-    const { data: pollResults } = await supabase
-      .rpc('get_poll_results', { poll_id_param: pollId });
-
-    if (pollResults && pollResults.winner) {
-      await notifyPlanUpdate(id, 'poll_won', userId, { 
-        poll_id: pollId,
-        winner: pollResults.winner
-      });
-    } else {
-      await notifyPlanUpdate(id, 'poll_voted', userId, { poll_id: pollId });
-    }
+    // Check if this vote creates a winner (simplified logic)
+    // Just notify that someone voted - poll winner logic can be implemented later
+    await notifyPlanUpdate(id, 'poll_voted', userId, { poll_id: pollId });
 
     const fullPlan = await getPlanWithDetails(id, userId);
     res.json(fullPlan);
@@ -692,9 +683,24 @@ router.post('/:id/complete-vote', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to add completion vote' });
     }
 
-    // Check if plan should be completed
-    const { data: shouldComplete } = await supabase
-      .rpc('check_plan_completion', { plan_id_param: id });
+    // Check if plan should be completed (simplified logic)
+    // Get total going participants and completion votes
+    const { data: goingParticipants } = await supabase
+      .from('plan_participants')
+      .select('user_id')
+      .eq('plan_id', id)
+      .eq('status', 'going');
+
+    const { data: completionVotes } = await supabase
+      .from('plan_completion_votes')
+      .select('user_id')
+      .eq('plan_id', id);
+
+    const totalGoing = goingParticipants?.length || 0;
+    const totalVotes = completionVotes?.length || 0;
+    
+    // Complete if majority of going participants voted for completion
+    const shouldComplete = totalGoing > 0 && totalVotes >= Math.ceil(totalGoing / 2);
 
     if (shouldComplete) {
       // Mark plan as completed
