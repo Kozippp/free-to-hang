@@ -23,7 +23,7 @@ app.use(limiter);
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
     ? true // Allow all origins in production for Expo Go compatibility
-    : ['http://localhost:8081', 'http://localhost:19006', 'exp://localhost:8081'],
+    : ['http://localhost:8081', 'http://localhost:19006', 'exp://localhost:8081', 'http://192.168.0.24:8081'],
   credentials: true
 };
 app.use(cors(corsOptions));
