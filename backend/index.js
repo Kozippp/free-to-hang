@@ -75,7 +75,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Serveri viga' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server töötab pordil ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}`);
