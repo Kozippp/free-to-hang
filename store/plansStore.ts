@@ -312,7 +312,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
           id: p.id,
           name: p.name,
           avatar: p.avatar || '',
-          status: p.status as ParticipantStatus
+          status: p.status as ParticipantStatus,
+          conditionalFriends: p.conditionalFriends
         })),
         date: updatedPlan.date,
         location: updatedPlan.location,
@@ -339,8 +340,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
           };
         }
         
-        // If response is 'accepted' or 'maybe', move to activePlans
-        if (response === 'accepted' || response === 'maybe') {
+        // If response is 'accepted', 'maybe', or 'conditional', move to activePlans
+        if (response === 'accepted' || response === 'maybe' || response === 'conditional') {
           return {
             invitations: state.invitations.filter(p => p.id !== planId),
             activePlans: [...state.activePlans, transformedPlan],
