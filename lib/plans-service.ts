@@ -83,6 +83,11 @@ export interface CreatePollData {
 class PlansService {
   private async getAuthHeaders() {
     const { data: { session } } = await supabase.auth.getSession();
+    console.log('🔑 Getting auth headers, session exists:', !!session);
+    console.log('🔑 Access token exists:', !!session?.access_token);
+    if (session?.access_token) {
+      console.log('🔑 Token preview:', session.access_token.substring(0, 20) + '...');
+    }
     return {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${session?.access_token}`
@@ -91,6 +96,8 @@ class PlansService {
 
   private async apiRequest(endpoint: string, options: RequestInit = {}) {
     const headers = await this.getAuthHeaders();
+    console.log('🌐 Making API request to:', `${API_URL}${endpoint}`);
+    console.log('🌐 Headers:', { ...headers, Authorization: headers.Authorization ? 'Bearer [REDACTED]' : 'missing' });
     
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
@@ -100,8 +107,10 @@ class PlansService {
       }
     });
 
+    console.log('🌐 Response status:', response.status);
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Network error' }));
+      console.log('🌐 Error response:', error);
       throw new Error(error.error || `HTTP ${response.status}`);
     }
 

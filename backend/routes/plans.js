@@ -7,9 +7,20 @@ const supabase = global.supabase;
 // Helper function to get user from token
 const getUserFromToken = async (req) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
+  console.log('🔑 Auth token received:', token ? 'Yes' : 'No');
+  if (token) {
+    console.log('🔑 Token preview:', token.substring(0, 20) + '...');
+  }
   if (!token) return null;
   
   const { data: { user }, error } = await supabase.auth.getUser(token);
+  console.log('🔑 Token validation result:', error ? 'Failed' : 'Success');
+  if (error) {
+    console.log('🔑 Token validation error:', error.message);
+  }
+  if (user) {
+    console.log('🔑 User from token:', user.id, user.email);
+  }
   return error ? null : user;
 };
 
