@@ -44,6 +44,7 @@ import ChatView from '../chat/ChatView';
 import usePlansStore from '@/store/plansStore';
 import useChatStore from '@/store/chatStore';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PlanDetailViewProps {
   plan: Plan;
@@ -52,6 +53,7 @@ interface PlanDetailViewProps {
 }
 
 export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailViewProps) {
+  const { user } = useAuth();
   const { 
     markAsRead, 
     addPoll, 
@@ -73,6 +75,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   } = usePlansStore();
   const { getUnreadCount } = useChatStore();
   const router = useRouter();
+  
+  // Early return if user is not authenticated
+  if (!user) {
+    return null;
+  }
   
   // Get the latest plan data from store
   const latestPlan = [...invitations, ...activePlans].find(p => p.id === plan.id) || plan;
@@ -107,7 +114,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const slideAnimation = useRef(new Animated.Value(0)).current;
   
   // Get current user's status from latest plan data
-  const currentUser = latestPlan.participants.find(p => p.id === 'current');
+  const currentUser = latestPlan.participants.find(p => p.id === user.id);
   const currentUserStatus = currentUser?.status || 'pending';
   
   // Check if user is going (has responded with 'accepted')
@@ -253,7 +260,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     if (!currentPollId) return;
     
     // Submit votes
-    voteOnPoll(plan.id, currentPollId, selectedOptionIds, 'current');
+    voteOnPoll(plan.id, currentPollId, selectedOptionIds, user.id);
     
     // Close voting modal
     setShowPollVoting(false);
@@ -266,7 +273,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
 
   const handleCreateInvitationPoll = (friendIds: string[], friendNames: string[]) => {
     // Use the new function with auto-vote for the creator
-    createInvitationPollWithAutoVote(latestPlan.id, friendIds, friendNames, 'current');
+    createInvitationPollWithAutoVote(latestPlan.id, friendIds, friendNames, user.id);
     setShowInviteModal(false);
   };
   
@@ -285,7 +292,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         const userVotes = getUserVotesForPoll(poll.id);
         if (userVotes.length > 0) {
           // Remove all votes by voting for empty array
-          voteOnPoll(plan.id, poll.id, [], 'current');
+          voteOnPoll(plan.id, poll.id, [], user.id);
         }
       });
     }
@@ -405,7 +412,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     if (!poll) return [];
     
     return poll.options
-      .filter(option => option.votes.includes('current'))
+      .filter(option => option.votes.includes(user.id))
       .map(option => option.id);
   };
   
@@ -449,7 +456,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
   
   // Get unread message count for this plan
-  const unreadCount = getUnreadCount(latestPlan.id, 'current');
+  const unreadCount = getUnreadCount(latestPlan.id, user.id);
 
   // Helper function to handle poll voting with multiple selections
   const handlePollVote = (pollId: string, optionId: string) => {
@@ -464,13 +471,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       newVotes = [...currentVotes, optionId];
     }
     
-    voteOnPoll(plan.id, pollId, newVotes, 'current');
+    voteOnPoll(plan.id, pollId, newVotes, user.id);
   };
 
   // Helper function to handle invitation poll voting (single selection)
   const handleInvitationVote = (pollId: string, optionId: string) => {
     // For invitation polls, only allow one vote (either Allow or Deny)
-    voteOnPoll(plan.id, pollId, [optionId], 'current');
+    voteOnPoll(plan.id, pollId, [optionId], user.id);
   };
 
   // Helper function to handle poll deletion
@@ -493,7 +500,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             text: 'Remove Vote', 
             style: 'destructive',
             onPress: () => {
-              removeCompletionVote(plan.id, 'current');
+              removeCompletionVote(plan.id, user.id);
             }
           }
         ]
@@ -510,7 +517,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             text: 'Vote to Complete', 
             style: 'default',
             onPress: () => {
-              voteForCompletion(plan.id, 'current');
+              voteForCompletion(plan.id, user.id);
               
               // Check if this vote will complete the plan
               if (remainingVotes === 1) {
@@ -758,7 +765,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                             votingStatus.hasUserVoted && styles.singleCompleteButtonPressed
                           ]}
                           onPress={() => {
-                            voteForCompletion(plan.id, 'current');
+                            voteForCompletion(plan.id, user.id);
                             
                             // Check if this vote will complete the plan
                             if (remainingVotes === 1) {
@@ -783,7 +790,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                             ]}
                             onPress={() => {
                               if (!votingStatus.hasUserVoted) {
-                                voteForCompletion(plan.id, 'current');
+                                voteForCompletion(plan.id, user.id);
                                 
                                 // Check if this vote will complete the plan
                                 if (remainingVotes === 1) {
@@ -810,7 +817,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                             ]}
                             onPress={() => {
                               if (votingStatus.hasUserVoted) {
-                                removeCompletionVote(plan.id, 'current');
+                                removeCompletionVote(plan.id, user.id);
                               }
                             }}
                           >
@@ -888,7 +895,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             currentStatus={currentUserStatus}
             onStatusChange={handleStatusChange}
             participants={latestPlan.participants}
-            currentUserId="current"
+            currentUserId={user.id}
           />
           
           {/* Bottom padding for better scrolling */}
@@ -904,7 +911,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         >
           <ChatView 
             plan={latestPlan} 
-            currentUserId="current" 
+            currentUserId={user.id} 
             disableKeyboardAvoidance={true}
           />
         </KeyboardAvoidingView>
@@ -932,7 +939,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           })()}
           onVote={handleVoteSubmit}
           userVotes={getUserVotesForPoll(currentPollId)}
-          currentUserId="current"
+          currentUserId={user.id}
         />
       )}
       
