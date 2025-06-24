@@ -269,7 +269,6 @@ router.get('/', requireAuth, async (req, res) => {
       location: plan.location,
       date: plan.date,
       isAnonymous: plan.is_private,
-      maxParticipants: plan.max_participants,
       status: plan.status,
       creator: plan.is_private ? null : creators[plan.creator_id],
       participants: plan.participants.map(p => ({
@@ -336,7 +335,6 @@ router.post('/', requireAuth, async (req, res) => {
         location,
         date,
         is_private: isAnonymous,
-        max_participants: maxParticipants,
         creator_id: userId
       })
       .select()
