@@ -2,14 +2,14 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files from backend directory
+COPY backend/package*.json ./
 
 # Install dependencies
 RUN npm install --production
 
-# Copy source code
-COPY . .
+# Copy backend source code
+COPY backend/ .
 
 # Start the application
 CMD ["npm", "start"] 
