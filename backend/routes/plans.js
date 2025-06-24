@@ -57,16 +57,23 @@ const getPlanWithDetails = async (planId, userId = null) => {
     const { data: plan, error: planError } = await supabase
       .from('plans')
       .select(`
-        *,
-        creator:creator_id (
-          id,
-          name,
-          username,
-          avatar_url
-        )
+        *
       `)
       .eq('id', planId)
       .single();
+      
+    if (planError) throw planError;
+    
+    // Get creator info separately
+    const { data: creator, error: creatorError } = await supabase
+      .from('users')
+      .select('id, name, username, avatar_url')
+      .eq('id', plan.creator_id)
+      .single();
+      
+    if (creatorError) {
+      console.warn('Could not fetch creator info:', creatorError);
+    }
 
     if (planError) throw planError;
 
@@ -171,7 +178,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
 
     return {
       ...plan,
-      creator: plan.creator,
+      creator: creator,
       participants: participants.map(p => ({
         id: p.user.id,
         name: p.user.name,
@@ -205,12 +212,6 @@ router.get('/', requireAuth, async (req, res) => {
       .from('plans')
       .select(`
         *,
-        creator:creator_id (
-          id,
-          name,
-          username,
-          avatar_url
-        ),
         participants:plan_participants (
           user_id,
           response,
@@ -240,6 +241,25 @@ router.get('/', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch plans' });
     }
 
+    // Get unique creator IDs for non-anonymous plans
+    const creatorIds = [...new Set(plans.filter(p => !p.is_anonymous).map(p => p.creator_id))];
+    
+    // Fetch creator information
+    let creators = {};
+    if (creatorIds.length > 0) {
+      const { data: creatorData, error: creatorError } = await supabase
+        .from('users')
+        .select('id, name, username, avatar_url')
+        .in('id', creatorIds);
+        
+      if (!creatorError && creatorData) {
+        creators = creatorData.reduce((acc, creator) => {
+          acc[creator.id] = creator;
+          return acc;
+        }, {});
+      }
+    }
+
     // Transform plans for frontend
     const transformedPlans = plans.map(plan => ({
       id: plan.id,
@@ -250,7 +270,7 @@ router.get('/', requireAuth, async (req, res) => {
       isAnonymous: plan.is_anonymous,
       maxParticipants: plan.max_participants,
       status: plan.status,
-      creator: plan.is_anonymous ? null : plan.creator,
+      creator: plan.is_anonymous ? null : creators[plan.creator_id],
       participants: plan.participants.map(p => ({
         id: p.user.id,
         name: p.user.name,
