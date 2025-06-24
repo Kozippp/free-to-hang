@@ -73,7 +73,7 @@ interface PlansState {
   // API Actions
   loadPlans: (userId?: string) => Promise<void>;
   createPlan: (planData: any) => Promise<void>;
-  markPlanAsSeen: (planId: string) => Promise<void>;
+  // markPlanAsSeen: (planId: string) => Promise<void>; // TODO: Enable when backend is ready
   
   // Real-time subscriptions
   startRealTimeUpdates: (userId: string) => void;
@@ -259,24 +259,24 @@ const usePlansStore = create<PlansState>((set, get) => ({
   },
   
   // Mark plan as seen via API
-  markPlanAsSeen: async (planId: string) => {
-    try {
-      console.log('👁️ Marking plan as seen via API...');
-      await plansService.markPlanAsSeen(planId);
-      console.log('✅ Plan marked as seen via API');
-      
-      // Update local state to mark as read
-      set(state => ({
-        invitations: state.invitations.map(plan => 
-          plan.id === planId ? { ...plan, isRead: true } : plan
-        )
-      }));
-      
-    } catch (error) {
-      console.error('❌ Error marking plan as seen:', error);
-      throw error;
-    }
-  },
+  // markPlanAsSeen: async (planId: string) => {
+  //   try {
+  //     console.log('👁️ Marking plan as seen via API...');
+  //     await plansService.markPlanAsSeen(planId);
+  //     console.log('✅ Plan marked as seen via API');
+  //     
+  //     // Update local state to mark as read
+  //     set(state => ({
+  //       invitations: state.invitations.map(plan => 
+  //         plan.id === planId ? { ...plan, isRead: true } : plan
+  //       )
+  //     }));
+  //     
+  //   } catch (error) {
+  //     console.error('❌ Error marking plan as seen:', error);
+  //     throw error;
+  //   }
+  // },
   
   markAsRead: (planId: string) => {
     set((state) => ({

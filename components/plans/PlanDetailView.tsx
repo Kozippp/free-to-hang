@@ -70,8 +70,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     getCompletionVotingStatus,
     invitations,
     activePlans,
-    processExpiredInvitationPolls,
-    markPlanAsSeen
+    processExpiredInvitationPolls
+    // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   const { getUnreadCount } = useChatStore();
   const router = useRouter();
@@ -139,10 +139,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   // Mark plan as seen when first opened (if user is pending)
   React.useEffect(() => {
-    if (currentUserStatus === 'pending') {
-      markPlanAsSeen(plan.id).catch(console.error);
-    }
-  }, [plan.id, currentUserStatus, markPlanAsSeen]);
+    // TODO: Add mark as seen functionality when database schema allows
+    // if (currentUserStatus === 'pending') {
+    //   markPlanAsSeen(plan.id).catch(console.error);
+    // }
+  }, [plan.id, currentUserStatus]);
 
   // Process expired invitation polls periodically
   React.useEffect(() => {
