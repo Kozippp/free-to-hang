@@ -4,6 +4,13 @@ const router = express.Router();
 // Use global supabase instance
 const supabase = global.supabase;
 
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseAnonKey) {
+  console.error('❌ SUPABASE_ANON_KEY environment variable is required');
+  process.exit(1);
+}
+
 // Helper function to get user from token
 const getUserFromToken = async (req) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -17,9 +24,8 @@ const getUserFromToken = async (req) => {
     // For JWT validation, we need to use the anon key, not service role key
     const { createClient } = require('@supabase/supabase-js');
     
-    // Try to get anon key from environment, fallback to hardcoded for now
-    const anonKey = process.env.SUPABASE_ANON_KEY || 
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5memJ2dXludHpnc3pxZGxzdXNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMxNjE5ODYsImV4cCI6MjA0ODczNzk4Nn0.ZNLQfEzBKZI5uxZQBbP5SIFEcDCdLuNEQGgJXCOWfTk';
+    // Use anon key from environment
+    const anonKey = supabaseAnonKey;
     
     console.log('🔑 Using anon key from:', process.env.SUPABASE_ANON_KEY ? 'environment' : 'hardcoded fallback');
     console.log('🔑 Supabase URL:', process.env.SUPABASE_URL);

@@ -75,7 +75,7 @@ export default function SupabaseTest() {
 
       <View style={styles.info}>
         <Text style={styles.infoText}>URL: https://nfzbvuyntzgszqdlsusj.supabase.co</Text>
-        <Text style={styles.infoText}>Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</Text>
+        <Text style={styles.infoText}>Key: [REDACTED FOR SECURITY]</Text>
       </View>
     </View>
   );
