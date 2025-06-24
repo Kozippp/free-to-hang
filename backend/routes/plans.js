@@ -56,9 +56,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
     // Get basic plan info
     const { data: plan, error: planError } = await supabase
       .from('plans')
-      .select(`
-        *
-      `)
+      .select('*')
       .eq('id', planId)
       .single();
       
@@ -75,54 +73,93 @@ const getPlanWithDetails = async (planId, userId = null) => {
       console.warn('Could not fetch creator info:', creatorError);
     }
 
-    if (planError) throw planError;
-
-    // Get participants
+    // Get participants (without user relationship)
     const { data: participants, error: participantsError } = await supabase
       .from('plan_participants')
-      .select(`
-        *,
-        user:user_id (
-          id,
-          name,
-          username,
-          avatar_url
-        )
-      `)
+      .select('*')
       .eq('plan_id', planId);
 
     if (participantsError) throw participantsError;
 
-    // Get polls with options and votes
+    // Get user info for participants separately
+    const participantUserIds = participants.map(p => p.user_id);
+    let participantUsers = [];
+    if (participantUserIds.length > 0) {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, name, username, avatar_url')
+        .in('id', participantUserIds);
+      
+      if (!userError) {
+        participantUsers = userData || [];
+      }
+    }
+
+    // Get polls (without relationships)
     const { data: polls, error: pollsError } = await supabase
       .from('plan_polls')
-      .select(`
-        *,
-        options:plan_poll_options (
-          id,
-          option_text,
-          option_order,
-          votes:plan_poll_votes (
-            user_id,
-            user:user_id (
-              id,
-              name,
-              username,
-              avatar_url
-            )
-          )
-        ),
-        created_by_user:created_by (
-          id,
-          name,
-          username,
-          avatar_url
-        )
-      `)
+      .select('*')
       .eq('plan_id', planId)
       .order('created_at', { ascending: true });
 
     if (pollsError) throw pollsError;
+
+    // Get poll options
+    const pollIds = polls.map(p => p.id);
+    let pollOptions = [];
+    if (pollIds.length > 0) {
+      const { data: optionsData, error: optionsError } = await supabase
+        .from('plan_poll_options')
+        .select('*')
+        .in('poll_id', pollIds)
+        .order('option_order', { ascending: true });
+      
+      if (!optionsError) {
+        pollOptions = optionsData || [];
+      }
+    }
+
+    // Get poll votes
+    let pollVotes = [];
+    const optionIds = pollOptions.map(o => o.id);
+    if (optionIds.length > 0) {
+      const { data: votesData, error: votesError } = await supabase
+        .from('plan_poll_votes')
+        .select('*')
+        .in('option_id', optionIds);
+      
+      if (!votesError) {
+        pollVotes = votesData || [];
+      }
+    }
+
+    // Get user info for poll voters
+    const voterIds = [...new Set(pollVotes.map(v => v.user_id))];
+    let voterUsers = [];
+    if (voterIds.length > 0) {
+      const { data: voterData, error: voterError } = await supabase
+        .from('users')
+        .select('id, name, username, avatar_url')
+        .in('id', voterIds);
+      
+      if (!voterError) {
+        voterUsers = voterData || [];
+      }
+    }
+
+    // Get poll creators
+    const pollCreatorIds = [...new Set(polls.map(p => p.created_by))];
+    let pollCreators = [];
+    if (pollCreatorIds.length > 0) {
+      const { data: creatorData, error: creatorError } = await supabase
+        .from('users')
+        .select('id, name, username, avatar_url')
+        .in('id', pollCreatorIds);
+      
+      if (!creatorError) {
+        pollCreators = creatorData || [];
+      }
+    }
 
     // Get completion votes
     const { data: completionVotes, error: completionError } = await supabase
@@ -137,41 +174,78 @@ const getPlanWithDetails = async (planId, userId = null) => {
     if (plan.status === 'completed') {
       const { data: attendanceData, error: attendanceError } = await supabase
         .from('plan_attendance')
-        .select(`
-          *,
-          user:user_id (
-            id,
-            name,
-            username,
-            avatar_url
-          )
-        `)
+        .select('*')
         .eq('plan_id', planId);
 
-      if (!attendanceError) {
-        attendance = attendanceData || [];
+      if (!attendanceError && attendanceData) {
+        const attendeeIds = attendanceData.map(a => a.user_id);
+        let attendeeUsers = [];
+        if (attendeeIds.length > 0) {
+          const { data: attendeeUserData, error: attendeeUserError } = await supabase
+            .from('users')
+            .select('id, name, username, avatar_url')
+            .in('id', attendeeIds);
+          
+          if (!attendeeUserError) {
+            attendeeUsers = attendeeUserData || [];
+          }
+        }
+
+        attendance = attendanceData.map(a => {
+          const user = attendeeUsers.find(u => u.id === a.user_id);
+          return {
+            userId: a.user_id,
+            name: user?.name || 'Unknown',
+            avatar: user?.avatar_url,
+            attended: a.attended
+          };
+        });
       }
     }
 
     // Transform polls to match frontend format
-    const transformedPolls = polls.map(poll => ({
-      id: poll.id,
-      question: poll.title,
-      type: poll.poll_type,
-      expiresAt: poll.ends_at,
-      invitedUsers: poll.invited_users,
-      createdBy: poll.created_by_user,
-      options: poll.options.map(option => ({
-        id: option.id,
-        text: option.option_text,
-        votes: option.votes.map(vote => vote.user_id),
-        voters: option.votes.map(vote => ({
-          id: vote.user.id,
-          name: vote.user.name,
-          avatar: vote.user.avatar_url
-        }))
-      }))
-    }));
+    const transformedPolls = polls.map(poll => {
+      const pollCreator = pollCreators.find(c => c.id === poll.created_by);
+      const pollOptionsForThisPoll = pollOptions.filter(o => o.poll_id === poll.id);
+      
+      return {
+        id: poll.id,
+        question: poll.title,
+        type: poll.poll_type,
+        expiresAt: poll.ends_at,
+        createdBy: pollCreator,
+        options: pollOptionsForThisPoll.map(option => {
+          const votesForThisOption = pollVotes.filter(v => v.option_id === option.id);
+          const voters = votesForThisOption.map(vote => {
+            const voter = voterUsers.find(u => u.id === vote.user_id);
+            return {
+              id: vote.user_id,
+              name: voter?.name || 'Unknown',
+              avatar: voter?.avatar_url
+            };
+          });
+          
+          return {
+            id: option.id,
+            text: option.option_text,
+            votes: votesForThisOption.map(v => v.user_id),
+            voters: voters
+          };
+        })
+      };
+    });
+
+    // Transform participants with user data
+    const transformedParticipants = participants.map(p => {
+      const user = participantUsers.find(u => u.id === p.user_id);
+      return {
+        id: p.user_id,
+        name: user?.name || 'Unknown',
+        avatar: user?.avatar_url,
+        status: p.status,
+        joinedAt: p.joined_at
+      };
+    });
 
     // Check if user has voted for completion
     const userCompletionVote = userId ? 
@@ -180,22 +254,11 @@ const getPlanWithDetails = async (planId, userId = null) => {
     return {
       ...plan,
       creator: creator,
-      participants: participants.map(p => ({
-        id: p.user.id,
-        name: p.user.name,
-        avatar: p.user.avatar_url,
-        status: p.status,
-        joinedAt: p.joined_at
-      })),
+      participants: transformedParticipants,
       polls: transformedPolls,
       completionVotes: completionVotes.map(v => v.user_id),
       userCompletionVote,
-      attendance: attendance.map(a => ({
-        userId: a.user.id,
-        name: a.user.name,
-        avatar: a.user.avatar_url,
-        attended: a.attended
-      }))
+      attendance: attendance
     };
   } catch (error) {
     console.error('Error getting plan details:', error);
@@ -209,22 +272,10 @@ router.get('/', requireAuth, async (req, res) => {
     const { status = 'all' } = req.query;
     const userId = req.user.id;
 
+    // Get plans where user is creator or participant
     let query = supabase
       .from('plans')
-      .select(`
-        *,
-        participants:plan_participants (
-          user_id,
-          status,
-          joined_at,
-          user:user_id (
-            id,
-            name,
-            username,
-            avatar_url
-          )
-        )
-      `)
+      .select('*')
       .or(`creator_id.eq.${userId},id.in.(${
         // Subquery for plans user participates in
         `select plan_id from plan_participants where user_id = '${userId}'`
@@ -240,6 +291,36 @@ router.get('/', requireAuth, async (req, res) => {
     if (error) {
       console.error('Error fetching plans:', error);
       return res.status(500).json({ error: 'Failed to fetch plans' });
+    }
+
+    if (!plans || plans.length === 0) {
+      return res.json([]);
+    }
+
+    // Get participants for all plans
+    const planIds = plans.map(p => p.id);
+    const { data: allParticipants, error: participantsError } = await supabase
+      .from('plan_participants')
+      .select('*')
+      .in('plan_id', planIds);
+
+    if (participantsError) {
+      console.error('Error fetching participants:', participantsError);
+      return res.status(500).json({ error: 'Failed to fetch participants' });
+    }
+
+    // Get unique user IDs for participants
+    const participantUserIds = [...new Set(allParticipants.map(p => p.user_id))];
+    let participantUsers = [];
+    if (participantUserIds.length > 0) {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, name, username, avatar_url')
+        .in('id', participantUserIds);
+      
+      if (!userError) {
+        participantUsers = userData || [];
+      }
     }
 
     // Get unique creator IDs for non-private plans
@@ -262,25 +343,33 @@ router.get('/', requireAuth, async (req, res) => {
     }
 
     // Transform plans for frontend
-    const transformedPlans = plans.map(plan => ({
-      id: plan.id,
-      title: plan.title,
-      description: plan.description,
-      location: plan.location,
-      date: plan.date,
-      isAnonymous: plan.is_private,
-      status: plan.status,
-      creator: plan.is_private ? null : creators[plan.creator_id],
-      participants: plan.participants.map(p => ({
-        id: p.user.id,
-        name: p.user.name,
-        avatar: p.user.avatar_url,
-        status: p.status,
-        joinedAt: p.joined_at
-      })),
-      createdAt: plan.created_at,
-      updatedAt: plan.updated_at
-    }));
+    const transformedPlans = plans.map(plan => {
+      const planParticipants = allParticipants.filter(p => p.plan_id === plan.id);
+      const participantsWithUserData = planParticipants.map(p => {
+        const user = participantUsers.find(u => u.id === p.user_id);
+        return {
+          id: p.user_id,
+          name: user?.name || 'Unknown',
+          avatar: user?.avatar_url,
+          status: p.status,
+          joinedAt: p.joined_at
+        };
+      });
+
+      return {
+        id: plan.id,
+        title: plan.title,
+        description: plan.description,
+        location: plan.location,
+        date: plan.date,
+        isAnonymous: plan.is_private,
+        status: plan.status,
+        creator: plan.is_private ? null : creators[plan.creator_id],
+        participants: participantsWithUserData,
+        createdAt: plan.created_at,
+        updatedAt: plan.updated_at
+      };
+    });
 
     res.json(transformedPlans);
   } catch (error) {
