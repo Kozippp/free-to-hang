@@ -341,7 +341,8 @@ const processConditionalDependencies = async (planId) => {
       .from('plan_updates')
       .select('triggered_by, metadata')
       .eq('plan_id', planId)
-      .eq('update_type', 'participant_conditional')
+      .eq('update_type', 'participant_joined')
+      .like('metadata', '%is_conditional%')
       .order('created_at', { ascending: false });
 
     if (conditionalError) throw conditionalError;
@@ -397,8 +398,9 @@ const processConditionalDependencies = async (planId) => {
               .from('plan_updates')
               .delete()
               .eq('plan_id', planId)
-              .eq('update_type', 'participant_conditional')
-              .eq('triggered_by', participant.user_id);
+              .eq('update_type', 'participant_joined')
+              .eq('triggered_by', participant.user_id)
+              .like('metadata', '%is_conditional%');
             
             // Update local data
             participant.status = 'accepted';
@@ -738,19 +740,21 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
         .from('plan_updates')
         .delete()
         .eq('plan_id', id)
-        .eq('update_type', 'participant_conditional')
-        .eq('triggered_by', userId);
+        .eq('update_type', 'participant_joined')
+        .eq('triggered_by', userId)
+        .like('metadata', '%is_conditional%');
       
-      // Store new conditional friends metadata
+      // Store new conditional friends metadata using 'participant_joined' type
       await supabase
         .from('plan_updates')
         .insert({
           plan_id: id,
-          update_type: 'participant_conditional',
+          update_type: 'participant_joined',
           triggered_by: userId,
           metadata: {
             conditional_friends: conditionalFriends,
-            user_id: userId
+            user_id: userId,
+            is_conditional: true
           }
         });
     } else {
@@ -759,8 +763,9 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
         .from('plan_updates')
         .delete()
         .eq('plan_id', id)
-        .eq('update_type', 'participant_conditional')
-        .eq('triggered_by', userId);
+        .eq('update_type', 'participant_joined')
+        .eq('triggered_by', userId)
+        .like('metadata', '%is_conditional%');
     }
 
     if (existingParticipant) {
