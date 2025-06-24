@@ -287,6 +287,57 @@ const getPlanWithDetails = async (planId, userId = null) => {
   }
 };
 
+// GET /plans/debug - Debug authentication (temporary)
+router.get('/debug', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    console.log('🔍 Debug endpoint called');
+    console.log('🔍 Token received:', !!token);
+    
+    if (!token) {
+      return res.json({ error: 'No token provided', hasToken: false });
+    }
+    
+    // Try to decode token without verification first
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      return res.json({ error: 'Invalid token format', tokenParts: tokenParts.length });
+    }
+    
+    try {
+      const header = JSON.parse(Buffer.from(tokenParts[0], 'base64').toString());
+      const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+      
+      console.log('🔍 Token header:', header);
+      console.log('🔍 Token payload:', payload);
+      
+      const user = await getUserFromToken(req);
+      
+      return res.json({
+        hasToken: true,
+        tokenValid: !!user,
+        header,
+        payload: {
+          iss: payload.iss,
+          aud: payload.aud,
+          exp: payload.exp,
+          iat: payload.iat,
+          sub: payload.sub,
+          email: payload.email
+        },
+        user: user ? { id: user.id, email: user.email } : null,
+        currentTime: Math.floor(Date.now() / 1000),
+        isExpired: payload.exp < Math.floor(Date.now() / 1000)
+      });
+    } catch (decodeError) {
+      return res.json({ error: 'Token decode failed', decodeError: decodeError.message });
+    }
+  } catch (error) {
+    console.error('🔍 Debug endpoint error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /plans - Get user's plans
 router.get('/', requireAuth, async (req, res) => {
   try {
