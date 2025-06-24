@@ -10,7 +10,6 @@ import PlanDetailModal from '@/components/plans/PlanDetailModal';
 import CompletedPlanDetailView from '@/components/plans/CompletedPlanDetailView';
 import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
-import { testNotifications } from '@/utils/notifications';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function PlansScreen() {
@@ -23,7 +22,7 @@ export default function PlansScreen() {
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
   const { user } = useAuth();
-  const { invitations, activePlans, completedPlans, loadPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates } = usePlansStore();
+  const { invitations, activePlans, completedPlans, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -236,25 +235,6 @@ export default function PlansScreen() {
         {activeTab === 'Plan' && 'Create a plan or accept an invitation to get started.'}
         {activeTab === 'Completed' && 'Completed plans will appear here.'}
       </Text>
-      
-      {/* Test notifications button */}
-      {activeTab === 'Invitations' && (
-        <TouchableOpacity 
-          style={styles.testButton}
-          onPress={testNotifications}
-        >
-          <Text style={styles.testButtonText}>Test Notifications</Text>
-        </TouchableOpacity>
-      )}
-      
-      {activeTab === 'Completed' && (
-        <TouchableOpacity 
-          style={styles.demoButton}
-          onPress={addDemoCompletedPlan}
-        >
-          <Text style={styles.demoButtonText}>Add Demo Completed Plan</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
   
@@ -431,32 +411,8 @@ const styles = StyleSheet.create({
     color: Colors.light.secondaryText,
     textAlign: 'center',
   },
-  demoButton: {
-    backgroundColor: Colors.light.primary,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  demoButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.light.background,
-    textAlign: 'center',
-  },
   finalSeparator: {
     height: 1,
     backgroundColor: '#EEEEEE',
-  },
-  testButton: {
-    backgroundColor: Colors.light.primary,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  testButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.light.background,
-    textAlign: 'center',
   },
 });

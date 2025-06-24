@@ -128,9 +128,6 @@ interface PlansState {
     isCompleted: boolean;
   };
   
-  // Demo function to add a completed plan for testing
-  addDemoCompletedPlan: () => void;
-  
   // Attendance tracking for completed plans
   updateAttendance: (planId: string, userId: string, attended: boolean) => void;
 }
@@ -1028,75 +1025,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
       hasUserVoted,
       isCompleted
     };
-  },
-  
-  // Demo function to add a completed plan for testing
-  addDemoCompletedPlan: () => {
-    const demoPlan: Plan = {
-      id: `completed-demo-${Date.now()}`,
-      title: 'Demo Completed Plan',
-      description: 'This is a demo completed plan for testing.',
-      type: 'normal' as const,
-      creator: {
-        id: 'current',
-        name: 'You',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
-      },
-      participants: [
-        {
-          id: 'current',
-          name: 'You',
-          avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-          status: 'accepted'
-        },
-        {
-          id: 'demo1',
-          name: 'Demo Friend 1',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-          status: 'accepted'
-        },
-        {
-          id: 'demo2',
-          name: 'Demo Friend 2',
-          avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-          status: 'accepted'
-        }
-      ],
-      date: 'Yesterday, 7:00 PM',
-      location: 'Demo Location',
-      isRead: true,
-      createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), // 25 hours ago
-      completionVotes: ['current', 'demo1'], // 2 out of 3 voted for completion
-      attendanceRecord: {
-        'current': true, // User attended
-        'demo1': true,   // Friend 1 attended
-        'demo2': false   // Friend 2 didn't attend
-      },
-      polls: [
-        {
-          id: 'demo-poll-1',
-          question: 'What time worked best?',
-          type: 'when',
-          options: [
-            {
-              id: 'demo-option-1',
-              text: '7:00 PM',
-              votes: ['current', 'demo1', 'demo2']
-            },
-            {
-              id: 'demo-option-2',
-              text: '8:00 PM',
-              votes: ['demo1']
-            }
-          ]
-        }
-      ]
-    };
-    
-    set((state) => ({
-      ...state,
-      completedPlans: [demoPlan, ...state.completedPlans]
-    }));
   },
   
   // Attendance tracking for completed plans
