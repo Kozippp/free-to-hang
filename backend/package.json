@@ -1,28 +1,29 @@
 {
   "name": "free-to-hang-backend",
   "version": "1.0.0",
-  "description": "Backend API for Free to Hang social planning app",
+  "description": "Backend for Free to Hang app",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "railway:install": "npm install --only=production",
+    "railway:start": "npm start"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
+    "@supabase/supabase-js": "^2.38.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "@supabase/supabase-js": "^2.38.0",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5"
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "keywords": ["express", "api", "supabase", "social", "planning"],
-  "author": "",
-  "license": "ISC"
+  }
 } 
