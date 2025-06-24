@@ -6,7 +6,8 @@ export interface PlanParticipant {
   id: string;
   name: string;
   avatar: string;
-  status: 'pending' | 'accepted' | 'maybe' | 'declined';
+  status: 'pending' | 'accepted' | 'maybe' | 'declined' | 'conditional';
+  conditionalFriends?: string[];
   joinedAt: string;
 }
 
