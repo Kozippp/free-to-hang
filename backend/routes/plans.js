@@ -662,17 +662,48 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid response' });
     }
 
-    // Update or insert participant response
-    const { data: participant, error } = await supabase
+    // Check if participant already exists
+    const { data: existingParticipant, error: checkError } = await supabase
       .from('plan_participants')
-      .upsert({
-        plan_id: id,
-        user_id: userId,
-        status: responseMapping[response] || response,
-        joined_at: new Date().toISOString()
-      })
-      .select()
+      .select('*')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
       .single();
+
+    let participant;
+    let error;
+
+    if (existingParticipant) {
+      // Update existing participant
+      const { data: updatedParticipant, error: updateError } = await supabase
+        .from('plan_participants')
+        .update({
+          status: responseMapping[response] || response,
+          joined_at: new Date().toISOString()
+        })
+        .eq('plan_id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+      
+      participant = updatedParticipant;
+      error = updateError;
+    } else {
+      // Insert new participant
+      const { data: newParticipant, error: insertError } = await supabase
+        .from('plan_participants')
+        .insert({
+          plan_id: id,
+          user_id: userId,
+          status: responseMapping[response] || response,
+          joined_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      participant = newParticipant;
+      error = insertError;
+    }
 
     if (error) {
       console.error('Error updating participant response:', error);
