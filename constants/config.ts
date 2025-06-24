@@ -1,28 +1,38 @@
 // API Configuration
 export const API_CONFIG = {
   // Local development - Use your local network IP
-  LOCAL_BASE_URL: 'http://192.168.0.24:3000',
+  LOCAL_BASE_URL: 'http://192.168.0.24:3001/api',
   
   // Production (Railway) - Updated with correct URL
-  PROD_BASE_URL: 'https://free-to-hang-production-up.railway.app',
+  PROD_BASE_URL: 'https://free-to-hang-production-up.railway.app/api',
   
-  // Current environment - Use Railway for production
-  BASE_URL: 'https://free-to-hang-production-up.railway.app',
+  // Current environment - Use local for testing since Railway has issues
+  BASE_URL: 'http://192.168.0.24:3001/api',
 };
 
 // API Endpoints
 export const API_ENDPOINTS = {
-  // Health check
+  // Health check (root endpoint, no /api prefix needed)
   HEALTH: '/',
   
   // User endpoints
   USER_PROFILE: '/user/me',
   REGISTER_PROFILE: '/user/register-profile',
   
-  // Future endpoints
+  // Friend endpoints
   FRIENDS: '/friends',
+  FRIENDS_SEARCH: '/friends/search',
+  FRIENDS_REQUEST: '/friends/request',
+  FRIENDS_ACCEPT: '/friends/request/accept',
+  FRIENDS_DECLINE: '/friends/request/decline',
+  FRIENDS_CANCEL: '/friends/request/cancel',
+  FRIENDS_REMOVE: '/friends/remove',
+  FRIENDS_INCOMING: '/friends/requests/incoming',
+  FRIENDS_OUTGOING: '/friends/requests/outgoing',
+  FRIENDS_STATUS: '/friends/status',
+  
+  // Plans endpoints
   PLANS: '/plans',
-  MESSAGES: '/messages',
 };
 
 // Helper function to build full URL
