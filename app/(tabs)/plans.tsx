@@ -11,6 +11,7 @@ import CompletedPlanDetailView from '@/components/plans/CompletedPlanDetailView'
 import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 import { testNotifications } from '@/utils/notifications';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function PlansScreen() {
   const [activeTab, setActiveTab] = useState('Invitations');
@@ -21,7 +22,8 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
-  const { invitations, activePlans, completedPlans, loadPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance, getSortedPlans, markUpdatesAsRead } = usePlansStore();
+  const { user } = useAuth();
+  const { invitations, activePlans, completedPlans, loadPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -34,8 +36,15 @@ export default function PlansScreen() {
 
   // Load plans from API when component mounts
   useEffect(() => {
-    loadPlans();
-  }, [loadPlans]);
+    if (user?.id) {
+      loadPlans(user.id);
+      startRealTimeUpdates(user.id);
+    }
+    
+    return () => {
+      stopRealTimeUpdates();
+    };
+  }, [loadPlans, user?.id, startRealTimeUpdates, stopRealTimeUpdates]);
 
   // Check for new plan creation
   useEffect(() => {

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { mockInvitations, mockActivePlans, mockCompletedPlans } from '@/constants/mockPlans';
 import { useRouter } from 'expo-router';
 import { notifyPlanUpdate } from '@/utils/notifications';
 import { plansService } from '@/lib/plans-service';
+import { supabase } from '@/lib/supabase';
 
 export type ParticipantStatus = 'pending' | 'accepted' | 'maybe' | 'conditional' | 'declined';
 
@@ -71,8 +71,12 @@ interface PlansState {
   isLoading: boolean;
   
   // API Actions
-  loadPlans: () => Promise<void>;
+  loadPlans: (userId?: string) => Promise<void>;
   createPlan: (planData: any) => Promise<void>;
+  
+  // Real-time subscriptions
+  startRealTimeUpdates: (userId: string) => void;
+  stopRealTimeUpdates: () => void;
   
   // Actions
   markAsRead: (planId: string) => void;
@@ -131,14 +135,18 @@ interface PlansState {
   updateAttendance: (planId: string, userId: string, attended: boolean) => void;
 }
 
+// Global variables for real-time subscriptions
+let plansChannel: any = null;
+let isSubscribed = false;
+
 const usePlansStore = create<PlansState>((set, get) => ({
-  invitations: mockInvitations.map(ensurePlanDefaults),
-  activePlans: mockActivePlans.map(ensurePlanDefaults),
-  completedPlans: mockCompletedPlans.map(ensurePlanDefaults),
+  invitations: [],
+  activePlans: [],
+  completedPlans: [],
   isLoading: false,
   
   // Load plans from API
-  loadPlans: async () => {
+  loadPlans: async (userId?: string) => {
     try {
       set({ isLoading: true });
       console.log('📋 Loading plans from API...');
@@ -147,7 +155,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       console.log('✅ Plans loaded from API:', plans.length);
       
       // Separate plans into categories based on user's participation status
-      const currentUserId = 'current'; // This should come from auth context
+      const currentUserId = userId || 'unknown';
       
       const invitations: Plan[] = [];
       const activePlans: Plan[] = [];
@@ -1168,7 +1176,94 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const bTime = new Date(b.lastUpdatedAt || b.createdAt).getTime();
       return bTime - aTime;
     });
+  },
+  
+  // Real-time subscriptions
+  startRealTimeUpdates: (userId: string) => {
+    if (isSubscribed || plansChannel) {
+      console.log('🛑 Plans real-time subscription already active');
+      return;
+    }
+
+    console.log('🚀 Starting plans real-time updates...');
+
+    try {
+      // Create channel for plans and plan_participants updates
+      plansChannel = supabase
+        .channel(`plans_updates_${userId}_${Date.now()}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'plans'
+        }, (payload) => {
+          console.log('📡 Plans table update:', payload);
+          handlePlanUpdate(payload, userId);
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'plan_participants'
+        }, (payload) => {
+          console.log('📡 Plan participants update:', payload);
+          handleParticipantUpdate(payload, userId);
+        })
+        .subscribe((status) => {
+          console.log('📡 Plans channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            isSubscribed = true;
+            console.log('✅ Plans real-time subscription started');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Plans real-time channel error');
+            isSubscribed = false;
+          } else {
+            isSubscribed = false;
+          }
+        });
+    } catch (error) {
+      console.error('❌ Error starting plans real-time updates:', error);
+      isSubscribed = false;
+    }
+  },
+  
+  stopRealTimeUpdates: () => {
+    console.log('🛑 Stopping plans real-time updates...');
+    
+    if (plansChannel) {
+      supabase.removeChannel(plansChannel);
+      plansChannel = null;
+    }
+    
+    isSubscribed = false;
+    console.log('✅ Plans real-time updates stopped');
   }
 }));
+
+// Handle real-time plan updates
+function handlePlanUpdate(payload: any, currentUserId: string) {
+  const { loadPlans } = usePlansStore.getState();
+  
+  if (payload.eventType === 'INSERT') {
+    console.log('📝 New plan created via real-time');
+    // Reload plans to get the new plan with proper categorization
+    loadPlans(currentUserId);
+  } else if (payload.eventType === 'UPDATE') {
+    console.log('📝 Plan updated via real-time');
+    // Reload plans to get updated data
+    loadPlans(currentUserId);
+  } else if (payload.eventType === 'DELETE') {
+    console.log('🗑️ Plan deleted via real-time');
+    // Reload plans to remove deleted plan
+    loadPlans(currentUserId);
+  }
+}
+
+// Handle real-time participant updates
+function handleParticipantUpdate(payload: any, currentUserId: string) {
+  const { loadPlans } = usePlansStore.getState();
+  
+  console.log('👥 Plan participant changed via real-time');
+  // Reload plans to get updated participant data
+  loadPlans(currentUserId);
+}
 
 export default usePlansStore;
