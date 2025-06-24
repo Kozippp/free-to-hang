@@ -287,10 +287,10 @@ const getPlanWithDetails = async (planId, userId = null) => {
       );
       
       // Determine actual status - if user has conditional data and response is 'maybe', it's actually 'conditional'
-      let actualStatus = p.status;
+      let actualStatus = p.response;
       let conditionalFriends = undefined;
       
-      if (conditionalData && p.status === 'maybe') {
+      if (conditionalData && p.response === 'maybe') {
         actualStatus = 'conditional';
         conditionalFriends = conditionalData.metadata?.conditional_friends;
       }
@@ -363,7 +363,7 @@ const processConditionalDependencies = async (planId) => {
       
       for (const participant of participants) {
         // Skip if not conditional or already accepted
-        if (participant.status !== 'maybe' || !conditionalMap.has(participant.user_id)) {
+        if (participant.response !== 'maybe' || !conditionalMap.has(participant.user_id)) {
           continue;
         }
         
@@ -375,7 +375,7 @@ const processConditionalDependencies = async (planId) => {
         // Check if all conditional friends are accepted
         const allFriendsAccepted = conditionalFriends.every(friendId => {
           const friend = participants.find(p => p.user_id === friendId);
-          return friend && friend.status === 'accepted';
+          return friend && friend.response === 'accepted';
         });
         
         if (allFriendsAccepted) {
@@ -385,8 +385,8 @@ const processConditionalDependencies = async (planId) => {
           const { error: updateError } = await supabase
             .from('plan_participants')
             .update({ 
-              status: 'accepted',
-              updated_at: new Date().toISOString()
+              response: 'accepted'
+              // updated_at is handled by database trigger
             })
             .eq('plan_id', planId)
             .eq('user_id', participant.user_id);
@@ -401,7 +401,7 @@ const processConditionalDependencies = async (planId) => {
               .eq('triggered_by', participant.user_id);
             
             // Update local data
-            participant.status = 'accepted';
+            participant.response = 'accepted';
             conditionalMap.delete(participant.user_id);
             iterationChanges = true;
             hasChanges = true;
@@ -638,7 +638,7 @@ router.get('/', requireAuth, async (req, res) => {
           id: p.user_id,
           name: user?.name || 'Unknown',
           avatar: user?.avatar_url,
-          status: p.status,
+          status: p.response,
           joinedAt: p.joined_at
         };
       });
@@ -729,7 +729,7 @@ router.post('/', requireAuth, async (req, res) => {
       .insert({
         plan_id: plan.id,
         user_id: userId,
-        status: 'accepted'  // Use 'accepted' instead of 'going' to match frontend
+        response: 'accepted'  // Use 'response' field and 'accepted' status
       });
 
     if (participantError) {
@@ -742,7 +742,7 @@ router.post('/', requireAuth, async (req, res) => {
       const participantInserts = invitedFriends.map(friendId => ({
         plan_id: plan.id,
         user_id: friendId,
-        status: 'pending'
+        response: 'pending'
       }));
 
       const { error: inviteError } = await supabase
@@ -805,8 +805,8 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
 
     // Prepare the participant data
     const participantData = {
-      status: responseMapping[response] || response, // Use 'status' field as per actual schema
-      updated_at: new Date().toISOString()
+      response: responseMapping[response] || response // Use 'response' field as per schema
+      // updated_at is handled by database trigger
     };
 
     // Handle conditional friends data
@@ -951,12 +951,12 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
     // Check if user can create polls (is participant)
     const { data: participant, error: participantError } = await supabase
       .from('plan_participants')
-      .select('status')
+      .select('response')
       .eq('plan_id', id)
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'accepted') {
+    if (participantError || !participant || participant.response !== 'accepted') {
       return res.status(403).json({ error: 'Only accepted participants can create polls' });
     }
 
@@ -1021,12 +1021,12 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
     // Check if user can vote (is accepted participant)
     const { data: participant, error: participantError } = await supabase
       .from('plan_participants')
-      .select('status')
+      .select('response')
       .eq('plan_id', id)
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'accepted') {
+    if (participantError || !participant || participant.response !== 'accepted') {
       return res.status(403).json({ error: 'Only accepted participants can vote' });
     }
 
@@ -1079,12 +1079,12 @@ router.post('/:id/complete-vote', requireAuth, async (req, res) => {
     // Check if user is accepted participant
     const { data: participant, error: participantError } = await supabase
       .from('plan_participants')
-      .select('status')
+      .select('response')
       .eq('plan_id', id)
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'accepted') {
+    if (participantError || !participant || participant.response !== 'accepted') {
       return res.status(403).json({ error: 'Only accepted participants can vote for completion' });
     }
 
@@ -1107,7 +1107,7 @@ router.post('/:id/complete-vote', requireAuth, async (req, res) => {
       .from('plan_participants')
       .select('user_id')
       .eq('plan_id', id)
-      .eq('status', 'accepted');
+      .eq('response', 'accepted');
 
     const { data: completionVotes } = await supabase
       .from('plan_completion_votes')
