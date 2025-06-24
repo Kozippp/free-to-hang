@@ -114,26 +114,40 @@ class PlansService {
   }
 
   private async apiRequest(endpoint: string, options: RequestInit = {}) {
-    const headers = await this.getAuthHeaders();
-    console.log('🌐 Making API request to:', `${API_URL}${endpoint}`);
-    console.log('🌐 Headers:', { ...headers, Authorization: headers.Authorization ? 'Bearer [REDACTED]' : 'missing' });
-    
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        ...headers,
-        ...options.headers
+    try {
+      const headers = await this.getAuthHeaders();
+      console.log('🌐 Making API request to:', `${API_URL}${endpoint}`);
+      console.log('🌐 Headers:', { ...headers, Authorization: headers.Authorization ? 'Bearer [REDACTED]' : 'missing' });
+      
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          ...headers,
+          ...options.headers
+        }
+      });
+
+      console.log('🌐 Response status:', response.status);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Network error' }));
+        console.log('🌐 Error response:', error);
+        
+        // Handle authentication errors specifically
+        if (response.status === 401) {
+          throw new Error('Authentication expired. Please sign out and sign back in.');
+        }
+        
+        throw new Error(error.error || `HTTP ${response.status}`);
       }
-    });
 
-    console.log('🌐 Response status:', response.status);
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      console.log('🌐 Error response:', error);
-      throw new Error(error.error || `HTTP ${response.status}`);
+      return response.json();
+    } catch (error) {
+      // If it's an authentication error, provide clear guidance
+      if (error instanceof Error && error.message.includes('Authentication')) {
+        throw error;
+      }
+      throw new Error('Failed to fetch plans');
     }
-
-    return response.json();
   }
 
   // Get all user's plans
