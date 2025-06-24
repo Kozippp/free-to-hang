@@ -48,7 +48,7 @@ import { useRouter } from 'expo-router';
 interface PlanDetailViewProps {
   plan: Plan;
   onClose: () => void;
-  onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => void;
+  onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => Promise<void>;
 }
 
 export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailViewProps) {
@@ -68,7 +68,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     getCompletionVotingStatus,
     invitations,
     activePlans,
-    processExpiredInvitationPolls
+    processExpiredInvitationPolls,
+    markPlanAsSeen
   } = usePlansStore();
   const { getUnreadCount } = useChatStore();
   const router = useRouter();
@@ -129,6 +130,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Animation for highlighting new plan
   const highlightAnim = useRef(new Animated.Value(0)).current;
   
+  // Mark plan as seen when first opened (if user is pending)
+  React.useEffect(() => {
+    if (currentUserStatus === 'pending') {
+      markPlanAsSeen(plan.id).catch(console.error);
+    }
+  }, [plan.id, currentUserStatus, markPlanAsSeen]);
+
   // Process expired invitation polls periodically
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -262,7 +270,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     setShowInviteModal(false);
   };
   
-  const handleStatusChange = (status: ParticipantStatus, conditionalFriends?: string[]) => {
+  const handleStatusChange = async (status: ParticipantStatus, conditionalFriends?: string[]) => {
     // Always close any existing confirmation modal first
     setShowConfirmationModal(false);
     setPendingResponse(null);
@@ -303,9 +311,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           duration: 300,
           useNativeDriver: true,
         })
-      ]).start(() => {
+      ]).start(async () => {
         // After animation, actually decline and close
-        onRespond(plan.id, status, conditionalFriends);
+        try {
+          await onRespond(plan.id, status, conditionalFriends);
+        } catch (error) {
+          console.error('Error declining plan:', error);
+        }
         
         // Small delay to show the effect, then close
         setTimeout(() => {
@@ -338,33 +350,52 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         setConfirmationMessage(statusText);
         setShowConfirmationModal(true);
       } else {
-        // STATUS CHANGE: Apply immediately without any alerts - let normal flow handle it
-        onRespond(plan.id, status, conditionalFriends);
+        // STATUS CHANGE: Apply immediately without any alerts
+        try {
+          await onRespond(plan.id, status, conditionalFriends);
+        } catch (error) {
+          console.error('Error changing status:', error);
+          Alert.alert('Error', 'Failed to update status. Please try again.');
+        }
       }
     } else {
       // For all other status changes, pass through directly
-      onRespond(plan.id, status, conditionalFriends);
+      try {
+        await onRespond(plan.id, status, conditionalFriends);
+      } catch (error) {
+        console.error('Error updating status:', error);
+        Alert.alert('Error', 'Failed to update status. Please try again.');
+      }
     }
   };
   
   // Handle confirmation modal completion
-  const handleConfirmationComplete = () => {
+  const handleConfirmationComplete = async () => {
     if (pendingResponse) {
-      // Apply the response
-      onRespond(plan.id, pendingResponse.status, pendingResponse.conditionalFriends);
-      
-      // Close confirmation modal
-      setShowConfirmationModal(false);
-      setPendingResponse(null);
-      
-      // Close the plan detail modal
-      onClose();
-      
-      // Navigate to Plans tab with highlighting parameter
-      router.replace({
-        pathname: '/plans',
-        params: { highlightPlan: plan.id }
-      });
+      try {
+        // Apply the response
+        await onRespond(plan.id, pendingResponse.status, pendingResponse.conditionalFriends);
+        
+        // Close confirmation modal
+        setShowConfirmationModal(false);
+        setPendingResponse(null);
+        
+        // Close the plan detail modal
+        onClose();
+        
+        // Navigate to Plans tab with highlighting parameter
+        router.replace({
+          pathname: '/plans',
+          params: { highlightPlan: plan.id }
+        });
+      } catch (error) {
+        console.error('Error confirming response:', error);
+        Alert.alert('Error', 'Failed to update status. Please try again.');
+        
+        // Don't close modal on error
+        setShowConfirmationModal(false);
+        setPendingResponse(null);
+      }
     }
   };
   

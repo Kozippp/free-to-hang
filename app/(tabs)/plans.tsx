@@ -237,8 +237,8 @@ export default function PlansScreen() {
     setSelectedPlan(null);
   };
   
-  const handleRespondToPlan = (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
-    respondToPlan(planId, response, conditionalFriends);
+  const handleRespondToPlan = async (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
+    await respondToPlan(planId, response, conditionalFriends);
   };
   
   const renderEmptyState = () => (

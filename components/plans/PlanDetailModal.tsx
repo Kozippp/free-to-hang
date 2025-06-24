@@ -22,7 +22,7 @@ interface PlanDetailModalProps {
   visible: boolean;
   plan: Plan | null;
   onClose: () => void;
-  onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => void;
+  onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => Promise<void>;
   isCompleted?: boolean;
   onAttendanceUpdate?: (planId: string, userId: string, attended: boolean) => void;
 }
