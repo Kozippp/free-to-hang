@@ -710,7 +710,7 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'going') {
+    if (participantError || !participant || participant.status !== 'accepted') {
       return res.status(403).json({ error: 'Only accepted participants can create polls' });
     }
 
@@ -780,7 +780,7 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'going') {
+    if (participantError || !participant || participant.status !== 'accepted') {
       return res.status(403).json({ error: 'Only accepted participants can vote' });
     }
 
@@ -838,7 +838,7 @@ router.post('/:id/complete-vote', requireAuth, async (req, res) => {
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'going') {
+    if (participantError || !participant || participant.status !== 'accepted') {
       return res.status(403).json({ error: 'Only accepted participants can vote for completion' });
     }
 
@@ -856,23 +856,23 @@ router.post('/:id/complete-vote', requireAuth, async (req, res) => {
     }
 
     // Check if plan should be completed (simplified logic)
-    // Get total going participants and completion votes
-    const { data: goingParticipants } = await supabase
+    // Get total accepted participants and completion votes
+    const { data: acceptedParticipants } = await supabase
       .from('plan_participants')
       .select('user_id')
       .eq('plan_id', id)
-      .eq('status', 'going');
+      .eq('status', 'accepted');
 
     const { data: completionVotes } = await supabase
       .from('plan_completion_votes')
       .select('user_id')
       .eq('plan_id', id);
 
-    const totalGoing = goingParticipants?.length || 0;
+    const totalAccepted = acceptedParticipants?.length || 0;
     const totalVotes = completionVotes?.length || 0;
     
-    // Complete if majority of going participants voted for completion
-    const shouldComplete = totalGoing > 0 && totalVotes >= Math.ceil(totalGoing / 2);
+    // Complete if majority of accepted participants voted for completion
+    const shouldComplete = totalAccepted > 0 && totalVotes >= Math.ceil(totalAccepted / 2);
 
     if (shouldComplete) {
       // Mark plan as completed
