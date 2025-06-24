@@ -239,6 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboardingGroup = segments[0] === '(onboarding)';
+    const inTabsGroup = segments[0] === '(tabs)';
 
     if (__DEV__) {
       console.log('🧭 AuthContext navigation check:', { 
@@ -247,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasCheckedOnboarding,
         inAuthGroup,
         inOnboardingGroup,
+        inTabsGroup,
         navigationReady,
         isCheckingOnboarding,
         initialSessionChecked
@@ -266,19 +268,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // User is logged in and not in onboarding/auth - check if onboarding is completed once
       console.log('🔍 Checking onboarding status from main app');
       checkOnboardingStatus();
+    } else if (user && inTabsGroup && !hasCheckedOnboarding && !isCheckingOnboarding) {
+      // User is already in tabs but onboarding hasn't been checked - this can happen on app restart
+      console.log('🔍 User already in tabs, checking onboarding status to complete loading');
+      checkOnboardingStatus();
+    } else if (user && hasCheckedOnboarding && navigationReady) {
+      // User is logged in, onboarding has been checked, and navigation is ready - ensure loading is false
+      console.log('✅ User authenticated and onboarding checked, ensuring loading is complete');
+      setLoading(false);
     }
   }, [user, segments, loading, hasCheckedOnboarding, navigationReady, isCheckingOnboarding, initialSessionChecked]);
 
+  // Failsafe: Set a maximum loading time to prevent infinite loading
+  useEffect(() => {
+    if (!loading) return;
+    
+    const maxLoadingTime = setTimeout(() => {
+      console.log('⚠️ Maximum loading time reached, forcing loading to complete');
+      if (user) {
+        // If we have a user but still loading, assume they're ready for main app
+        setHasCheckedOnboarding(true);
+        setNavigationReady(true);
+        setLoading(false);
+        router.replace('/(tabs)');
+      } else {
+        // If no user, go to auth
+        setLoading(false);
+        setNavigationReady(true);
+        router.replace('/(auth)/sign-in');
+      }
+    }, 10000); // 10 seconds max loading time
+
+    return () => clearTimeout(maxLoadingTime);
+  }, [loading, user]);
+
   const checkOnboardingStatus = async () => {
-    if (!user || isCheckingOnboarding) return;
+    if (!user || isCheckingOnboarding) {
+      console.log('🚫 Skipping onboarding check:', { hasUser: !!user, isCheckingOnboarding });
+      return;
+    }
 
     setIsCheckingOnboarding(true);
     setHasCheckedOnboarding(true); // Mark that we've checked to prevent loops
-    console.log('🔍 Starting onboarding status check...');
+    console.log('🔍 Starting onboarding status check for user:', user.email);
+
+    // Set a timeout to ensure this function always completes
+    const timeoutId = setTimeout(() => {
+      console.log('⚠️ Onboarding check timeout - forcing completion');
+      setIsCheckingOnboarding(false);
+      setNavigationReady(true);
+      setLoading(false);
+      // Default to main app if we have a user
+      if (user && segments[0] !== '(tabs)') {
+        router.replace('/(tabs)');
+      }
+    }, 5000); // 5 second timeout
 
     try {
       // Small delay to ensure smooth transition
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // First check if user exists in our users table
       const { data: userData, error } = await supabase
@@ -287,25 +335,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', user!.id)
         .single();
 
+      // Clear the timeout since we got a response
+      clearTimeout(timeoutId);
+
       if (error) {
         // If user doesn't exist in users table (404/PGRST116), they need onboarding
         if (error.code === 'PGRST116') {
           console.log('👤 User not found in users table. Directing to onboarding.');
-          setTimeout(() => {
-            router.replace('/(onboarding)/step-1');
-            setNavigationReady(true);
-            setLoading(false);
-          }, 100);
+          router.replace('/(onboarding)/step-1');
+          setNavigationReady(true);
+          setLoading(false);
+          setIsCheckingOnboarding(false);
           return;
         }
         
         console.error('❌ Error checking user existence:', error);
-        // On other errors, default to onboarding for safety
-        setTimeout(() => {
-          router.replace('/(onboarding)/step-1');
-          setNavigationReady(true);
-          setLoading(false);
-        }, 100);
+        // On other errors, default to main app for better UX
+        console.log('🔄 Defaulting to main app due to error');
+        router.replace('/(tabs)');
+        setNavigationReady(true);
+        setLoading(false);
+        setIsCheckingOnboarding(false);
         return;
       }
 
@@ -321,53 +371,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // If user has name and username, consider them onboarded (backward compatibility)
         if (userData.name && userData.username) {
           console.log('✅ User has name and username, directing to main app');
-          setTimeout(() => {
+          if (segments[0] !== '(tabs)') {
             router.replace('/(tabs)');
-            setNavigationReady(true);
-            setLoading(false);
-          }, 100);
+          }
+          setNavigationReady(true);
+          setLoading(false);
+          setIsCheckingOnboarding(false);
           return;
         }
         
         // If onboarding_completed field exists and is true, go to main app
         if (userData.onboarding_completed === true) {
           console.log('✅ User has onboarding_completed = true, directing to main app');
-          setTimeout(() => {
+          if (segments[0] !== '(tabs)') {
             router.replace('/(tabs)');
-            setNavigationReady(true);
-            setLoading(false);
-          }, 100);
+          }
+          setNavigationReady(true);
+          setLoading(false);
+          setIsCheckingOnboarding(false);
           return;
         } 
         
         // Otherwise, user needs onboarding
         console.log('📝 User needs onboarding, directing to step-1');
-        setTimeout(() => {
-          router.replace('/(onboarding)/step-1');
-          setNavigationReady(true);
-          setLoading(false);
-        }, 100);
-      } else {
-        // No user data found, need onboarding
-        console.log('📝 No user data found, directing to onboarding');
-        setTimeout(() => {
-          router.replace('/(onboarding)/step-1');
-          setNavigationReady(true);
-          setLoading(false);
-        }, 100);
-      }
-    } catch (error) {
-      console.error('❌ Error in checkOnboardingStatus:', error);
-      // On unexpected errors, default to onboarding for safety
-      setTimeout(() => {
         router.replace('/(onboarding)/step-1');
         setNavigationReady(true);
         setLoading(false);
-      }, 100);
-    } finally {
-      setTimeout(() => {
         setIsCheckingOnboarding(false);
-      }, 300);
+      } else {
+        // No user data found, need onboarding
+        console.log('📝 No user data found, directing to onboarding');
+        router.replace('/(onboarding)/step-1');
+        setNavigationReady(true);
+        setLoading(false);
+        setIsCheckingOnboarding(false);
+      }
+    } catch (error) {
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      console.error('❌ Error in checkOnboardingStatus:', error);
+      // On unexpected errors, default to main app for better UX
+      console.log('🔄 Defaulting to main app due to unexpected error');
+      if (segments[0] !== '(tabs)') {
+        router.replace('/(tabs)');
+      }
+      setNavigationReady(true);
+      setLoading(false);
+      setIsCheckingOnboarding(false);
     }
   };
 
