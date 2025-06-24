@@ -383,6 +383,8 @@ router.get('/', requireAuth, async (req, res) => {
     const userId = req.user.id;
 
     console.log('🔍 Fetching plans for user:', userId, 'with status:', status);
+    console.log('🔍 Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('🔍 Request query:', JSON.stringify(req.query, null, 2));
 
     // Get plans where user is creator
     let creatorQuery = supabase
@@ -398,7 +400,8 @@ router.get('/', requireAuth, async (req, res) => {
     const { data: creatorPlans, error: creatorError } = await creatorQuery;
 
     if (creatorError) {
-      console.error('Error fetching creator plans:', creatorError);
+      console.error('❌ Error fetching creator plans:', creatorError);
+      console.error('❌ Creator query details:', { userId, status, query: creatorQuery });
       return res.status(500).json({ error: 'Failed to fetch plans' });
     }
 
@@ -527,8 +530,10 @@ router.get('/', requireAuth, async (req, res) => {
 
     res.json(transformedPlans);
   } catch (error) {
-    console.error('Error in GET /plans:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Error in GET /plans:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error details:', JSON.stringify(error, null, 2));
+    res.status(500).json({ error: 'Failed to fetch plans' });
   }
 });
 

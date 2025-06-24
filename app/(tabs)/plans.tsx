@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity, RefreshControl } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -20,9 +20,10 @@ export default function PlansScreen() {
   const [newPlanTitle, setNewPlanTitle] = useState('');
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const { user } = useAuth();
-  const { invitations, activePlans, completedPlans, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates } = usePlansStore();
+  const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -36,6 +37,7 @@ export default function PlansScreen() {
   // Load plans from API when component mounts
   useEffect(() => {
     if (user?.id) {
+      console.log('🔄 Loading plans for user:', user.id);
       loadPlans(user.id);
       startRealTimeUpdates(user.id);
     }
@@ -44,6 +46,21 @@ export default function PlansScreen() {
       stopRealTimeUpdates();
     };
   }, [loadPlans, user?.id, startRealTimeUpdates, stopRealTimeUpdates]);
+
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    if (!user?.id) return;
+    
+    setIsRefreshing(true);
+    try {
+      console.log('🔄 Manual refresh triggered');
+      await loadPlans(user.id);
+    } catch (error) {
+      console.error('❌ Error during manual refresh:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Check for new plan creation
   useEffect(() => {
@@ -306,6 +323,14 @@ export default function PlansScreen() {
                 keyExtractor={(item) => `invitations-${item.id}`}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={renderEmptyState}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshing || isLoading}
+                    onRefresh={handleRefresh}
+                    colors={[Colors.light.primary]}
+                    tintColor={Colors.light.primary}
+                  />
+                }
               />
             )}
             
@@ -318,6 +343,14 @@ export default function PlansScreen() {
                     keyExtractor={(item) => `activePlans-${item.id}`}
                     contentContainerStyle={styles.listContent}
                     ListEmptyComponent={renderEmptyState}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={isRefreshing || isLoading}
+                        onRefresh={handleRefresh}
+                        colors={[Colors.light.primary]}
+                        tintColor={Colors.light.primary}
+                      />
+                    }
                   />
                 )}
               </View>
@@ -343,6 +376,14 @@ export default function PlansScreen() {
                         <View style={styles.finalSeparator} />
                       ) : null
                     )}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={isRefreshing || isLoading}
+                        onRefresh={handleRefresh}
+                        colors={[Colors.light.primary]}
+                        tintColor={Colors.light.primary}
+                      />
+                    }
                   />
                 )}
               </View>
