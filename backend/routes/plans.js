@@ -505,6 +505,52 @@ router.get('/debug', async (req, res) => {
   }
 });
 
+// GET /plans/debug-fields - Debug database fields (temporary)
+router.get('/debug-fields', async (req, res) => {
+  try {
+    console.log('🔍 Testing database field names...');
+    
+    // Try to get a sample participant record with different field selections
+    const tests = [
+      { name: 'response', field: 'response' },
+      { name: 'status', field: 'status' },
+      { name: 'all_fields', field: '*' }
+    ];
+    
+    const results = {};
+    
+    for (const test of tests) {
+      try {
+        const { data, error } = await supabase
+          .from('plan_participants')
+          .select(test.field)
+          .limit(1);
+        
+        results[test.name] = {
+          success: !error,
+          error: error?.message,
+          data: data ? Object.keys(data[0] || {}) : null
+        };
+      } catch (err) {
+        results[test.name] = {
+          success: false,
+          error: err.message,
+          data: null
+        };
+      }
+    }
+    
+    res.json({
+      message: 'Database field test results',
+      results,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('🔍 Debug fields error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /plans - Get user's plans
 router.get('/', requireAuth, async (req, res) => {
   try {
