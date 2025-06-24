@@ -209,12 +209,17 @@ class PlansService {
   // }
 
   // Respond to plan invitation
-  async respondToPlan(planId: string, response: 'accepted' | 'maybe' | 'declined' | 'pending'): Promise<Plan> {
+  async respondToPlan(planId: string, response: 'accepted' | 'maybe' | 'declined' | 'pending' | 'conditional', conditionalFriends?: string[]): Promise<Plan> {
     try {
-      console.log('📝 Responding to plan:', planId, 'with:', response);
+      console.log('📝 Responding to plan:', planId, 'with:', response, conditionalFriends ? `(conditional friends: ${conditionalFriends.length})` : '');
+      const body: any = { response };
+      if (response === 'conditional' && conditionalFriends) {
+        body.conditionalFriends = conditionalFriends;
+      }
+      
       const plan = await this.apiRequest(`/plans/${planId}/respond`, {
         method: 'POST',
-        body: JSON.stringify({ response })
+        body: JSON.stringify(body)
       });
       console.log('✅ Plan response updated successfully');
       return plan;

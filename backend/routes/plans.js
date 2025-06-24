@@ -201,6 +201,16 @@ const getPlanWithDetails = async (planId, userId = null) => {
 
     if (completionError) throw completionError;
 
+    // Get conditional friends data from plan_updates
+    const { data: conditionalUpdates, error: conditionalError } = await supabase
+      .from('plan_updates')
+      .select('triggered_by, metadata')
+      .eq('plan_id', planId)
+      .eq('update_type', 'participant_conditional')
+      .order('created_at', { ascending: false });
+
+    if (conditionalError) throw conditionalError;
+
     // Get attendance if plan is completed
     let attendance = [];
     if (plan.status === 'completed') {
@@ -267,15 +277,31 @@ const getPlanWithDetails = async (planId, userId = null) => {
       };
     });
 
-    // Transform participants with user data
+    // Transform participants with user data and conditional friends
     const transformedParticipants = participants.map(p => {
       const user = participantUsers.find(u => u.id === p.user_id);
+      
+      // Check if this user has conditional friends data
+      const conditionalData = conditionalUpdates?.find(update => 
+        update.triggered_by === p.user_id && update.metadata?.user_id === p.user_id
+      );
+      
+      // Determine actual status - if user has conditional data and response is 'maybe', it's actually 'conditional'
+      let actualStatus = p.response;
+      let conditionalFriends = undefined;
+      
+      if (conditionalData && p.response === 'maybe') {
+        actualStatus = 'conditional';
+        conditionalFriends = conditionalData.metadata?.conditional_friends;
+      }
+      
       return {
         id: p.user_id,
         name: user?.name || 'Unknown',
         avatar: user?.avatar_url,
-        status: p.status,
-        joinedAt: p.joined_at
+        status: actualStatus,
+        conditionalFriends: conditionalFriends,
+        joinedAt: p.created_at
       };
     });
 
@@ -295,6 +321,109 @@ const getPlanWithDetails = async (planId, userId = null) => {
   } catch (error) {
     console.error('Error getting plan details:', error);
     throw error;
+  }
+};
+
+const processConditionalDependencies = async (planId) => {
+  try {
+    console.log('🔄 Processing conditional dependencies for plan:', planId);
+    
+    // Get all participants
+    const { data: participants, error: participantsError } = await supabase
+      .from('plan_participants')
+      .select('*')
+      .eq('plan_id', planId);
+
+    if (participantsError) throw participantsError;
+
+    // Get conditional friends data
+    const { data: conditionalUpdates, error: conditionalError } = await supabase
+      .from('plan_updates')
+      .select('triggered_by, metadata')
+      .eq('plan_id', planId)
+      .eq('update_type', 'participant_conditional')
+      .order('created_at', { ascending: false });
+
+    if (conditionalError) throw conditionalError;
+
+    // Build map of conditional dependencies
+    const conditionalMap = new Map();
+    conditionalUpdates?.forEach(update => {
+      if (update.metadata?.conditional_friends && update.metadata?.user_id) {
+        conditionalMap.set(update.metadata.user_id, update.metadata.conditional_friends);
+      }
+    });
+
+    // Process conditional participants
+    let hasChanges = false;
+    const maxIterations = 10; // Prevent infinite loops
+    
+    for (let iteration = 0; iteration < maxIterations; iteration++) {
+      let iterationChanges = false;
+      
+      for (const participant of participants) {
+        // Skip if not conditional or already accepted
+        if (participant.response !== 'maybe' || !conditionalMap.has(participant.user_id)) {
+          continue;
+        }
+        
+        const conditionalFriends = conditionalMap.get(participant.user_id);
+        if (!conditionalFriends || conditionalFriends.length === 0) {
+          continue;
+        }
+        
+        // Check if all conditional friends are accepted
+        const allFriendsAccepted = conditionalFriends.every(friendId => {
+          const friend = participants.find(p => p.user_id === friendId);
+          return friend && friend.response === 'accepted';
+        });
+        
+        if (allFriendsAccepted) {
+          console.log('✅ Converting conditional participant to accepted:', participant.user_id);
+          
+          // Update participant to accepted
+          const { error: updateError } = await supabase
+            .from('plan_participants')
+            .update({ 
+              response: 'accepted',
+              updated_at: new Date().toISOString()
+            })
+            .eq('plan_id', planId)
+            .eq('user_id', participant.user_id);
+          
+          if (!updateError) {
+            // Remove conditional data
+            await supabase
+              .from('plan_updates')
+              .delete()
+              .eq('plan_id', planId)
+              .eq('update_type', 'participant_conditional')
+              .eq('triggered_by', participant.user_id);
+            
+            // Update local data
+            participant.response = 'accepted';
+            conditionalMap.delete(participant.user_id);
+            iterationChanges = true;
+            hasChanges = true;
+            
+            // Notify about status change
+            await notifyPlanUpdate(planId, 'participant_accepted_conditionally', participant.user_id);
+          }
+        }
+      }
+      
+      // If no changes this iteration, we're done
+      if (!iterationChanges) {
+        break;
+      }
+    }
+    
+    if (hasChanges) {
+      console.log('✅ Conditional dependencies processed with changes');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error processing conditional dependencies:', error);
   }
 };
 
@@ -646,16 +775,17 @@ router.post('/', requireAuth, async (req, res) => {
 router.post('/:id/respond', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { response } = req.body;
+    const { response, conditionalFriends } = req.body;
     const userId = req.user.id;
 
     // Validate response and map to backend format
-    const validResponses = ['pending', 'accepted', 'maybe', 'declined'];
+    const validResponses = ['pending', 'accepted', 'maybe', 'declined', 'conditional'];
     const responseMapping = {
       'accepted': 'accepted',
       'maybe': 'maybe', 
       'declined': 'declined',
-      'pending': 'pending'
+      'pending': 'pending',
+      'conditional': 'maybe' // Store conditional as maybe in DB, handle logic in frontend
     };
     
     if (!validResponses.includes(response)) {
@@ -673,14 +803,49 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
     let participant;
     let error;
 
+    // Prepare the participant data
+    const participantData = {
+      response: responseMapping[response] || response, // Use 'response' field as per schema
+      updated_at: new Date().toISOString()
+    };
+
+    // Handle conditional friends data
+    if (response === 'conditional' && conditionalFriends && conditionalFriends.length > 0) {
+      // First, remove any existing conditional data for this user
+      await supabase
+        .from('plan_updates')
+        .delete()
+        .eq('plan_id', id)
+        .eq('update_type', 'participant_conditional')
+        .eq('triggered_by', userId);
+      
+      // Store new conditional friends metadata
+      await supabase
+        .from('plan_updates')
+        .insert({
+          plan_id: id,
+          update_type: 'participant_conditional',
+          triggered_by: userId,
+          metadata: {
+            conditional_friends: conditionalFriends,
+            user_id: userId
+          }
+        });
+    } else {
+      // If not conditional, remove any existing conditional data
+      await supabase
+        .from('plan_updates')
+        .delete()
+        .eq('plan_id', id)
+        .eq('update_type', 'participant_conditional')
+        .eq('triggered_by', userId);
+    }
+
     if (existingParticipant) {
       // Update existing participant
       const { data: updatedParticipant, error: updateError } = await supabase
         .from('plan_participants')
-        .update({
-          status: responseMapping[response] || response,
-          joined_at: new Date().toISOString()
-        })
+        .update(participantData)
         .eq('plan_id', id)
         .eq('user_id', userId)
         .select()
@@ -695,8 +860,8 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
         .insert({
           plan_id: id,
           user_id: userId,
-          status: responseMapping[response] || response,
-          joined_at: new Date().toISOString()
+          ...participantData,
+          created_at: new Date().toISOString()
         })
         .select()
         .single();
@@ -712,6 +877,9 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
 
     // Notify plan update
     await notifyPlanUpdate(id, 'participant_joined', userId);
+
+    // Process conditional dependencies after status change
+    await processConditionalDependencies(id);
 
     const fullPlan = await getPlanWithDetails(id, userId);
     res.json(fullPlan);
