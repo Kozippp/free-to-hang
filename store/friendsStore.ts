@@ -60,7 +60,7 @@ let lastUpdateTime = 0;
 const UPDATE_THROTTLE_MS = 1000; // Max 1 update per second
 
 // Debouncing for data loading
-let loadTimeouts: { [key: string]: NodeJS.Timeout } = {};
+let loadTimeouts: { [key: string]: ReturnType<typeof setTimeout> } = {};
 
 // Cache to prevent unnecessary API calls
 let lastLoadTimes: { [key: string]: number } = {};
@@ -528,6 +528,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     
     try {
       console.log('🚀 Starting friend real-time updates...');
+      
+      // Load initial data immediately when real-time starts
+      console.log('📊 Loading initial friend data...');
+      await get().loadAllRelationships();
       
       // Stop any existing channel
       if (friendRequestsChannel) {
