@@ -1,9 +1,16 @@
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseServiceKey) {
+  console.error('❌ SUPABASE_SERVICE_ROLE_KEY environment variable is required');
+  process.exit(1);
+}
+
 const supabase = createClient(
   'https://nfzbvuyntzgszqdlsusl.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5memJ2dXludHpnc3pxZGxzdXNsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNjA5OTcwMCwiZXhwIjoyMDUxNjc1NzAwfQ.RcB-1tCdRYJxH8FWJXfvCl1VEgd7cjPUOmMQlTSPJFY'
+  supabaseServiceKey
 );
 
 async function fixRLS() {
