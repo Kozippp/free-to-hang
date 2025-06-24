@@ -218,8 +218,12 @@ export default function HangScreen() {
               />
               
               <View style={styles.friendsSection}>
-                <Text style={styles.friendsTitle}>Friends available to hang</Text>
-                <Text style={styles.friendsDescription}>Choose the people to suggest a hang.</Text>
+                {getAllFriends().length > 0 && (
+                  <>
+                    <Text style={styles.friendsTitle}>Friends available to hang</Text>
+                    <Text style={styles.friendsDescription}>Choose the people to suggest a hang.</Text>
+                  </>
+                )}
                 
                 <View style={styles.friendsList}>
                   {getAllFriends().length > 0 ? (
