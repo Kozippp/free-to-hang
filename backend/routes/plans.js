@@ -427,48 +427,6 @@ const processConditionalDependencies = async (planId) => {
   }
 };
 
-// GET /plans/debug-schema - Debug database schema (temporary, no auth required)
-router.get('/debug-schema', async (req, res) => {
-  try {
-    // Check the actual structure of plan_participants table
-    const { data: tableInfo, error: tableError } = await supabase
-      .from('plan_participants')
-      .select('*')
-      .limit(1);
-    
-    if (tableError) {
-      console.error('Error querying plan_participants:', tableError);
-      return res.json({ 
-        error: 'Failed to query table',
-        details: tableError,
-        suggestion: 'Check if plan_participants table exists and has correct permissions'
-      });
-    }
-    
-    // Get table columns by trying to describe the table structure
-    const { data: columnInfo, error: columnError } = await supabase.rpc('exec', {
-      sql: `
-        SELECT column_name, data_type, is_nullable, column_default
-        FROM information_schema.columns 
-        WHERE table_name = 'plan_participants' 
-        AND table_schema = 'public'
-        ORDER BY ordinal_position;
-      `
-    }).catch(() => ({ data: null, error: 'RPC not available' }));
-    
-    return res.json({
-      tableExists: !tableError,
-      sampleData: tableInfo,
-      columnInfo: columnInfo || 'Could not fetch column info',
-      columnError: columnError || null,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Debug schema error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // GET /plans/debug - Debug authentication (temporary)
 router.get('/debug', async (req, res) => {
   try {
