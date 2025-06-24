@@ -1,6 +1,8 @@
 const express = require('express');
-const { supabase } = require('../index');
 const router = express.Router();
+
+// Use global supabase instance
+const supabase = global.supabase;
 
 // Helper function to get user from token
 const getUserFromToken = async (req) => {
