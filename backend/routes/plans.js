@@ -98,10 +98,11 @@ const getPlanWithDetails = async (planId, userId = null) => {
       .from('plan_polls')
       .select(`
         *,
-        options:poll_options (
+        options:plan_poll_options (
           id,
           option_text,
-          votes:poll_votes (
+          option_order,
+          votes:plan_poll_votes (
             user_id,
             user:user_id (
               id,
@@ -155,9 +156,9 @@ const getPlanWithDetails = async (planId, userId = null) => {
     // Transform polls to match frontend format
     const transformedPolls = polls.map(poll => ({
       id: poll.id,
-      question: poll.question,
+      question: poll.title,
       type: poll.poll_type,
-      expiresAt: poll.expires_at,
+      expiresAt: poll.ends_at,
       invitedUsers: poll.invited_users,
       createdBy: poll.created_by_user,
       options: poll.options.map(option => ({
@@ -183,8 +184,8 @@ const getPlanWithDetails = async (planId, userId = null) => {
         id: p.user.id,
         name: p.user.name,
         avatar: p.user.avatar_url,
-        status: p.response,
-        joinedAt: p.created_at
+        status: p.status,
+        joinedAt: p.joined_at
       })),
       polls: transformedPolls,
       completionVotes: completionVotes.map(v => v.user_id),
@@ -214,8 +215,8 @@ router.get('/', requireAuth, async (req, res) => {
         *,
         participants:plan_participants (
           user_id,
-          response,
-          created_at,
+          status,
+          joined_at,
           user:user_id (
             id,
             name,
@@ -241,8 +242,8 @@ router.get('/', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch plans' });
     }
 
-    // Get unique creator IDs for non-anonymous plans
-    const creatorIds = [...new Set(plans.filter(p => !p.is_anonymous).map(p => p.creator_id))];
+    // Get unique creator IDs for non-private plans
+    const creatorIds = [...new Set(plans.filter(p => !p.is_private).map(p => p.creator_id))];
     
     // Fetch creator information
     let creators = {};
@@ -267,16 +268,16 @@ router.get('/', requireAuth, async (req, res) => {
       description: plan.description,
       location: plan.location,
       date: plan.date,
-      isAnonymous: plan.is_anonymous,
+      isAnonymous: plan.is_private,
       maxParticipants: plan.max_participants,
       status: plan.status,
-      creator: plan.is_anonymous ? null : creators[plan.creator_id],
+      creator: plan.is_private ? null : creators[plan.creator_id],
       participants: plan.participants.map(p => ({
         id: p.user.id,
         name: p.user.name,
         avatar: p.user.avatar_url,
-        status: p.response,
-        joinedAt: p.created_at
+        status: p.status,
+        joinedAt: p.joined_at
       })),
       createdAt: plan.created_at,
       updatedAt: plan.updated_at
@@ -334,7 +335,7 @@ router.post('/', requireAuth, async (req, res) => {
         description,
         location,
         date,
-        is_anonymous: isAnonymous,
+        is_private: isAnonymous,
         max_participants: maxParticipants,
         creator_id: userId
       })
@@ -352,7 +353,7 @@ router.post('/', requireAuth, async (req, res) => {
       .insert({
         plan_id: plan.id,
         user_id: userId,
-        response: 'accepted'
+        status: 'going'
       });
 
     if (participantError) {
@@ -364,7 +365,7 @@ router.post('/', requireAuth, async (req, res) => {
       const participantInserts = invitedFriends.map(friendId => ({
         plan_id: plan.id,
         user_id: friendId,
-        response: 'pending'
+        status: 'pending'
       }));
 
       const { error: inviteError } = await supabase
@@ -397,7 +398,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
     const userId = req.user.id;
 
     // Validate response
-    const validResponses = ['accepted', 'maybe', 'declined', 'pending'];
+    const validResponses = ['pending', 'going', 'maybe', 'not_going'];
     if (!validResponses.includes(response)) {
       return res.status(400).json({ error: 'Invalid response' });
     }
@@ -408,8 +409,8 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       .upsert({
         plan_id: id,
         user_id: userId,
-        response,
-        updated_at: new Date().toISOString()
+        status: response,
+        joined_at: new Date().toISOString()
       })
       .select()
       .single();
@@ -434,7 +435,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
 router.post('/:id/polls', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { question, options, type = 'custom', expiresAt, invitedUsers } = req.body;
+    const { question, options, type = 'custom', expiresAt } = req.body;
     const userId = req.user.id;
 
     // Validate input
@@ -445,12 +446,12 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
     // Check if user can create polls (is participant)
     const { data: participant, error: participantError } = await supabase
       .from('plan_participants')
-      .select('response')
+      .select('status')
       .eq('plan_id', id)
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.response !== 'accepted') {
+    if (participantError || !participant || participant.status !== 'going') {
       return res.status(403).json({ error: 'Only accepted participants can create polls' });
     }
 
@@ -459,10 +460,10 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
       .from('plan_polls')
       .insert({
         plan_id: id,
-        question,
+        title: question,
+        description: `Poll created by user`,
         poll_type: type,
-        expires_at: expiresAt,
-        invited_users: invitedUsers,
+        ends_at: expiresAt,
         created_by: userId
       })
       .select()
@@ -474,13 +475,14 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
     }
 
     // Create poll options
-    const optionInserts = options.map(optionText => ({
+    const optionInserts = options.map((optionText, index) => ({
       poll_id: poll.id,
-      option_text: optionText
+      option_text: optionText,
+      option_order: index
     }));
 
     const { error: optionsError } = await supabase
-      .from('poll_options')
+      .from('plan_poll_options')
       .insert(optionInserts);
 
     if (optionsError) {
@@ -514,18 +516,18 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
     // Check if user can vote (is accepted participant)
     const { data: participant, error: participantError } = await supabase
       .from('plan_participants')
-      .select('response')
+      .select('status')
       .eq('plan_id', id)
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.response !== 'accepted') {
+    if (participantError || !participant || participant.status !== 'going') {
       return res.status(403).json({ error: 'Only accepted participants can vote' });
     }
 
     // Remove existing votes for this poll
     const { error: deleteError } = await supabase
-      .from('poll_votes')
+      .from('plan_poll_votes')
       .delete()
       .eq('poll_id', pollId)
       .eq('user_id', userId);
@@ -543,7 +545,7 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
     }));
 
     const { error: voteError } = await supabase
-      .from('poll_votes')
+      .from('plan_poll_votes')
       .insert(voteInserts);
 
     if (voteError) {
@@ -581,12 +583,12 @@ router.post('/:id/complete-vote', requireAuth, async (req, res) => {
     // Check if user is accepted participant
     const { data: participant, error: participantError } = await supabase
       .from('plan_participants')
-      .select('response')
+      .select('status')
       .eq('plan_id', id)
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.response !== 'accepted') {
+    if (participantError || !participant || participant.status !== 'going') {
       return res.status(403).json({ error: 'Only accepted participants can vote for completion' });
     }
 
