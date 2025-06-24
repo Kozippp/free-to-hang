@@ -1,9 +1,0 @@
-[build]
-builder = "dockerfile"
-
-[deploy]
-startCommand = "npm start"
-restartPolicyType = "on_failure"
-
-[env]
-NODE_ENV = "production" 
