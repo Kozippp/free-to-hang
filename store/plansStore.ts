@@ -178,7 +178,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
             id: p.id,
             name: p.name,
             avatar: p.avatar || '',
-            status: p.status as ParticipantStatus
+            status: p.status as ParticipantStatus,
+            conditionalFriends: p.conditionalFriends
           })),
           date: plan.date,
           location: plan.location,
@@ -194,7 +195,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
           completedPlans.push(transformedPlan);
         } else if (userStatus === 'pending') {
           invitations.push(transformedPlan);
-        } else if (userStatus === 'accepted' || userStatus === 'maybe') {
+        } else if (userStatus === 'accepted' || userStatus === 'maybe' || userStatus === 'conditional') {
           activePlans.push(transformedPlan);
         }
       });
@@ -235,7 +236,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
           id: p.id,
           name: p.name,
           avatar: p.avatar || '',
-          status: p.status as ParticipantStatus
+          status: p.status as ParticipantStatus,
+          conditionalFriends: p.conditionalFriends
         })),
         date: newPlan.date,
         location: newPlan.location,
