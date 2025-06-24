@@ -82,15 +82,34 @@ export interface CreatePollData {
 
 class PlansService {
   private async getAuthHeaders() {
-    const { data: { session } } = await supabase.auth.getSession();
+    // First try to get the current session
+    let { data: { session }, error } = await supabase.auth.getSession();
     console.log('🔑 Getting auth headers, session exists:', !!session);
+    
+    // If no session or session is expired, try to refresh
+    if (!session || error) {
+      console.log('🔄 No valid session found, attempting to refresh...');
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        console.log('❌ Token refresh failed:', refreshError.message);
+        throw new Error('Authentication expired. Please sign in again.');
+      }
+      session = refreshData.session;
+      console.log('✅ Token refreshed successfully');
+    }
+    
     console.log('🔑 Access token exists:', !!session?.access_token);
     if (session?.access_token) {
       console.log('🔑 Token preview:', session.access_token.substring(0, 20) + '...');
     }
+    
+    if (!session?.access_token) {
+      throw new Error('No authentication token available');
+    }
+    
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session?.access_token}`
+      'Authorization': `Bearer ${session.access_token}`
     };
   }
 
