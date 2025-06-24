@@ -21,7 +21,7 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   
-  const { invitations, activePlans, completedPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance, getSortedPlans, markUpdatesAsRead } = usePlansStore();
+  const { invitations, activePlans, completedPlans, loadPlans, markAsRead, respondToPlan, processCompletedPlans, addDemoCompletedPlan, updateAttendance, getSortedPlans, markUpdatesAsRead } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -31,6 +31,11 @@ export default function PlansScreen() {
   const newPlanAnimation = useRef(new Animated.Value(0)).current;
   const tabSwitchAnimation = useRef(new Animated.Value(0)).current;
   const dropInAnimation = useRef(new Animated.Value(-100)).current;
+
+  // Load plans from API when component mounts
+  useEffect(() => {
+    loadPlans();
+  }, [loadPlans]);
 
   // Check for new plan creation
   useEffect(() => {

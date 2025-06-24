@@ -56,7 +56,7 @@ export default function PlanSuggestionSheet({
   prefilledDescription,
 }: PlanSuggestionSheetProps) {
   const { user, clearSelectedFriends } = useHangStore();
-  const { addPlan } = usePlansStore();
+  const { createPlan } = usePlansStore();
   const router = useRouter();
   
   const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
@@ -140,64 +140,48 @@ export default function PlanSuggestionSheet({
     outputRange: [height, 0],
   });
   
-  const handleSubmit = () => {
-    // Create a new plan object
-    const newPlan = {
-      id: Date.now().toString(), // Generate a unique ID
-      title: planTitle,
-      description: description,
-      type: isAnonymous ? 'anonymous' as const : 'normal' as const,
-      creator: isAnonymous ? null : {
-        id: 'current',
-        name: user.name,
-        avatar: user.avatar
-      },
-      participants: getAllFriends().map(friend => {
-        // For anonymous plans, even the creator starts as pending
-        if (isAnonymous) {
-          return {
-            id: friend.id,
-            name: friend.name,
-            avatar: friend.avatar,
-            status: 'pending' as ParticipantStatus
-          };
-        }
-        // For normal plans, creator is automatically going
-        return {
-          id: friend.id,
-          name: friend.name,
-          avatar: friend.avatar,
-          status: friend.id === 'current' ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
-        };
-      }),
-      date: 'Today, 7:00 PM', // This would be set by the user in a real app
-      location: 'To be determined', // This would be set by the user in a real app
-      isRead: false, // Mark as unread so it appears as new
-      createdAt: new Date().toISOString()
-    };
-    
-    // Add the plan to the store first
-    addPlan(newPlan);
-    
-    // Clear selected friends in the store
-    clearSelectedFriends();
-    
-    // Notify parent component that plan was submitted immediately
-    onPlanSubmitted();
-    
-    // Close the plan sheet with animation
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      onClose();
+  const handleSubmit = async () => {
+    try {
+      // Create plan data for API
+      const planData = {
+        title: planTitle,
+        description: description,
+        isAnonymous: isAnonymous,
+        date: 'Today, 7:00 PM', // This would be set by the user in a real app
+        location: 'To be determined', // This would be set by the user in a real app
+        maxParticipants: null,
+        invitedFriends: getAllFriends()
+          .filter(friend => friend.id !== 'current')
+          .map(friend => friend.id)
+      };
       
-      // Navigate to plans tab with immediate effect
-      setTimeout(() => {
-        router.push('/plans?newPlan=true');
-      }, 100); // Small delay to ensure sheet is closed
-    });
+      // Create the plan via API
+      await createPlan(planData);
+      
+      // Clear selected friends in the store
+      clearSelectedFriends();
+      
+      // Notify parent component that plan was submitted
+      onPlanSubmitted();
+      
+      // Close the plan sheet with animation
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        onClose();
+        
+        // Navigate to plans tab with immediate effect
+        setTimeout(() => {
+          router.push('/plans?newPlan=true');
+        }, 100); // Small delay to ensure sheet is closed
+      });
+      
+    } catch (error) {
+      console.error('❌ Error creating plan:', error);
+      // You might want to show an error message to the user here
+    }
   };
   
   const handleClose = () => {

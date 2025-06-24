@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { mockInvitations, mockActivePlans, mockCompletedPlans } from '@/constants/mockPlans';
 import { useRouter } from 'expo-router';
 import { notifyPlanUpdate } from '@/utils/notifications';
+import { plansService } from '@/lib/plans-service';
 
 export type ParticipantStatus = 'pending' | 'accepted' | 'maybe' | 'conditional' | 'declined';
 
@@ -67,6 +68,11 @@ interface PlansState {
   invitations: Plan[];
   activePlans: Plan[];
   completedPlans: Plan[];
+  isLoading: boolean;
+  
+  // API Actions
+  loadPlans: () => Promise<void>;
+  createPlan: (planData: any) => Promise<void>;
   
   // Actions
   markAsRead: (planId: string) => void;
@@ -129,6 +135,122 @@ const usePlansStore = create<PlansState>((set, get) => ({
   invitations: mockInvitations.map(ensurePlanDefaults),
   activePlans: mockActivePlans.map(ensurePlanDefaults),
   completedPlans: mockCompletedPlans.map(ensurePlanDefaults),
+  isLoading: false,
+  
+  // Load plans from API
+  loadPlans: async () => {
+    try {
+      set({ isLoading: true });
+      console.log('📋 Loading plans from API...');
+      
+      const plans = await plansService.getPlans();
+      console.log('✅ Plans loaded from API:', plans.length);
+      
+      // Separate plans into categories based on user's participation status
+      const currentUserId = 'current'; // This should come from auth context
+      
+      const invitations: Plan[] = [];
+      const activePlans: Plan[] = [];
+      const completedPlans: Plan[] = [];
+      
+      plans.forEach(plan => {
+        const userParticipant = plan.participants.find(p => p.id === currentUserId);
+        const userStatus = userParticipant?.status || 'pending';
+        
+        // Transform API plan to store format
+        const transformedPlan: Plan = {
+          id: plan.id,
+          title: plan.title,
+          description: plan.description,
+          type: plan.isAnonymous ? 'anonymous' : 'normal',
+          creator: plan.creator ? {
+            id: plan.creator.id,
+            name: plan.creator.name,
+            avatar: plan.creator.avatar_url || ''
+          } : null,
+          participants: plan.participants.map(p => ({
+            id: p.id,
+            name: p.name,
+            avatar: p.avatar || '',
+            status: p.status as ParticipantStatus
+          })),
+          date: plan.date,
+          location: plan.location,
+          isRead: true, // Mark as read for now
+          createdAt: plan.createdAt,
+          lastUpdatedAt: plan.updatedAt,
+          hasUnreadUpdates: false,
+          completionVotes: [],
+          polls: []
+        };
+        
+        if (plan.status === 'completed') {
+          completedPlans.push(transformedPlan);
+        } else if (userStatus === 'pending') {
+          invitations.push(transformedPlan);
+        } else if (userStatus === 'accepted' || userStatus === 'maybe') {
+          activePlans.push(transformedPlan);
+        }
+      });
+      
+      set({
+        invitations: invitations.map(ensurePlanDefaults),
+        activePlans: activePlans.map(ensurePlanDefaults),
+        completedPlans: completedPlans.map(ensurePlanDefaults),
+        isLoading: false
+      });
+      
+    } catch (error) {
+      console.error('❌ Error loading plans:', error);
+      set({ isLoading: false });
+      // Keep mock data on error for now
+    }
+  },
+  
+  // Create new plan via API
+  createPlan: async (planData: any) => {
+    try {
+      console.log('📝 Creating plan via API...');
+      const newPlan = await plansService.createPlan(planData);
+      console.log('✅ Plan created via API:', newPlan.id);
+      
+      // Transform API response to store format
+      const transformedPlan: Plan = {
+        id: newPlan.id,
+        title: newPlan.title,
+        description: newPlan.description,
+        type: newPlan.isAnonymous ? 'anonymous' : 'normal',
+        creator: newPlan.creator ? {
+          id: newPlan.creator.id,
+          name: newPlan.creator.name,
+          avatar: newPlan.creator.avatar_url || ''
+        } : null,
+        participants: newPlan.participants.map(p => ({
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar || '',
+          status: p.status as ParticipantStatus
+        })),
+        date: newPlan.date,
+        location: newPlan.location,
+        isRead: true,
+        createdAt: newPlan.createdAt,
+        lastUpdatedAt: newPlan.updatedAt,
+        hasUnreadUpdates: false,
+        completionVotes: [],
+        polls: []
+      };
+      
+      // Add to active plans since creator is auto-accepted
+      set(state => ({
+        activePlans: [...state.activePlans, ensurePlanDefaults(transformedPlan)]
+      }));
+      
+    } catch (error) {
+      console.error('❌ Error creating plan:', error);
+      throw error;
+    }
+  },
   
   markAsRead: (planId: string) => {
     set((state) => ({
