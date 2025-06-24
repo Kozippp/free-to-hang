@@ -77,11 +77,12 @@ app.get('/', (req, res) => {
   console.log('🏥 Health check requested');
   res.json({ 
     message: 'Free to Hang API töötab!',
-    version: '1.0.0',
+    version: '1.0.1',
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV,
-    supabase: supabase ? 'Connected' : 'Not connected'
+    supabase: supabase ? 'Connected' : 'Not connected',
+    debug: 'Authentication debugging enabled'
   });
 });
 
