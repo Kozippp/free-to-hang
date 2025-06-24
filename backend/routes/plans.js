@@ -505,10 +505,17 @@ router.get('/debug', async (req, res) => {
   }
 });
 
-// GET /plans/debug-fields - Debug database fields (temporary)
+// GET /plans/debug-fields - Debug database fields (temporary, no auth)
 router.get('/debug-fields', async (req, res) => {
   try {
     console.log('🔍 Testing database field names...');
+    
+    // Use service role client to bypass RLS
+    const { createClient } = require('@supabase/supabase-js');
+    const serviceClient = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
     
     // Try to get a sample participant record with different field selections
     const tests = [
@@ -521,7 +528,7 @@ router.get('/debug-fields', async (req, res) => {
     
     for (const test of tests) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await serviceClient
           .from('plan_participants')
           .select(test.field)
           .limit(1);
