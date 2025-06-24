@@ -58,17 +58,6 @@ const getUserFromToken = async (req) => {
 
 // Middleware to require authentication
 const requireAuth = async (req, res, next) => {
-  // If no anon key is available, authentication is disabled (debug mode)
-  if (!supabaseAnonKey) {
-    console.warn('🚨 Authentication bypassed - no anon key available');
-    // For debugging, create a mock user
-    req.user = {
-      id: 'debug-user-id',
-      email: 'debug@example.com'
-    };
-    return next();
-  }
-
   const user = await getUserFromToken(req);
   if (!user) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -393,26 +382,70 @@ router.get('/', requireAuth, async (req, res) => {
     const { status = 'all' } = req.query;
     const userId = req.user.id;
 
-    // Get plans where user is creator or participant
-    let query = supabase
+    console.log('🔍 Fetching plans for user:', userId, 'with status:', status);
+
+    // Get plans where user is creator
+    let creatorQuery = supabase
       .from('plans')
       .select('*')
-      .or(`creator_id.eq.${userId},id.in.(${
-        // Subquery for plans user participates in
-        `select plan_id from plan_participants where user_id = '${userId}'`
-      })`)
+      .eq('creator_id', userId)
       .order('created_at', { ascending: false });
 
     if (status !== 'all') {
-      query = query.eq('status', status);
+      creatorQuery = creatorQuery.eq('status', status);
     }
 
-    const { data: plans, error } = await query;
+    const { data: creatorPlans, error: creatorError } = await creatorQuery;
 
-    if (error) {
-      console.error('Error fetching plans:', error);
+    if (creatorError) {
+      console.error('Error fetching creator plans:', creatorError);
       return res.status(500).json({ error: 'Failed to fetch plans' });
     }
+
+    // Get plan IDs where user is participant
+    const { data: participantRecords, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('plan_id')
+      .eq('user_id', userId);
+
+    if (participantError) {
+      console.error('Error fetching participant records:', participantError);
+      return res.status(500).json({ error: 'Failed to fetch plans' });
+    }
+
+    // Get plans where user is participant (but not creator)
+    let participantPlans = [];
+    if (participantRecords.length > 0) {
+      const participantPlanIds = participantRecords.map(p => p.plan_id);
+      
+      let participantQuery = supabase
+        .from('plans')
+        .select('*')
+        .in('id', participantPlanIds)
+        .neq('creator_id', userId) // Exclude plans where user is also creator
+        .order('created_at', { ascending: false });
+
+      if (status !== 'all') {
+        participantQuery = participantQuery.eq('status', status);
+      }
+
+      const { data: participantPlansData, error: participantPlansError } = await participantQuery;
+
+      if (participantPlansError) {
+        console.error('Error fetching participant plans:', participantPlansError);
+        return res.status(500).json({ error: 'Failed to fetch plans' });
+      }
+
+      participantPlans = participantPlansData || [];
+    }
+
+    // Combine and deduplicate plans
+    const allPlans = [...(creatorPlans || []), ...participantPlans];
+    const plans = allPlans.filter((plan, index, self) => 
+      index === self.findIndex(p => p.id === plan.id)
+    );
+
+    console.log('✅ Found plans:', plans.length);
 
     if (!plans || plans.length === 0) {
       return res.json([]);
