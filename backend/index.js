@@ -14,6 +14,7 @@ console.log('PORT:', process.env.PORT);
 console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('🔑 Supabase URL:', process.env.SUPABASE_URL ? 'Configured' : 'Missing');
 console.log('🔑 Supabase Service Role Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Configured' : 'Missing');
+console.log('🔑 Supabase Anon Key:', process.env.SUPABASE_ANON_KEY ? 'Configured' : 'Missing');
 
 // Check for required environment variables
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -21,6 +22,11 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   if (!process.env.SUPABASE_URL) console.error('   - SUPABASE_URL');
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) console.error('   - SUPABASE_SERVICE_ROLE_KEY');
   console.error('🚨 Server will start but Supabase functionality will be disabled');
+}
+
+// Check for JWT validation key
+if (!process.env.SUPABASE_ANON_KEY) {
+  console.warn('⚠️ SUPABASE_ANON_KEY not found, using hardcoded fallback for JWT validation');
 }
 
 // Security middleware
