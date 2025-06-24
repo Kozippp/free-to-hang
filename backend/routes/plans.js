@@ -600,7 +600,7 @@ router.post('/', requireAuth, async (req, res) => {
       .insert({
         plan_id: plan.id,
         user_id: userId,
-        status: 'going'
+        status: 'accepted'  // Use 'accepted' instead of 'going' to match frontend
       });
 
     if (participantError) {
@@ -609,6 +609,7 @@ router.post('/', requireAuth, async (req, res) => {
 
     // Add invited friends as participants
     if (invitedFriends.length > 0) {
+      console.log('🎯 Adding invited friends as participants:', invitedFriends);
       const participantInserts = invitedFriends.map(friendId => ({
         plan_id: plan.id,
         user_id: friendId,
@@ -620,8 +621,12 @@ router.post('/', requireAuth, async (req, res) => {
         .insert(participantInserts);
 
       if (inviteError) {
-        console.error('Error inviting friends:', inviteError);
+        console.error('❌ Error inviting friends:', inviteError);
+      } else {
+        console.log('✅ Successfully added', invitedFriends.length, 'participants');
       }
+    } else {
+      console.log('ℹ️ No invited friends to add');
     }
 
     // Get full plan details to return
@@ -644,8 +649,15 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
     const { response } = req.body;
     const userId = req.user.id;
 
-    // Validate response
-    const validResponses = ['pending', 'going', 'maybe', 'not_going'];
+    // Validate response and map to backend format
+    const validResponses = ['pending', 'accepted', 'maybe', 'declined'];
+    const responseMapping = {
+      'accepted': 'accepted',
+      'maybe': 'maybe', 
+      'declined': 'declined',
+      'pending': 'pending'
+    };
+    
     if (!validResponses.includes(response)) {
       return res.status(400).json({ error: 'Invalid response' });
     }
@@ -656,7 +668,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       .upsert({
         plan_id: id,
         user_id: userId,
-        status: response,
+        status: responseMapping[response] || response,
         joined_at: new Date().toISOString()
       })
       .select()
