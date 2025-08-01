@@ -71,7 +71,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     getCompletionVotingStatus,
     invitations,
     activePlans,
-    processExpiredInvitationPolls
+    processExpiredInvitationPolls,
+    loadPlans
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   const { getUnreadCount } = useChatStore();
@@ -257,8 +258,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         const updatedPlan = await plansService.createPoll(latestPlan.id, pollData);
         console.log('✅ Poll created successfully via API:', updatedPlan);
         
-        // The real-time subscription will handle updating the store
-        // No need to manually add to store
+        // Manually reload plans to ensure UI updates immediately
+        // Real-time subscription should also handle this, but this ensures immediate feedback
+        await loadPlans(user.id);
       }
       
       // Close the poll creator and reset state
@@ -301,7 +303,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       await plansService.voteOnPoll(plan.id, currentPollId, selectedOptionIds);
       console.log('✅ Votes submitted successfully via API');
       
-      // Real-time subscription will handle updating the store
+      // Manually reload plans to ensure UI updates immediately
+      // Real-time subscription should also handle this, but this ensures immediate feedback
+      await loadPlans(user.id);
       
       // Close voting modal
       setShowPollVoting(false);

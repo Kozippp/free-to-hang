@@ -570,7 +570,7 @@ router.get('/', requireAuth, async (req, res) => {
           name: user?.name || 'Unknown',
           avatar: user?.avatar_url,
           status: p.status,
-          joinedAt: p.joined_at
+          joinedAt: p.created_at
         };
       });
 
