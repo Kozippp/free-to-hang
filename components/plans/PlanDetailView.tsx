@@ -59,6 +59,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     markAsRead, 
     addPoll, 
     voteOnPoll, 
+    voteOnPollOptimistic,
     updatePollOption, 
     removePollOption, 
     addPollOption, 
@@ -108,6 +109,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [currentPollId, setCurrentPollId] = useState<string | null>(null);
   const [pollType, setPollType] = useState<'when' | 'where' | 'custom'>('custom');
   const [editingPoll, setEditingPoll] = useState<Poll | null>(null);
+  const [realTimeUpdates, setRealTimeUpdates] = useState<Set<string>>(new Set());
   
   // Decline animation states
   const [isClosing, setIsClosing] = useState(false);
@@ -155,6 +157,26 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     
     return () => clearInterval(interval);
   }, [processExpiredInvitationPolls]);
+
+  // Track real-time updates for animation
+  React.useEffect(() => {
+    const pollIds = polls.map(poll => poll.id);
+    const newRealTimeUpdates = new Set<string>();
+    
+    // Add poll IDs to real-time updates set
+    pollIds.forEach(pollId => {
+      newRealTimeUpdates.add(pollId);
+    });
+    
+    setRealTimeUpdates(newRealTimeUpdates);
+    
+    // Clear real-time update flags after animation
+    const timeout = setTimeout(() => {
+      setRealTimeUpdates(new Set());
+    }, 1000);
+    
+    return () => clearTimeout(timeout);
+  }, [polls]);
   
   React.useEffect(() => {
     if (highlightNewPlan) {
@@ -585,17 +607,23 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         newVotes = [...currentVotes, optionId];
       }
       
+      // Optimistic update - update UI immediately
+      console.log('🚀 Optimistic vote update:', { pollId, newVotes });
+      voteOnPollOptimistic(plan.id, pollId, newVotes, user.id);
+      
       // Use API to vote on poll
       console.log('🗳️ Voting on poll via API:', { pollId, newVotes });
       await plansService.voteOnPoll(plan.id, pollId, newVotes);
       console.log('✅ Vote submitted successfully via API');
       
-      // Manually reload plans to ensure UI updates immediately
-      console.log('🔄 Reloading plans after vote...');
-      await loadPlans(user.id);
-      console.log('✅ Plans reloaded after vote');
+      // Real-time subscription will handle updating the store
+      // No need to manually reload plans
     } catch (error) {
       console.error('❌ Error voting on poll:', error);
+      
+      // Revert optimistic update on error
+      console.log('🔄 Reverting optimistic update due to error');
+      await loadPlans(user.id);
       
       let errorMessage = 'Failed to submit vote. Please try again.';
       
@@ -811,6 +839,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     onEdit={() => handleCreatePoll('when', whenPoll)}
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
+                    isRealTimeUpdate={realTimeUpdates.has(whenPoll.id)}
                   />
                 </View>
               ) : isInYesGang ? (
@@ -848,6 +877,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     onEdit={() => handleCreatePoll('where', wherePoll)}
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
+                    isRealTimeUpdate={realTimeUpdates.has(wherePoll.id)}
                   />
                 </View>
               ) : isInYesGang ? (
@@ -881,6 +911,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     onEdit={() => handleCreatePoll('custom', poll)}
                     totalGoingParticipants={acceptedParticipants.length}
                     onDelete={() => handleDeletePoll(poll.id)}
+                    isRealTimeUpdate={realTimeUpdates.has(poll.id)}
                   />
                 </View>
               ))}
