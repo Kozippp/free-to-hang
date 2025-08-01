@@ -304,8 +304,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       console.log('✅ Votes submitted successfully via API');
       
       // Manually reload plans to ensure UI updates immediately
-      // Real-time subscription should also handle this, but this ensures immediate feedback
+      console.log('🔄 Reloading plans after vote submit...');
       await loadPlans(user.id);
+      console.log('✅ Plans reloaded after vote submit');
       
       // Close voting modal
       setShowPollVoting(false);
@@ -519,9 +520,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     const poll = polls.find(p => p.id === pollId);
     if (!poll) return [];
     
-    return poll.options
+    const userVotes = poll.options
       .filter(option => option.votes.includes(user.id))
       .map(option => option.id);
+    
+    console.log('🔍 getUserVotesForPoll:', { pollId, userVotes, userId: user.id, pollOptions: poll.options.map(o => ({ id: o.id, votes: o.votes })) });
+    
+    return userVotes;
   };
   
   // Helper function to get total votes for a poll
@@ -585,7 +590,10 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       await plansService.voteOnPoll(plan.id, pollId, newVotes);
       console.log('✅ Vote submitted successfully via API');
       
-      // Real-time subscription will handle updating the store
+      // Manually reload plans to ensure UI updates immediately
+      console.log('🔄 Reloading plans after vote...');
+      await loadPlans(user.id);
+      console.log('✅ Plans reloaded after vote');
     } catch (error) {
       console.error('❌ Error voting on poll:', error);
       
