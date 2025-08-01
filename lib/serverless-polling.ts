@@ -107,29 +107,6 @@ class ServerlessPolling {
       return stats;
     } catch (error) {
       console.error('❌ Failed to vote on poll:', error);
-      
-      // PRODUCTION FALLBACK: Try original function if poll_vote_rpc fails
-      if (error.message.includes('function') && error.message.includes('not found')) {
-        console.log('🔄 Trying fallback to vote_on_poll_serverless...');
-        
-        try {
-          const { data: fallbackStats, error: fallbackError } = await supabase.rpc('vote_on_poll_serverless', {
-            p_poll_id: data.poll_id,
-            p_option_ids: data.option_ids
-          });
-
-          if (fallbackError) {
-            throw new Error(`Fallback also failed: ${fallbackError.message}`);
-          }
-
-          console.log('✅ Fallback vote successful:', fallbackStats);
-          return fallbackStats;
-        } catch (fallbackError) {
-          console.error('❌ Fallback also failed:', fallbackError);
-          throw new Error('Voting service is currently unavailable. Please try again later.');
-        }
-      }
-      
       throw error;
     }
   }
