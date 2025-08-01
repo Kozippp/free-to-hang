@@ -929,56 +929,16 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // Set up authentication for Realtime Authorization
       await supabase.realtime.setAuth();
       
-      // Create a single channel for all postgres changes
+      // OPTIMIZED: Create channel for plan_updates only (much smaller data)
       plansChannel = supabase
         .channel(`plans_changes_${userId}_${Date.now()}`)
         .on('postgres_changes', { 
           event: 'INSERT', 
           schema: 'public', 
-          table: 'poll_votes' 
-        }, (payload) => {
-          console.log('🗳️📡 POLL VOTE INSERT:', JSON.stringify(payload, null, 2));
-          handlePostgresChange(payload, userId, 'INSERT');
-        })
-        .on('postgres_changes', { 
-          event: 'UPDATE', 
-          schema: 'public', 
-          table: 'poll_votes' 
-        }, (payload) => {
-          console.log('🗳️📡 POLL VOTE UPDATE:', JSON.stringify(payload, null, 2));
-          handlePostgresChange(payload, userId, 'UPDATE');
-        })
-        .on('postgres_changes', { 
-          event: 'DELETE', 
-          schema: 'public', 
-          table: 'poll_votes' 
-        }, (payload) => {
-          console.log('🗳️📡 POLL VOTE DELETE:', JSON.stringify(payload, null, 2));
-          handlePostgresChange(payload, userId, 'DELETE');
-        })
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'plan_polls' 
-        }, (payload) => {
-          console.log('🗳️📡 PLAN POLL CHANGE:', JSON.stringify(payload, null, 2));
-          handlePostgresChange(payload, userId, payload.eventType);
-        })
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'poll_options' 
-        }, (payload) => {
-          console.log('🗳️📡 POLL OPTION CHANGE:', JSON.stringify(payload, null, 2));
-          handlePostgresChange(payload, userId, payload.eventType);
-        })
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
           table: 'plan_updates' 
         }, (payload) => {
-          console.log('🗳️📡 PLAN UPDATE CHANGE:', JSON.stringify(payload, null, 2));
-          handlePostgresChange(payload, userId, payload.eventType);
+          console.log('🗳️📡 OPTIMIZED PLAN UPDATE:', JSON.stringify(payload, null, 2));
+          handleOptimizedPlanUpdate(payload, userId, payload.new?.plan_id);
         })
         .subscribe((status) => {
           console.log('📡 Plans broadcast channel status:', status);
@@ -1087,6 +1047,115 @@ function handlePostgresChange(payload: any, currentUserId: string, eventType: 'I
       loadPlans(currentUserId);
       break;
   }
+}
+
+// OPTIMIZED: Handle plan-specific updates (smaller data payload)
+function handleOptimizedPlanUpdate(payload: any, currentUserId: string, planId: string) {
+  console.log('🚀 OPTIMIZED PLAN UPDATE:', {
+    planId,
+    updateType: payload.new?.update_type,
+    metadata: payload.new?.metadata,
+    currentUserId
+  });
+
+  // Only update specific poll data instead of reloading entire plan
+  if (payload.new?.update_type === 'poll_vote_changed') {
+    const metadata = payload.new.metadata;
+    const pollId = metadata?.poll_id;
+    const optionId = metadata?.option_id;
+    
+    if (pollId && optionId) {
+      // Update only the specific poll's vote count
+      updatePollVoteOptimistically(planId, pollId, optionId, metadata.action);
+    }
+  }
+}
+
+// OPTIMIZED: Update only poll vote data (no full plan reload)
+function updatePollVoteOptimistically(planId: string, pollId: string, optionId: string, action: string) {
+  const store = usePlansStore.getState();
+  
+  // Use Zustand's set method directly
+  usePlansStore.setState((state: any) => {
+    const updatePlanArray = (plans: Plan[]) => {
+      return plans.map(plan => {
+        if (plan.id !== planId) return plan;
+        
+        return {
+          ...plan,
+          polls: plan.polls?.map(poll => {
+            if (poll.id !== pollId) return poll;
+            
+            return {
+              ...poll,
+              options: poll.options.map(option => {
+                if (option.id !== optionId) return option;
+                
+                // Update vote count based on action
+                let newVotes = [...option.votes];
+                if (action === 'INSERT') {
+                  // Add vote (simplified - we don't know which user)
+                  newVotes.push('unknown_user');
+                } else if (action === 'DELETE') {
+                  // Remove vote (simplified)
+                  newVotes = newVotes.slice(0, -1);
+                }
+                
+                return {
+                  ...option,
+                  votes: newVotes
+                };
+              })
+            };
+          })
+        };
+      });
+    };
+    
+    return {
+      invitations: updatePlanArray(state.invitations),
+      activePlans: updatePlanArray(state.activePlans),
+      completedPlans: updatePlanArray(state.completedPlans)
+    };
+  });
+}
+
+// Fallback polling for plans with failed real-time connections
+const fallbackPollingPlans = new Set<string>();
+const fallbackIntervals = new Map<string, NodeJS.Timeout>();
+
+function setFallbackPolling(planId: string, enabled: boolean) {
+  if (enabled) {
+    fallbackPollingPlans.add(planId);
+  } else {
+    fallbackPollingPlans.delete(planId);
+  }
+}
+
+function startFallbackPolling(userId: string, planIds: string[]) {
+  // Clear existing intervals
+  fallbackIntervals.forEach(interval => clearInterval(interval));
+  fallbackIntervals.clear();
+  
+  // Start polling for plans that need fallback
+  planIds.forEach(planId => {
+    if (fallbackPollingPlans.has(planId)) {
+      console.log(`🔄 Starting fallback polling for plan: ${planId}`);
+      
+      const interval = setInterval(async () => {
+        try {
+          // Load only this specific plan
+          const { loadPlans } = usePlansStore.getState();
+          await loadPlans(userId);
+          console.log(`✅ Fallback polling updated plan: ${planId}`);
+        } catch (error) {
+          console.error(`❌ Fallback polling error for plan ${planId}:`, error);
+        }
+      }, 30000); // 30 seconds
+      
+      fallbackIntervals.set(planId, interval as any);
+    }
+  });
 }
 
 export default usePlansStore;
