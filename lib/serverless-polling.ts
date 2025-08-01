@@ -75,6 +75,8 @@ class ServerlessPolling {
    */
   async voteOnPoll(data: VotePollData): Promise<PollStats> {
     try {
+      console.log('🗳️ Voting on poll:', data.poll_id, 'with options:', data.option_ids);
+      
       const { data: stats, error } = await supabase.rpc('vote_on_poll_serverless', {
         p_poll_id: data.poll_id,
         p_option_ids: data.option_ids
@@ -85,7 +87,7 @@ class ServerlessPolling {
         throw new Error(error.message);
       }
 
-      console.log('✅ Vote recorded successfully');
+      console.log('✅ Vote recorded successfully:', stats);
       return stats;
     } catch (error) {
       console.error('❌ Failed to vote on poll:', error);
