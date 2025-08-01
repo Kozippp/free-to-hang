@@ -59,7 +59,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     markAsRead, 
     addPoll, 
     voteOnPoll, 
-    voteOnPollOptimistic,
     updatePollOption, 
     removePollOption, 
     addPollOption, 
@@ -160,7 +159,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
 
     // Track real-time updates for animation - trigger when plan's lastUpdatedAt changes
   React.useEffect(() => {
-    if (plan.lastUpdatedAt && plan.updateType === 'poll_voted') {
+    if (plan.lastUpdatedAt && (plan.updateType === 'poll_voted' || plan.updateType === 'status_changed' || plan.updateType === 'plan_created' || plan.updateType === 'plan_updated')) {
+      console.log('🎬 Triggering animation for plan update:', plan.updateType);
+      
       // Trigger animation for all polls when we receive real-time updates
       const pollIds = polls.map(poll => poll.id);
       setRealTimeUpdates(new Set(pollIds));
@@ -603,17 +604,12 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         newVotes = [...currentVotes, optionId];
       }
       
-      // Optimistic update - update UI immediately
-      console.log('🚀 Optimistic vote update:', { pollId, newVotes });
-      voteOnPollOptimistic(plan.id, pollId, newVotes, user.id);
-      
       // Use API to vote on poll
       console.log('🗳️ Voting on poll via API:', { pollId, newVotes });
       await plansService.voteOnPoll(plan.id, pollId, newVotes);
       console.log('✅ Vote submitted successfully via API');
       
-      // Real-time subscription will handle updating the store
-      // No need to manually reload plans
+      // Real-time subscription will handle updating the store and animations
     } catch (error) {
       console.error('❌ Error voting on poll:', error);
       

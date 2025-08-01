@@ -212,23 +212,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
         isLoading: false
       });
       
-      // Trigger animation by updating lastUpdatedAt for all plans
-      // This will cause PollDisplay components to show animations
-      set((state) => {
-        const updatePlanArray = (plans: Plan[]) => {
-          return plans.map(plan => ({
-            ...plan,
-            lastUpdatedAt: new Date().toISOString(),
-            updateType: 'poll_voted' as const
-          }));
-        };
-        
-        return {
-          invitations: updatePlanArray(state.invitations),
-          activePlans: updatePlanArray(state.activePlans),
-          completedPlans: updatePlanArray(state.completedPlans)
-        };
-      });
+      // Don't trigger animation here - it causes infinite loops
+      // Animations will be triggered by real-time handlers when needed
       
     } catch (error) {
       console.error('❌ Error loading plans:', error);
@@ -1034,10 +1019,24 @@ function handlePlanUpdate(payload: any, currentUserId: string) {
     console.log('📝 New plan created via real-time');
     // Reload plans to get the new plan with proper categorization
     loadPlans(currentUserId);
+    
+    // Trigger animation for new plan
+    setTimeout(() => {
+      if (payload.new?.id) {
+        usePlansStore.getState().markPlanUpdated(payload.new.id, 'plan_created');
+      }
+    }, 100);
   } else if (payload.eventType === 'UPDATE') {
     console.log('📝 Plan updated via real-time');
     // Reload plans to get updated data
     loadPlans(currentUserId);
+    
+    // Trigger animation for updated plan
+    setTimeout(() => {
+      if (payload.new?.id) {
+        usePlansStore.getState().markPlanUpdated(payload.new.id, 'plan_updated');
+      }
+    }, 100);
   } else if (payload.eventType === 'DELETE') {
     console.log('🗑️ Plan deleted via real-time');
     // Reload plans to remove deleted plan
@@ -1052,6 +1051,13 @@ function handleParticipantUpdate(payload: any, currentUserId: string) {
   console.log('👥 Plan participant changed via real-time');
   // Reload plans to get updated participant data
   loadPlans(currentUserId);
+  
+  // Trigger animation after data is loaded
+  setTimeout(() => {
+    if (payload.new?.plan_id) {
+      usePlansStore.getState().markPlanUpdated(payload.new.plan_id, 'status_changed');
+    }
+  }, 100);
 }
 
 // Handle real-time plan update notifications
@@ -1094,17 +1100,31 @@ function handlePollUpdate(payload: any, currentUserId: string) {
 
 // Handle real-time poll vote updates
 function handlePollVoteUpdate(payload: any, currentUserId: string) {
-  const { loadPlans, voteOnPollOptimistic } = usePlansStore.getState();
+  const { loadPlans } = usePlansStore.getState();
   
   console.log('🗳️ Poll vote update received:', payload);
   
   if (payload.eventType === 'INSERT') {
     console.log('🗳️ New poll vote via real-time');
-    // Always reload plans to get the latest data
+    // Reload plans to get the latest data
     loadPlans(currentUserId);
+    
+    // Trigger animation after data is loaded
+    setTimeout(() => {
+      if (payload.new?.plan_id) {
+        usePlansStore.getState().markPlanUpdated(payload.new.plan_id, 'poll_voted');
+      }
+    }, 100);
   } else if (payload.eventType === 'UPDATE') {
     console.log('🗳️ Poll vote updated via real-time');
     loadPlans(currentUserId);
+    
+    // Trigger animation after data is loaded
+    setTimeout(() => {
+      if (payload.new?.plan_id) {
+        usePlansStore.getState().markPlanUpdated(payload.new.plan_id, 'poll_voted');
+      }
+    }, 100);
   } else if (payload.eventType === 'DELETE') {
     console.log('🗳️ Poll vote deleted via real-time');
     loadPlans(currentUserId);
