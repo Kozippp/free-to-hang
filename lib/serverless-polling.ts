@@ -77,6 +77,7 @@ class ServerlessPolling {
     try {
       console.log('🗳️ Voting on poll:', data.poll_id, 'with options:', data.option_ids);
       
+      // PRODUCTION READY: Use poll_vote_rpc with proper error handling
       const { data: stats, error } = await supabase.rpc('poll_vote_rpc', {
         p_poll_id: data.poll_id,
         p_option_ids: data.option_ids
@@ -84,13 +85,51 @@ class ServerlessPolling {
 
       if (error) {
         console.error('❌ Error voting on poll:', error);
+        
+        // Production error handling
+        if (error.message.includes('function') && error.message.includes('not found')) {
+          throw new Error('Voting service temporarily unavailable. Please try again.');
+        }
+        
         throw new Error(error.message);
       }
 
       console.log('✅ Vote recorded successfully:', stats);
+      
+      // PRODUCTION LOGGING: Confirm vote was recorded
+      console.log('📊 Vote confirmed:', {
+        poll_id: data.poll_id,
+        option_ids: data.option_ids,
+        timestamp: new Date().toISOString(),
+        stats: stats
+      });
+      
       return stats;
     } catch (error) {
       console.error('❌ Failed to vote on poll:', error);
+      
+      // PRODUCTION FALLBACK: Try original function if poll_vote_rpc fails
+      if (error.message.includes('function') && error.message.includes('not found')) {
+        console.log('🔄 Trying fallback to vote_on_poll_serverless...');
+        
+        try {
+          const { data: fallbackStats, error: fallbackError } = await supabase.rpc('vote_on_poll_serverless', {
+            p_poll_id: data.poll_id,
+            p_option_ids: data.option_ids
+          });
+
+          if (fallbackError) {
+            throw new Error(`Fallback also failed: ${fallbackError.message}`);
+          }
+
+          console.log('✅ Fallback vote successful:', fallbackStats);
+          return fallbackStats;
+        } catch (fallbackError) {
+          console.error('❌ Fallback also failed:', fallbackError);
+          throw new Error('Voting service is currently unavailable. Please try again later.');
+        }
+      }
+      
       throw error;
     }
   }

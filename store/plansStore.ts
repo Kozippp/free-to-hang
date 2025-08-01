@@ -1059,7 +1059,7 @@ function handleOptimizedPlanUpdate(payload: any, currentUserId: string, planId: 
   });
 
   // Only update specific poll data instead of reloading entire plan
-  if (payload.new?.update_type === 'poll_vote_changed') {
+  if (payload.new?.update_type === 'poll_voted') {
     const metadata = payload.new.metadata;
     const pollId = metadata?.poll_id;
     const optionId = metadata?.option_id;
