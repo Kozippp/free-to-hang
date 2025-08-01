@@ -898,14 +898,23 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
     try {
       // Create simplified channel focusing on the key tables
+      console.log('🚀 Creating real-time channel for user:', userId);
       plansChannel = supabase
         .channel(`plans_realtime_${userId}_${Date.now()}`)
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
+          table: 'plans'
+        }, (payload) => {
+          console.log('📡 PLANS TABLE UPDATE:', JSON.stringify(payload, null, 2));
+          handlePlanUpdate(payload, userId);
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
           table: 'plan_updates'
         }, (payload) => {
-          console.log('📡 Plan updates (including poll votes):', payload);
+          console.log('📡 PLAN_UPDATES TABLE UPDATE:', JSON.stringify(payload, null, 2));
           handlePlanUpdateNotification(payload, userId);
         })
         .on('postgres_changes', {
@@ -913,14 +922,21 @@ const usePlansStore = create<PlansState>((set, get) => ({
           schema: 'public',
           table: 'plan_poll_votes'
         }, (payload) => {
-          console.log('🗳️📡 DIRECT POLL VOTE UPDATE:', JSON.stringify(payload, null, 2));
+          console.log('🗳️📡 PLAN_POLL_VOTES TABLE UPDATE:', JSON.stringify(payload, null, 2));
           handlePollVoteUpdate(payload, userId);
         })
         .subscribe((status) => {
           console.log('📡 Plans channel status:', status);
+          console.log('📡 Channel details:', {
+            userId,
+            channelName: `plans_realtime_${userId}_${Date.now()}`,
+            timestamp: new Date().toISOString()
+          });
+          
           if (status === 'SUBSCRIBED') {
             isSubscribed = true;
-            console.log('✅ Plans real-time subscription started');
+            console.log('✅ Plans real-time subscription started successfully');
+            console.log('✅ Listening for plan_updates and plan_poll_votes changes');
           } else if (status === 'CHANNEL_ERROR') {
             console.log('❌ Plans real-time channel error');
             isSubscribed = false;
@@ -935,6 +951,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
               get().startRealTimeUpdates(userId);
             }, 2000);
           } else {
+            console.log('📡 Unknown status:', status);
             isSubscribed = false;
           }
         });
@@ -983,6 +1000,24 @@ function handleParticipantUpdate(payload: any, currentUserId: string) {
   console.log('👥 Plan participant changed via real-time');
   // Reload plans to get updated participant data
   loadPlans(currentUserId);
+}
+
+// Handle real-time plan updates
+function handlePlanUpdate(payload: any, currentUserId: string) {
+  const { loadPlans } = usePlansStore.getState();
+  
+  console.log('📝 Plan table update received:', JSON.stringify(payload, null, 2));
+  
+  if (payload.eventType === 'INSERT') {
+    console.log('📝 New plan created via real-time');
+    loadPlans(currentUserId);
+  } else if (payload.eventType === 'UPDATE') {
+    console.log('📝 Plan updated via real-time');
+    loadPlans(currentUserId);
+  } else if (payload.eventType === 'DELETE') {
+    console.log('🗑️ Plan deleted via real-time');
+    loadPlans(currentUserId);
+  }
 }
 
 // Handle real-time plan update notifications
