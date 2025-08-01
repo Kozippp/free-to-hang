@@ -519,9 +519,15 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
   // Start real-time updates
   startRealTimeUpdates: async () => {
-    if (isStartingRealTime || isSubscribed) {
-      console.log('🛑 Real-time subscription already active or starting');
+    if (isStartingRealTime) {
+      console.log('🛑 Real-time subscription already starting');
       return;
+    }
+
+    // Reset subscription state if there was an error
+    if (isSubscribed && !friendRequestsChannel) {
+      console.log('🔄 Resetting subscription state due to missing channel');
+      isSubscribed = false;
     }
 
     isStartingRealTime = true;
@@ -603,14 +609,21 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           } else if (status === 'CHANNEL_ERROR') {
             console.log('❌ Friend real-time channel error');
             isSubscribed = false;
+            friendRequestsChannel = null;
           } else if (status === 'CLOSED') {
             isSubscribed = false;
+            friendRequestsChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Friend real-time subscription timed out');
+            isSubscribed = false;
+            friendRequestsChannel = null;
           }
         });
 
     } catch (error) {
       console.error('❌ Error starting friend real-time updates:', error);
       isSubscribed = false;
+      friendRequestsChannel = null;
     } finally {
       isStartingRealTime = false;
     }
