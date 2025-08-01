@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
   moreVotersText: {
     fontSize: 10,
     fontWeight: '600',
-    color: Colors.light.textSecondary,
+    color: Colors.light.secondaryText,
   },
   percentageContainer: {
     position: 'relative',
@@ -621,10 +621,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: 'white',
-  },
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
   },
   compactHeader: {
     flexDirection: 'row',
