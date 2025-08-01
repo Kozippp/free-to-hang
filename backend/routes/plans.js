@@ -1047,74 +1047,7 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
   }
 });
 
-// POST /plans/:id/polls/:pollId/vote - Vote on poll
-router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
-  try {
-    const { id, pollId } = req.params;
-    const { optionIds } = req.body;
-    const userId = req.user.id;
-
-    // Validate input
-    if (!Array.isArray(optionIds)) {
-      return res.status(400).json({ error: 'optionIds must be an array' });
-    }
-    
-    // Allow empty array (no votes selected)
-    // This allows users to "unvote" by selecting no options
-
-    // Check if user can vote (is accepted participant)
-    const { data: participant, error: participantError } = await supabase
-      .from('plan_participants')
-      .select('status')
-      .eq('plan_id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (participantError || !participant || participant.status !== 'accepted') {
-      return res.status(403).json({ error: 'Only accepted participants can vote' });
-    }
-
-    // Remove existing votes for this poll
-    const { error: deleteError } = await supabase
-      .from('plan_poll_votes')
-      .delete()
-      .eq('poll_id', pollId)
-      .eq('user_id', userId);
-
-    if (deleteError) {
-      console.error('Error removing existing votes:', deleteError);
-      return res.status(500).json({ error: 'Failed to update vote' });
-    }
-
-    // Add new votes
-    const voteInserts = optionIds.map(optionId => ({
-      poll_id: pollId,
-      option_id: optionId,
-      user_id: userId
-    }));
-
-    const { error: voteError } = await supabase
-      .from('plan_poll_votes')
-      .insert(voteInserts);
-
-    if (voteError) {
-      console.error('Error adding votes:', voteError);
-      return res.status(500).json({ error: 'Failed to add vote' });
-    }
-
-    // Check if this vote creates a winner (simplified logic)
-    // Just notify that someone voted - poll winner logic can be implemented later
-    await notifyPlanUpdate(id, 'poll_voted', userId, { poll_id: pollId });
-    
-
-
-    const fullPlan = await getPlanWithDetails(id, userId);
-    res.json(fullPlan);
-  } catch (error) {
-    console.error('Error in POST /plans/:id/polls/:pollId/vote:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// POST /plans/:id/polls/:pollId/vote - Vote on poll (REMOVED - Now serverless)
 
 // POST /plans/:id/complete-vote - Vote for plan completion
 router.post('/:id/complete-vote', requireAuth, async (req, res) => {
