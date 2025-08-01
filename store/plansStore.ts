@@ -978,34 +978,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
 function handlePlanUpdate(payload: any, currentUserId: string) {
   const { loadPlans } = usePlansStore.getState();
   
-  if (payload.eventType === 'INSERT') {
-    console.log('📝 New plan created via real-time');
-    // Reload plans to get the new plan with proper categorization
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'UPDATE') {
-    console.log('📝 Plan updated via real-time');
-    // Reload plans to get updated data
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'DELETE') {
-    console.log('🗑️ Plan deleted via real-time');
-    // Reload plans to remove deleted plan
-    loadPlans(currentUserId);
-  }
-}
-
-// Handle real-time participant updates
-function handleParticipantUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
-  
-  console.log('👥 Plan participant changed via real-time');
-  // Reload plans to get updated participant data
-  loadPlans(currentUserId);
-}
-
-// Handle real-time plan updates
-function handlePlanUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
-  
   console.log('📝 Plan table update received:', JSON.stringify(payload, null, 2));
   
   if (payload.eventType === 'INSERT') {
@@ -1018,6 +990,15 @@ function handlePlanUpdate(payload: any, currentUserId: string) {
     console.log('🗑️ Plan deleted via real-time');
     loadPlans(currentUserId);
   }
+}
+
+// Handle real-time participant updates
+function handleParticipantUpdate(payload: any, currentUserId: string) {
+  const { loadPlans } = usePlansStore.getState();
+  
+  console.log('👥 Plan participant changed via real-time');
+  // Reload plans to get updated participant data
+  loadPlans(currentUserId);
 }
 
 // Handle real-time plan update notifications
