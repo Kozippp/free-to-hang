@@ -33,6 +33,7 @@ interface PollDisplayProps {
   totalGoingParticipants?: number; // Total number of people going to the plan
   hideQuestion?: boolean; // New prop to hide question for preset polls
   onDelete?: () => void; // New prop for deleting custom polls
+  isRealTimeUpdate?: boolean; // New prop to indicate if this is a real-time update
 }
 
 export default function PollDisplay({
@@ -45,7 +46,8 @@ export default function PollDisplay({
   onEdit,
   totalGoingParticipants = 0,
   hideQuestion = false,
-  onDelete
+  onDelete,
+  isRealTimeUpdate = false
 }: PollDisplayProps) {
   const [animatedValues] = useState(() => {
     const values: Record<string, Animated.Value> = {};
@@ -55,6 +57,43 @@ export default function PollDisplay({
     return values;
   });
 
+  const [voteCounts, setVoteCounts] = useState<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    options.forEach(option => {
+      counts[option.id] = option.votes;
+    });
+    return counts;
+  });
+
+  // Update vote counts when options change (for real-time updates)
+  React.useEffect(() => {
+    const newCounts: Record<string, number> = {};
+    options.forEach(option => {
+      const oldCount = voteCounts[option.id] || 0;
+      const newCount = option.votes;
+      
+      // If vote count increased, trigger +1 animation
+      if (newCount > oldCount && isRealTimeUpdate) {
+        // Trigger a quick pulse animation for the increased vote
+        Animated.sequence([
+          Animated.timing(animatedValues[option.id], {
+            toValue: 1,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+          Animated.timing(animatedValues[option.id], {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+          })
+        ]).start();
+      }
+      
+      newCounts[option.id] = newCount;
+    });
+    setVoteCounts(newCounts);
+  }, [options, isRealTimeUpdate, voteCounts, animatedValues]);
+
   // Ensure all options have animation values
   React.useEffect(() => {
     options.forEach(option => {
@@ -63,6 +102,29 @@ export default function PollDisplay({
       }
     });
   }, [options, animatedValues]);
+
+  // Real-time update animation
+  React.useEffect(() => {
+    if (isRealTimeUpdate) {
+      // Animate all options with a subtle pulse
+      const animations = options.map(option => 
+        Animated.sequence([
+          Animated.timing(animatedValues[option.id], {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(animatedValues[option.id], {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          })
+        ])
+      );
+      
+      Animated.parallel(animations).start();
+    }
+  }, [isRealTimeUpdate, options, animatedValues]);
 
   const handleVote = (optionId: string) => {
     if (!canVote) {
@@ -330,13 +392,38 @@ export default function PollDisplay({
                   <View style={styles.optionRight}>
                     {/* Percentage and voters in column */}
                     <View style={styles.rightColumn}>
-                      <Text style={[
-                        styles.percentageText,
-                        isSelected && styles.selectedPercentageText,
-                        isWinningOption && styles.winningPercentageText
-                      ]}>
-                        {percentage}%
-                      </Text>
+                      <View style={styles.percentageContainer}>
+                        <Text style={[
+                          styles.percentageText,
+                          isSelected && styles.selectedPercentageText,
+                          isWinningOption && styles.winningPercentageText
+                        ]}>
+                          {percentage}%
+                        </Text>
+                        {isRealTimeUpdate && option.votes > (voteCounts[option.id] || 0) && (
+                          <Animated.View
+                            style={[
+                              styles.newVoteIndicator,
+                              {
+                                opacity: animatedValues[option.id]?.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0, 1],
+                                }) || 0,
+                                transform: [
+                                  {
+                                    scale: animatedValues[option.id]?.interpolate({
+                                      inputRange: [0, 1],
+                                      outputRange: [0.8, 1.2],
+                                    }) || 1,
+                                  },
+                                ],
+                              }
+                            ]}
+                          >
+                            <Text style={styles.newVoteText}>+1</Text>
+                          </Animated.View>
+                        )}
+                      </View>
                       
                       {/* Voters avatars under percentage */}
                       <VotersAvatars voters={option.voters} />
@@ -510,6 +597,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   moreVotersText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  percentageContainer: {
+    position: 'relative',
+    alignItems: 'center',
+  },
+  newVoteIndicator: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    minWidth: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newVoteText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
+  },
     fontSize: 10,
     fontWeight: '600',
     color: Colors.light.secondaryText,

@@ -1055,9 +1055,12 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
     const userId = req.user.id;
 
     // Validate input
-    if (!Array.isArray(optionIds) || optionIds.length === 0) {
-      return res.status(400).json({ error: 'At least one option must be selected' });
+    if (!Array.isArray(optionIds)) {
+      return res.status(400).json({ error: 'optionIds must be an array' });
     }
+    
+    // Allow empty array (no votes selected)
+    // This allows users to "unvote" by selecting no options
 
     // Check if user can vote (is accepted participant)
     const { data: participant, error: participantError } = await supabase

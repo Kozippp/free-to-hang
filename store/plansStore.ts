@@ -102,6 +102,7 @@ interface PlansState {
   // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => void;
   voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => void;
+  voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => void;
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => void;
   removePollOption: (planId: string, pollId: string, optionId: string) => void;
   addPollOption: (planId: string, pollId: string, optionText: string) => void;
@@ -572,6 +573,63 @@ const usePlansStore = create<PlansState>((set, get) => ({
     // This function is kept for backward compatibility but should not be used
     // Poll votes are now submitted via API calls
     console.warn('⚠️ voteOnPoll should not be called directly. Use API instead.');
+  },
+  
+  voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => {
+    console.log('🚀 Optimistic vote update:', { planId, pollId, optionIds, userId });
+    
+    set((state) => {
+      // Find the plan in all plan arrays
+      const allPlans = [...state.invitations, ...state.activePlans, ...state.completedPlans];
+      const planIndex = allPlans.findIndex(p => p.id === planId);
+      
+      if (planIndex === -1) {
+        console.warn('⚠️ Plan not found for optimistic update:', planId);
+        return state;
+      }
+      
+      const plan = allPlans[planIndex];
+      const pollIndex = plan.polls?.findIndex(p => p.id === pollId) ?? -1;
+      
+      if (pollIndex === -1) {
+        console.warn('⚠️ Poll not found for optimistic update:', pollId);
+        return state;
+      }
+      
+      // Create updated plan with optimistic vote
+      const updatedPlan = {
+        ...plan,
+        polls: plan.polls?.map((poll, index) => {
+          if (index === pollIndex) {
+            return {
+              ...poll,
+              options: poll.options.map(option => {
+                const hasUserVote = optionIds.includes(option.id);
+                const currentVotes = option.votes.filter(voteId => voteId !== userId);
+                const newVotes = hasUserVote ? [...currentVotes, userId] : currentVotes;
+                
+                return {
+                  ...option,
+                  votes: newVotes
+                };
+              })
+            };
+          }
+          return poll;
+        })
+      };
+      
+      // Update the appropriate plan array
+      const updatePlanArray = (plans: Plan[]) => {
+        return plans.map(p => p.id === planId ? updatedPlan : p);
+      };
+      
+      return {
+        invitations: updatePlanArray(state.invitations),
+        activePlans: updatePlanArray(state.activePlans),
+        completedPlans: updatePlanArray(state.completedPlans)
+      };
+    });
   },
   
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => {
