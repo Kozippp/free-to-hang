@@ -60,10 +60,13 @@ export default function PollDisplay({
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>(() => {
     const counts: Record<string, number> = {};
     options.forEach(option => {
-      counts[option.id] = option.votes;
+      counts[option.id] = option.voters.length;
     });
     return counts;
   });
+
+  // Use ref to prevent unnecessary re-renders during animations
+  const isAnimatingRef = useRef(false);
 
   // Update vote counts when options change (for real-time updates)
   React.useEffect(() => {
@@ -77,6 +80,8 @@ export default function PollDisplay({
       // If vote count increased, trigger +1 animation
       if (newCount > oldCount && isRealTimeUpdate) {
         hasChanges = true;
+        isAnimatingRef.current = true;
+        
         // Trigger a quick pulse animation for the increased vote
         Animated.sequence([
           Animated.timing(animatedValues[option.id], {
@@ -89,14 +94,19 @@ export default function PollDisplay({
             duration: 150,
             useNativeDriver: true,
           })
-        ]).start();
+        ]).start(() => {
+          isAnimatingRef.current = false;
+        });
       }
       
       newCounts[option.id] = newCount;
     });
     
-    // Only update if there are actual changes
-    if (hasChanges || JSON.stringify(newCounts) !== JSON.stringify(voteCounts)) {
+    // Only update if there are actual changes and we're not in the middle of an animation
+    const currentCountsString = JSON.stringify(voteCounts);
+    const newCountsString = JSON.stringify(newCounts);
+    
+    if ((hasChanges || currentCountsString !== newCountsString) && !isAnimatingRef.current) {
       setVoteCounts(newCounts);
     }
   }, [options, isRealTimeUpdate, animatedValues]); // Removed voteCounts from dependencies
@@ -112,7 +122,7 @@ export default function PollDisplay({
 
   // Real-time update animation - only animate options that actually changed
   React.useEffect(() => {
-    if (isRealTimeUpdate) {
+    if (isRealTimeUpdate && !isAnimatingRef.current) {
       // Only animate options that have vote count changes
       const animations = options.map(option => {
         const oldCount = voteCounts[option.id] || 0;
@@ -139,7 +149,7 @@ export default function PollDisplay({
         Animated.parallel(animations).start();
       }
     }
-  }, [isRealTimeUpdate, options, animatedValues, voteCounts]);
+  }, [isRealTimeUpdate, options, animatedValues]); // Removed voteCounts to prevent infinite loop
 
   const handleVote = (optionId: string) => {
     if (!canVote) {

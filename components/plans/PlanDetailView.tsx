@@ -175,7 +175,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       
       return () => clearTimeout(timeout);
     }
-  }, [polls, realTimeUpdates]);
+  }, [polls]); // Removed realTimeUpdates from dependencies to prevent infinite loop
   
   React.useEffect(() => {
     if (highlightNewPlan) {
