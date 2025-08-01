@@ -1106,15 +1106,7 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
     // Just notify that someone voted - poll winner logic can be implemented later
     await notifyPlanUpdate(id, 'poll_voted', userId, { poll_id: pollId });
     
-    // Broadcast via WebSocket for real-time updates
-    if (req.app.locals.broadcastToPlan) {
-      req.app.locals.broadcastToPlan(id, {
-        type: 'poll_vote',
-        pollId,
-        optionIds,
-        userId
-      });
-    }
+
 
     const fullPlan = await getPlanWithDetails(id, userId);
     res.json(fullPlan);

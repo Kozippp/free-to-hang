@@ -149,72 +149,27 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // }
   }, [plan.id, currentUserStatus]);
 
-  // Smart refresh mechanism - only when needed
+  // Simple polling with vote protection
   React.useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     let lastVoteTime = 0;
-    let wsConnection: WebSocket | null = null;
     
-    // Try WebSocket first (like Facebook Messenger)
-    const tryWebSocket = () => {
-      try {
-        console.log('🔌 Attempting WebSocket connection...');
-        wsConnection = new WebSocket('wss://free-to-hang-production.up.railway.app/ws');
-        
-        wsConnection.onopen = () => {
-          console.log('✅ WebSocket connected - real-time updates active');
-          // Subscribe to plan updates
-          wsConnection?.send(JSON.stringify({
-            type: 'subscribe',
-            planId: plan.id,
-            userId: user?.id
-          }));
-        };
-        
-        wsConnection.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          console.log('📡 WebSocket message received:', data);
-          
-          if (data.type === 'poll_vote' || data.type === 'poll_created') {
-            console.log('🗳️ Poll update via WebSocket - reloading plans');
-            loadPlans(user?.id);
-          }
-        };
-        
-        wsConnection.onclose = () => {
-          console.log('🔌 WebSocket closed - falling back to polling');
-          startPolling();
-        };
-        
-        wsConnection.onerror = () => {
-          console.log('❌ WebSocket failed - falling back to polling');
-          startPolling();
-        };
-        
-      } catch (error) {
-        console.log('❌ WebSocket not supported - using polling');
-        startPolling();
+    const smartRefresh = () => {
+      // Don't refresh if user just voted (within 3 seconds)
+      const timeSinceLastVote = Date.now() - lastVoteTime;
+      if (timeSinceLastVote < 3000) {
+        console.log('⏸️ Skipping refresh - recent vote activity');
+        return;
+      }
+      
+      if (user?.id) {
+        console.log('🔄 Smart refresh check for updates...');
+        loadPlans(user.id);
       }
     };
     
-    const startPolling = () => {
-      const smartRefresh = () => {
-        // Don't refresh if user just voted (within 3 seconds)
-        const timeSinceLastVote = Date.now() - lastVoteTime;
-        if (timeSinceLastVote < 3000) {
-          console.log('⏸️ Skipping refresh - recent vote activity');
-          return;
-        }
-        
-        if (user?.id) {
-          console.log('🔄 Smart refresh check for updates...');
-          loadPlans(user.id);
-        }
-      };
-      
-      // Start with longer interval (10 seconds) to avoid rate limiting
-      interval = setInterval(smartRefresh, 10000);
-    };
+    // Start with longer interval (10 seconds) to avoid rate limiting
+    interval = setInterval(smartRefresh, 10000);
     
     // Listen for vote events to track when user votes
     const handleVoteEvent = () => {
@@ -225,19 +180,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // Store vote handler globally for access from poll components
     (global as any).onVoteEvent = handleVoteEvent;
     
-    // Try WebSocket first, fallback to polling
-    tryWebSocket();
-    
     return () => {
-      if (wsConnection) {
-        wsConnection.close();
-      }
       if (interval) {
         clearInterval(interval);
       }
       delete (global as any).onVoteEvent;
     };
-  }, [loadPlans, user?.id, plan.id]);
+  }, [loadPlans, user?.id]);
 
     // Simple real-time animation trigger
   React.useEffect(() => {
