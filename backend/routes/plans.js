@@ -560,6 +560,72 @@ router.get('/', requireAuth, async (req, res) => {
       }
     }
 
+    // Get polls for all plans
+    const { data: allPolls, error: pollsError } = await supabase
+      .from('plan_polls')
+      .select('*')
+      .in('plan_id', planIds);
+
+    if (pollsError) {
+      console.error('Error fetching polls:', pollsError);
+    }
+
+    // Get poll options for all polls
+    const pollIds = allPolls ? allPolls.map(p => p.id) : [];
+    let pollOptions = [];
+    if (pollIds.length > 0) {
+      const { data: optionsData, error: optionsError } = await supabase
+        .from('plan_poll_options')
+        .select('*')
+        .in('poll_id', pollIds);
+      
+      if (!optionsError) {
+        pollOptions = optionsData || [];
+      }
+    }
+
+    // Get poll votes for all options
+    const optionIds = pollOptions.map(o => o.id);
+    let pollVotes = [];
+    if (optionIds.length > 0) {
+      const { data: votesData, error: votesError } = await supabase
+        .from('plan_poll_votes')
+        .select('*')
+        .in('option_id', optionIds);
+      
+      if (!votesError) {
+        pollVotes = votesData || [];
+      }
+    }
+
+    // Get voter user data
+    const voterIds = [...new Set(pollVotes.map(v => v.user_id))];
+    let voterUsers = [];
+    if (voterIds.length > 0) {
+      const { data: voterData, error: voterError } = await supabase
+        .from('users')
+        .select('id, name, username, avatar_url')
+        .in('id', voterIds);
+      
+      if (!voterError) {
+        voterUsers = voterData || [];
+      }
+    }
+
+    // Get poll creators
+    const pollCreatorIds = [...new Set((allPolls || []).map(p => p.created_by))];
+    let pollCreators = [];
+    if (pollCreatorIds.length > 0) {
+      const { data: creatorData, error: creatorError } = await supabase
+        .from('users')
+        .select('id, name, username, avatar_url')
+        .in('id', pollCreatorIds);
+      
+      if (!creatorError) {
+        pollCreators = creatorData || [];
+      }
+    }
+
     // Transform plans for frontend
     const transformedPlans = plans.map(plan => {
       const planParticipants = allParticipants.filter(p => p.plan_id === plan.id);
@@ -574,6 +640,39 @@ router.get('/', requireAuth, async (req, res) => {
         };
       });
 
+      // Get polls for this plan
+      const planPolls = (allPolls || []).filter(poll => poll.plan_id === plan.id);
+      const transformedPolls = planPolls.map(poll => {
+        const pollCreator = pollCreators.find(c => c.id === poll.created_by);
+        const pollOptionsForThisPoll = pollOptions.filter(o => o.poll_id === poll.id);
+        
+        return {
+          id: poll.id,
+          question: poll.title,
+          type: poll.poll_type,
+          expiresAt: poll.ends_at,
+          createdBy: pollCreator,
+          options: pollOptionsForThisPoll.map(option => {
+            const votesForThisOption = pollVotes.filter(v => v.option_id === option.id);
+            const voters = votesForThisOption.map(vote => {
+              const voter = voterUsers.find(u => u.id === vote.user_id);
+              return {
+                id: vote.user_id,
+                name: voter?.name || 'Unknown',
+                avatar: voter?.avatar_url
+              };
+            });
+            
+            return {
+              id: option.id,
+              text: option.option_text,
+              votes: votesForThisOption.map(v => v.user_id),
+              voters: voters
+            };
+          })
+        };
+      });
+
       return {
         id: plan.id,
         title: plan.title,
@@ -584,6 +683,7 @@ router.get('/', requireAuth, async (req, res) => {
         status: plan.status,
         creator: plan.is_private ? null : creators[plan.creator_id],
         participants: participantsWithUserData,
+        polls: transformedPolls,
         createdAt: plan.created_at,
         updatedAt: plan.updated_at
       };
