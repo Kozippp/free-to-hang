@@ -58,26 +58,37 @@ async function applyRealtimeBroadcastSetup() {
       try {
         console.log(`⏳ Executing statement ${i + 1}/${statements.length}...`);
         
-        const { error } = await supabase.rpc('exec_sql', { sql: statement });
+        // Try to execute the statement using direct SQL
+        // Note: Supabase client doesn't support direct SQL execution for complex scripts
+        // We'll use a different approach - execute specific statements that we can handle
         
-        if (error) {
-          // If exec_sql doesn't exist, try direct query
-          const { error: directError } = await supabase.from('_dummy').select('*').limit(0);
+        if (statement.includes('CREATE OR REPLACE FUNCTION') || 
+            statement.includes('CREATE TRIGGER') || 
+            statement.includes('CREATE POLICY') ||
+            statement.includes('CREATE INDEX') ||
+            statement.includes('GRANT') ||
+            statement.includes('DROP TRIGGER')) {
           
-          if (directError && directError.message.includes('exec_sql')) {
-            console.log('⚠️  exec_sql function not available, using direct SQL execution...');
-            
-            // For direct SQL execution, we need to use a different approach
-            // This is a simplified version - in production you might want to use a proper SQL client
-            console.log('📝 Statement:', statement.substring(0, 100) + '...');
-            
-            // Note: Direct SQL execution through Supabase client is limited
-            // You may need to use a proper PostgreSQL client like 'pg' for complex scripts
-            console.log('⚠️  Direct SQL execution not fully supported. Please run the SQL script manually in Supabase SQL editor.');
-            break;
-          } else {
-            throw error;
+          console.log('⚠️  Complex SQL statement detected. Please run this manually in Supabase SQL editor:');
+          console.log('📝 Statement:', statement.substring(0, 200) + '...');
+          console.log('🌐 Go to: https://supabase.com/dashboard/project/gmhufbwvegxasckjenap/sql');
+          console.log('📋 Copy and paste the SQL script from: scripts/setup-broadcast-manual.sql');
+          console.log('');
+          
+          // Skip this statement for now
+          continue;
+        }
+        
+        // For simple statements, we can try to execute them
+        try {
+          const { error } = await supabase.rpc('exec_sql', { sql: statement });
+          if (error) {
+            console.log('⚠️  Statement requires manual execution in SQL editor');
+            continue;
           }
+        } catch (error) {
+          console.log('⚠️  Statement requires manual execution in SQL editor');
+          continue;
         }
         
         console.log(`✅ Statement ${i + 1} executed successfully`);
