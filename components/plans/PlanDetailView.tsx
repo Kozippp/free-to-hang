@@ -158,15 +158,12 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     return () => clearInterval(interval);
   }, [processExpiredInvitationPolls]);
 
-  // Track real-time updates for animation - trigger when polls change or when we receive real-time updates
+    // Track real-time updates for animation - trigger when plan's lastUpdatedAt changes
   React.useEffect(() => {
-    const pollIds = polls.map(poll => poll.id);
-    const currentPollIds = Array.from(realTimeUpdates);
-    
-    // Trigger animation if poll IDs have changed or if we have real-time updates
-    if (JSON.stringify(pollIds.sort()) !== JSON.stringify(currentPollIds.sort())) {
-      const newRealTimeUpdates = new Set<string>(pollIds);
-      setRealTimeUpdates(newRealTimeUpdates);
+    if (plan.lastUpdatedAt && plan.updateType === 'poll_voted') {
+      // Trigger animation for all polls when we receive real-time updates
+      const pollIds = polls.map(poll => poll.id);
+      setRealTimeUpdates(new Set(pollIds));
       
       // Clear real-time update flags after animation
       const timeout = setTimeout(() => {
@@ -175,27 +172,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       
       return () => clearTimeout(timeout);
     }
-  }, [polls]); // Removed realTimeUpdates from dependencies to prevent infinite loop
-
-  // Listen for real-time poll updates and trigger animations
-  React.useEffect(() => {
-    const handleRealTimeUpdate = () => {
-      // Trigger animation for all polls when we receive real-time updates
-      const pollIds = polls.map(poll => poll.id);
-      setRealTimeUpdates(new Set(pollIds));
-      
-      // Clear after animation
-      const timeout = setTimeout(() => {
-        setRealTimeUpdates(new Set());
-      }, 1000);
-      
-      return () => clearTimeout(timeout);
-    };
-
-    // In React Native, we'll use a different approach for real-time updates
-    // The real-time subscription will trigger animations directly
-    // No need for document events in React Native
-  }, [polls]);
+  }, [plan.lastUpdatedAt, plan.updateType, polls]);
   
   React.useEffect(() => {
     if (highlightNewPlan) {
