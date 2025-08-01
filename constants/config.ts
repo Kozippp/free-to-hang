@@ -1,7 +1,7 @@
 // API Configuration
 export const API_CONFIG = {
   // Local development - Use your local network IP
-  LOCAL_BASE_URL: 'http://192.168.0.24:3000/api',
+  LOCAL_BASE_URL: 'http://localhost:3000/api',
   
   // Production (Railway) - Updated with correct URL
   PROD_BASE_URL: 'https://free-to-hang-production.up.railway.app/api',

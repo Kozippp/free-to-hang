@@ -250,7 +250,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
       const pollCreator = pollCreators.find(c => c.id === poll.created_by);
       const pollOptionsForThisPoll = pollOptions.filter(o => o.poll_id === poll.id);
       
-      return {
+      const transformedPoll = {
         id: poll.id,
         question: poll.title,
         type: poll.poll_type,
@@ -275,6 +275,13 @@ const getPlanWithDetails = async (planId, userId = null) => {
           };
         })
       };
+
+      // Add invitedUsers for invitation polls
+      if (poll.poll_type === 'invitation' && poll.invited_users) {
+        transformedPoll.invitedUsers = poll.invited_users;
+      }
+
+      return transformedPoll;
     });
 
     // Transform participants with user data and conditional friends
@@ -867,7 +874,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
 router.post('/:id/polls', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { question, options, type = 'custom', expiresAt } = req.body;
+    const { question, options, type = 'custom', expiresAt, invitedUsers } = req.body;
     const userId = req.user.id;
 
     // Validate input
@@ -888,16 +895,23 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
     }
 
     // Create poll
+    const pollData = {
+      plan_id: id,
+      title: question,
+      description: `Poll created by user`,
+      poll_type: type,
+      ends_at: expiresAt,
+      created_by: userId
+    };
+
+    // Add invited_users for invitation polls
+    if (type === 'invitation' && invitedUsers && invitedUsers.length > 0) {
+      pollData.invited_users = invitedUsers;
+    }
+
     const { data: poll, error: pollError } = await supabase
       .from('plan_polls')
-      .insert({
-        plan_id: id,
-        title: question,
-        description: `Poll created by user`,
-        poll_type: type,
-        ends_at: expiresAt,
-        created_by: userId
-      })
+      .insert(pollData)
       .select()
       .single();
 

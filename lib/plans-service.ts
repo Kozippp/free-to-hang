@@ -299,6 +299,8 @@ class PlansService {
   }
 
   // Real-time subscription helpers
+  // Note: Real-time subscriptions are now handled in plansStore.ts
+  // These functions are kept for backward compatibility but may be removed
   subscribeToPlanUpdates(planId: string, callback: (update: any) => void) {
     console.log('🔔 Subscribing to plan updates:', planId);
     

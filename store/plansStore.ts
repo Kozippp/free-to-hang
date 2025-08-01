@@ -98,7 +98,8 @@ interface PlansState {
     visited: Set<string>
   ) => boolean;
   
-  // Poll actions
+  // Poll actions - These are now handled via API calls
+  // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => void;
   voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => void;
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => void;
@@ -187,8 +188,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
           createdAt: plan.createdAt,
           lastUpdatedAt: plan.updatedAt,
           hasUnreadUpdates: false,
-          completionVotes: [],
-          polls: []
+          completionVotes: plan.completionVotes || [],
+          polls: plan.polls ? plan.polls.map(poll => ({
+            ...poll,
+            expiresAt: poll.expiresAt ? new Date(poll.expiresAt).getTime() : undefined
+          })) : []
         };
         
         if (plan.status === 'completed') {
@@ -245,8 +249,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
         createdAt: newPlan.createdAt,
         lastUpdatedAt: newPlan.updatedAt,
         hasUnreadUpdates: false,
-        completionVotes: [],
-        polls: []
+        completionVotes: newPlan.completionVotes || [],
+        polls: newPlan.polls ? newPlan.polls.map(poll => ({
+          ...poll,
+          expiresAt: poll.expiresAt ? new Date(poll.expiresAt).getTime() : undefined
+        })) : []
       };
       
       // Add to active plans since creator is auto-accepted
@@ -323,8 +330,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
         createdAt: updatedPlan.createdAt,
         lastUpdatedAt: updatedPlan.updatedAt,
         hasUnreadUpdates: false,
-        completionVotes: [],
-        polls: []
+        completionVotes: updatedPlan.completionVotes || [],
+        polls: updatedPlan.polls ? updatedPlan.polls.map(poll => ({
+          ...poll,
+          expiresAt: poll.expiresAt ? new Date(poll.expiresAt).getTime() : undefined
+        })) : []
       };
       
       // Update local state based on response
@@ -550,302 +560,55 @@ const usePlansStore = create<PlansState>((set, get) => ({
     return allFriendsSatisfied;
   },
   
-  // Poll actions
+  // Poll actions - These are now handled via API calls
+  // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id === planId) {
-          return {
-            ...plan,
-            polls: [...(plan.polls || []), poll]
-          };
-        }
-        return plan;
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans
-      };
-    });
-    
-    // Mark plan as updated with poll creation
-    get().markPlanUpdated(planId, 'poll_created');
+    // This function is kept for backward compatibility but should not be used
+    // Polls are now created via API calls
+    console.warn('⚠️ addPoll should not be called directly. Use API instead.');
   },
   
   voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId) return plan;
-        
-        const polls = plan.polls || [];
-        const updatedPolls = polls.map(poll => {
-          if (poll.id !== pollId) return poll;
-          
-          // Remove user's previous votes
-          const clearedOptions = poll.options.map(option => ({
-            ...option,
-            votes: option.votes.filter(id => id !== userId)
-          }));
-          
-          // Add new votes
-          const updatedOptions = clearedOptions.map(option => ({
-            ...option,
-            votes: optionIds.includes(option.id) 
-              ? [...option.votes, userId]
-              : option.votes
-          }));
-          
-          return {
-            ...poll,
-            options: updatedOptions
-          };
-        });
-        
-        return {
-          ...plan,
-          polls: updatedPolls
-        };
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans
-      };
-    });
-    
-    // Only track as update if it's not the current user voting
-    if (userId !== 'current') {
-      get().markPlanUpdated(planId, 'poll_voted');
-    }
+    // This function is kept for backward compatibility but should not be used
+    // Poll votes are now submitted via API calls
+    console.warn('⚠️ voteOnPoll should not be called directly. Use API instead.');
   },
   
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId || !plan.polls) return plan;
-        
-        const updatedPolls = plan.polls.map(poll => {
-          if (poll.id !== pollId) return poll;
-          
-          return {
-            ...poll,
-            options: poll.options.map(option => 
-              option.id === optionId
-                ? { ...option, text: newText }
-                : option
-            )
-          };
-        });
-        
-        return {
-          ...plan,
-          polls: updatedPolls
-        };
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans.map(updatePlan)
-      };
-    });
+    // This function is kept for backward compatibility but should not be used
+    // Poll options are now updated via API calls
+    console.warn('⚠️ updatePollOption should not be called directly. Use API instead.');
   },
   
   removePollOption: (planId: string, pollId: string, optionId: string) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId || !plan.polls) return plan;
-        
-        const updatedPolls = plan.polls.map(poll => {
-          if (poll.id !== pollId) return poll;
-          
-          return {
-            ...poll,
-            options: poll.options.filter(option => option.id !== optionId)
-          };
-        });
-        
-        return {
-          ...plan,
-          polls: updatedPolls
-        };
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans.map(updatePlan)
-      };
-    });
+    // This function is kept for backward compatibility but should not be used
+    // Poll options are now removed via API calls
+    console.warn('⚠️ removePollOption should not be called directly. Use API instead.');
   },
   
   addPollOption: (planId: string, pollId: string, optionText: string) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId || !plan.polls) return plan;
-        
-        const updatedPolls = plan.polls.map(poll => {
-          if (poll.id !== pollId) return poll;
-          
-          const newOption: PollOption = {
-            id: `option-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            text: optionText,
-            votes: []
-          };
-          
-          return {
-            ...poll,
-            options: [...poll.options, newOption]
-          };
-        });
-        
-        return {
-          ...plan,
-          polls: updatedPolls
-        };
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans.map(updatePlan)
-      };
-    });
+    // This function is kept for backward compatibility but should not be used
+    // Poll options are now added via API calls
+    console.warn('⚠️ addPollOption should not be called directly. Use API instead.');
   },
   
   deletePoll: (planId: string, pollId: string) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId || !plan.polls) return plan;
-        
-        const updatedPolls = plan.polls.filter(poll => poll.id !== pollId);
-        
-        return {
-          ...plan,
-          polls: updatedPolls
-        };
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans.map(updatePlan)
-      };
-    });
+    // This function is kept for backward compatibility but should not be used
+    // Polls are now deleted via API calls
+    console.warn('⚠️ deletePoll should not be called directly. Use API instead.');
   },
   
   // Invitation poll actions
   processExpiredInvitationPolls: () => {
-    set((state) => {
-      const currentTime = Date.now();
-      
-      const updatePlan = (plan: Plan): Plan => {
-        if (!plan.polls) return plan;
-        
-        const expiredInvitationPolls = plan.polls.filter(poll => 
-          poll.type === 'invitation' && 
-          poll.expiresAt && 
-          poll.expiresAt <= currentTime
-        );
-        
-        if (expiredInvitationPolls.length === 0) return plan;
-        
-        let updatedParticipants = [...plan.participants];
-        let updatedPolls = plan.polls.filter(poll => 
-          !(poll.type === 'invitation' && poll.expiresAt && poll.expiresAt <= currentTime)
-        );
-        
-        // Process each expired poll
-        expiredInvitationPolls.forEach(poll => {
-          if (!poll.invitedUsers || poll.invitedUsers.length === 0) return;
-          
-          const invitedUserId = poll.invitedUsers[0]; // Each poll has one invited user
-          
-          // Count votes
-          const allowVotes = poll.options.find(opt => opt.text === 'Allow')?.votes.length || 0;
-          const denyVotes = poll.options.find(opt => opt.text === 'Deny')?.votes.length || 0;
-          
-          // If majority voted to allow, add the person to participants
-          if (allowVotes > denyVotes) {
-            // Check if user is not already in participants
-            const existingParticipant = updatedParticipants.find(p => p.id === invitedUserId);
-            if (!existingParticipant) {
-              // Add new participant with pending status
-              updatedParticipants.push({
-                id: invitedUserId,
-                name: `User ${invitedUserId}`, // In real app, get from user store
-                avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`,
-                status: 'pending'
-              });
-            }
-          }
-          // If majority voted to deny or tie, the person just disappears (no action needed)
-        });
-        
-        return {
-          ...plan,
-          participants: updatedParticipants,
-          polls: updatedPolls
-        };
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans
-      };
-    });
+    // This function is kept for backward compatibility but should not be used
+    // Expired polls are now handled via API
+    console.warn('⚠️ processExpiredInvitationPolls should not be called directly. Use API instead.');
   },
   
   createInvitationPollWithAutoVote: (planId: string, friendIds: string[], friendNames: string[], creatorId: string) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId) return plan;
-        
-        const newPolls = [...(plan.polls || [])];
-        
-        // Create individual invitation polls for each person
-        friendIds.forEach((friendId, index) => {
-          const friendName = friendNames[index];
-          
-          const invitationPoll: Poll = {
-            id: `invitation-poll-${Date.now()}-${friendId}`,
-            question: `Should we invite ${friendName} to this plan?`,
-            type: 'invitation',
-            expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
-            invitedUsers: [friendId], // Only one user per poll
-            options: [
-              {
-                id: `allow-${Date.now()}-${friendId}`,
-                text: 'Allow',
-                votes: [creatorId] // Auto-vote for the creator
-              },
-              {
-                id: `deny-${Date.now()}-${friendId}`,
-                text: 'Deny',
-                votes: []
-              }
-            ]
-          };
-          
-          newPolls.push(invitationPoll);
-        });
-        
-        return {
-          ...plan,
-          polls: newPolls
-        };
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans
-      };
-    });
+    // This function is kept for backward compatibility but should not be used
+    // Invitation polls are now created via API calls
+    console.warn('⚠️ createInvitationPollWithAutoVote should not be called directly. Use API instead.');
   },
   
   // Completion actions
@@ -963,71 +726,15 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   // New completion voting functions
   voteForCompletion: (planId: string, userId: string) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId) return plan;
-        
-        const currentVotes = plan.completionVotes || [];
-        
-        // Don't add vote if user already voted
-        if (currentVotes.includes(userId)) return plan;
-        
-        const updatedCompletionVotes = [...currentVotes, userId];
-        const updatedPlan = {
-          ...plan,
-          completionVotes: updatedCompletionVotes
-        };
-        
-        // Use new voting logic to check completion
-        const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
-        const maybeParticipants = plan.participants.filter(p => p.status === 'maybe');
-        const totalVoteWeight = acceptedParticipants.length * 1 + maybeParticipants.length * 0.25;
-        const requiredVoteWeight = Math.ceil(totalVoteWeight * 0.5);
-        const requiredMinimumPeople = 2;
-        
-        // Check both conditions for completion
-        const hasEnoughVotes = updatedCompletionVotes.length >= requiredVoteWeight;
-        const hasEnoughPeople = updatedCompletionVotes.length >= requiredMinimumPeople;
-        
-        // If both conditions met, automatically complete the plan
-        if (hasEnoughVotes && hasEnoughPeople) {
-          // Move to completed plans immediately
-          setTimeout(() => {
-            get().markPlanAsCompleted(planId);
-          }, 0);
-        }
-        
-        return updatedPlan;
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans
-      };
-    });
+    // This function is kept for backward compatibility but should not be used
+    // Completion votes are now submitted via API calls
+    console.warn('⚠️ voteForCompletion should not be called directly. Use API instead.');
   },
   
   removeCompletionVote: (planId: string, userId: string) => {
-    set((state) => {
-      const updatePlan = (plan: Plan): Plan => {
-        if (plan.id !== planId) return plan;
-        
-        const currentVotes = plan.completionVotes || [];
-        const updatedCompletionVotes = currentVotes.filter(id => id !== userId);
-        
-        return {
-          ...plan,
-          completionVotes: updatedCompletionVotes
-        };
-      };
-      
-      return {
-        invitations: state.invitations.map(updatePlan),
-        activePlans: state.activePlans.map(updatePlan),
-        completedPlans: state.completedPlans
-      };
-    });
+    // This function is kept for backward compatibility but should not be used
+    // Completion votes are now removed via API calls
+    console.warn('⚠️ removeCompletionVote should not be called directly. Use API instead.');
   },
   
   getCompletionVotingStatus: (plan: Plan) => {
@@ -1147,7 +854,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.log('🚀 Starting plans real-time updates...');
 
     try {
-      // Create channel for plans and plan_participants updates
+      // Create channel for plans, plan_participants, and plan_updates
       plansChannel = supabase
         .channel(`plans_updates_${userId}_${Date.now()}`)
         .on('postgres_changes', {
@@ -1165,6 +872,30 @@ const usePlansStore = create<PlansState>((set, get) => ({
         }, (payload) => {
           console.log('📡 Plan participants update:', payload);
           handleParticipantUpdate(payload, userId);
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'plan_updates'
+        }, (payload) => {
+          console.log('📡 Plan updates table update:', payload);
+          handlePlanUpdateNotification(payload, userId);
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'plan_polls'
+        }, (payload) => {
+          console.log('📡 Plan polls update:', payload);
+          handlePollUpdate(payload, userId);
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'plan_poll_votes'
+        }, (payload) => {
+          console.log('📡 Plan poll votes update:', payload);
+          handlePollVoteUpdate(payload, userId);
         })
         .subscribe((status) => {
           console.log('📡 Plans channel status:', status);
@@ -1223,6 +954,62 @@ function handleParticipantUpdate(payload: any, currentUserId: string) {
   console.log('👥 Plan participant changed via real-time');
   // Reload plans to get updated participant data
   loadPlans(currentUserId);
+}
+
+// Handle real-time plan update notifications
+function handlePlanUpdateNotification(payload: any, currentUserId: string) {
+  const { loadPlans } = usePlansStore.getState();
+  
+  console.log('📢 Plan update notification received:', payload);
+  
+  // Handle different types of updates
+  if (payload.eventType === 'INSERT') {
+    const updateType = payload.new?.update_type;
+    const planId = payload.new?.plan_id;
+    
+    console.log('📢 New plan update:', { updateType, planId });
+    
+    // For poll-related updates, reload the specific plan
+    if (updateType === 'poll_created' || updateType === 'poll_voted') {
+      loadPlans(currentUserId);
+    }
+  }
+}
+
+// Handle real-time poll updates
+function handlePollUpdate(payload: any, currentUserId: string) {
+  const { loadPlans } = usePlansStore.getState();
+  
+  console.log('📊 Poll update received:', payload);
+  
+  if (payload.eventType === 'INSERT') {
+    console.log('📊 New poll created via real-time');
+    loadPlans(currentUserId);
+  } else if (payload.eventType === 'UPDATE') {
+    console.log('📊 Poll updated via real-time');
+    loadPlans(currentUserId);
+  } else if (payload.eventType === 'DELETE') {
+    console.log('📊 Poll deleted via real-time');
+    loadPlans(currentUserId);
+  }
+}
+
+// Handle real-time poll vote updates
+function handlePollVoteUpdate(payload: any, currentUserId: string) {
+  const { loadPlans } = usePlansStore.getState();
+  
+  console.log('🗳️ Poll vote update received:', payload);
+  
+  if (payload.eventType === 'INSERT') {
+    console.log('🗳️ New poll vote via real-time');
+    loadPlans(currentUserId);
+  } else if (payload.eventType === 'UPDATE') {
+    console.log('🗳️ Poll vote updated via real-time');
+    loadPlans(currentUserId);
+  } else if (payload.eventType === 'DELETE') {
+    console.log('🗳️ Poll vote deleted via real-time');
+    loadPlans(currentUserId);
+  }
 }
 
 export default usePlansStore;

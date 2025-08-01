@@ -292,25 +292,93 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     setShowPollVoting(true);
   };
   
-  const handleVoteSubmit = (selectedOptionIds: string[]) => {
+  const handleVoteSubmit = async (selectedOptionIds: string[]) => {
     if (!currentPollId) return;
     
-    // Submit votes
-    voteOnPoll(plan.id, currentPollId, selectedOptionIds, user.id);
-    
-    // Close voting modal
-    setShowPollVoting(false);
-    setCurrentPollId(null);
+    try {
+      // Submit votes via API
+      console.log('🗳️ Submitting votes via API:', { pollId: currentPollId, selectedOptionIds });
+      await plansService.voteOnPoll(plan.id, currentPollId, selectedOptionIds);
+      console.log('✅ Votes submitted successfully via API');
+      
+      // Real-time subscription will handle updating the store
+      
+      // Close voting modal
+      setShowPollVoting(false);
+      setCurrentPollId(null);
+    } catch (error) {
+      console.error('❌ Error submitting votes:', error);
+      
+      let errorMessage = 'Failed to submit votes. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          errorMessage = 'Your session has expired. Please sign out and sign back in.';
+        } else if (error.message.includes('403')) {
+          errorMessage = 'You need to respond "Going" to the plan to vote on polls.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert(
+        'Error Voting',
+        errorMessage,
+        [{ text: 'OK', style: 'default' }]
+      );
+    }
   };
   
   const handleInviteFriends = () => {
     setShowInviteModal(true);
   };
 
-  const handleCreateInvitationPoll = (friendIds: string[], friendNames: string[]) => {
-    // Use the new function with auto-vote for the creator
-    createInvitationPollWithAutoVote(latestPlan.id, friendIds, friendNames, user.id);
-    setShowInviteModal(false);
+  const handleCreateInvitationPoll = async (friendIds: string[], friendNames: string[]) => {
+    try {
+      console.log('📊 Creating invitation polls via API:', { friendIds, friendNames });
+      
+      // Create invitation polls for each friend
+      for (let i = 0; i < friendIds.length; i++) {
+        const friendId = friendIds[i];
+        const friendName = friendNames[i];
+        
+        const pollData = {
+          question: `Should we invite ${friendName} to this plan?`,
+          options: ['Allow', 'Deny'],
+          type: 'invitation' as const,
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
+          invitedUsers: [friendId]
+        };
+        
+        console.log('📊 Creating invitation poll for:', friendName);
+        await plansService.createPoll(latestPlan.id, pollData);
+      }
+      
+      console.log('✅ Invitation polls created successfully via API');
+      setShowInviteModal(false);
+      
+      // Real-time subscription will handle updating the store
+    } catch (error) {
+      console.error('❌ Error creating invitation polls:', error);
+      
+      let errorMessage = 'Failed to create invitation polls. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          errorMessage = 'Your session has expired. Please sign out and sign back in.';
+        } else if (error.message.includes('403')) {
+          errorMessage = 'You need to respond "Going" to the plan to create polls.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert(
+        'Error Creating Polls',
+        errorMessage,
+        [{ text: 'OK', style: 'default' }]
+      );
+    }
   };
   
   const handleStatusChange = async (status: ParticipantStatus, conditionalFriends?: string[]) => {
@@ -495,25 +563,78 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const unreadCount = getUnreadCount(latestPlan.id, user.id);
 
   // Helper function to handle poll voting with multiple selections
-  const handlePollVote = (pollId: string, optionId: string) => {
-    const currentVotes = getUserVotesForPoll(pollId);
-    let newVotes: string[];
-    
-    if (currentVotes.includes(optionId)) {
-      // Remove vote if already selected
-      newVotes = currentVotes.filter(id => id !== optionId);
-    } else {
-      // Add vote if not selected
-      newVotes = [...currentVotes, optionId];
+  const handlePollVote = async (pollId: string, optionId: string) => {
+    try {
+      const currentVotes = getUserVotesForPoll(pollId);
+      let newVotes: string[];
+      
+      if (currentVotes.includes(optionId)) {
+        // Remove vote if already selected
+        newVotes = currentVotes.filter(id => id !== optionId);
+      } else {
+        // Add vote if not selected
+        newVotes = [...currentVotes, optionId];
+      }
+      
+      // Use API to vote on poll
+      console.log('🗳️ Voting on poll via API:', { pollId, newVotes });
+      await plansService.voteOnPoll(plan.id, pollId, newVotes);
+      console.log('✅ Vote submitted successfully via API');
+      
+      // Real-time subscription will handle updating the store
+    } catch (error) {
+      console.error('❌ Error voting on poll:', error);
+      
+      let errorMessage = 'Failed to submit vote. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          errorMessage = 'Your session has expired. Please sign out and sign back in.';
+        } else if (error.message.includes('403')) {
+          errorMessage = 'You need to respond "Going" to the plan to vote on polls.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert(
+        'Error Voting',
+        errorMessage,
+        [{ text: 'OK', style: 'default' }]
+      );
     }
-    
-    voteOnPoll(plan.id, pollId, newVotes, user.id);
   };
 
   // Helper function to handle invitation poll voting (single selection)
-  const handleInvitationVote = (pollId: string, optionId: string) => {
-    // For invitation polls, only allow one vote (either Allow or Deny)
-    voteOnPoll(plan.id, pollId, [optionId], user.id);
+  const handleInvitationVote = async (pollId: string, optionId: string) => {
+    try {
+      // For invitation polls, only allow one vote (either Allow or Deny)
+      console.log('🗳️ Voting on invitation poll via API:', { pollId, optionId });
+      await plansService.voteOnPoll(plan.id, pollId, [optionId]);
+      console.log('✅ Invitation vote submitted successfully via API');
+      
+      // Real-time subscription will handle updating the store
+    } catch (error) {
+      console.error('❌ Error voting on invitation poll:', error);
+      
+      let errorMessage = 'Failed to submit vote. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          errorMessage = 'Your session has expired. Please sign out and sign back in.';
+        } else if (error.message.includes('403')) {
+          errorMessage = 'You need to respond "Going" to the plan to vote on polls.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert(
+        'Error Voting',
+        errorMessage,
+        [{ text: 'OK', style: 'default' }]
+      );
+    }
   };
 
   // Helper function to handle poll deletion
@@ -535,8 +656,14 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           { 
             text: 'Remove Vote', 
             style: 'destructive',
-            onPress: () => {
-              removeCompletionVote(plan.id, user.id);
+            onPress: async () => {
+              try {
+                // TODO: Implement remove completion vote API
+                removeCompletionVote(plan.id, user.id);
+              } catch (error) {
+                console.error('❌ Error removing completion vote:', error);
+                Alert.alert('Error', 'Failed to remove completion vote');
+              }
             }
           }
         ]
@@ -552,15 +679,41 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           { 
             text: 'Vote to Complete', 
             style: 'default',
-            onPress: () => {
-              voteForCompletion(plan.id, user.id);
-              
-              // Check if this vote will complete the plan
-              if (remainingVotes === 1) {
-                // This will be the last vote needed, close modal after short delay
-                setTimeout(() => {
-                  onClose();
-                }, 1000);
+            onPress: async () => {
+              try {
+                console.log('✅ Voting for completion via API');
+                await plansService.voteForCompletion(plan.id);
+                console.log('✅ Completion vote submitted successfully via API');
+                
+                // Real-time subscription will handle updating the store
+                
+                // Check if this vote will complete the plan
+                if (remainingVotes === 1) {
+                  // This will be the last vote needed, close modal after short delay
+                  setTimeout(() => {
+                    onClose();
+                  }, 1000);
+                }
+              } catch (error) {
+                console.error('❌ Error voting for completion:', error);
+                
+                let errorMessage = 'Failed to submit completion vote. Please try again.';
+                
+                if (error instanceof Error) {
+                  if (error.message.includes('Authentication')) {
+                    errorMessage = 'Your session has expired. Please sign out and sign back in.';
+                  } else if (error.message.includes('403')) {
+                    errorMessage = 'You need to respond "Going" to the plan to vote for completion.';
+                  } else {
+                    errorMessage = error.message;
+                  }
+                }
+                
+                Alert.alert(
+                  'Error Voting',
+                  errorMessage,
+                  [{ text: 'OK', style: 'default' }]
+                );
               }
             }
           }
