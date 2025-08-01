@@ -10,8 +10,8 @@
 const { createClient } = require('@supabase/supabase-js');
 
 // Your Supabase credentials
-const supabaseUrl = 'https://nfzbvuyntzgszqdlsusj.supabase.co';
-const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key-here';
+const supabaseUrl = 'https://nfzbvuyntzgszqdlsusl.supabase.co';
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5memJ2dXludHpnc3pxZGxzdXNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkwNjk2MzcsImV4cCI6MjA2NDY0NTYzN30.GpWZXatLSPHm4QgFPOVUoRZJLD9Aqzz_hE-JqdcHiwc';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
