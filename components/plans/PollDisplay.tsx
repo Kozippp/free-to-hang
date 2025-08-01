@@ -106,8 +106,13 @@ export default function PollDisplay({
     const currentCountsString = JSON.stringify(voteCounts);
     const newCountsString = JSON.stringify(newCounts);
     
+    // Add debouncing to prevent rapid state updates
     if ((hasChanges || currentCountsString !== newCountsString) && !isAnimatingRef.current) {
-      setVoteCounts(newCounts);
+      const timeoutId = setTimeout(() => {
+        setVoteCounts(newCounts);
+      }, 50); // Small delay to prevent rapid updates
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [options, isRealTimeUpdate, animatedValues]); // Removed voteCounts from dependencies
 
