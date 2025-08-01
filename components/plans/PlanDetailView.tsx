@@ -73,7 +73,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     invitations,
     activePlans,
     processExpiredInvitationPolls,
-    loadPlans
+    loadPlans,
+    startRealTimeUpdates,
+    stopRealTimeUpdates
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   const { getUnreadCount } = useChatStore();
@@ -157,10 +159,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     }
     
     return () => {
-      // Cleanup is handled by the store
-      console.log('🛑 Plan detail view unmounted');
+      // Cleanup when component unmounts
+      console.log('🛑 Plan detail view unmounted, stopping real-time updates');
+      stopRealTimeUpdates();
     };
-  }, [user?.id, plan.id, startRealTimeUpdates]);
+  }, [user?.id, plan.id, startRealTimeUpdates, stopRealTimeUpdates]);
 
     // Simple real-time animation trigger
   React.useEffect(() => {
