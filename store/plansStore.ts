@@ -78,6 +78,7 @@ interface PlansState {
   // Real-time subscriptions
   startRealTimeUpdates: (userId: string) => void;
   stopRealTimeUpdates: () => void;
+  subscribeToUserPlanChannels: (userId: string) => Promise<void>;
   
   // Actions
   markAsRead: (planId: string) => void;
@@ -138,6 +139,7 @@ interface PlansState {
 // Global variables for real-time subscriptions
 let plansChannel: any = null;
 let isSubscribed = false;
+let isStartingRealTime = false;
 
 const usePlansStore = create<PlansState>((set, get) => ({
   invitations: [],
@@ -895,76 +897,97 @@ const usePlansStore = create<PlansState>((set, get) => ({
   },
   
   // Real-time subscriptions
-  startRealTimeUpdates: (userId: string) => {
+  startRealTimeUpdates: async (userId: string) => {
+    if (isStartingRealTime) {
+      console.log('🛑 Plans real-time subscription already starting...');
+      return;
+    }
+
     if (isSubscribed || plansChannel) {
       console.log('🛑 Plans real-time subscription already active');
       return;
     }
 
-    console.log('🚀 Starting plans real-time updates...');
-
+    isStartingRealTime = true;
+    
     try {
-      // Create simplified channel focusing on the key tables
+      console.log('🚀 Starting plans real-time updates with Broadcast system...');
+      
+      // Stop any existing channel first
+      if (plansChannel) {
+        console.log('🛑 Stopping existing plans real-time subscription...');
+        await supabase.removeChannel(plansChannel);
+        plansChannel = null;
+        isSubscribed = false;
+      }
+      
+      // Load initial data immediately when real-time starts
+      console.log('📊 Loading initial plans data...');
+      await get().loadPlans(userId);
+
       console.log('🚀 Creating real-time channel for user:', userId);
+      
+      // Set up authentication for Realtime Authorization
+      await supabase.realtime.setAuth();
+      
+      // Create a single channel for all broadcast events
       plansChannel = supabase
-        .channel(`plans_realtime_${userId}_${Date.now()}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plans'
-        }, (payload) => {
-          console.log('📡 PLANS TABLE UPDATE:', JSON.stringify(payload, null, 2));
-          handlePlanUpdate(payload, userId);
+        .channel(`plans_broadcast_${userId}_${Date.now()}`, {
+          config: { private: true } // Enable Realtime Authorization
         })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_updates'
-        }, (payload) => {
-          console.log('📡 PLAN_UPDATES TABLE UPDATE:', JSON.stringify(payload, null, 2));
-          handlePlanUpdateNotification(payload, userId);
+        .on('broadcast', { event: 'INSERT' }, (payload) => {
+          console.log('🗳️📡 BROADCAST INSERT:', JSON.stringify(payload, null, 2));
+          handleBroadcastUpdate(payload, userId, 'INSERT');
         })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_poll_votes'
-        }, (payload) => {
-          console.log('🗳️📡 PLAN_POLL_VOTES TABLE UPDATE:', JSON.stringify(payload, null, 2));
-          handlePollVoteUpdate(payload, userId);
+        .on('broadcast', { event: 'UPDATE' }, (payload) => {
+          console.log('🗳️📡 BROADCAST UPDATE:', JSON.stringify(payload, null, 2));
+          handleBroadcastUpdate(payload, userId, 'UPDATE');
+        })
+        .on('broadcast', { event: 'DELETE' }, (payload) => {
+          console.log('🗳️📡 BROADCAST DELETE:', JSON.stringify(payload, null, 2));
+          handleBroadcastUpdate(payload, userId, 'DELETE');
         })
         .subscribe((status) => {
-          console.log('📡 Plans channel status:', status);
-          console.log('📡 Channel details:', {
-            userId,
-            channelName: `plans_realtime_${userId}_${Date.now()}`,
-            timestamp: new Date().toISOString()
-          });
+          console.log('📡 Plans broadcast channel status:', status);
           
           if (status === 'SUBSCRIBED') {
             isSubscribed = true;
-            console.log('✅ Plans real-time subscription started successfully');
-            console.log('✅ Listening for plan_updates and plan_poll_votes changes');
+            console.log('✅ Plans broadcast subscription started successfully');
+            console.log('✅ Listening for poll vote, poll, and plan update broadcasts');
           } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Plans real-time channel error');
-            isSubscribed = false;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Plans real-time connection timed out, reconnecting...');
+            console.log('❌ Plans broadcast channel error');
             isSubscribed = false;
             plansChannel = null;
-            
-            // Auto-reconnect after timeout
-            setTimeout(() => {
-              console.log('🔄 Reconnecting plans real-time...');
-              get().startRealTimeUpdates(userId);
-            }, 2000);
-          } else {
-            console.log('📡 Unknown status:', status);
+          } else if (status === 'CLOSED') {
             isSubscribed = false;
+            plansChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Plans broadcast subscription timed out');
+            isSubscribed = false;
+            plansChannel = null;
           }
         });
+
     } catch (error) {
-      console.error('❌ Error starting plans real-time updates:', error);
+      console.error('❌ Error starting plans broadcast updates:', error);
       isSubscribed = false;
+      plansChannel = null;
+    } finally {
+      isStartingRealTime = false;
+    }
+  },
+
+  // Subscribe to specific plan channels for a user (simplified version)
+  subscribeToUserPlanChannels: async (userId: string) => {
+    try {
+      console.log('🔗 Broadcast system ready for user plan updates...');
+      
+      // The broadcast system automatically handles all plan updates
+      // through the single channel we created above
+      // No need to create individual plan channels
+      
+    } catch (error) {
+      console.error('❌ Error in broadcast subscription:', error);
     }
   },
   
@@ -981,99 +1004,55 @@ const usePlansStore = create<PlansState>((set, get) => ({
   }
 }));
 
-// Handle real-time plan updates
-function handlePlanUpdate(payload: any, currentUserId: string) {
+// Handle real-time broadcast updates (for new plans, updates, and deletes)
+function handleBroadcastUpdate(payload: any, currentUserId: string, eventType: 'INSERT' | 'UPDATE' | 'DELETE') {
   const { loadPlans } = usePlansStore.getState();
   
-  console.log('📝 Plan table update received:', JSON.stringify(payload, null, 2));
-  
-  if (payload.eventType === 'INSERT') {
-    console.log('📝 New plan created via real-time');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'UPDATE') {
-    console.log('📝 Plan updated via real-time');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'DELETE') {
-    console.log('🗑️ Plan deleted via real-time');
-    loadPlans(currentUserId);
-  }
-}
-
-// Handle real-time participant updates
-function handleParticipantUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
-  
-  console.log('👥 Plan participant changed via real-time');
-  // Reload plans to get updated participant data
-  loadPlans(currentUserId);
-}
-
-// Handle real-time plan update notifications
-function handlePlanUpdateNotification(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
-  
-  console.log('📢 Plan update notification received:', JSON.stringify(payload, null, 2));
-  
-  // Handle different types of updates
-  if (payload.eventType === 'INSERT') {
-    const updateType = payload.new?.update_type;
-    const planId = payload.new?.plan_id;
-    const triggeredBy = payload.new?.triggered_by;
-    
-    console.log('📢 New plan update:', { updateType, planId, triggeredBy, currentUserId });
-    
-    // For poll-related updates, reload plans
-    if (updateType === 'poll_created' || updateType === 'poll_voted') {
-      console.log('🗳️ Poll update detected via plan_updates table - reloading plans');
-      loadPlans(currentUserId);
-    }
-    
-    // For other updates, also reload
-    if (updateType === 'participant_joined' || updateType === 'plan_completed') {
-      console.log('👥 Plan update detected - reloading plans');
-      loadPlans(currentUserId);
-    }
-  }
-}
-
-// Handle real-time poll updates
-function handlePollUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
-  
-  console.log('📊 Poll update received:', payload);
-  
-  if (payload.eventType === 'INSERT') {
-    console.log('📊 New poll created via real-time');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'UPDATE') {
-    console.log('📊 Poll updated via real-time');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'DELETE') {
-    console.log('📊 Poll deleted via real-time');
-    loadPlans(currentUserId);
-  }
-}
-
-// Handle real-time poll vote updates
-function handlePollVoteUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
-  
-  console.log('🗳️ POLL VOTE UPDATE HANDLER CALLED:', {
-    eventType: payload.eventType,
+  console.log('🗳️ BROADCAST UPDATE HANDLER CALLED:', {
+    eventType,
+    table: payload.table,
+    schema: payload.schema,
     new: payload.new,
     old: payload.old,
     currentUserId
   });
-  
-  if (payload.eventType === 'INSERT') {
-    console.log('🗳️ New poll vote via real-time - RELOADING PLANS');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'UPDATE') {
-    console.log('🗳️ Poll vote updated via real-time - RELOADING PLANS');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'DELETE') {
-    console.log('🗳️ Poll vote deleted via real-time - RELOADING PLANS');
-    loadPlans(currentUserId);
+
+  // Handle different types of broadcast updates based on table
+  switch (payload.table) {
+    case 'poll_votes':
+      console.log('🗳️ Poll vote broadcast received - RELOADING PLANS');
+      loadPlans(currentUserId);
+      break;
+      
+    case 'plan_polls':
+      console.log('📊 Poll broadcast received - RELOADING PLANS');
+      loadPlans(currentUserId);
+      break;
+      
+    case 'poll_options':
+      console.log('📋 Poll option broadcast received - RELOADING PLANS');
+      loadPlans(currentUserId);
+      break;
+      
+    case 'plan_updates':
+      console.log('📢 Plan update broadcast received - RELOADING PLANS');
+      loadPlans(currentUserId);
+      break;
+      
+    case 'plans':
+      console.log('📝 Plan broadcast received - RELOADING PLANS');
+      loadPlans(currentUserId);
+      break;
+      
+    case 'plan_participants':
+      console.log('👥 Plan participant broadcast received - RELOADING PLANS');
+      loadPlans(currentUserId);
+      break;
+      
+    default:
+      console.log('❓ Unknown broadcast table:', payload.table, '- RELOADING PLANS');
+      loadPlans(currentUserId);
+      break;
   }
 }
 

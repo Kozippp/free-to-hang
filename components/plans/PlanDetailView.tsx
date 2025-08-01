@@ -149,44 +149,18 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // }
   }, [plan.id, currentUserStatus]);
 
-  // Simple polling with vote protection
+  // Start Supabase real-time updates when plan is opened
   React.useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    let lastVoteTime = 0;
-    
-    const smartRefresh = () => {
-      // Don't refresh if user just voted (within 3 seconds)
-      const timeSinceLastVote = Date.now() - lastVoteTime;
-      if (timeSinceLastVote < 3000) {
-        console.log('⏸️ Skipping refresh - recent vote activity');
-        return;
-      }
-      
-      if (user?.id) {
-        console.log('🔄 Smart refresh check for updates...');
-        loadPlans(user.id);
-      }
-    };
-    
-    // Start with longer interval (10 seconds) to avoid rate limiting
-    interval = setInterval(smartRefresh, 10000);
-    
-    // Listen for vote events to track when user votes
-    const handleVoteEvent = () => {
-      lastVoteTime = Date.now();
-      console.log('🗳️ Vote detected - pausing refresh for 3 seconds');
-    };
-    
-    // Store vote handler globally for access from poll components
-    (global as any).onVoteEvent = handleVoteEvent;
+    if (user?.id) {
+      console.log('🚀 Starting Supabase real-time for plan:', plan.id);
+      startRealTimeUpdates(user.id);
+    }
     
     return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-      delete (global as any).onVoteEvent;
+      // Cleanup is handled by the store
+      console.log('🛑 Plan detail view unmounted');
     };
-  }, [loadPlans, user?.id]);
+  }, [user?.id, plan.id, startRealTimeUpdates]);
 
     // Simple real-time animation trigger
   React.useEffect(() => {
