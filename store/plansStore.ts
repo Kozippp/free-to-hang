@@ -930,22 +930,56 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // Set up authentication for Realtime Authorization
       await supabase.realtime.setAuth();
       
-      // Create a single channel for all broadcast events
+      // Create a single channel for all postgres changes
       plansChannel = supabase
-        .channel(`plans_broadcast_${userId}_${Date.now()}`, {
-          config: { private: true } // Enable Realtime Authorization
+        .channel(`plans_changes_${userId}_${Date.now()}`)
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'poll_votes' 
+        }, (payload) => {
+          console.log('🗳️📡 POLL VOTE INSERT:', JSON.stringify(payload, null, 2));
+          handlePostgresChange(payload, userId, 'INSERT');
         })
-        .on('broadcast', { event: 'INSERT' }, (payload) => {
-          console.log('🗳️📡 BROADCAST INSERT:', JSON.stringify(payload, null, 2));
-          handleBroadcastUpdate(payload, userId, 'INSERT');
+        .on('postgres_changes', { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'poll_votes' 
+        }, (payload) => {
+          console.log('🗳️📡 POLL VOTE UPDATE:', JSON.stringify(payload, null, 2));
+          handlePostgresChange(payload, userId, 'UPDATE');
         })
-        .on('broadcast', { event: 'UPDATE' }, (payload) => {
-          console.log('🗳️📡 BROADCAST UPDATE:', JSON.stringify(payload, null, 2));
-          handleBroadcastUpdate(payload, userId, 'UPDATE');
+        .on('postgres_changes', { 
+          event: 'DELETE', 
+          schema: 'public', 
+          table: 'poll_votes' 
+        }, (payload) => {
+          console.log('🗳️📡 POLL VOTE DELETE:', JSON.stringify(payload, null, 2));
+          handlePostgresChange(payload, userId, 'DELETE');
         })
-        .on('broadcast', { event: 'DELETE' }, (payload) => {
-          console.log('🗳️📡 BROADCAST DELETE:', JSON.stringify(payload, null, 2));
-          handleBroadcastUpdate(payload, userId, 'DELETE');
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'plan_polls' 
+        }, (payload) => {
+          console.log('🗳️📡 PLAN POLL CHANGE:', JSON.stringify(payload, null, 2));
+          handlePostgresChange(payload, userId, payload.eventType);
+        })
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'poll_options' 
+        }, (payload) => {
+          console.log('🗳️📡 POLL OPTION CHANGE:', JSON.stringify(payload, null, 2));
+          handlePostgresChange(payload, userId, payload.eventType);
+        })
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'plan_updates' 
+        }, (payload) => {
+          console.log('🗳️📡 PLAN UPDATE CHANGE:', JSON.stringify(payload, null, 2));
+          handlePostgresChange(payload, userId, payload.eventType);
         })
         .subscribe((status) => {
           console.log('📡 Plans broadcast channel status:', status);
@@ -1004,11 +1038,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
   }
 }));
 
-// Handle real-time broadcast updates (for new plans, updates, and deletes)
-function handleBroadcastUpdate(payload: any, currentUserId: string, eventType: 'INSERT' | 'UPDATE' | 'DELETE') {
+// Handle real-time postgres changes (for new plans, updates, and deletes)
+function handlePostgresChange(payload: any, currentUserId: string, eventType: 'INSERT' | 'UPDATE' | 'DELETE') {
   const { loadPlans } = usePlansStore.getState();
   
-  console.log('🗳️ BROADCAST UPDATE HANDLER CALLED:', {
+  console.log('🗳️ POSTGRES CHANGE HANDLER CALLED:', {
     eventType,
     table: payload.table,
     schema: payload.schema,
@@ -1017,40 +1051,40 @@ function handleBroadcastUpdate(payload: any, currentUserId: string, eventType: '
     currentUserId
   });
 
-  // Handle different types of broadcast updates based on table
+  // Handle different types of postgres changes based on table
   switch (payload.table) {
     case 'poll_votes':
-      console.log('🗳️ Poll vote broadcast received - RELOADING PLANS');
+      console.log('🗳️ Poll vote change received - RELOADING PLANS');
       loadPlans(currentUserId);
       break;
       
     case 'plan_polls':
-      console.log('📊 Poll broadcast received - RELOADING PLANS');
+      console.log('📊 Poll change received - RELOADING PLANS');
       loadPlans(currentUserId);
       break;
       
     case 'poll_options':
-      console.log('📋 Poll option broadcast received - RELOADING PLANS');
+      console.log('📋 Poll option change received - RELOADING PLANS');
       loadPlans(currentUserId);
       break;
       
     case 'plan_updates':
-      console.log('📢 Plan update broadcast received - RELOADING PLANS');
+      console.log('📢 Plan update change received - RELOADING PLANS');
       loadPlans(currentUserId);
       break;
       
     case 'plans':
-      console.log('📝 Plan broadcast received - RELOADING PLANS');
+      console.log('📝 Plan change received - RELOADING PLANS');
       loadPlans(currentUserId);
       break;
       
     case 'plan_participants':
-      console.log('👥 Plan participant broadcast received - RELOADING PLANS');
+      console.log('👥 Plan participant change received - RELOADING PLANS');
       loadPlans(currentUserId);
       break;
       
     default:
-      console.log('❓ Unknown broadcast table:', payload.table, '- RELOADING PLANS');
+      console.log('❓ Unknown postgres table:', payload.table, '- RELOADING PLANS');
       loadPlans(currentUserId);
       break;
   }
