@@ -138,6 +138,12 @@ class PlansService {
           throw new Error('Authentication expired. Please sign out and sign back in.');
         }
         
+        // Handle rate limiting gracefully for background refreshes
+        if (response.status === 429) {
+          console.log('⚠️ Rate limited - skipping this request');
+          throw new Error('RATE_LIMITED'); // Special error we can catch
+        }
+        
         throw new Error(error.error || `HTTP ${response.status}`);
       }
 
