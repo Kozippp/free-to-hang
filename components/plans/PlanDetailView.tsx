@@ -45,6 +45,7 @@ import usePlansStore from '@/store/plansStore';
 import useChatStore from '@/store/chatStore';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { plansService } from '@/lib/plans-service';
 
 interface PlanDetailViewProps {
   plan: Plan;
@@ -211,45 +212,79 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     setShowPollCreator(true);
   };
   
-  const handlePollSubmit = (question: string, options: string[]) => {
-    if (editingPoll) {
-      // Update existing poll
-      const updatedPoll: Poll = {
-        ...editingPoll,
-        question,
-        options: options.map((text, index) => {
-          // Keep existing votes if option text hasn't changed
-          const existingOption = editingPoll.options.find(opt => opt.text === text);
-          return {
-            id: existingOption?.id || `option-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${index}`,
-            text,
-            votes: existingOption?.votes || []
-          };
-        })
-      };
+  const handlePollSubmit = async (question: string, options: string[]) => {
+    try {
+      // Check if user is authenticated
+      if (!user) {
+        Alert.alert(
+          'Authentication Required',
+          'You need to be signed in to create polls. Please sign in and try again.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
+
+      if (editingPoll) {
+        // Update existing poll - TODO: Implement poll update API
+        const updatedPoll: Poll = {
+          ...editingPoll,
+          question,
+          options: options.map((text, index) => {
+            // Keep existing votes if option text hasn't changed
+            const existingOption = editingPoll.options.find(opt => opt.text === text);
+            return {
+              id: existingOption?.id || `option-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${index}`,
+              text,
+              votes: existingOption?.votes || []
+            };
+          })
+        };
+        
+        // Update the poll in the store
+        addPoll(latestPlan.id, updatedPoll);
+      } else {
+        // Create a new poll using API
+        console.log('📊 Creating poll via API:', { question, options, type: pollType });
+        console.log('👤 User ID:', user.id);
+        
+        const pollData = {
+          question,
+          options,
+          type: pollType
+        };
+        
+        // Use plansService to create poll via API
+        const updatedPlan = await plansService.createPoll(latestPlan.id, pollData);
+        console.log('✅ Poll created successfully via API:', updatedPlan);
+        
+        // The real-time subscription will handle updating the store
+        // No need to manually add to store
+      }
       
-      // Update the poll in the store
-      addPoll(latestPlan.id, updatedPoll);
-    } else {
-      // Create a new poll
-      const newPoll: Poll = {
-        id: `poll-${Date.now()}`,
-        question,
-        type: pollType,
-        options: options.map((text, index) => ({
-          id: `option-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${index}`,
-          text,
-          votes: []
-        }))
-      };
+      // Close the poll creator and reset state
+      setShowPollCreator(false);
+      setEditingPoll(null);
+    } catch (error) {
+      console.error('❌ Error creating poll:', error);
       
-      // Add the new poll to the plan
-      addPoll(latestPlan.id, newPoll);
+      let errorMessage = 'Failed to create poll. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          errorMessage = 'Your session has expired. Please sign out and sign back in.';
+        } else if (error.message.includes('403')) {
+          errorMessage = 'You need to respond "Going" to the plan to create polls.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert(
+        'Error Creating Poll',
+        errorMessage,
+        [{ text: 'OK', style: 'default' }]
+      );
     }
-    
-    // Close the poll creator and reset state
-    setShowPollCreator(false);
-    setEditingPoll(null);
   };
   
   const handleOpenVoting = (pollId: string) => {
