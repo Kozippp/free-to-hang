@@ -149,18 +149,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // }
   }, [plan.id, currentUserStatus]);
 
-  // Temporary polling solution until real-time works
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      // Reload plans every 3 seconds to get real-time effect
-      if (user?.id) {
-        console.log('🔄 Polling for updates...');
-        loadPlans(user.id);
-      }
-    }, 3000); // Every 3 seconds
-    
-    return () => clearInterval(interval);
-  }, [loadPlans, user?.id]);
+  // Real-time updates are handled by the global store subscription
 
     // Simple real-time animation trigger
   React.useEffect(() => {

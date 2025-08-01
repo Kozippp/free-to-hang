@@ -897,47 +897,23 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.log('🚀 Starting plans real-time updates...');
 
     try {
-      // Create channel for plans, plan_participants, and plan_updates
+      // Create simplified channel focusing on the key tables
       plansChannel = supabase
-        .channel(`plans_updates_${userId}_${Date.now()}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plans'
-        }, (payload) => {
-          console.log('📡 Plans table update:', payload);
-          handlePlanUpdate(payload, userId);
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_participants'
-        }, (payload) => {
-          console.log('📡 Plan participants update:', payload);
-          handleParticipantUpdate(payload, userId);
-        })
+        .channel(`plans_realtime_${userId}_${Date.now()}`)
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
           table: 'plan_updates'
         }, (payload) => {
-          console.log('📡 Plan updates table update:', payload);
+          console.log('📡 Plan updates (including poll votes):', payload);
           handlePlanUpdateNotification(payload, userId);
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_polls'
-        }, (payload) => {
-          console.log('📡 Plan polls update:', payload);
-          handlePollUpdate(payload, userId);
         })
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
           table: 'plan_poll_votes'
         }, (payload) => {
-          console.log('🗳️📡 REAL-TIME POLL VOTE UPDATE RECEIVED:', JSON.stringify(payload, null, 2));
+          console.log('🗳️📡 DIRECT POLL VOTE UPDATE:', JSON.stringify(payload, null, 2));
           handlePollVoteUpdate(payload, userId);
         })
         .subscribe((status) => {
@@ -1013,17 +989,25 @@ function handleParticipantUpdate(payload: any, currentUserId: string) {
 function handlePlanUpdateNotification(payload: any, currentUserId: string) {
   const { loadPlans } = usePlansStore.getState();
   
-  console.log('📢 Plan update notification received:', payload);
+  console.log('📢 Plan update notification received:', JSON.stringify(payload, null, 2));
   
   // Handle different types of updates
   if (payload.eventType === 'INSERT') {
     const updateType = payload.new?.update_type;
     const planId = payload.new?.plan_id;
+    const triggeredBy = payload.new?.triggered_by;
     
-    console.log('📢 New plan update:', { updateType, planId });
+    console.log('📢 New plan update:', { updateType, planId, triggeredBy, currentUserId });
     
-    // For poll-related updates, reload the specific plan
+    // For poll-related updates, reload plans
     if (updateType === 'poll_created' || updateType === 'poll_voted') {
+      console.log('🗳️ Poll update detected via plan_updates table - reloading plans');
+      loadPlans(currentUserId);
+    }
+    
+    // For other updates, also reload
+    if (updateType === 'participant_joined' || updateType === 'plan_completed') {
+      console.log('👥 Plan update detected - reloading plans');
       loadPlans(currentUserId);
     }
   }
