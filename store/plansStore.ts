@@ -1054,16 +1054,35 @@ function handlePollUpdate(payload: any, currentUserId: string) {
 
 // Handle real-time poll vote updates
 function handlePollVoteUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
+  const { loadPlans, voteOnPollOptimistic } = usePlansStore.getState();
   
   console.log('🗳️ Poll vote update received:', payload);
   
   if (payload.eventType === 'INSERT') {
     console.log('🗳️ New poll vote via real-time');
-    loadPlans(currentUserId);
+    // For new votes, we can do optimistic update if we have the data
+    if (payload.new) {
+      const { plan_id, poll_id, option_id, user_id } = payload.new;
+      if (user_id !== currentUserId) { // Don't update for our own votes
+        console.log('🚀 Optimistic real-time vote update for other user');
+        voteOnPollOptimistic(plan_id, poll_id, [option_id], user_id);
+        
+        // Dispatch custom event to trigger animations
+        if (typeof document !== 'undefined') {
+          document.dispatchEvent(new CustomEvent('pollUpdate'));
+        }
+      }
+    } else {
+      loadPlans(currentUserId);
+    }
   } else if (payload.eventType === 'UPDATE') {
     console.log('🗳️ Poll vote updated via real-time');
     loadPlans(currentUserId);
+    
+    // Dispatch custom event to trigger animations
+    if (typeof document !== 'undefined') {
+      document.dispatchEvent(new CustomEvent('pollUpdate'));
+    }
   } else if (payload.eventType === 'DELETE') {
     console.log('🗳️ Poll vote deleted via real-time');
     loadPlans(currentUserId);
