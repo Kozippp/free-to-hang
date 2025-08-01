@@ -630,6 +630,28 @@ const usePlansStore = create<PlansState>((set, get) => ({
         completedPlans: updatePlanArray(state.completedPlans)
       };
     });
+    
+    // Trigger real-time animation by updating the plan's lastUpdatedAt
+    set((state) => {
+      const updatePlanArray = (plans: Plan[]) => {
+        return plans.map(p => {
+          if (p.id === planId) {
+            return {
+              ...p,
+              lastUpdatedAt: new Date().toISOString(),
+              updateType: 'poll_voted' as const
+            };
+          }
+          return p;
+        });
+      };
+      
+      return {
+        invitations: updatePlanArray(state.invitations),
+        activePlans: updatePlanArray(state.activePlans),
+        completedPlans: updatePlanArray(state.completedPlans)
+      };
+    });
   },
   
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => {
@@ -1067,10 +1089,8 @@ function handlePollVoteUpdate(payload: any, currentUserId: string) {
         console.log('🚀 Optimistic real-time vote update for other user');
         voteOnPollOptimistic(plan_id, poll_id, [option_id], user_id);
         
-        // Dispatch custom event to trigger animations
-        if (typeof document !== 'undefined') {
-          document.dispatchEvent(new CustomEvent('pollUpdate'));
-        }
+        // In React Native, we'll trigger animations directly through state updates
+        // No need for document events
       }
     } else {
       loadPlans(currentUserId);
@@ -1079,10 +1099,8 @@ function handlePollVoteUpdate(payload: any, currentUserId: string) {
     console.log('🗳️ Poll vote updated via real-time');
     loadPlans(currentUserId);
     
-    // Dispatch custom event to trigger animations
-    if (typeof document !== 'undefined') {
-      document.dispatchEvent(new CustomEvent('pollUpdate'));
-    }
+    // In React Native, we'll trigger animations directly through state updates
+    // No need for document events
   } else if (payload.eventType === 'DELETE') {
     console.log('🗳️ Poll vote deleted via real-time');
     loadPlans(currentUserId);

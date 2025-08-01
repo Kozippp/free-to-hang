@@ -192,14 +192,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       return () => clearTimeout(timeout);
     };
 
-    // This will be called when real-time updates come in
-    // We'll use a custom event to trigger this
-    const eventListener = () => handleRealTimeUpdate();
-    document.addEventListener('pollUpdate', eventListener);
-    
-    return () => {
-      document.removeEventListener('pollUpdate', eventListener);
-    };
+    // In React Native, we'll use a different approach for real-time updates
+    // The real-time subscription will trigger animations directly
+    // No need for document events in React Native
   }, [polls]);
   
   React.useEffect(() => {
