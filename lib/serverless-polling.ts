@@ -77,7 +77,7 @@ class ServerlessPolling {
     try {
       console.log('🗳️ Voting on poll:', data.poll_id, 'with options:', data.option_ids);
       
-      const { data: stats, error } = await supabase.rpc('vote_on_poll_serverless', {
+      const { data: stats, error } = await supabase.rpc('poll_vote_rpc', {
         p_poll_id: data.poll_id,
         p_option_ids: data.option_ids
       });
