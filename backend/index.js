@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { createServer } = require('http');
+const { WebSocketServer } = require('ws');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -71,6 +73,67 @@ try {
 
 // Make supabase available globally
 global.supabase = supabase;
+
+// WebSocket server for real-time updates
+const wss = new WebSocketServer({ server });
+
+// Store active connections
+const connections = new Map();
+
+// WebSocket connection handling
+wss.on('connection', (ws, req) => {
+  console.log('🔌 New WebSocket connection');
+  
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      console.log('📡 WebSocket message received:', data);
+      
+      if (data.type === 'subscribe') {
+        // Store connection with plan and user info
+        const key = `${data.planId}_${data.userId}`;
+        connections.set(key, ws);
+        console.log('✅ WebSocket subscribed to plan:', data.planId);
+      }
+    } catch (error) {
+      console.error('❌ WebSocket message error:', error);
+    }
+  });
+  
+  ws.on('close', () => {
+    // Remove connection from map
+    for (const [key, connection] of connections.entries()) {
+      if (connection === ws) {
+        connections.delete(key);
+        console.log('🔌 WebSocket connection closed:', key);
+        break;
+      }
+    }
+  });
+  
+  ws.on('error', (error) => {
+    console.error('❌ WebSocket error:', error);
+  });
+});
+
+// Helper function to broadcast to plan participants
+const broadcastToPlan = (planId, message) => {
+  console.log('📢 Broadcasting to plan:', planId, message);
+  
+  for (const [key, ws] of connections.entries()) {
+    if (key.startsWith(planId + '_') && ws.readyState === 1) { // 1 = OPEN
+      try {
+        ws.send(JSON.stringify(message));
+        console.log('✅ Message sent to:', key);
+      } catch (error) {
+        console.error('❌ Failed to send message to:', key, error);
+      }
+    }
+  }
+};
+
+// Make broadcast function available to routes
+app.locals.broadcastToPlan = broadcastToPlan;
 
 // Add request logging middleware
 app.use((req, res, next) => {
