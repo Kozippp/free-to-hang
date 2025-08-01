@@ -102,6 +102,7 @@ interface PlansState {
   // Poll actions - These are now handled via API calls
   // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => void;
+  // Poll voting functions - Now serverless
   voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => void;
   voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => void;
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => void;
@@ -580,15 +581,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.warn('⚠️ addPoll should not be called directly. Use API instead.');
   },
   
+  // Poll voting functions - Now serverless
   voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => {
-    // This function is kept for backward compatibility but should not be used
-    // Poll votes are now submitted via API calls
-    console.warn('⚠️ voteOnPoll should not be called directly. Use API instead.');
+    console.warn('⚠️ voteOnPoll should not be called directly. Use plans-service.ts instead.');
   },
   
-  // Simple optimistic vote update for immediate UI feedback
   voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => {
-    console.log('🚀 Optimistic vote update:', { planId, pollId, optionIds, userId });
+    console.log('🚀 Optimistic vote update (serverless):', { planId, pollId, optionIds, userId });
     
     set((state) => {
       const updatePlanArray = (plans: Plan[]) => {

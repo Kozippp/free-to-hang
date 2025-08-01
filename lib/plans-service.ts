@@ -257,18 +257,24 @@ class PlansService {
     }
   }
 
-  // Vote on poll
+  // Vote on poll - Now serverless
   async voteOnPoll(planId: string, pollId: string, optionIds: string[]): Promise<Plan> {
     try {
-      console.log('🗳️ Voting on poll:', pollId, 'options:', optionIds);
-      const plan = await this.apiRequest(`/plans/${planId}/polls/${pollId}/vote`, {
-        method: 'POST',
-        body: JSON.stringify({ optionIds })
+      console.log('🗳️ Voting on poll (serverless):', pollId, 'options:', optionIds);
+      
+      // Use serverless polling function
+      const { serverlessPolling } = await import('./serverless-polling');
+      await serverlessPolling.voteOnPoll({
+        poll_id: pollId,
+        option_ids: optionIds
       });
-      console.log('✅ Vote submitted successfully');
+      
+      // Return updated plan data
+      const plan = await this.getPlan(planId);
+      console.log('✅ Vote submitted successfully (serverless)');
       return plan;
     } catch (error) {
-      console.error('❌ Error voting on poll:', error);
+      console.error('❌ Error voting on poll (serverless):', error);
       throw error;
     }
   }
