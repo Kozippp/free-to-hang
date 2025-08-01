@@ -212,8 +212,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         isLoading: false
       });
       
-      // Don't trigger animation here - it causes infinite loops
-      // Animations will be triggered by real-time handlers when needed
+      // No need for animation triggers here - real-time will handle it
       
     } catch (error) {
       console.error('❌ Error loading plans:', error);
@@ -578,74 +577,35 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.warn('⚠️ voteOnPoll should not be called directly. Use API instead.');
   },
   
+  // Simple optimistic vote update for immediate UI feedback
   voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => {
     console.log('🚀 Optimistic vote update:', { planId, pollId, optionIds, userId });
     
     set((state) => {
-      // Find the plan in all plan arrays
-      const allPlans = [...state.invitations, ...state.activePlans, ...state.completedPlans];
-      const planIndex = allPlans.findIndex(p => p.id === planId);
-      
-      if (planIndex === -1) {
-        console.warn('⚠️ Plan not found for optimistic update:', planId);
-        return state;
-      }
-      
-      const plan = allPlans[planIndex];
-      const pollIndex = plan.polls?.findIndex(p => p.id === pollId) ?? -1;
-      
-      if (pollIndex === -1) {
-        console.warn('⚠️ Poll not found for optimistic update:', pollId);
-        return state;
-      }
-      
-      // Create updated plan with optimistic vote
-      const updatedPlan = {
-        ...plan,
-        polls: plan.polls?.map((poll, index) => {
-          if (index === pollIndex) {
-            return {
-              ...poll,
-              options: poll.options.map(option => {
-                const hasUserVote = optionIds.includes(option.id);
-                const currentVotes = option.votes.filter(voteId => voteId !== userId);
-                const newVotes = hasUserVote ? [...currentVotes, userId] : currentVotes;
-                
-                return {
-                  ...option,
-                  votes: newVotes
-                };
-              })
-            };
-          }
-          return poll;
-        })
-      };
-      
-      // Update the appropriate plan array
       const updatePlanArray = (plans: Plan[]) => {
-        return plans.map(p => p.id === planId ? updatedPlan : p);
-      };
-      
-      return {
-        invitations: updatePlanArray(state.invitations),
-        activePlans: updatePlanArray(state.activePlans),
-        completedPlans: updatePlanArray(state.completedPlans)
-      };
-    });
-    
-    // Trigger real-time animation by updating the plan's lastUpdatedAt
-    set((state) => {
-      const updatePlanArray = (plans: Plan[]) => {
-        return plans.map(p => {
-          if (p.id === planId) {
-            return {
-              ...p,
-              lastUpdatedAt: new Date().toISOString(),
-              updateType: 'poll_voted' as const
-            };
-          }
-          return p;
+        return plans.map(plan => {
+          if (plan.id !== planId) return plan;
+          
+          return {
+            ...plan,
+            polls: plan.polls?.map(poll => {
+              if (poll.id !== pollId) return poll;
+              
+              return {
+                ...poll,
+                options: poll.options.map(option => {
+                  const hasUserVote = optionIds.includes(option.id);
+                  const currentVotes = option.votes.filter(voteId => voteId !== userId);
+                  const newVotes = hasUserVote ? [...currentVotes, userId] : currentVotes;
+                  
+                  return {
+                    ...option,
+                    votes: newVotes
+                  };
+                })
+              };
+            })
+          };
         });
       };
       
@@ -988,6 +948,16 @@ const usePlansStore = create<PlansState>((set, get) => ({
           } else if (status === 'CHANNEL_ERROR') {
             console.log('❌ Plans real-time channel error');
             isSubscribed = false;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Plans real-time connection timed out, reconnecting...');
+            isSubscribed = false;
+            plansChannel = null;
+            
+            // Auto-reconnect after timeout
+            setTimeout(() => {
+              console.log('🔄 Reconnecting plans real-time...');
+              get().startRealTimeUpdates(userId);
+            }, 2000);
           } else {
             isSubscribed = false;
           }
@@ -1019,24 +989,10 @@ function handlePlanUpdate(payload: any, currentUserId: string) {
     console.log('📝 New plan created via real-time');
     // Reload plans to get the new plan with proper categorization
     loadPlans(currentUserId);
-    
-    // Trigger animation for new plan
-    setTimeout(() => {
-      if (payload.new?.id) {
-        usePlansStore.getState().markPlanUpdated(payload.new.id, 'plan_created');
-      }
-    }, 100);
   } else if (payload.eventType === 'UPDATE') {
     console.log('📝 Plan updated via real-time');
     // Reload plans to get updated data
     loadPlans(currentUserId);
-    
-    // Trigger animation for updated plan
-    setTimeout(() => {
-      if (payload.new?.id) {
-        usePlansStore.getState().markPlanUpdated(payload.new.id, 'plan_updated');
-      }
-    }, 100);
   } else if (payload.eventType === 'DELETE') {
     console.log('🗑️ Plan deleted via real-time');
     // Reload plans to remove deleted plan
@@ -1051,13 +1007,6 @@ function handleParticipantUpdate(payload: any, currentUserId: string) {
   console.log('👥 Plan participant changed via real-time');
   // Reload plans to get updated participant data
   loadPlans(currentUserId);
-  
-  // Trigger animation after data is loaded
-  setTimeout(() => {
-    if (payload.new?.plan_id) {
-      usePlansStore.getState().markPlanUpdated(payload.new.plan_id, 'status_changed');
-    }
-  }, 100);
 }
 
 // Handle real-time plan update notifications
@@ -1100,31 +1049,17 @@ function handlePollUpdate(payload: any, currentUserId: string) {
 
 // Handle real-time poll vote updates
 function handlePollVoteUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
+  const { loadPlans, voteOnPollOptimistic } = usePlansStore.getState();
   
   console.log('🗳️ Poll vote update received:', payload);
   
   if (payload.eventType === 'INSERT') {
     console.log('🗳️ New poll vote via real-time');
-    // Reload plans to get the latest data
+    // Always reload plans to get the latest data
     loadPlans(currentUserId);
-    
-    // Trigger animation after data is loaded
-    setTimeout(() => {
-      if (payload.new?.plan_id) {
-        usePlansStore.getState().markPlanUpdated(payload.new.plan_id, 'poll_voted');
-      }
-    }, 100);
   } else if (payload.eventType === 'UPDATE') {
     console.log('🗳️ Poll vote updated via real-time');
     loadPlans(currentUserId);
-    
-    // Trigger animation after data is loaded
-    setTimeout(() => {
-      if (payload.new?.plan_id) {
-        usePlansStore.getState().markPlanUpdated(payload.new.plan_id, 'poll_voted');
-      }
-    }, 100);
   } else if (payload.eventType === 'DELETE') {
     console.log('🗳️ Poll vote deleted via real-time');
     loadPlans(currentUserId);
