@@ -158,25 +158,24 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     return () => clearInterval(interval);
   }, [processExpiredInvitationPolls]);
 
-  // Track real-time updates for animation
+  // Track real-time updates for animation - only trigger when polls actually change
   React.useEffect(() => {
     const pollIds = polls.map(poll => poll.id);
-    const newRealTimeUpdates = new Set<string>();
+    const currentPollIds = Array.from(realTimeUpdates);
     
-    // Add poll IDs to real-time updates set
-    pollIds.forEach(pollId => {
-      newRealTimeUpdates.add(pollId);
-    });
-    
-    setRealTimeUpdates(newRealTimeUpdates);
-    
-    // Clear real-time update flags after animation
-    const timeout = setTimeout(() => {
-      setRealTimeUpdates(new Set());
-    }, 1000);
-    
-    return () => clearTimeout(timeout);
-  }, [polls]);
+    // Only trigger animation if poll IDs have changed
+    if (JSON.stringify(pollIds.sort()) !== JSON.stringify(currentPollIds.sort())) {
+      const newRealTimeUpdates = new Set<string>(pollIds);
+      setRealTimeUpdates(newRealTimeUpdates);
+      
+      // Clear real-time update flags after animation
+      const timeout = setTimeout(() => {
+        setRealTimeUpdates(new Set());
+      }, 1000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [polls, realTimeUpdates]);
   
   React.useEffect(() => {
     if (highlightNewPlan) {
