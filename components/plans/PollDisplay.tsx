@@ -68,12 +68,15 @@ export default function PollDisplay({
   // Update vote counts when options change (for real-time updates)
   React.useEffect(() => {
     const newCounts: Record<string, number> = {};
+    let hasChanges = false;
+    
     options.forEach(option => {
       const oldCount = voteCounts[option.id] || 0;
-      const newCount = option.votes;
+      const newCount = option.voters.length;
       
       // If vote count increased, trigger +1 animation
       if (newCount > oldCount && isRealTimeUpdate) {
+        hasChanges = true;
         // Trigger a quick pulse animation for the increased vote
         Animated.sequence([
           Animated.timing(animatedValues[option.id], {
@@ -91,8 +94,12 @@ export default function PollDisplay({
       
       newCounts[option.id] = newCount;
     });
-    setVoteCounts(newCounts);
-  }, [options, isRealTimeUpdate, voteCounts, animatedValues]);
+    
+    // Only update if there are actual changes
+    if (hasChanges || JSON.stringify(newCounts) !== JSON.stringify(voteCounts)) {
+      setVoteCounts(newCounts);
+    }
+  }, [options, isRealTimeUpdate, animatedValues]); // Removed voteCounts from dependencies
 
   // Ensure all options have animation values
   React.useEffect(() => {
@@ -103,28 +110,36 @@ export default function PollDisplay({
     });
   }, [options, animatedValues]);
 
-  // Real-time update animation
+  // Real-time update animation - only animate options that actually changed
   React.useEffect(() => {
     if (isRealTimeUpdate) {
-      // Animate all options with a subtle pulse
-      const animations = options.map(option => 
-        Animated.sequence([
-          Animated.timing(animatedValues[option.id], {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(animatedValues[option.id], {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          })
-        ])
-      );
+      // Only animate options that have vote count changes
+      const animations = options.map(option => {
+        const oldCount = voteCounts[option.id] || 0;
+        const newCount = option.voters.length;
+        
+        if (newCount > oldCount && animatedValues[option.id]) {
+          return Animated.sequence([
+            Animated.timing(animatedValues[option.id], {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(animatedValues[option.id], {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            })
+          ]);
+        }
+        return null;
+      }).filter(Boolean);
       
-      Animated.parallel(animations).start();
+      if (animations.length > 0) {
+        Animated.parallel(animations).start();
+      }
     }
-  }, [isRealTimeUpdate, options, animatedValues]);
+  }, [isRealTimeUpdate, options, animatedValues, voteCounts]);
 
   const handleVote = (optionId: string) => {
     if (!canVote) {
@@ -136,7 +151,7 @@ export default function PollDisplay({
       return;
     }
 
-    // Animate the selection only if animation value exists
+    // Animate only the clicked option
     if (animatedValues[optionId]) {
       Animated.sequence([
         Animated.timing(animatedValues[optionId], {
@@ -169,12 +184,12 @@ export default function PollDisplay({
   const totalVoters = getTotalVoters();
   const goingParticipants = Math.max(totalGoingParticipants, totalVoters);
 
-  const getPercentage = (votes: number) => {
-    return totalVoters > 0 ? Math.round((votes / totalVoters) * 100) : 0;
+  const getPercentage = (voters: PollOption['voters']) => {
+    return totalVoters > 0 ? Math.round((voters.length / totalVoters) * 100) : 0;
   };
 
   // Sort options by vote count (descending)
-  const sortedOptions = [...options].sort((a, b) => b.votes - a.votes);
+  const sortedOptions = [...options].sort((a, b) => b.voters.length - a.voters.length);
   
   // Dynamic threshold algorithm for determining winner
   const getWinnerThreshold = () => {
@@ -335,7 +350,7 @@ export default function PollDisplay({
       {/* Vertical options list */}
       <View style={[styles.optionsContainer, hideQuestion && styles.compactOptionsContainer]}>
         {sortedOptions.map((option, index) => {
-          const percentage = getPercentage(option.votes);
+          const percentage = getPercentage(option.voters);
           const isSelected = userVotes.includes(option.id);
           const isWinningOption = isWinning(option.id);
           
@@ -400,7 +415,7 @@ export default function PollDisplay({
                         ]}>
                           {percentage}%
                         </Text>
-                        {isRealTimeUpdate && option.votes > (voteCounts[option.id] || 0) && (
+                        {isRealTimeUpdate && option.voters.length > (voteCounts[option.id] || 0) && (
                           <Animated.View
                             style={[
                               styles.newVoteIndicator,
