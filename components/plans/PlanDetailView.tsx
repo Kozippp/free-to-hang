@@ -149,14 +149,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // }
   }, [plan.id, currentUserStatus]);
 
-  // Process expired invitation polls periodically
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      processExpiredInvitationPolls();
-    }, 5000); // Check every 5 seconds
-    
-    return () => clearInterval(interval);
-  }, [processExpiredInvitationPolls]);
+  // Expired invitation polls are now handled by the backend automatically
+  // No need for client-side polling
 
     // Simple real-time animation trigger
   React.useEffect(() => {

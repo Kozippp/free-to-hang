@@ -937,7 +937,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
           schema: 'public',
           table: 'plan_poll_votes'
         }, (payload) => {
-          console.log('📡 Plan poll votes update:', payload);
+          console.log('🗳️📡 REAL-TIME POLL VOTE UPDATE RECEIVED:', JSON.stringify(payload, null, 2));
           handlePollVoteUpdate(payload, userId);
         })
         .subscribe((status) => {
@@ -1049,19 +1049,23 @@ function handlePollUpdate(payload: any, currentUserId: string) {
 
 // Handle real-time poll vote updates
 function handlePollVoteUpdate(payload: any, currentUserId: string) {
-  const { loadPlans, voteOnPollOptimistic } = usePlansStore.getState();
+  const { loadPlans } = usePlansStore.getState();
   
-  console.log('🗳️ Poll vote update received:', payload);
+  console.log('🗳️ POLL VOTE UPDATE HANDLER CALLED:', {
+    eventType: payload.eventType,
+    new: payload.new,
+    old: payload.old,
+    currentUserId
+  });
   
   if (payload.eventType === 'INSERT') {
-    console.log('🗳️ New poll vote via real-time');
-    // Always reload plans to get the latest data
+    console.log('🗳️ New poll vote via real-time - RELOADING PLANS');
     loadPlans(currentUserId);
   } else if (payload.eventType === 'UPDATE') {
-    console.log('🗳️ Poll vote updated via real-time');
+    console.log('🗳️ Poll vote updated via real-time - RELOADING PLANS');
     loadPlans(currentUserId);
   } else if (payload.eventType === 'DELETE') {
-    console.log('🗳️ Poll vote deleted via real-time');
+    console.log('🗳️ Poll vote deleted via real-time - RELOADING PLANS');
     loadPlans(currentUserId);
   }
 }
