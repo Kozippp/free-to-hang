@@ -182,6 +182,11 @@ export default function PollDisplay({
       ]).start();
     }
 
+    // Notify refresh system about vote activity
+    if ((global as any).onVoteEvent) {
+      (global as any).onVoteEvent();
+    }
+
     onVote(optionId);
   };
 

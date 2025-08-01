@@ -149,17 +149,41 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // }
   }, [plan.id, currentUserStatus]);
 
-  // Manual refresh mechanism to check for updates
+  // Smart refresh mechanism - only when needed
   React.useEffect(() => {
-    // Check for updates every 5 seconds when plan is open
-    const interval = setInterval(() => {
+    let interval: NodeJS.Timeout;
+    let lastVoteTime = 0;
+    
+    const smartRefresh = () => {
+      // Don't refresh if user just voted (within 3 seconds)
+      const timeSinceLastVote = Date.now() - lastVoteTime;
+      if (timeSinceLastVote < 3000) {
+        console.log('⏸️ Skipping refresh - recent vote activity');
+        return;
+      }
+      
       if (user?.id) {
-        console.log('🔄 Manual refresh check for real-time updates...');
+        console.log('🔄 Smart refresh check for updates...');
         loadPlans(user.id);
       }
-    }, 5000); // Every 5 seconds
+    };
     
-    return () => clearInterval(interval);
+    // Start with longer interval (10 seconds) to avoid rate limiting
+    interval = setInterval(smartRefresh, 10000);
+    
+    // Listen for vote events to track when user votes
+    const handleVoteEvent = () => {
+      lastVoteTime = Date.now();
+      console.log('🗳️ Vote detected - pausing refresh for 3 seconds');
+    };
+    
+    // Store vote handler globally for access from poll components
+    (global as any).onVoteEvent = handleVoteEvent;
+    
+    return () => {
+      clearInterval(interval);
+      delete (global as any).onVoteEvent;
+    };
   }, [loadPlans, user?.id]);
 
     // Simple real-time animation trigger

@@ -215,6 +215,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // No need for animation triggers here - real-time will handle it
       
     } catch (error) {
+      // Handle rate limiting gracefully - don't show error to user
+      if (error instanceof Error && error.message === 'RATE_LIMITED') {
+        console.log('⚠️ Rate limited - skipping this refresh cycle');
+        set({ isLoading: false });
+        return; // Silently skip this refresh
+      }
+      
       console.error('❌ Error loading plans:', error);
       set({ isLoading: false });
       // Keep mock data on error for now
