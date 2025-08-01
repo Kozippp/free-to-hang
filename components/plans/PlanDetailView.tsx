@@ -149,7 +149,18 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // }
   }, [plan.id, currentUserStatus]);
 
-  // Real-time updates are handled by the global store subscription
+  // Manual refresh mechanism to check for updates
+  React.useEffect(() => {
+    // Check for updates every 5 seconds when plan is open
+    const interval = setInterval(() => {
+      if (user?.id) {
+        console.log('🔄 Manual refresh check for real-time updates...');
+        loadPlans(user.id);
+      }
+    }, 5000); // Every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, [loadPlans, user?.id]);
 
     // Simple real-time animation trigger
   React.useEffect(() => {
