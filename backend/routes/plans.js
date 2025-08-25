@@ -141,7 +141,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
     let pollOptions = [];
     if (pollIds.length > 0) {
       const { data: optionsData, error: optionsError } = await supabase
-        .from('plan_poll_options')
+        .from('poll_options')
         .select('*')
         .in('poll_id', pollIds)
         .order('option_order', { ascending: true });
@@ -156,7 +156,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
     const optionIds = pollOptions.map(o => o.id);
     if (optionIds.length > 0) {
       const { data: votesData, error: votesError } = await supabase
-        .from('plan_poll_votes')
+        .from('poll_votes')
         .select('*')
         .in('option_id', optionIds);
       
@@ -252,9 +252,9 @@ const getPlanWithDetails = async (planId, userId = null) => {
       
       const transformedPoll = {
         id: poll.id,
-        question: poll.title,
+        question: poll.question || poll.title, // Use question field if available, fallback to title
         type: poll.poll_type,
-        expiresAt: poll.ends_at,
+        expiresAt: poll.expires_at || poll.ends_at, // Use expires_at field if available, fallback to ends_at
         createdBy: pollCreator,
         options: pollOptionsForThisPoll.map(option => {
           const votesForThisOption = pollVotes.filter(v => v.option_id === option.id);
@@ -589,7 +589,7 @@ router.get('/', requireAuth, async (req, res) => {
     let pollVotes = [];
     if (optionIds.length > 0) {
       const { data: votesData, error: votesError } = await supabase
-        .from('plan_poll_votes')
+        .from('poll_votes')
         .select('*')
         .in('option_id', optionIds);
       
@@ -648,9 +648,9 @@ router.get('/', requireAuth, async (req, res) => {
         
         return {
           id: poll.id,
-          question: poll.title,
+          question: poll.question || poll.title, // Use question field if available, fallback to title
           type: poll.poll_type,
-          expiresAt: poll.ends_at,
+          expiresAt: poll.expires_at || poll.ends_at, // Use expires_at field if available, fallback to ends_at
           createdBy: pollCreator,
           options: pollOptionsForThisPoll.map(option => {
             const votesForThisOption = pollVotes.filter(v => v.option_id === option.id);
@@ -998,9 +998,11 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
     const pollData = {
       plan_id: id,
       title: question,
+      question: question, // Add question field for compatibility
       description: `Poll created by user`,
       poll_type: type,
       ends_at: expiresAt,
+      expires_at: expiresAt, // Add expires_at field for compatibility
       created_by: userId
     };
 
@@ -1028,7 +1030,7 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
     }));
 
     const { error: optionsError } = await supabase
-      .from('plan_poll_options')
+      .from('poll_options')
       .insert(optionInserts);
 
     if (optionsError) {
