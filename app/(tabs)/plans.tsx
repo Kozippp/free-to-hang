@@ -13,7 +13,7 @@ import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function PlansScreen() {
-  const [activeTab, setActiveTab] = useState('Invitations');
+  const [activeTab, setActiveTab] = useState('Plan');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -74,9 +74,7 @@ export default function PlansScreen() {
 
       if (newestPlan) {
         // Set the tab based on plan type and creator
-        const targetTab = newestPlan.type === 'anonymous' || newestPlan.creator?.id !== 'current' 
-          ? 'Invitations' 
-          : 'Plan';
+        const targetTab = newestPlan.type === 'anonymous' ? 'Invitations' : 'Plan';
         
         // Animate tab switch for visual feedback
         Animated.timing(tabSwitchAnimation, {
