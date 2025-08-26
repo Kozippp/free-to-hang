@@ -727,6 +727,35 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Title and date are required' });
     }
 
+    // Ensure creator exists in public.users (FK requirement)
+    try {
+      const { data: existingUser, error: existingUserError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (existingUserError && existingUserError.code !== 'PGRST116') {
+        console.warn('⚠️ Error checking existing user:', existingUserError.message);
+      }
+
+      if (!existingUser) {
+        console.log('🆕 Inserting missing user row for creator');
+        const email = req.user.email || 'unknown@example.com';
+        const name = email.split('@')[0];
+        const username = name;
+        const { error: insertUserError } = await supabase
+          .from('users')
+          .insert({ id: userId, email, name, username })
+          .single();
+        if (insertUserError) {
+          console.error('❌ Failed to insert missing user row:', insertUserError);
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Skipping ensure-user step due to error:', e.message);
+    }
+
     // Create plan
     const { data: plan, error: planError } = await supabase
       .from('plans')
