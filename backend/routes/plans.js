@@ -197,13 +197,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
       }
     }
 
-    // Get completion votes
-    const { data: completionVotes, error: completionError } = await supabase
-      .from('plan_completion_votes')
-      .select('user_id')
-      .eq('plan_id', planId);
-
-    if (completionError) throw completionError;
+    // Completion votes deprecated: plans auto-complete after 24h
 
     // Get conditional friends data from plan_updates
     const { data: conditionalUpdates, error: conditionalError } = await supabase
@@ -316,17 +310,11 @@ const getPlanWithDetails = async (planId, userId = null) => {
       };
     });
 
-    // Check if user has voted for completion
-    const userCompletionVote = userId ? 
-      completionVotes.some(vote => vote.user_id === userId) : false;
-
     return {
       ...plan,
       creator: creator,
       participants: transformedParticipants,
       polls: transformedPolls,
-      completionVotes: completionVotes.map(v => v.user_id),
-      userCompletionVote,
       attendance: attendance
     };
   } catch (error) {
@@ -1119,78 +1107,9 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
 });
 
 // POST /plans/:id/complete-vote - Vote for plan completion
+// Deprecated: manual completion voting removed in favor of 24h auto-complete
 router.post('/:id/complete-vote', requireAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    // Check if user is accepted participant
-    const { data: participant, error: participantError } = await supabase
-      .from('plan_participants')
-      .select('status')
-      .eq('plan_id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (participantError || !participant || participant.status !== 'accepted') {
-      return res.status(403).json({ error: 'Only accepted participants can vote for completion' });
-    }
-
-    // Add completion vote
-    const { error: voteError } = await supabase
-      .from('plan_completion_votes')
-      .upsert({
-        plan_id: id,
-        user_id: userId
-      });
-
-    if (voteError) {
-      console.error('Error adding completion vote:', voteError);
-      return res.status(500).json({ error: 'Failed to add completion vote' });
-    }
-
-    // Check if plan should be completed (simplified logic)
-    // Get total accepted participants and completion votes
-    const { data: acceptedParticipants } = await supabase
-      .from('plan_participants')
-      .select('user_id')
-      .eq('plan_id', id)
-      .eq('status', 'accepted');
-
-    const { data: completionVotes } = await supabase
-      .from('plan_completion_votes')
-      .select('user_id')
-      .eq('plan_id', id);
-
-    const totalAccepted = acceptedParticipants?.length || 0;
-    const totalVotes = completionVotes?.length || 0;
-    
-    // Complete if majority of accepted participants voted for completion
-    const shouldComplete = totalAccepted > 0 && totalVotes >= Math.ceil(totalAccepted / 2);
-
-    if (shouldComplete) {
-      // Mark plan as completed
-      const { error: completeError } = await supabase
-        .from('plans')
-        .update({ 
-          status: 'completed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-
-      if (completeError) {
-        console.error('Error completing plan:', completeError);
-      } else {
-        await notifyPlanUpdate(id, 'plan_completed', userId);
-      }
-    }
-
-    const fullPlan = await getPlanWithDetails(id, userId);
-    res.json(fullPlan);
-  } catch (error) {
-    console.error('Error in POST /plans/:id/complete-vote:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  return res.status(410).json({ error: 'Completion voting is deprecated. Plans auto-complete after 24h.' });
 });
 
 // POST /plans/:id/attendance - Update attendance for completed plan

@@ -17,7 +17,7 @@ Dokument on kirjutatud elluviimise jaoks: sisaldab nõudeid (Acceptance Criteria
 
 - **Tavaline plaan (normal)**
   - Looja näeb plaani kohe vaates `Plans → Plan` (aktiivsed plaanid).
-  - Kõik teised kutsutud kasutajad näevad plaani vaates `Plans → Invitations` (kutsed/ooteolek).
+  - Kõik teised kutsutud kasutajad näevad alguses plaani vaates `Plans → Invitations` (kutsed/ooteolek).
   - Looja staatus on automaatselt `going`.
   - Kõigi teiste algstaatus on `pending`.
 
@@ -50,6 +50,9 @@ Staatuse loetelu:
   - Ei saa hääletada.
   - Ei saa chattida.
 
+  Kui kasutaja läheb `pending` -> ,`going`,`maybe`, `conditional`, siis liigub plaan plans->plan alla
+  Kui kasutaja valib `declined`, siiskustub plaan tema vaatest üldse ära
+
 - `going`
   - Võib muuta plaani detaile (pealkiri, kirjeldus jne – täpsustada allpool UI/Fields).
   - Võib luua polle, muuta polle ja hääletada.
@@ -62,7 +65,7 @@ Staatuse loetelu:
   - Ei saa polle luua, muuta ega hääletada.
 
 - `conditional`
-  - Käitub kui ootel tingimus (vt allpool „Conditional loogika”).
+  - Õigused nagu `maybe` staatusel
   - Kui tingimus(ed) täituvad, staatus muutub automaatselt `going`.
 
 - `declined`
@@ -86,9 +89,6 @@ Acceptance Criteria
 - Conditional staatusest muututakse `going`, kui kõik seotud tingimused on täidetud.
 - Aheltingimused on toetatud; keerdjuhul teeme deterministliku korduva hindamise kuni stabiilsuseni.
 
-Avatud küsimused (kinnitada enne implementeerimist)
-- Kas `conditional` staatuses kasutaja tohib chattida? (Praegu eeldame: sama nagu `pending` → ei tohi.)
-- Kas `conditional` võib esitada invitation poll’i? (Praegu eeldame: ei.)
 
 ---
 
@@ -111,7 +111,7 @@ Acceptance Criteria
 ## 5) Pollid
 
 Pollide tüübid:
-1) „When/Where” – eeldefineeritud küsimused (ajal/locationi valik)
+1) „When/Where” – eeldefineeritud küsimused (aja/locationi valik)
 2) „Custom poll” – vaba küsimus kuni 4 valikuga
 3) „Invitation poll” – hääletus, kas kutsuda konkreetne inimene
 
@@ -126,9 +126,16 @@ Pollide tüübid:
 - Hääletada saavad rollid vastavalt õigustele (eeldus: ainult `going`).
 - Võitja määramine: enim hääli kogunud valik; viigi korral kasutatakse tie-breaker algoritmi (täpsustada).
 
-Avatud detailid
-- „Kahe populaarseima lukustamise” täpne algoritm: millal lukustame, millise intervalliga hindame? (nt iga muudatus või perioodiliselt)
-- Tie-breaker: nt „viimase hääle aeg”, „valiku lisamise aeg” või „looja eelistus”.
+Kahe populaarseima lukustamise algoritm (kehtib When/Where küsitlustele)
+- Lukustamist hinnatakse iga muudatuse järel reaalajas (valiku lisamine/muutmine, hääl).
+- Kui osalusmäär < 45% (osalejate ligikaudne hinnang: max(totalVoters*2, 4)), ei lukustata midagi.
+- Sorteeri valikud häälte järgi kahanevalt.
+- Kui valikuid on ≥ 3:
+  - Lukusta TOP2, kui nii 1. kui 2. kohal on rohkem hääli kui 3. kohal.
+  - Muidu, kui 1. koht juhib selgelt (rohkem kui 2. ja 3. kohal), lukusta ainult 1. koht.
+- Kui valikuid on täpselt 2: lukusta 1. koht, kui sellel on rohkem hääli kui 2. kohal.
+- Muidu ei lukustata.
+- Lukus valikuid ei saa muuta ega eemaldada.
 
 ### 5.2 Custom poll
 - Sama loogika mis When/Where, kuid küsimus on muudetav.
@@ -142,23 +149,23 @@ Avatud detailid
 - Otsus: kui 10 minuti lõpus on „Jah” häälteenamus, lisatakse valitud kasutaja plaani osalejaks staatusega `pending`.
 - Reaalajas sündmused: polli loomine, hääletused, taimeri lõpp, kasutaja lisamine plaani.
 
-Avatud detailid
-- Häälteenamuse definitsioon: kas „rohkem kui 50% hääletanutest” või „rohkem kui 50% hääleõiguslikest”? Soovitus: „rohkem kui 50% antud häältest”; viigi korral „Ei”.
-- Hääleõigus: kas ainult `going` või `going` + `maybe`? Soovitus: ainult `going`.
-- Mis juhtub, kui sihtkasutaja on juba plaanis (mistahes staatusega)? Soovitus: keelata invitation poll selle kasutaja kohta.
+Avatud detailidhääletanutest”
+- Häälteenamuse definitsioon: „rohkem kui 50% antud häältest”; viigi korral „Ei”.
+- Hääleõigus: kas ainult `going`
+- Mis juhtub, kui sihtkasutaja on juba plaanis - keelata invitation poll selle kasutaja kohta (seda kasutajat pole seal isegi näha nende seas keda kutsuda)
 
 Acceptance Criteria
 - Polli taimer töötab usaldusväärselt serveri-autoriteediga.
-- Enamuse korral lisatakse kasutaja plaani `pending` staatuses, sündmus levib reaalajas.
+- Enamuse korral lisatakse kasutaja plaani `pending` staatuses, ning sellele kasutajale tuleb plaan plans->invintations tabi
 
 ---
 
 ## 6) Nähtavus vaadetes
 
 Vaated:
-- `Plans → Plan` (aktiivsed plaanid, kus kasutaja on `going`)
-- `Plans → Invitations` (kutsed ja ootel plaanid: `pending`, `maybe`, `conditional`)
-- `Plans → Completed` (lõpetatud plaanid)
+- `Plans → Plan` (aktiivsed plaanid, kus kasutaja on `going`, `maybe`, `conditional`)
+- `Plans → Invitations` (kutsed : `pending`)
+- `Plans → Completed` (lõpetatud plaanid, 24h peale plaani loomist)
 
 Reeglid
 - Tavaline plaan: Looja on `going` → näeb kohe „Plan”; kutsutud on `pending` → näevad „Invitations”.
@@ -176,12 +183,12 @@ Acceptance Criteria
 - Loomise aeg: T+0.
 - Automaatne lõpetamine: T+24h pärast plaani loomist muutub plaan staatuseks „completed”.
 - Completed plaan kolitakse vaatesse `Plans → Completed`.
+- 24h algab loomise hetkest
 
 Acceptance Criteria
 - Plaan lõpetatakse automaatselt 24h järel isegi siis, kui kliendid on offline (server/DB autoriteet). Reaalajas teavitus aktiivsetele klientidele.
 
-Avatud detailid
-- Kas 24h algab loomise hetkest või kinnitatud „When” võitja-ajast? Praegu: loomise hetkest.
+
 
 ---
 
@@ -273,19 +280,23 @@ Serveri/DB autoriteet
 
 ## 12) Avatud küsimused (kinnitada)
 
-- Who-can-vote täpsustus:
-  - When/Where ja Custom: ainult `going`? (soovitus: jah)
-  - Invitation poll: ainult `going` või `going` + `maybe`? (soovitus: ainult `going`)
+- Who-can-vote:
+VASTUS:
+  - When/Where ja Custom: ainult `going`
+  - Invitation poll: ainult `going` 
 
 - Tie-breaker reeglid viigi korral (When/Where, Custom):
-  - Eelistus: deterministlik ja läbipaistev reegel (nt „kõige varem lisatud valik võidab viigi”).
+  - VASTUS: deterministlik ja läbipaistev reegel „kõige varem lisatud valik võidab viigi”
 
 - Top2 lukustamise algoritm (When/Where):
-  - Millal lukustame (iga muudatus vs perioodiline)? Mis teeb valiku „lukus” ja kes ei tohi seda muuta?
+  - Lukustamine toimub reaalajas igal muudatusel; lukus valikuid ei saa muuta ega eemaldada; vaata 5.1 jaotise täpset loogikat.
 
-- Kas looja võib hiljem `decline` teha? Kui jah, kas plaan jääb alles, kui teisi `going` osalejaid on? (soovitus: plaan jääb alles, kui vähemalt 1 `going` osaleja on.)
+- Kas looja võib hiljem `decline` teha? Kui jah, kas plaan jääb alles, kui teisi `going` osalejaid on? (soovitus: plaan jääb alles, kui vähemalt 1 `going` osaleja on.) 
+VASTUS: loojal ei ole eriõigusi, tema on täpselt need õigused, mis tal staatusega kaasa tulevad ning kui ta declineb, siis on see samamoodi nagu kui iga teine osaleja declainiks.
 
-- Kas `conditional` staatuses kasutaja saab chattida? (praegu: ei)
+- Kas `conditional` staatuses kasutaja saab chattida? VASTUS: jah saab, samamoodi nagu maybe
+
+Lisa reegel: conditional väärtus näeb teistele välja nagu maybe. ehk seda conditional väärtust näeb ainult kasutaja ise, et ta on conditional, teistele on ta maybe ja õigused samamoodi nagu maybe. See on nagu triggeriga maybe, ehk kui mingid asjad juhtuvad, siis kasutaja automaatselt muutub maybe-st going staatusesse.
 
 ---
 
