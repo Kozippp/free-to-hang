@@ -267,19 +267,9 @@ class PlansService {
     }
   }
 
-  // Vote for plan completion
+  // Vote for plan completion (deprecated)
   async voteForCompletion(planId: string): Promise<Plan> {
-    try {
-      console.log('✅ Voting for plan completion:', planId);
-      const plan = await this.apiRequest(`/plans/${planId}/complete-vote`, {
-        method: 'POST'
-      });
-      console.log('✅ Completion vote submitted successfully');
-      return plan;
-    } catch (error) {
-      console.error('❌ Error voting for completion:', error);
-      throw error;
-    }
+    throw new Error('Completion voting is deprecated. Plans auto-complete after 24h.');
   }
 
   // Update attendance for completed plan
@@ -395,18 +385,14 @@ class PlansService {
     return participant?.status === 'accepted';
   }
 
-  // Helper to get completion voting status
+  // Helper to get completion voting status (deprecated)
   getCompletionVotingStatus(plan: Plan) {
-    const goingParticipants = plan.participants.filter(p => p.status === 'accepted');
-    const requiredVotes = Math.ceil(0.7 * goingParticipants.length);
-    const currentVotes = plan.completionVotes.length;
-    
     return {
-      currentVotes,
-      requiredVotes: Math.max(requiredVotes, 1),
-      goingParticipants: goingParticipants.length,
-      canComplete: currentVotes >= Math.max(requiredVotes, 1) && goingParticipants.length > 0,
-      percentage: goingParticipants.length > 0 ? Math.round((currentVotes / goingParticipants.length) * 100) : 0
+      currentVotes: 0,
+      requiredVotes: 0,
+      goingParticipants: plan.participants.filter(p => p.status === 'accepted').length,
+      canComplete: false,
+      percentage: 0
     };
   }
 
