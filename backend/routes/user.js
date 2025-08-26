@@ -1,13 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { createClient } = require('@supabase/supabase-js');
 const verifyToken = require('../middleware/verifyToken');
 
-// Supabase ühendus (kasuta olemasolevat või loo uus)
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Use global supabase instance initialised in backend/index.js
+const supabase = global.supabase;
 
 // GET /me
 router.get('/me', verifyToken, async (req, res) => {

@@ -15,17 +15,19 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('🔑 Supabase URL:', process.env.SUPABASE_URL ? 'Configured' : 'Missing');
 console.log('🔑 Supabase Service Role Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Configured' : 'Missing');
 console.log('🔑 Supabase Anon Key:', process.env.SUPABASE_ANON_KEY ? 'Configured' : 'Missing');
+console.log('🔁 Active project:', (process.env.SUPABASE_ACTIVE_PROJECT || 'KOZIPPP').toUpperCase());
 
 // Allow selecting between multiple Supabase projects via SUPABASE_ACTIVE_PROJECT
 const ACTIVE = (process.env.SUPABASE_ACTIVE_PROJECT || 'KOZIPPP').toUpperCase();
 const resolveEnv = (base, fallback) => process.env[base] || process.env[fallback];
 
-const SUPABASE_URL =
-  resolveEnv(`SUPABASE_URL_${ACTIVE}`, 'SUPABASE_URL');
-const SUPABASE_SERVICE_ROLE_KEY =
-  resolveEnv(`SUPABASE_SERVICE_ROLE_KEY_${ACTIVE}`, 'SUPABASE_SERVICE_ROLE_KEY');
-const SUPABASE_ANON_KEY =
-  resolveEnv(`SUPABASE_ANON_KEY_${ACTIVE}`, 'SUPABASE_ANON_KEY');
+const SUPABASE_URL = resolveEnv(`SUPABASE_URL_${ACTIVE}`, 'SUPABASE_URL');
+const SUPABASE_SERVICE_ROLE_KEY = resolveEnv(`SUPABASE_SERVICE_ROLE_KEY_${ACTIVE}`, 'SUPABASE_SERVICE_ROLE_KEY');
+const SUPABASE_ANON_KEY = resolveEnv(`SUPABASE_ANON_KEY_${ACTIVE}`, 'SUPABASE_ANON_KEY');
+
+console.log('🔧 Resolved Supabase URL (active):', SUPABASE_URL ? 'OK' : 'MISSING');
+console.log('🔧 Resolved Service Key (active):', SUPABASE_SERVICE_ROLE_KEY ? 'OK' : 'MISSING');
+console.log('🔧 Resolved Anon Key (active):', SUPABASE_ANON_KEY ? 'OK' : 'MISSING');
 
 // Check for required environment variables
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
