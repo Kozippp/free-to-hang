@@ -746,13 +746,13 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to create plan' });
     }
 
-    // Add creator as participant
+    // Add creator as participant (anonymous plans: creator is pending)
     const { error: participantError } = await supabase
       .from('plan_participants')
       .insert({
         plan_id: plan.id,
         user_id: userId,
-        status: 'accepted'  // Use 'status' field and 'accepted' status
+        status: isAnonymous ? 'pending' : 'accepted'
       });
 
     if (participantError) {

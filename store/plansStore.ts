@@ -114,22 +114,9 @@ interface PlansState {
   
   // Completion actions
   processCompletedPlans: () => void;
-  markPlanAsCompleted: (planId: string) => void;
-  canMarkAsCompleted: (plan: Plan) => boolean;
   restartPlan: (completedPlan: Plan) => Plan;
   
-  // New completion voting functions
-  voteForCompletion: (planId: string, userId: string) => void;
-  removeCompletionVote: (planId: string, userId: string) => void;
-  getCompletionVotingStatus: (plan: Plan) => {
-    votedUsers: string[];
-    requiredVotes: number;
-    requiredVoteWeight: number;
-    requiredMinimumPeople: number;
-    totalVoteWeight: number;
-    hasUserVoted: boolean;
-    isCompleted: boolean;
-  };
+  // Deprecated completion voting removed
   
   // Attendance tracking for completed plans
   updateAttendance: (planId: string, userId: string, attended: boolean) => void;
@@ -257,10 +244,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
         })) : []
       };
       
-      // Add to active plans since creator is auto-accepted
-      set(state => ({
-        activePlans: [...state.activePlans, ensurePlanDefaults(transformedPlan)]
-      }));
+      // Add to correct list: anonymous → invitations; normal → active
+      set(state => {
+        if (transformedPlan.type === 'anonymous') {
+          return { invitations: [...state.invitations, ensurePlanDefaults(transformedPlan)] } as any;
+        }
+        return { activePlans: [...state.activePlans, ensurePlanDefaults(transformedPlan)] } as any;
+      });
       
     } catch (error) {
       console.error('❌ Error creating plan:', error);
@@ -394,7 +384,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         completionVotes: []
       };
       
-      // Anonymous plans always go to invitations (since user didn't create them knowingly)
+      // Anonymous plans always go to invitations (including creator starts as pending)
       if (plan.type === 'anonymous') {
         return {
           invitations: [planWithDefaults, ...state.invitations], // Add to top
@@ -403,7 +393,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         };
       }
       
-      // If the plan is created by the current user, add it to activePlans
+      // If the plan is created by the current user and is normal, add it to activePlans
       if (plan.creator?.id === 'current') {
         return {
           invitations: state.invitations,
