@@ -12,9 +12,10 @@ export interface UploadResult {
  * Upload an image to Supabase Storage
  */
 export async function uploadImage(
-  uri: string, 
-  bucket: string = 'avatars', 
-  folder: string = 'profiles'
+  uri: string,
+  bucket: string = 'avatars',
+  folder: string = 'profiles',
+  onProgress?: (progressPercent: number) => void
 ): Promise<UploadResult> {
   try {
     // Get current user
@@ -45,26 +46,41 @@ export async function uploadImage(
       const backendUrl = `${API_URL}/storage/avatar`;
       console.log('Attempting upload via backend to:', backendUrl);
 
-      const uploadResponse = await fetch(backendUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: formData,
+      // Use XMLHttpRequest for progress events
+      const result: UploadResult = await new Promise((resolve, reject) => {
+        try {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', backendUrl);
+          xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
+          if (xhr.upload && onProgress) {
+            xhr.upload.onprogress = (event: any) => {
+              if (event.lengthComputable) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                onProgress(percent);
+              }
+            };
+          }
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const json = JSON.parse(xhr.responseText);
+                resolve({ url: json.url, path: json.path });
+              } catch (e) {
+                reject(e);
+              }
+            } else {
+              reject(new Error(`Upload failed ${xhr.status}: ${xhr.responseText}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.send(formData as any);
+        } catch (e) {
+          reject(e);
+        }
       });
 
-      if (uploadResponse.ok) {
-        const json = await uploadResponse.json();
-        console.log('Upload successful via backend');
-        return {
-          url: json.url,
-          path: json.path,
-        };
-      } else {
-        const errorText = await uploadResponse.text();
-        console.log('REST API upload failed, trying fallback method:', errorText);
-        throw new Error(`REST API failed: ${uploadResponse.status}`);
-      }
+      console.log('Upload successful via backend');
+      return result;
     } catch (restError) {
       console.log('REST API method failed, trying Supabase client method:', restError);
       

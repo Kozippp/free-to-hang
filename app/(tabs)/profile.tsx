@@ -150,6 +150,7 @@ export default function ProfileScreen() {
   const [editBio, setEditBio] = useState(userProfile.bio);
   const [editEmail, setEditEmail] = useState(userProfile.email);
   const [editAvatar, setEditAvatar] = useState(userProfile.avatar);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   
   // Username validation states for edit profile
   const [originalUsername, setOriginalUsername] = useState('');
@@ -401,8 +402,8 @@ export default function ProfileScreen() {
               console.log('New avatar selected from camera:', asset.uri);
               
               try {
-                // Upload to storage first
-                const uploadResult = await uploadImage(asset.uri);
+                setUploadProgress(0);
+                const uploadResult = await uploadImage(asset.uri, 'avatars', 'profiles', (p) => setUploadProgress(p));
                 const avatarUrl = uploadResult.url;
                 console.log('Avatar uploaded successfully:', avatarUrl);
                 
@@ -411,6 +412,8 @@ export default function ProfileScreen() {
                 console.error('Upload error:', error);
                 Alert.alert('Upload Error', 'Failed to upload image. Please try again.');
                 return;
+              } finally {
+                setUploadProgress(null);
               }
             }
           }
@@ -436,8 +439,8 @@ export default function ProfileScreen() {
               console.log('New avatar selected from gallery:', asset.uri);
               
               try {
-                // Upload to storage first
-                const uploadResult = await uploadImage(asset.uri);
+                setUploadProgress(0);
+                const uploadResult = await uploadImage(asset.uri, 'avatars', 'profiles', (p) => setUploadProgress(p));
                 const avatarUrl = uploadResult.url;
                 console.log('Avatar uploaded successfully:', avatarUrl);
                 
@@ -446,6 +449,8 @@ export default function ProfileScreen() {
                 console.error('Upload error:', error);
                 Alert.alert('Upload Error', 'Failed to upload image. Please try again.');
                 return;
+              } finally {
+                setUploadProgress(null);
               }
             }
           }
@@ -882,6 +887,11 @@ export default function ProfileScreen() {
                     style={styles.editProfileImage} 
                     key={editAvatar}
                   />
+                  {uploadProgress !== null && (
+                    <View style={styles.uploadOverlay}>
+                      <Text style={styles.uploadText}>{uploadProgress}%</Text>
+                    </View>
+                  )}
                   <View style={styles.cameraOverlay}>
                     <Camera size={20} color="white" />
                   </View>
@@ -1446,6 +1456,22 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     backgroundColor: Colors.light.buttonBackground,
+  },
+  uploadOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 18,
   },
   cameraOverlay: {
     position: 'absolute',
