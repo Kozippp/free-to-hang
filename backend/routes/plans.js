@@ -756,21 +756,51 @@ router.post('/', requireAuth, async (req, res) => {
       console.warn('⚠️ Skipping ensure-user step due to error:', e.message);
     }
 
-    // Create plan
-    const { data: plan, error: planError } = await supabase
-      .from('plans')
-      .insert({
-        title,
-        description,
-        location,
-        date,
-        is_anonymous: isAnonymous,
-        creator_id: userId
-      })
-      .select()
-      .single();
+    // Create plan with schema fallback (is_anonymous vs is_private)
+    let plan = null;
+    let planError = null;
+    try {
+      const resp = await supabase
+        .from('plans')
+        .insert({
+          title,
+          description,
+          location,
+          date,
+          is_anonymous: isAnonymous,
+          creator_id: userId
+        })
+        .select()
+        .single();
+      plan = resp.data;
+      planError = resp.error;
+    } catch (e) {
+      planError = e;
+    }
 
+    // Retry with legacy column name if needed
     if (planError) {
+      const needsLegacy = (planError.message && planError.message.includes("is_anonymous")) || planError.code === 'PGRST204';
+      if (needsLegacy) {
+        console.log('🔁 Retrying plan insert with legacy column is_private');
+        const { data: planLegacy, error: legacyError } = await supabase
+          .from('plans')
+          .insert({
+            title,
+            description,
+            location,
+            date,
+            is_private: isAnonymous,
+            creator_id: userId
+          })
+          .select()
+          .single();
+        plan = planLegacy;
+        planError = legacyError;
+      }
+    }
+
+    if (planError || !plan) {
       console.error('Error creating plan:', planError);
       return res.status(500).json({ error: 'Failed to create plan' });
     }
