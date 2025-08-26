@@ -116,15 +116,25 @@ const useHangStore = create<HangState>()(
           }
         });
         
-        // Update status in database using our new function
+        // Update status in database directly on users table (no RPC)
         try {
           const { data: { user: authUser } } = await supabase.auth.getUser();
           if (authUser) {
-            const { data, error } = await supabase.rpc('update_user_status', {
-              user_id: authUser.id,
-              new_status: newStatus ? 'available' : 'offline',
-              activity: newStatus && currentActivity ? currentActivity : null
-            });
+            const nextStatus = newStatus ? 'available' as const : 'offline' as const;
+            const nextActivity = newStatus && currentActivity ? currentActivity : null;
+
+            const { data, error } = await supabase
+              .from('users')
+              .update({
+                status: nextStatus,
+                current_activity: nextActivity,
+                status_changed_at: new Date().toISOString(),
+                // when going offline, capture last seen
+                last_seen_at: !newStatus ? new Date().toISOString() : null,
+              })
+              .eq('id', authUser.id)
+              .select()
+              .maybeSingle();
             
             if (error) {
               console.error('Error updating status in database:', error);
@@ -137,10 +147,7 @@ const useHangStore = create<HangState>()(
                 }
               });
             } else {
-              console.log('Status updated in database:', newStatus ? 'available' : 'offline');
-              if (currentActivity && newStatus) {
-                console.log('Activity set:', currentActivity);
-              }
+              console.log('Status updated in database:', nextStatus, 'activity:', nextActivity ?? '-');
             }
           }
         } catch (error) {
