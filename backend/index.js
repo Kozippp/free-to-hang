@@ -85,6 +85,34 @@ try {
 // Make supabase available globally
 global.supabase = supabase;
 
+// Ensure required storage bucket exists (best-effort, idempotent)
+async function ensureStorageSetup() {
+  if (!supabase) return;
+  try {
+    const { data: bucket, error: getError } = await supabase.storage.getBucket('avatars');
+    if (getError) {
+      console.log('ℹ️ getBucket error (continuing):', getError.message);
+    }
+    if (!bucket) {
+      console.log('🪣 Creating avatars bucket');
+      const { error: createError } = await supabase.storage.createBucket('avatars', {
+        public: true,
+        fileSizeLimit: 5 * 1024 * 1024,
+        allowedMimeTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+      });
+      if (createError) {
+        console.log('ℹ️ Could not create avatars bucket:', createError.message);
+      } else {
+        console.log('✅ Avatars bucket ensured');
+      }
+    }
+  } catch (e) {
+    console.log('ℹ️ Bucket ensure skipped (best-effort):', e.message);
+  }
+}
+
+ensureStorageSetup();
+
 // Add request logging middleware
 app.use((req, res, next) => {
   console.log(`📡 ${req.method} ${req.path} - ${new Date().toISOString()}`);
