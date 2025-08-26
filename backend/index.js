@@ -16,16 +16,27 @@ console.log('🔑 Supabase URL:', process.env.SUPABASE_URL ? 'Configured' : 'Mis
 console.log('🔑 Supabase Service Role Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Configured' : 'Missing');
 console.log('🔑 Supabase Anon Key:', process.env.SUPABASE_ANON_KEY ? 'Configured' : 'Missing');
 
+// Allow selecting between multiple Supabase projects via SUPABASE_ACTIVE_PROJECT
+const ACTIVE = (process.env.SUPABASE_ACTIVE_PROJECT || 'KOZIPPP').toUpperCase();
+const resolveEnv = (base, fallback) => process.env[base] || process.env[fallback];
+
+const SUPABASE_URL =
+  resolveEnv(`SUPABASE_URL_${ACTIVE}`, 'SUPABASE_URL');
+const SUPABASE_SERVICE_ROLE_KEY =
+  resolveEnv(`SUPABASE_SERVICE_ROLE_KEY_${ACTIVE}`, 'SUPABASE_SERVICE_ROLE_KEY');
+const SUPABASE_ANON_KEY =
+  resolveEnv(`SUPABASE_ANON_KEY_${ACTIVE}`, 'SUPABASE_ANON_KEY');
+
 // Check for required environment variables
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('❌ Missing required environment variables:');
-  if (!process.env.SUPABASE_URL) console.error('   - SUPABASE_URL');
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) console.error('   - SUPABASE_SERVICE_ROLE_KEY');
+  if (!SUPABASE_URL) console.error('   - SUPABASE_URL or SUPABASE_URL_' + ACTIVE);
+  if (!SUPABASE_SERVICE_ROLE_KEY) console.error('   - SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY_' + ACTIVE);
   console.error('🚨 Server will start but Supabase functionality will be disabled');
 }
 
 // Check for JWT validation key
-if (!process.env.SUPABASE_ANON_KEY) {
+if (!SUPABASE_ANON_KEY) {
   console.warn('⚠️ SUPABASE_ANON_KEY not found, using hardcoded fallback for JWT validation');
 }
 
@@ -56,10 +67,10 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // Supabase client with error handling
 let supabase = null;
 try {
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
     supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY
     );
     console.log('✅ Supabase client initialized');
   } else {
