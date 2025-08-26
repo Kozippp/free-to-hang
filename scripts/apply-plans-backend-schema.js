@@ -58,19 +58,7 @@ async function applyPlansBackendSchema() {
       `
     });
 
-    // 4. Create plan_completion_votes table
-    console.log('✅ Creating plan_completion_votes table...');
-    await supabase.rpc('exec_sql', {
-      sql: `
-        CREATE TABLE IF NOT EXISTS plan_completion_votes (
-          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          plan_id UUID REFERENCES plans(id) ON DELETE CASCADE NOT NULL,
-          user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          UNIQUE(plan_id, user_id) -- User can vote once per plan
-        );
-      `
-    });
+    // 4. (REMOVED) plan_completion_votes table deprecated
 
     // 5. Create plan_attendance table
     console.log('📋 Creating plan_attendance table...');
@@ -112,7 +100,6 @@ async function applyPlansBackendSchema() {
         CREATE INDEX IF NOT EXISTS idx_plan_poll_options_poll_id ON plan_poll_options(poll_id);
         CREATE INDEX IF NOT EXISTS idx_plan_poll_votes_poll_id ON plan_poll_votes(poll_id);
         CREATE INDEX IF NOT EXISTS idx_plan_poll_votes_user_id ON plan_poll_votes(user_id);
-        CREATE INDEX IF NOT EXISTS idx_plan_completion_votes_plan_id ON plan_completion_votes(plan_id);
         CREATE INDEX IF NOT EXISTS idx_plan_attendance_plan_id ON plan_attendance(plan_id);
         CREATE INDEX IF NOT EXISTS idx_plan_updates_plan_id ON plan_updates(plan_id);
         CREATE INDEX IF NOT EXISTS idx_plan_updates_created_at ON plan_updates(created_at);
@@ -126,7 +113,6 @@ async function applyPlansBackendSchema() {
         ALTER TABLE plan_polls ENABLE ROW LEVEL SECURITY;
         ALTER TABLE plan_poll_options ENABLE ROW LEVEL SECURITY;
         ALTER TABLE plan_poll_votes ENABLE ROW LEVEL SECURITY;
-        ALTER TABLE plan_completion_votes ENABLE ROW LEVEL SECURITY;
         ALTER TABLE plan_attendance ENABLE ROW LEVEL SECURITY;
         ALTER TABLE plan_updates ENABLE ROW LEVEL SECURITY;
       `
@@ -196,20 +182,7 @@ async function applyPlansBackendSchema() {
           user_id = auth.uid()
         );
 
-        -- Completion votes policies
-        DROP POLICY IF EXISTS "Users can view completion votes" ON plan_completion_votes;
-        CREATE POLICY "Users can view completion votes" ON plan_completion_votes FOR SELECT USING (
-          plan_id IN (
-            SELECT id FROM plans WHERE 
-            creator_id = auth.uid() OR 
-            id IN (SELECT plan_id FROM plan_participants WHERE user_id = auth.uid())
-          )
-        );
-
-        DROP POLICY IF EXISTS "Users can manage their completion votes" ON plan_completion_votes;
-        CREATE POLICY "Users can manage their completion votes" ON plan_completion_votes FOR ALL USING (
-          user_id = auth.uid()
-        );
+        -- Completion votes deprecated
 
         -- Attendance policies
         DROP POLICY IF EXISTS "Users can view plan attendance" ON plan_attendance;
@@ -246,8 +219,7 @@ async function applyPlansBackendSchema() {
         DROP POLICY IF EXISTS "Service role can manage all poll votes" ON plan_poll_votes;
         CREATE POLICY "Service role can manage all poll votes" ON plan_poll_votes FOR ALL USING (auth.uid() IS NULL);
         
-        DROP POLICY IF EXISTS "Service role can manage all completion votes" ON plan_completion_votes;
-        CREATE POLICY "Service role can manage all completion votes" ON plan_completion_votes FOR ALL USING (auth.uid() IS NULL);
+        -- Completion votes deprecated
         
         DROP POLICY IF EXISTS "Service role can manage all attendance" ON plan_attendance;
         CREATE POLICY "Service role can manage all attendance" ON plan_attendance FOR ALL USING (auth.uid() IS NULL);

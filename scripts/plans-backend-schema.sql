@@ -32,15 +32,6 @@ CREATE TABLE poll_votes (
   UNIQUE(poll_id, option_id, user_id) -- User can vote once per option per poll
 );
 
--- Plan completion votes table
-CREATE TABLE plan_completion_votes (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  plan_id UUID REFERENCES plans(id) ON DELETE CASCADE NOT NULL,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(plan_id, user_id) -- User can vote once per plan
-);
-
 -- Plan attendance tracking (for completed plans)
 CREATE TABLE plan_attendance (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -68,7 +59,6 @@ CREATE INDEX idx_plan_polls_expires_at ON plan_polls(expires_at) WHERE expires_a
 CREATE INDEX idx_poll_options_poll_id ON poll_options(poll_id);
 CREATE INDEX idx_poll_votes_poll_id ON poll_votes(poll_id);
 CREATE INDEX idx_poll_votes_user_id ON poll_votes(user_id);
-CREATE INDEX idx_plan_completion_votes_plan_id ON plan_completion_votes(plan_id);
 CREATE INDEX idx_plan_attendance_plan_id ON plan_attendance(plan_id);
 CREATE INDEX idx_plan_updates_plan_id ON plan_updates(plan_id);
 CREATE INDEX idx_plan_updates_created_at ON plan_updates(created_at);
@@ -134,21 +124,6 @@ CREATE POLICY "Users can manage their own votes" ON poll_votes FOR ALL USING (
   user_id = auth.uid()
 );
 
--- Plan completion votes
-ALTER TABLE plan_completion_votes ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view completion votes" ON plan_completion_votes FOR SELECT USING (
-  plan_id IN (
-    SELECT id FROM plans WHERE 
-    creator_id = auth.uid() OR 
-    id IN (SELECT plan_id FROM plan_participants WHERE user_id = auth.uid())
-  )
-);
-
-CREATE POLICY "Users can manage their completion votes" ON plan_completion_votes FOR ALL USING (
-  user_id = auth.uid()
-);
-
 -- Plan attendance
 ALTER TABLE plan_attendance ENABLE ROW LEVEL SECURITY;
 
@@ -179,7 +154,6 @@ CREATE POLICY "Users can view plan updates" ON plan_updates FOR SELECT USING (
 CREATE POLICY "Service role can manage all plan data" ON plan_polls FOR ALL USING (auth.uid() IS NULL);
 CREATE POLICY "Service role can manage all poll options" ON poll_options FOR ALL USING (auth.uid() IS NULL);
 CREATE POLICY "Service role can manage all poll votes" ON poll_votes FOR ALL USING (auth.uid() IS NULL);
-CREATE POLICY "Service role can manage all completion votes" ON plan_completion_votes FOR ALL USING (auth.uid() IS NULL);
 CREATE POLICY "Service role can manage all attendance" ON plan_attendance FOR ALL USING (auth.uid() IS NULL);
 CREATE POLICY "Service role can manage all plan updates" ON plan_updates FOR ALL USING (auth.uid() IS NULL);
 
@@ -282,38 +256,14 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to check if plan should be completed
-CREATE OR REPLACE FUNCTION check_plan_completion(plan_id_param UUID)
-RETURNS BOOLEAN AS $$
-DECLARE
-  going_count INTEGER;
-  completion_votes INTEGER;
-  required_votes INTEGER;
-BEGIN
-  -- Count going participants
-  SELECT COUNT(*) INTO going_count
-  FROM plan_participants
-  WHERE plan_id = plan_id_param AND response = 'accepted';
-  
-  -- Count completion votes
-  SELECT COUNT(*) INTO completion_votes
-  FROM plan_completion_votes
-  WHERE plan_id = plan_id_param;
-  
-  -- Calculate required votes (70% of going participants, minimum 1)
-  required_votes := GREATEST(CEIL(0.7 * going_count), 1);
-  
-  RETURN completion_votes >= required_votes AND going_count > 0;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Function to automatically complete plans
+-- Function to automatically complete plans after 24 hours from creation
 CREATE OR REPLACE FUNCTION auto_complete_plans()
 RETURNS VOID AS $$
 BEGIN
   UPDATE plans 
   SET status = 'completed', updated_at = NOW()
-  WHERE status = 'active' 
-    AND check_plan_completion(id) = true;
+  WHERE status = 'active'
+    AND created_at <= NOW() - INTERVAL '24 hours';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

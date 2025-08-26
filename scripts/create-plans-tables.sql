@@ -34,16 +34,7 @@ CREATE TABLE IF NOT EXISTS plan_poll_votes (
   UNIQUE(poll_id, option_id, user_id)
 );
 
--- 4. Create plan_completion_votes table
-CREATE TABLE IF NOT EXISTS plan_completion_votes (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  plan_id UUID REFERENCES plans(id) ON DELETE CASCADE NOT NULL,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(plan_id, user_id)
-);
-
--- 5. Create plan_attendance table
+-- 4. Create plan_attendance table
 CREATE TABLE IF NOT EXISTS plan_attendance (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   plan_id UUID REFERENCES plans(id) ON DELETE CASCADE NOT NULL,
@@ -70,7 +61,6 @@ CREATE INDEX IF NOT EXISTS idx_plan_polls_expires_at ON plan_polls(ends_at) WHER
 CREATE INDEX IF NOT EXISTS idx_plan_poll_options_poll_id ON plan_poll_options(poll_id);
 CREATE INDEX IF NOT EXISTS idx_plan_poll_votes_poll_id ON plan_poll_votes(poll_id);
 CREATE INDEX IF NOT EXISTS idx_plan_poll_votes_user_id ON plan_poll_votes(user_id);
-CREATE INDEX IF NOT EXISTS idx_plan_completion_votes_plan_id ON plan_completion_votes(plan_id);
 CREATE INDEX IF NOT EXISTS idx_plan_attendance_plan_id ON plan_attendance(plan_id);
 CREATE INDEX IF NOT EXISTS idx_plan_updates_plan_id ON plan_updates(plan_id);
 CREATE INDEX IF NOT EXISTS idx_plan_updates_created_at ON plan_updates(created_at);
@@ -79,7 +69,6 @@ CREATE INDEX IF NOT EXISTS idx_plan_updates_created_at ON plan_updates(created_a
 ALTER TABLE plan_polls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_poll_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_poll_votes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE plan_completion_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_updates ENABLE ROW LEVEL SECURITY;
 
@@ -94,8 +83,6 @@ CREATE POLICY "Service role can manage all poll options" ON plan_poll_options FO
 DROP POLICY IF EXISTS "Service role can manage all poll votes" ON plan_poll_votes;
 CREATE POLICY "Service role can manage all poll votes" ON plan_poll_votes FOR ALL USING (auth.uid() IS NULL);
 
-DROP POLICY IF EXISTS "Service role can manage all completion votes" ON plan_completion_votes;
-CREATE POLICY "Service role can manage all completion votes" ON plan_completion_votes FOR ALL USING (auth.uid() IS NULL);
 
 DROP POLICY IF EXISTS "Service role can manage all attendance" ON plan_attendance;
 CREATE POLICY "Service role can manage all attendance" ON plan_attendance FOR ALL USING (auth.uid() IS NULL);

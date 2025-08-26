@@ -86,25 +86,7 @@ async function applyPlansSchema() {
       console.log('✅ plan_poll_votes table created');
     }
 
-    // 4. Create plan_completion_votes table
-    console.log('✅ Creating plan_completion_votes table...');
-    const { error: completionError } = await supabase.rpc('exec_sql', {
-      sql: `
-        CREATE TABLE IF NOT EXISTS plan_completion_votes (
-          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          plan_id UUID REFERENCES plans(id) ON DELETE CASCADE NOT NULL,
-          user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          UNIQUE(plan_id, user_id)
-        );
-      `
-    });
-
-    if (completionError) {
-      console.error('❌ Error creating plan_completion_votes:', completionError);
-    } else {
-      console.log('✅ plan_completion_votes table created');
-    }
+    // 4. (REMOVED) plan_completion_votes table deprecated
 
     // 5. Create plan_attendance table
     console.log('📋 Creating plan_attendance table...');
@@ -157,7 +139,6 @@ async function applyPlansSchema() {
         CREATE INDEX IF NOT EXISTS idx_plan_poll_options_poll_id ON plan_poll_options(poll_id);
         CREATE INDEX IF NOT EXISTS idx_plan_poll_votes_poll_id ON plan_poll_votes(poll_id);
         CREATE INDEX IF NOT EXISTS idx_plan_poll_votes_user_id ON plan_poll_votes(user_id);
-        CREATE INDEX IF NOT EXISTS idx_plan_completion_votes_plan_id ON plan_completion_votes(plan_id);
         CREATE INDEX IF NOT EXISTS idx_plan_attendance_plan_id ON plan_attendance(plan_id);
         CREATE INDEX IF NOT EXISTS idx_plan_updates_plan_id ON plan_updates(plan_id);
       `
@@ -176,7 +157,6 @@ async function applyPlansSchema() {
         ALTER TABLE plan_polls ENABLE ROW LEVEL SECURITY;
         ALTER TABLE plan_poll_options ENABLE ROW LEVEL SECURITY;
         ALTER TABLE plan_poll_votes ENABLE ROW LEVEL SECURITY;
-        ALTER TABLE plan_completion_votes ENABLE ROW LEVEL SECURITY;
         ALTER TABLE plan_attendance ENABLE ROW LEVEL SECURITY;
         ALTER TABLE plan_updates ENABLE ROW LEVEL SECURITY;
       `
@@ -201,9 +181,6 @@ async function applyPlansSchema() {
         
         DROP POLICY IF EXISTS "Service role can manage all poll votes" ON plan_poll_votes;
         CREATE POLICY "Service role can manage all poll votes" ON plan_poll_votes FOR ALL USING (auth.uid() IS NULL);
-        
-        DROP POLICY IF EXISTS "Service role can manage all completion votes" ON plan_completion_votes;
-        CREATE POLICY "Service role can manage all completion votes" ON plan_completion_votes FOR ALL USING (auth.uid() IS NULL);
         
         DROP POLICY IF EXISTS "Service role can manage all attendance" ON plan_attendance;
         CREATE POLICY "Service role can manage all attendance" ON plan_attendance FOR ALL USING (auth.uid() IS NULL);
