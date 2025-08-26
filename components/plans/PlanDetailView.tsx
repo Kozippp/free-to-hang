@@ -942,7 +942,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       >
         <View style={styles.confirmationOverlay}>
           <View style={styles.confirmationModal}>
-            <CheckCircle size={36} color={Colors.light.onlineGreen} style={styles.confirmationIcon} />
+            <Check size={36} color={Colors.light.onlineGreen} style={styles.confirmationIcon} />
             <Text style={styles.confirmationTitle}>Your status is set to</Text>
             <Text style={styles.confirmationStatus}>{confirmationMessage}</Text>
             <Text style={styles.confirmationSubtext}>You can find this plan in the Plans tab.</Text>
