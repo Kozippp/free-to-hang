@@ -1,4 +1,5 @@
 import { supabase, SUPABASE_URL } from './supabase';
+import { API_URL } from '../constants/config';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 
@@ -29,7 +30,7 @@ export async function uploadImage(
 
     console.log('Uploading image:', { filePath, fileName, type: `image/${fileExt}`, uri });
 
-    // Try method 1: Direct REST API with FormData (preferred for React Native)
+    // Try method 1: Upload via our backend (handles bucket + auth reliably)
     try {
       const formData = new FormData();
       formData.append('file', {
@@ -39,34 +40,25 @@ export async function uploadImage(
       } as any);
 
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('No active session');
-      }
+      if (!session) throw new Error('No active session');
 
-      const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${bucket}/${filePath}`;
+      const backendUrl = `${API_URL}/storage/avatar`;
+      console.log('Attempting upload via backend to:', backendUrl);
 
-      console.log('Attempting upload to:', uploadUrl);
-
-      const uploadResponse = await fetch(uploadUrl, {
+      const uploadResponse = await fetch(backendUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
-          'x-upsert': 'true'
         },
         body: formData,
       });
 
       if (uploadResponse.ok) {
-        console.log('Upload successful via REST API');
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from(bucket)
-          .getPublicUrl(filePath);
-
-        console.log('Image uploaded successfully:', publicUrl);
+        const json = await uploadResponse.json();
+        console.log('Upload successful via backend');
         return {
-          url: publicUrl,
-          path: filePath
+          url: json.url,
+          path: json.path,
         };
       } else {
         const errorText = await uploadResponse.text();
