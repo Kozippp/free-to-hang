@@ -251,6 +251,22 @@ class PlansService {
     }
   }
 
+  // Create plan
+  async createPlan(body: { title: string; description?: string; location?: string; date: string; isAnonymous?: boolean; invitedFriends?: string[]; }): Promise<Plan> {
+    try {
+      console.log('📝 Creating plan via backend:', body);
+      const plan = await this.apiRequest(`/plans`, {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+      console.log('✅ Plan created via backend');
+      return plan;
+    } catch (error) {
+      console.error('❌ Error creating plan:', error);
+      throw error;
+    }
+  }
+
   // Vote on poll
   async voteOnPoll(planId: string, pollId: string, optionIds: string[]): Promise<Plan> {
     try {
