@@ -827,9 +827,7 @@ router.post('/', requireAuth, async (req, res) => {
       }
     }
 
-    if (participantError) {
-      console.error('Error adding creator as participant:', participantError);
-    }
+    // participantError block removed (legacy variable)
 
     // Add invited friends as participants
     if (invitedFriends.length > 0) {
