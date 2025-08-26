@@ -244,12 +244,19 @@ const usePlansStore = create<PlansState>((set, get) => ({
         })) : []
       };
       
-      // Add to correct list: anonymous → invitations; normal → active
+      // Add to correct list per spec:
+      // - Anonymous → invitations (including creator)
+      // - Normal   → active (creator auto-accepted)
       set(state => {
-        if (transformedPlan.type === 'anonymous') {
-          return { invitations: [...state.invitations, ensurePlanDefaults(transformedPlan)] } as any;
+        const planWithDefaults = ensurePlanDefaults(transformedPlan);
+        if (planWithDefaults.type === 'anonymous') {
+          return { 
+            invitations: [planWithDefaults, ...state.invitations]
+          } as any;
         }
-        return { activePlans: [...state.activePlans, ensurePlanDefaults(transformedPlan)] } as any;
+        return { 
+          activePlans: [planWithDefaults, ...state.activePlans]
+        } as any;
       });
       
     } catch (error) {

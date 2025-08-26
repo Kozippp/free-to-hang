@@ -304,7 +304,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
         id: p.user_id,
         name: user?.name || 'Unknown',
         avatar: user?.avatar_url,
-        status: actualStatus,
+        status: actualStatus || p.status || p.response,
         conditionalFriends: conditionalFriends,
         joinedAt: p.created_at
       };
@@ -883,7 +883,8 @@ router.post('/', requireAuth, async (req, res) => {
     // Get full plan details to return
     const fullPlan = await getPlanWithDetails(plan.id, userId);
     
-    // Notify plan creation
+    // Notify plan creation and visibility updates
+    await notifyPlanUpdate(plan.id, 'poll_created', userId, { event: 'plan_created' });
     await notifyPlanUpdate(plan.id, 'participant_joined', userId);
 
     res.status(201).json(fullPlan);
