@@ -735,7 +735,7 @@ router.post('/', requireAuth, async (req, res) => {
         description,
         location,
         date,
-        is_private: isAnonymous,
+        is_anonymous: isAnonymous,
         creator_id: userId
       })
       .select()
@@ -747,13 +747,33 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     // Add creator as participant (anonymous plans: creator is pending)
-    const { error: participantError } = await supabase
-      .from('plan_participants')
-      .insert({
-        plan_id: plan.id,
-        user_id: userId,
-        status: isAnonymous ? 'pending' : 'accepted'
-      });
+    let participantError = null;
+    try {
+      const { error } = await supabase
+        .from('plan_participants')
+        .insert({
+          plan_id: plan.id,
+          user_id: userId,
+          status: isAnonymous ? 'pending' : 'accepted'
+        });
+      participantError = error;
+    } catch (e) {
+      participantError = e;
+    }
+
+    // Fallback for older schemas that still use 'response' column
+    if (participantError) {
+      const { error: participantErrorFallback } = await supabase
+        .from('plan_participants')
+        .insert({
+          plan_id: plan.id,
+          user_id: userId,
+          response: isAnonymous ? 'pending' : 'accepted'
+        });
+      if (participantErrorFallback) {
+        console.error('Error adding creator as participant (fallback failed):', participantErrorFallback);
+      }
+    }
 
     if (participantError) {
       console.error('Error adding creator as participant:', participantError);
@@ -762,15 +782,35 @@ router.post('/', requireAuth, async (req, res) => {
     // Add invited friends as participants
     if (invitedFriends.length > 0) {
       console.log('🎯 Adding invited friends as participants:', invitedFriends);
-      const participantInserts = invitedFriends.map(friendId => ({
+      const participantInsertsStatus = invitedFriends.map(friendId => ({
         plan_id: plan.id,
         user_id: friendId,
         status: 'pending'
       }));
 
-      const { error: inviteError } = await supabase
-        .from('plan_participants')
-        .insert(participantInserts);
+      let inviteError = null;
+      try {
+        const { error } = await supabase
+          .from('plan_participants')
+          .insert(participantInsertsStatus);
+        inviteError = error;
+      } catch (e) {
+        inviteError = e;
+      }
+
+      if (inviteError) {
+        const participantInsertsResponse = invitedFriends.map(friendId => ({
+          plan_id: plan.id,
+          user_id: friendId,
+          response: 'pending'
+        }));
+        const { error: inviteErrorFallback } = await supabase
+          .from('plan_participants')
+          .insert(participantInsertsResponse);
+        if (inviteErrorFallback) {
+          console.error('❌ Error inviting friends (fallback failed):', inviteErrorFallback);
+        }
+      }
 
       if (inviteError) {
         console.error('❌ Error inviting friends:', inviteError);
