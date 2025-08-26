@@ -4,7 +4,10 @@ const router = express.Router();
 // Use global supabase instance
 const supabase = global.supabase;
 
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+// Select anon key based on active project (fallback to base var)
+const ACTIVE = (process.env.SUPABASE_ACTIVE_PROJECT || 'KOZIPPP').toUpperCase();
+const resolveEnv = (base, fallback) => process.env[base] || process.env[fallback];
+const supabaseAnonKey = resolveEnv(`SUPABASE_ANON_KEY_${ACTIVE}`, 'SUPABASE_ANON_KEY');
 
 if (!supabaseAnonKey) {
   console.warn('⚠️ SUPABASE_ANON_KEY environment variable is missing');
@@ -33,10 +36,11 @@ const getUserFromToken = async (req) => {
     }
     
     console.log('🔑 Using anon key from environment');
-    console.log('🔑 Supabase URL:', process.env.SUPABASE_URL);
+    const supabaseUrl = resolveEnv(`SUPABASE_URL_${ACTIVE}`, 'SUPABASE_URL');
+    console.log('🔑 Supabase URL:', supabaseUrl);
     
     const clientSupabase = createClient(
-      process.env.SUPABASE_URL,
+      supabaseUrl,
       supabaseAnonKey
     );
     
