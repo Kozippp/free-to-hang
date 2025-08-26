@@ -45,11 +45,17 @@ if (!SUPABASE_ANON_KEY) {
 // Security middleware
 app.use(helmet());
 
+// Trust proxy for rate limit behind Railway/Proxies
+app.set('trust proxy', 1);
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Liiga palju päringuid, proovi hiljem uuesti'
+  message: 'Liiga palju päringuid, proovi hiljem uuesti',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip
 });
 app.use(limiter);
 
