@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, SUPABASE_URL } from './supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 
@@ -43,8 +43,7 @@ export async function uploadImage(
         throw new Error('No active session');
       }
 
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${filePath}`;
+      const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${bucket}/${filePath}`;
 
       console.log('Attempting upload to:', uploadUrl);
 
@@ -52,6 +51,7 @@ export async function uploadImage(
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
+          'x-upsert': 'true'
         },
         body: formData,
       });

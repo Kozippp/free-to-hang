@@ -39,3 +39,4 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 export const SUPABASE_ACTIVE_PROJECT = ACTIVE;
+export const SUPABASE_URL = supabaseUrl;
