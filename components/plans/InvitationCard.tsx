@@ -124,14 +124,14 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
         <Text style={[
           styles.invitedBy,
           !plan.isRead && styles.unreadText,
-          isCreatedByCurrentUser ? styles.createdByYouText : 
-          isAnonymous ? styles.anonymousText : styles.invitedText
+          // Anonymous overrides all – even for creator
+          isAnonymous ? styles.anonymousText : (isCreatedByCurrentUser ? styles.createdByYouText : styles.invitedText)
         ]}>
-          {isCreatedByCurrentUser
-            ? 'You created this plan'
-            : isAnonymous
-              ? 'Anonymous invitation to'
-              : `${getFirstName(plan.creator?.name || 'Someone')} invited you to`}
+          {isAnonymous
+            ? 'Anonymous invitation to'
+            : (isCreatedByCurrentUser
+                ? 'You created this plan'
+                : `${getFirstName(plan.creator?.name || 'Someone')} invited you to`)}
         </Text>
         <Text style={[styles.title, !plan.isRead && styles.unreadText]}>{plan.title}</Text>
       </View>
