@@ -144,7 +144,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       console.log('✅ Plans loaded from API:', plans.length);
       
       // Separate plans into categories based on user's participation status
-      const currentUserId = userId || 'unknown';
+      const currentUserId = userId || get().currentUserId || 'unknown';
       
       const invitations: Plan[] = [];
       const activePlans: Plan[] = [];
