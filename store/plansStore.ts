@@ -917,25 +917,60 @@ const usePlansStore = create<PlansState>((set, get) => ({
     try {
       // Remember current user for insert categorization
       set({ currentUserId: userId });
-      // Create channel for plans, plan_participants, and plan_updates
+      // Create channel for plans tables with filtering (like friend requests)
       plansChannel = supabase
         .channel(`plans_updates_${userId}_${Date.now()}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plans'
-        }, (payload) => {
-          console.log('📡 Plans table update:', payload);
-          handlePlanUpdate(payload, userId);
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_participants'
-        }, (payload) => {
-          console.log('📡 Plan participants update:', payload);
-          handleParticipantUpdate(payload, userId);
-        })
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'plans',
+            filter: `creator_id=eq.${userId}`
+          },
+          (payload) => {
+            console.log('📡 Plans table update (creator):', payload);
+            handlePlansRealtimeChange(payload, userId);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'plan_participants',
+            filter: `user_id=eq.${userId}`
+          },
+          (payload) => {
+            console.log('📡 Plan participants update (participant):', payload);
+            handlePlansRealtimeChange(payload, userId);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'plans'
+          },
+          (payload) => {
+            console.log('📡 Plans DELETE event (global):', payload);
+            // DELETE events don't have filters, so we process all and let handler decide
+            handlePlansRealtimeChange(payload, userId);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'plan_participants'
+          },
+          (payload) => {
+            console.log('📡 Plan participants DELETE event (global):', payload);
+            handlePlansRealtimeChange(payload, userId);
+          }
+        )
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
@@ -981,7 +1016,14 @@ const usePlansStore = create<PlansState>((set, get) => ({
           if (status === 'SUBSCRIBED') {
             isSubscribed = true;
             console.log('✅ Plans real-time subscription started - READY FOR LIVE UPDATES!');
-            console.log('🔥 Listening for: plans, plan_participants, plan_updates, plan_polls, plan_poll_votes, plan_poll_options, plan_attendance');
+            console.log('🔥 Listening for (with filters like friend requests):');
+            console.log('  - plans (creator_id filter)');
+            console.log('  - plan_participants (user_id filter)');
+            console.log('  - plan_updates (no filter)');
+            console.log('  - plan_polls (no filter)');
+            console.log('  - plan_poll_votes (no filter)');
+            console.log('  - plan_poll_options (no filter)');
+            console.log('  - plan_attendance (no filter)');
 
             // Test realtime by sending a test notification
             setTimeout(async () => {
@@ -1100,6 +1142,46 @@ function handleParticipantUpdate(payload: any, currentUserId: string) {
   console.log('👥 Plan participant changed via real-time');
   // Reload plans to get updated participant data
   loadPlans(currentUserId);
+}
+
+// Handle plans realtime changes (like friend requests handleRealtimeChange)
+function handlePlansRealtimeChange(payload: any, currentUserId: string) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+  const { loadPlans } = usePlansStore.getState();
+
+  console.log('📡 Processing plans realtime change:', {
+    eventType,
+    table: payload.table,
+    currentUserId
+  });
+
+  if (eventType === 'INSERT') {
+    console.log('📝 New plan record inserted via real-time');
+    // Force reload plans data (bypass cache)
+    loadPlans(currentUserId).then(() => {
+      console.log('✅ Plans updated via real-time INSERT');
+    }).catch(error => {
+      console.error('❌ Error updating plans via real-time:', error);
+    });
+
+  } else if (eventType === 'UPDATE') {
+    console.log('📝 Plan record updated via real-time');
+    // Force reload plans data (bypass cache)
+    loadPlans(currentUserId).then(() => {
+      console.log('✅ Plans updated via real-time UPDATE');
+    }).catch(error => {
+      console.error('❌ Error updating plans via real-time:', error);
+    });
+
+  } else if (eventType === 'DELETE') {
+    console.log('🗑️ Plan record deleted via real-time');
+    // Force reload plans data (bypass cache)
+    loadPlans(currentUserId).then(() => {
+      console.log('✅ Plans updated via real-time DELETE');
+    }).catch(error => {
+      console.error('❌ Error updating plans via real-time:', error);
+    });
+  }
 }
 
 // Handle real-time plan update notifications
