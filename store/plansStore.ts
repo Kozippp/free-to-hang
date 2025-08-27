@@ -185,6 +185,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
         
         if (plan.status === 'completed') {
           completedPlans.push(transformedPlan);
+        } else if (transformedPlan.type === 'anonymous') {
+          // Anonymous plans are always invitations (even for creator)
+          invitations.push(transformedPlan);
         } else if (userStatus === 'pending') {
           invitations.push(transformedPlan);
         } else if (userStatus === 'accepted' || userStatus === 'maybe' || userStatus === 'conditional') {

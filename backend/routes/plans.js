@@ -627,7 +627,7 @@ router.get('/', requireAuth, async (req, res) => {
           id: p.user_id,
           name: user?.name || 'Unknown',
           avatar: user?.avatar_url,
-          status: p.status,
+          status: p.status ?? p.response,
           joinedAt: p.created_at
         };
       });
@@ -671,9 +671,9 @@ router.get('/', requireAuth, async (req, res) => {
         description: plan.description,
         location: plan.location,
         date: plan.date,
-        isAnonymous: plan.is_private,
+        isAnonymous: plan.is_private || plan.is_anonymous,
         status: plan.status,
-        creator: plan.is_private ? null : creators[plan.creator_id],
+        creator: (plan.is_private || plan.is_anonymous) ? null : creators[plan.creator_id],
         participants: participantsWithUserData,
         polls: transformedPolls,
         createdAt: plan.created_at,
@@ -865,7 +865,7 @@ router.post('/', requireAuth, async (req, res) => {
     const fullPlan = await getPlanWithDetails(plan.id, userId);
     
     // Notify plan creation and visibility updates
-    await notifyPlanUpdate(plan.id, 'poll_created', userId, { event: 'plan_created' });
+    await notifyPlanUpdate(plan.id, 'plan_created', userId);
     await notifyPlanUpdate(plan.id, 'participant_joined', userId);
 
     res.status(201).json(fullPlan);
