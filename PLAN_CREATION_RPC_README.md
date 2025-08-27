@@ -51,6 +51,23 @@ The `plansService.createPlan()` method has been updated to use the RPC instead o
 - **Reduced Complexity**: No need for complex backend logic
 - **Maintainability**: Database logic is centralized in the RPC function
 
+## Feature Flag
+
+The RPC implementation includes a feature flag `USE_PLAN_RPC` that can be controlled via environment variable:
+
+```bash
+# Enable RPC (default)
+EXPO_PUBLIC_USE_PLAN_RPC=true
+
+# Disable RPC (fallback to legacy API)
+EXPO_PUBLIC_USE_PLAN_RPC=false
+```
+
+**To toggle USE_PLAN_RPC:**
+1. Set the environment variable in your `.env` file or deployment environment
+2. Restart the app
+3. The plans service will automatically use the appropriate method
+
 ## Usage Example
 
 ```typescript
@@ -66,11 +83,28 @@ const planData = {
 const createdPlan = await plansService.createPlan(planData);
 ```
 
+## Fallback Behavior
+
+The implementation includes automatic fallback logic:
+
+1. **RPC Path**: Attempts to use the PostgreSQL RPC function
+2. **Error Handling**: If RPC fails or returns no data, automatically falls back to legacy API
+3. **Logging**: Logs diagnostic information for troubleshooting
+4. **Zero Downtime**: No service interruption during fallback
+
+### Error Scenarios Handled:
+- RPC function not found
+- RPC returns empty result set
+- Database connection issues
+- Authentication failures
+- Invalid parameters
+
 ## Migration Notes
 
 - The old backend API endpoint (`POST /plans`) can be deprecated after confirming the RPC works correctly
 - The `plansService.createPlan()` method maintains backward compatibility
 - All existing code using the plans service will continue to work without changes
+- Feature flag allows instant rollback if issues arise
 
 ## Testing
 

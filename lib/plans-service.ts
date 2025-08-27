@@ -182,8 +182,17 @@ class PlansService {
     }
   }
 
-  // Create new plan using RPC
+  // Feature flag for RPC usage
+  private USE_PLAN_RPC = process.env.EXPO_PUBLIC_USE_PLAN_RPC !== 'false'; // Default true
+
+  // Create new plan with RPC fallback
   async createPlan(planData: CreatePlanData): Promise<Plan> {
+    // If RPC is disabled, use legacy API immediately
+    if (!this.USE_PLAN_RPC) {
+      console.log('🔄 USE_PLAN_RPC=false, using legacy API');
+      return this.createPlanLegacy(planData);
+    }
+
     try {
       console.log('📝 Creating new plan via RPC:', planData.title);
 
@@ -199,23 +208,33 @@ class PlansService {
       };
 
       // Call the RPC function
-      const { data: planData, error } = await supabase
-        .rpc('create_plan_with_participants', rpcParams)
-        .single();
+      const { data, error } = await supabase.rpc('create_plan_with_participants', rpcParams);
+
+      console.log('📊 RPC create_plan result:', { hasData: !!data, error: !!error });
 
       if (error) {
         console.error('❌ RPC Error creating plan:', error);
         throw error;
       }
 
-      console.log('✅ Plan created successfully via RPC:', planData.id);
+      // RPC returns a TABLE → Supabase returns an array
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
+        throw new Error('RPC returned no rows');
+      }
+
+      console.log('✅ Plan created successfully via RPC:', row.id);
 
       // Get the full plan details (including participants and creator info)
-      const fullPlan = await this.getPlan(planData.id);
+      const fullPlan = await this.getPlan(row.id);
       return fullPlan;
+
     } catch (error) {
-      console.error('❌ Error creating plan:', error);
-      throw error;
+      console.error('❌ RPC Error creating plan:', error);
+      console.log('🔄 Falling back to legacy createPlan API');
+
+      // Fallback to legacy API
+      return this.createPlanLegacy(planData);
     }
   }
 
@@ -272,17 +291,27 @@ class PlansService {
     }
   }
 
-  // Create plan (legacy method - now uses RPC)
-  async createPlanLegacy(body: { title: string; description?: string; location?: string; date: string; isAnonymous?: boolean; invitedFriends?: string[]; }): Promise<Plan> {
-    // This method is kept for backward compatibility but now delegates to the main createPlan method
-    return this.createPlan({
-      title: body.title,
-      description: body.description,
-      location: body.location,
-      date: body.date,
-      isAnonymous: body.isAnonymous,
-      invitedFriends: body.invitedFriends
-    });
+  // Create plan using legacy API
+  async createPlanLegacy(planData: CreatePlanData): Promise<Plan> {
+    try {
+      console.log('📝 Creating plan via legacy API:', planData.title);
+      const plan = await this.apiRequest('/plans', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: planData.title,
+          description: planData.description,
+          location: planData.location,
+          date: planData.date,
+          isAnonymous: planData.isAnonymous,
+          invitedFriends: planData.invitedFriends
+        })
+      });
+      console.log('✅ Plan created successfully via legacy API');
+      return plan;
+    } catch (error) {
+      console.error('❌ Error creating plan via legacy API:', error);
+      throw error;
+    }
   }
 
   // Vote on poll
