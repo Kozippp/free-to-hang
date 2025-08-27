@@ -913,6 +913,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   // Real-time subscriptions - separate channels for each table
   startRealTimeUpdates: async (userId: string) => {
+    console.log('🧩 Plans realtime init called');
+
     if (isSubscribed) {
       console.log('🛑 Plans real-time subscriptions already active');
       return;
@@ -949,10 +951,12 @@ const usePlansStore = create<PlansState>((set, get) => ({
             console.log('🆕 New plan INSERT event:', payload);
             handlePlansInsert(payload, userId);
           }
-        )
-        .subscribe((status) => {
-          console.log('📡 Plans channel status:', status);
-        });
+        );
+
+      console.log('🛰️ Plans realtime: subscribing now');
+      plansChannel.subscribe((status) => {
+        console.log('📡 Plans channel status:', status);
+      });
 
       // 1. PLAN UPDATES CHANNEL - The main notification system
       updatesChannel = supabase
