@@ -69,6 +69,7 @@ interface PlansState {
   activePlans: Plan[];
   completedPlans: Plan[];
   isLoading: boolean;
+  currentUserId?: string;
   
   // API Actions
   loadPlans: (userId?: string) => Promise<void>;
@@ -131,6 +132,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
   activePlans: [],
   completedPlans: [],
   isLoading: false,
+  currentUserId: undefined,
   
   // Load plans from API
   loadPlans: async (userId?: string) => {
@@ -405,7 +407,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       }
       
       // If the plan is created by the current user and is normal, add it to activePlans
-      if (plan.creator?.id === 'current') {
+      if (plan.creator?.id === 'current' && plan.type === 'normal') {
         return {
           invitations: state.invitations,
           activePlans: [planWithDefaults, ...state.activePlans], // Add to top
@@ -913,6 +915,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.log('🚀 Starting plans real-time updates...');
 
     try {
+      // Remember current user for insert categorization
+      set({ currentUserId: userId });
       // Create channel for plans, plan_participants, and plan_updates
       plansChannel = supabase
         .channel(`plans_updates_${userId}_${Date.now()}`)
@@ -993,8 +997,30 @@ function handlePlanUpdate(payload: any, currentUserId: string) {
   
   if (payload.eventType === 'INSERT') {
     console.log('📝 New plan created via real-time');
-    // Reload plans to get the new plan with proper categorization
-    loadPlans(currentUserId);
+    try {
+      const row = payload.new;
+      const isAnonymous = !!(row?.is_private || row?.is_anonymous);
+      const creatorId = row?.creator_id;
+      const isCreator = creatorId && creatorId === (usePlansStore.getState().currentUserId || currentUserId);
+      const lightweightPlan: any = {
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        type: isAnonymous ? 'anonymous' : 'normal',
+        creator: isAnonymous ? null : (isCreator ? { id: 'current', name: '', avatar_url: '' } : { id: creatorId, name: '', avatar_url: '' }),
+        participants: [],
+        date: row.date,
+        location: row.location,
+        isRead: false,
+        createdAt: row.created_at,
+      };
+      // Place immediately in correct list to avoid flicker; full reload will sync details
+      usePlansStore.getState().addPlan(lightweightPlan);
+      // Then fetch fresh state
+      loadPlans(currentUserId);
+    } catch (e) {
+      loadPlans(currentUserId);
+    }
   } else if (payload.eventType === 'UPDATE') {
     console.log('📝 Plan updated via real-time');
     // Reload plans to get updated data
