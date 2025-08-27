@@ -63,62 +63,63 @@ export default function PlansScreen() {
     }
   };
 
-  // Check for new plan creation
-  useEffect(() => {
-    if (params.newPlan === 'true') {
-      // Find the newest plan (highest timestamp)
-      const allPlans = [...invitations, ...activePlans];
-      const newestPlan = allPlans.reduce((newest, current) => {
-        return new Date(current.createdAt) > new Date(newest.createdAt) ? current : newest;
-      }, allPlans[0]);
-
-      if (newestPlan) {
-        // Set the tab based on plan type and creator
-        const targetTab = newestPlan.type === 'anonymous' ? 'Invitations' : 'Plan';
-        
-        // Animate tab switch for visual feedback
-        Animated.timing(tabSwitchAnimation, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => {
-          // Reset animation
-          tabSwitchAnimation.setValue(0);
-        });
-        
-        // Immediately switch to the correct tab
-        setActiveTab(targetTab);
-        // DISABLED: setNewPlanTitle(newestPlan.title);
-        setIsAnonymousPlan(newestPlan.type === 'anonymous');
-        // DISABLED: setHighlightedPlanId(newestPlan.id);
-        
-        // DISABLED: Start drop-in animation
-        // dropInAnimation.setValue(-100);
-        // Animated.spring(dropInAnimation, {
-        //   toValue: 0,
-        //   useNativeDriver: true,
-        //   damping: 10,
-        //   stiffness: 100,
-        //   velocity: 8,
-        // }).start();
-        
-        // DISABLED: Show success modal with short delay for smooth transition
-        // setTimeout(() => {
-        //   setShowSuccessModal(true);
-        // }, 300);
-
-        // DISABLED: Start new plan highlight animation after modal appears
-        // setTimeout(() => {
-        //   startNewPlanAnimation();
-        // }, 400);
-        
-        // Clear the URL parameter after handling
-        setTimeout(() => {
-          router.replace('/plans');
-        }, 1000);
-      }
-    }
-  }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation]);
+  // DISABLED: Check for new plan creation - now handled by server reload only
+  // This prevents race conditions and wrong tab placements
+  // useEffect(() => {
+  //   if (params.newPlan === 'true') {
+  //     // Find the newest plan (highest timestamp)
+  //     const allPlans = [...invitations, ...activePlans];
+  //     const newestPlan = allPlans.reduce((newest, current) => {
+  //       return new Date(current.createdAt) > new Date(newest.createdAt) ? current : newest;
+  //     }, allPlans[0]);
+  //
+  //     if (newestPlan) {
+  //       // Set the tab based on plan type and creator
+  //       const targetTab = newestPlan.type === 'anonymous' ? 'Invitations' : 'Plan';
+  //
+  //       // Animate tab switch for visual feedback
+  //       Animated.timing(tabSwitchAnimation, {
+  //         toValue: 1,
+  //         duration: 300,
+  //         useNativeDriver: true,
+  //       }).start(() => {
+  //         // Reset animation
+  //         tabSwitchAnimation.setValue(0);
+  //       });
+  //
+  //       // Immediately switch to the correct tab
+  //       setActiveTab(targetTab);
+  //       // DISABLED: setNewPlanTitle(newestPlan.title);
+  //       setIsAnonymousPlan(newestPlan.type === 'anonymous');
+  //       // DISABLED: setHighlightedPlanId(newestPlan.id);
+  //
+  //       // DISABLED: Start drop-in animation
+  //       // dropInAnimation.setValue(-100);
+  //       // Animated.spring(dropInAnimation, {
+  //       //   toValue: 0,
+  //       //   useNativeDriver: true,
+  //       //   damping: 10,
+  //       //   stiffness: 100,
+  //       //   velocity: 8,
+  //       // }).start();
+  //
+  //       // DISABLED: Show success modal with short delay for smooth transition
+  //       // setTimeout(() => {
+  //       //   setShowSuccessModal(true);
+  //       // }, 300);
+  //
+  //       // DISABLED: Start new plan highlight animation after modal appears
+  //       // setTimeout(() => {
+  //       //   startNewPlanAnimation();
+  //       // }, 400);
+  //
+  //       // Clear the URL parameter after handling
+  //       setTimeout(() => {
+  //         router.replace('/plans');
+  //       }, 1000);
+  //     }
+  //   }
+  // }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation]);
 
   // Handle highlighting when coming from invitation response
   useEffect(() => {
