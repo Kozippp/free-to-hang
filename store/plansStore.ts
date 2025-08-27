@@ -982,20 +982,45 @@ const usePlansStore = create<PlansState>((set, get) => ({
             isSubscribed = true;
             console.log('✅ Plans real-time subscription started - READY FOR LIVE UPDATES!');
             console.log('🔥 Listening for: plans, plan_participants, plan_updates, plan_polls, plan_poll_votes, plan_poll_options, plan_attendance');
+
+            // Test realtime by sending a test notification
+            setTimeout(async () => {
+              console.log('🧪 Testing realtime connection...');
+              try {
+                const supabase = (await import('@/lib/supabase')).supabase;
+                const { error } = await supabase
+                  .from('plan_updates')
+                  .insert({
+                    plan_id: 'test-connection-' + Date.now(),
+                    update_type: 'connection_test',
+                    triggered_by: 'system-test',
+                    metadata: { test: true, timestamp: new Date().toISOString() }
+                  });
+                if (error) {
+                  console.log('❌ Test notification failed:', error);
+                } else {
+                  console.log('✅ Test notification sent - if you see this in logs, realtime works!');
+                }
+              } catch (e) {
+                console.log('❌ Test failed:', e);
+              }
+            }, 2000);
+
           } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Plans real-time channel error - CHECK SUPABASE REALTIME CONFIG!');
-            console.log('💡 Go to Supabase Dashboard → Database → Replication → Enable realtime for:');
-            console.log('   - plans');
-            console.log('   - plan_participants');
-            console.log('   - plan_updates');
-            console.log('   - plan_polls');
-            console.log('   - plan_poll_votes');
-            console.log('   - plan_poll_options');
-            console.log('   - plan_attendance');
+            console.log('❌ Plans real-time channel error!');
+            console.log('🔧 POSSIBLE SOLUTIONS:');
+            console.log('   1. Network/firewall blocking WebSocket connections');
+            console.log('   2. Supabase project configuration issue');
+            console.log('   3. Check browser console for CORS or network errors');
+            console.log('   4. Try different network or disable VPN');
             isSubscribed = false;
           } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Plans real-time timed out - SUPABASE REALTIME NOT ENABLED!');
-            console.log('🔧 Solution: Enable Supabase Realtime for plans tables');
+            console.log('⏰ Plans real-time timed out!');
+            console.log('🔧 POSSIBLE CAUSES:');
+            console.log('   1. Slow network connection');
+            console.log('   2. Supabase servers overloaded');
+            console.log('   3. Firewall blocking WebSocket connections');
+            console.log('   4. Try refreshing the page');
             isSubscribed = false;
           } else if (status === 'CLOSED') {
             console.log('🔒 Plans real-time closed');
