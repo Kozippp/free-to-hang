@@ -964,11 +964,19 @@ const usePlansStore = create<PlansState>((set, get) => ({
           console.log('📡 Plans channel status:', status);
           if (status === 'SUBSCRIBED') {
             isSubscribed = true;
-            console.log('✅ Plans real-time subscription started');
+            console.log('✅ Plans real-time subscription started - READY FOR LIVE UPDATES!');
+            console.log('🔥 Listening for: plans, plan_participants, plan_updates, plan_polls, plan_poll_votes');
           } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Plans real-time channel error');
+            console.log('❌ Plans real-time channel error - REALTIME WILL NOT WORK!');
+            isSubscribed = false;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Plans real-time timed out - RETRYING...');
+            isSubscribed = false;
+          } else if (status === 'CLOSED') {
+            console.log('🔒 Plans real-time closed');
             isSubscribed = false;
           } else {
+            console.log('❓ Unknown plans channel status:', status);
             isSubscribed = false;
           }
         });
@@ -1047,20 +1055,33 @@ function handleParticipantUpdate(payload: any, currentUserId: string) {
 // Handle real-time plan update notifications
 function handlePlanUpdateNotification(payload: any, currentUserId: string) {
   const { loadPlans } = usePlansStore.getState();
-  
+
   console.log('📢 Plan update notification received:', payload);
-  
+  console.log('👤 Current user ID:', currentUserId);
+  console.log('📡 Event type:', payload.eventType);
+
   // Handle different types of updates
   if (payload.eventType === 'INSERT') {
     const updateType = payload.new?.update_type;
     const planId = payload.new?.plan_id;
-    
-    console.log('📢 New plan update:', { updateType, planId });
-    
+    const triggeredBy = payload.new?.triggered_by;
+
+    console.log('📢 New plan update details:', {
+      updateType,
+      planId,
+      triggeredBy,
+      fullPayload: payload.new
+    });
+
     // Reload on important update types
     if (updateType === 'poll_created' || updateType === 'poll_voted' || updateType === 'plan_created' || updateType === 'participant_joined') {
+      console.log('🔄 Reloading plans due to:', updateType, 'for plan:', planId);
       loadPlans(currentUserId);
+    } else {
+      console.log('⏭️ Skipping reload for update type:', updateType);
     }
+  } else {
+    console.log('⏭️ Skipping non-INSERT event:', payload.eventType);
   }
 }
 
