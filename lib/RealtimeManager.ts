@@ -89,8 +89,9 @@ class RealtimeManager {
 
     // Start channel subscriptions based on mode
     if (isPlansOnly()) {
-      // Plans-only mode: only start plans_list channel
+      // Plans-only mode: start plans channels + friends channels
       this.startPlansOnlyChannels();
+      this.startFriendsChannels();
     } else {
       // Full mode: start all channels
       this.startPlansChannels();
@@ -290,10 +291,8 @@ class RealtimeManager {
     console.log('👥 Starting friends realtime channels...');
     this.friendsInitialized = true;
 
-    // Create friends channels based on mode
-    const friendsChannelKeys = isPlansOnly()
-      ? [] // Plans-only mode: no friends channels
-      : ['friend_requests_outgoing', 'friend_requests_incoming', 'friend_requests_delete'];
+    // Create friends channels (always enabled)
+    const friendsChannelKeys = ['friend_requests_outgoing', 'friend_requests_incoming', 'friend_requests_delete'];
 
     for (const channelKey of friendsChannelKeys) {
       const config = this.getChannelConfig(channelKey);
