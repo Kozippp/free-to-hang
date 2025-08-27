@@ -907,10 +907,9 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
     let participant;
     let error;
 
-    // Prepare the participant data
-    const participantData = {
-      status: responseMapping[response] || response // Use 'status' field as per actual database
-      // updated_at is handled by database trigger
+    // Prepare participant data (prefer legacy 'response' column for compat)
+    const participantDataResponse = {
+      response: responseMapping[response] || response
     };
 
     // Handle conditional friends data
@@ -949,30 +948,72 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
     }
 
     if (existingParticipant) {
-      // Update existing participant
-      const { data: updatedParticipant, error: updateError } = await supabase
-        .from('plan_participants')
-        .update(participantData)
-        .eq('plan_id', id)
-        .eq('user_id', userId)
-        .select()
-        .single();
-      
+      // Update existing participant (legacy first)
+      let updatedParticipant = null;
+      let updateError = null;
+      try {
+        const resp = await supabase
+          .from('plan_participants')
+          .update(participantDataResponse)
+          .eq('plan_id', id)
+          .eq('user_id', userId)
+          .select()
+          .single();
+        updatedParticipant = resp.data;
+        updateError = resp.error;
+      } catch (e) {
+        updateError = e;
+      }
+
+      // Fallback to 'status' column for newer schemas
+      if (updateError) {
+        const { data: updated2, error: updateError2 } = await supabase
+          .from('plan_participants')
+          .update({ status: responseMapping[response] || response })
+          .eq('plan_id', id)
+          .eq('user_id', userId)
+          .select()
+          .single();
+        updatedParticipant = updated2;
+        updateError = updateError2;
+      }
       participant = updatedParticipant;
       error = updateError;
     } else {
-      // Insert new participant
-      const { data: newParticipant, error: insertError } = await supabase
-        .from('plan_participants')
-        .insert({
-          plan_id: id,
-          user_id: userId,
-          ...participantData,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-      
+      // Insert new participant (legacy first)
+      let newParticipant = null;
+      let insertError = null;
+      try {
+        const resp = await supabase
+          .from('plan_participants')
+          .insert({
+            plan_id: id,
+            user_id: userId,
+            ...participantDataResponse,
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+        newParticipant = resp.data;
+        insertError = resp.error;
+      } catch (e) {
+        insertError = e;
+      }
+
+      if (insertError) {
+        const { data: newParticipant2, error: insertError2 } = await supabase
+          .from('plan_participants')
+          .insert({
+            plan_id: id,
+            user_id: userId,
+            status: responseMapping[response] || response,
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+        newParticipant = newParticipant2;
+        insertError = insertError2;
+      }
       participant = newParticipant;
       error = insertError;
     }

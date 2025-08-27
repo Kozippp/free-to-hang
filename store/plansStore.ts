@@ -150,7 +150,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       
       plans.forEach(plan => {
         const userParticipant = plan.participants.find(p => p.id === currentUserId);
-        const userStatus = userParticipant?.status || 'pending';
+        const userStatus = (userParticipant?.status || (userParticipant as any)?.response) || 'pending';
         
         // Transform API plan to store format
         const transformedPlan: Plan = {
@@ -167,7 +167,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
             id: p.id,
             name: p.name,
             avatar: p.avatar || '',
-            status: p.status as ParticipantStatus,
+            status: (p.status || (p as any).response) as ParticipantStatus,
             conditionalFriends: p.conditionalFriends
           })),
           date: plan.date,
