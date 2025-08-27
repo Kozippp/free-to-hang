@@ -182,16 +182,37 @@ class PlansService {
     }
   }
 
-  // Create new plan
+  // Create new plan using RPC
   async createPlan(planData: CreatePlanData): Promise<Plan> {
     try {
-      console.log('📝 Creating new plan:', planData.title);
-      const plan = await this.apiRequest('/plans', {
-        method: 'POST',
-        body: JSON.stringify(planData)
-      });
-      console.log('✅ Plan created successfully:', plan.id);
-      return plan;
+      console.log('📝 Creating new plan via RPC:', planData.title);
+
+      // Prepare parameters for RPC call
+      const rpcParams = {
+        p_title: planData.title,
+        p_description: planData.description || null,
+        p_location: planData.location || null,
+        p_date: planData.date,
+        p_invited_user_ids: planData.invitedFriends || [],
+        p_is_anonymous: planData.isAnonymous || false,
+        p_max_participants: planData.maxParticipants || null
+      };
+
+      // Call the RPC function
+      const { data: planData, error } = await supabase
+        .rpc('create_plan_with_participants', rpcParams)
+        .single();
+
+      if (error) {
+        console.error('❌ RPC Error creating plan:', error);
+        throw error;
+      }
+
+      console.log('✅ Plan created successfully via RPC:', planData.id);
+
+      // Get the full plan details (including participants and creator info)
+      const fullPlan = await this.getPlan(planData.id);
+      return fullPlan;
     } catch (error) {
       console.error('❌ Error creating plan:', error);
       throw error;
@@ -251,20 +272,17 @@ class PlansService {
     }
   }
 
-  // Create plan
-  async createPlan(body: { title: string; description?: string; location?: string; date: string; isAnonymous?: boolean; invitedFriends?: string[]; }): Promise<Plan> {
-    try {
-      console.log('📝 Creating plan via backend:', body);
-      const plan = await this.apiRequest(`/plans`, {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
-      console.log('✅ Plan created via backend');
-      return plan;
-    } catch (error) {
-      console.error('❌ Error creating plan:', error);
-      throw error;
-    }
+  // Create plan (legacy method - now uses RPC)
+  async createPlanLegacy(body: { title: string; description?: string; location?: string; date: string; isAnonymous?: boolean; invitedFriends?: string[]; }): Promise<Plan> {
+    // This method is kept for backward compatibility but now delegates to the main createPlan method
+    return this.createPlan({
+      title: body.title,
+      description: body.description,
+      location: body.location,
+      date: body.date,
+      isAnonymous: body.isAnonymous,
+      invitedFriends: body.invitedFriends
+    });
   }
 
   // Vote on poll

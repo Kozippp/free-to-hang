@@ -12,6 +12,7 @@
     "debug-registration": "node scripts/debug-registration.js",
     "migrate-onboarding": "node scripts/migrate-onboarding.js",
     "apply-plans-rls-policy": "node scripts/apply-plans-rls-policy.js",
+    "apply-create-plan-rpc": "node scripts/apply-create-plan-rpc.js",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },
