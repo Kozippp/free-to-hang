@@ -11,6 +11,7 @@
     "check-database": "node scripts/check-database.js",
     "debug-registration": "node scripts/debug-registration.js",
     "migrate-onboarding": "node scripts/migrate-onboarding.js",
+    "apply-plans-rls-policy": "node scripts/apply-plans-rls-policy.js",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },
