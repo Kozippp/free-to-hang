@@ -919,9 +919,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       // Register event handlers with RealtimeManager
       if (isPlansOnly()) {
-        // Plans-only mode: only register plans_list handler
-        const debouncedLoadPlans = createDebouncedLoadPlans(() => get().loadPlans(userId));
-        realtimeManager.on('plans_list', handlePlansListInsert, 'plansStore');
+        // Plans-only mode: plans_list channel temporarily disabled to prevent spam
+        console.log('🚫 plans_list handler not registered (channel disabled to prevent spam)');
       } else {
         // Full mode: register all handlers
         realtimeManager.on('plans', handlePlansInsert, 'plansStore');
@@ -945,8 +944,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
     // Remove all event handlers
     if (isPlansOnly()) {
-      // Plans-only mode: only remove plans_list handler
-      realtimeManager.off('plans_list', handlePlansListInsert);
+      // Plans-only mode: plans_list handler not registered (disabled to prevent spam)
+      console.log('🚫 plans_list handler not removed (was not registered)');
     } else {
       // Full mode: remove all handlers
       realtimeManager.off('plans', handlePlansInsert);

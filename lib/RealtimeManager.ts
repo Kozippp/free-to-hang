@@ -214,6 +214,10 @@ class RealtimeManager {
     console.log('📋 Starting plans-only realtime channels...');
     this.plansInitialized = true;
 
+    // TEMPORARILY DISABLED: plans_list channel causing spam
+    // TODO: Re-enable once channel stability issues are resolved
+    console.log('🚫 plans_list channel temporarily disabled to prevent spam');
+    /*
     // Only create the plans_list channel
     const plansOnlyChannelKeys = ['plans_list'];
     for (const channelKey of plansOnlyChannelKeys) {
@@ -227,6 +231,7 @@ class RealtimeManager {
         });
       }
     }
+    */
   }
 
   private startPlansChannels(): void {
