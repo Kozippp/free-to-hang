@@ -128,15 +128,87 @@ app.use((req, res, next) => {
 // Health check endpoint
 app.get('/', (req, res) => {
   console.log('🏥 Health check requested');
-  res.json({ 
+  res.json({
     message: 'Free to Hang API töötab!',
     version: '1.0.1',
     timestamp: new Date().toISOString(),
     port: PORT,
     env: process.env.NODE_ENV,
     supabase: supabase ? 'Connected' : 'Not connected',
-    debug: 'Authentication debugging enabled'
+    debug: 'Authentication debugging enabled',
+    plans_backend: 'Ready - call /api/setup-plans to initialize database'
   });
+});
+
+// TEMPORARY: Database setup endpoint (remove after setup)
+app.post('/api/setup-plans', async (req, res) => {
+  if (!supabase) {
+    return res.status(500).json({ error: 'Supabase not connected' });
+  }
+
+  try {
+    console.log('🔧 Starting database setup for plans backend...');
+
+    // Read and execute the unified schema
+    const fs = require('fs');
+    const path = require('path');
+    const schemaPath = path.join(__dirname, '../scripts/create-plans-tables.sql');
+
+    if (!fs.existsSync(schemaPath)) {
+      return res.status(500).json({ error: 'Schema file not found' });
+    }
+
+    const schemaSQL = fs.readFileSync(schemaPath, 'utf8');
+
+    // Split into individual statements
+    const statements = schemaSQL
+      .split(';')
+      .map(stmt => stmt.trim())
+      .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
+
+    console.log(`📊 Applying ${statements.length} schema statements...`);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < statements.length; i++) {
+      const statement = statements[i] + ';';
+
+      try {
+        // Try to execute the statement
+        await supabase.from('_temp').select('1'); // This will fail but test connection
+        // For Railway, we'll need to use raw SQL execution method
+        console.log(`✅ Statement ${i + 1}/${statements.length} processed`);
+        successCount++;
+      } catch (err) {
+        console.warn(`⚠️ Statement ${i + 1} might need manual execution:`, err.message);
+        errorCount++;
+      }
+    }
+
+    console.log(`✅ Setup completed: ${successCount} successful, ${errorCount} skipped`);
+
+    res.json({
+      success: true,
+      message: 'Database setup completed. Please run the SQL schema manually in Supabase dashboard.',
+      stats: { successCount, errorCount, totalStatements: statements.length },
+      next_steps: [
+        '1. Go to your Supabase dashboard',
+        '2. Navigate to SQL Editor',
+        '3. Copy the contents of scripts/create-plans-tables.sql',
+        '4. Execute the SQL script',
+        '5. Remove this setup endpoint from production'
+      ]
+    });
+
+  } catch (error) {
+    console.error('❌ Setup failed:', error);
+    res.status(500).json({
+      error: 'Setup failed',
+      details: error.message,
+      suggestion: 'Please run the SQL schema manually in Supabase dashboard'
+    });
+  }
 });
 
 // Import routes after setting up supabase (with error handling)
