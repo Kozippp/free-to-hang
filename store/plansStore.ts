@@ -219,8 +219,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
         title: newPlan.title,
         description: newPlan.description,
         type: newPlan.isAnonymous ? 'anonymous' : 'normal',
+        // Since this function is called by the current user, mark creator as 'current'
         creator: newPlan.creator ? {
-          id: newPlan.creator.id === (userId || 'unknown') ? 'current' : newPlan.creator.id,
+          id: 'current',
           name: newPlan.creator.name,
           avatar: newPlan.creator.avatar_url || ''
         } : null,
