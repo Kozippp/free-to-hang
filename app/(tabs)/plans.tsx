@@ -19,7 +19,7 @@ export default function PlansScreen() {
   // DISABLED: const [showSuccessModal, setShowSuccessModal] = useState(false);
   // DISABLED: const [newPlanTitle, setNewPlanTitle] = useState('');
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
-  const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
+  // DISABLED: const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const { user } = useAuth();
@@ -30,9 +30,9 @@ export default function PlansScreen() {
   const tabs = ['Invitations', 'Plan', 'Completed'];
   const screenWidth = Dimensions.get('window').width;
   const translateX = useRef(new Animated.Value(0)).current;
-  const newPlanAnimation = useRef(new Animated.Value(0)).current;
+  // DISABLED: const newPlanAnimation = useRef(new Animated.Value(0)).current;
   const tabSwitchAnimation = useRef(new Animated.Value(0)).current;
-  const dropInAnimation = useRef(new Animated.Value(-100)).current;
+  // DISABLED: const dropInAnimation = useRef(new Animated.Value(-100)).current;
 
   // Load plans from API when component mounts
   useEffect(() => {
@@ -90,17 +90,17 @@ export default function PlansScreen() {
         setActiveTab(targetTab);
         // DISABLED: setNewPlanTitle(newestPlan.title);
         setIsAnonymousPlan(newestPlan.type === 'anonymous');
-        setHighlightedPlanId(newestPlan.id);
+        // DISABLED: setHighlightedPlanId(newestPlan.id);
         
-        // Start drop-in animation
-        dropInAnimation.setValue(-100);
-        Animated.spring(dropInAnimation, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 10,
-          stiffness: 100,
-          velocity: 8,
-        }).start();
+        // DISABLED: Start drop-in animation
+        // dropInAnimation.setValue(-100);
+        // Animated.spring(dropInAnimation, {
+        //   toValue: 0,
+        //   useNativeDriver: true,
+        //   damping: 10,
+        //   stiffness: 100,
+        //   velocity: 8,
+        // }).start();
         
         // DISABLED: Show success modal with short delay for smooth transition
         // setTimeout(() => {
@@ -118,24 +118,24 @@ export default function PlansScreen() {
         }, 1000);
       }
     }
-  }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation, dropInAnimation]);
+  }, [params.newPlan, invitations, activePlans, router, tabSwitchAnimation]);
 
   // Handle highlighting when coming from invitation response
   useEffect(() => {
     if (params.highlightPlan) {
       const planId = typeof params.highlightPlan === 'string' ? params.highlightPlan : params.highlightPlan[0];
-      
+
       // Set active tab to Plan since user responded to invitation
       setActiveTab('Plan');
-      
-      // Set highlighted plan
-      setHighlightedPlanId(planId);
-      
-      // Start highlighting animation
-      setTimeout(() => {
-        startNewPlanAnimation();
-      }, 200);
-      
+
+      // DISABLED: Set highlighted plan
+      // setHighlightedPlanId(planId);
+
+      // DISABLED: Start highlighting animation
+      // setTimeout(() => {
+      //   startNewPlanAnimation();
+      // }, 200);
+
       // Clear the parameter after handling
       setTimeout(() => {
         router.replace('/plans');
@@ -156,24 +156,24 @@ export default function PlansScreen() {
     return () => clearInterval(interval);
   }, [processCompletedPlans]);
 
-  const startNewPlanAnimation = () => {
-    // Use only transform animations with native driver
-    Animated.timing(newPlanAnimation, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start(() => {
-      // Fade out after highlighting
-      Animated.timing(newPlanAnimation, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }).start(() => {
-        setHighlightedPlanId(null);
-        dropInAnimation.setValue(0); // Reset drop animation
-      });
-    });
-  };
+  // DISABLED: const startNewPlanAnimation = () => {
+  //   // Use only transform animations with native driver
+  //   Animated.timing(newPlanAnimation, {
+  //     toValue: 1,
+  //     duration: 800,
+  //     useNativeDriver: true,
+  //   }).start(() => {
+  //     // Fade out after highlighting
+  //     Animated.timing(newPlanAnimation, {
+  //       toValue: 0,
+  //       duration: 600,
+  //       useNativeDriver: true,
+  //     }).start(() => {
+  //       setHighlightedPlanId(null);
+  //       dropInAnimation.setValue(0); // Reset drop animation
+  //     });
+  //   });
+  // };
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -258,34 +258,29 @@ export default function PlansScreen() {
   const unreadCount = invitations.filter(plan => !plan.isRead).length;
   
   const renderPlanItem = ({ item, index }: { item: Plan; index: number }) => {
-    const isHighlighted = highlightedPlanId === item.id;
-    const isFirst = index === 0 && isHighlighted;
-    
-    const highlightStyle = isHighlighted ? {
-      transform: [
-        {
-          translateY: isFirst ? dropInAnimation : 0
-        },
-        {
-          scale: newPlanAnimation.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [1, 1.08, 1.02]
-          })
-        }
-      ],
-      // Remove backgroundColor animation to avoid native driver conflicts
-    } : {};
+    // DISABLED: Highlight animation system
+    // const isHighlighted = highlightedPlanId === item.id;
+    // const isFirst = index === 0 && isHighlighted;
+    //
+    // const highlightStyle = isHighlighted ? {
+    //   transform: [
+    //     {
+    //       translateY: isFirst ? dropInAnimation : 0
+    //     },
+    //     {
+    //       scale: newPlanAnimation.interpolate({
+    //         inputRange: [0, 0.5, 1],
+    //         outputRange: [1, 1.08, 1.02]
+    //       })
+    //     }
+    //   ],
+    //   // Remove backgroundColor animation to avoid native driver conflicts
+    // } : {};
 
     return (
-      <Animated.View style={[
-        highlightStyle,
-        isHighlighted && { 
-          backgroundColor: 'rgba(76, 175, 80, 0.25)',
-          borderRadius: 12,
-        }
-      ]}>
+      <View>
         <InvitationCard plan={item} onPress={handlePlanPress} />
-      </Animated.View>
+      </View>
     );
   };
   
