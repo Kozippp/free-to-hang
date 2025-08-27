@@ -4,6 +4,7 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
 import { Platform, Alert } from 'react-native';
 import * as Linking from 'expo-linking';
+import { realtimeManager } from '@/lib/RealtimeManager';
 
 // TEMPORARY: Mock mode for database setup
 // Automatically enabled when placeholder keys are used
@@ -75,6 +76,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           console.log('✅ Found existing session for user:', session.user.email);
           setUser(session.user);
+
+          // Start realtime subscriptions for existing session
+          console.log('🚀 Starting realtime subscriptions for existing session:', session.user.id);
+          realtimeManager.start(session.user.id);
+
           // Don't set loading to false yet - wait for onboarding check
         } else {
           console.log('❌ No existing session found');
@@ -116,13 +122,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsCheckingOnboarding(false);
             setNavigationReady(false);
           }
+
+          // Start realtime subscriptions for the signed-in user
+          console.log('🚀 Starting realtime subscriptions for user:', session.user.id);
+          realtimeManager.start(session.user.id);
         }
-        
+
         if (event === 'SIGNED_OUT') {
           console.log('👋 User signed out');
           setHasCheckedOnboarding(false);
           setIsCheckingOnboarding(false);
           setNavigationReady(true);
+
+          // Stop all realtime subscriptions
+          console.log('🛑 Stopping realtime subscriptions');
+          realtimeManager.stop();
         }
         
         if (event === 'TOKEN_REFRESHED' && __DEV__) {
@@ -566,6 +580,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (AUTH_MOCK_MODE) {
       return;
     }
+
+    // Stop realtime subscriptions before signing out
+    console.log('🛑 Stopping realtime subscriptions before sign out');
+    realtimeManager.stop();
 
     const { error } = await supabase.auth.signOut();
     if (error) {

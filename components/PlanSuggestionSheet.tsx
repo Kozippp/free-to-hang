@@ -1,5 +1,4 @@
-git add .
-git commit -mimport React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -19,7 +18,7 @@ import {
 } from 'react-native';
 import Colors from '@/constants/colors';
 import { X, Plus, Users, Bell, UserPlus } from 'lucide-react-native';
-import PingOfflineModal from './PingOfflineModal';
+import PingOfflineModal from '@/components/PingOfflineModal';
 import { offlineFriends } from '@/constants/mockData';
 import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
@@ -42,6 +41,8 @@ interface PlanSuggestionSheetProps {
   availableFriends: Friend[];
   isAnonymous: boolean;
   onPlanSubmitted: () => void;
+  prefilledTitle?: string;
+  prefilledDescription?: string;
 }
 
 export default function PlanSuggestionSheet({
@@ -51,13 +52,15 @@ export default function PlanSuggestionSheet({
   availableFriends,
   isAnonymous,
   onPlanSubmitted,
+  prefilledTitle,
+  prefilledDescription,
 }: PlanSuggestionSheetProps) {
   const { user, clearSelectedFriends } = useHangStore();
-  const { addPlan } = usePlansStore();
+  const { createPlan } = usePlansStore();
   const router = useRouter();
   
-  const [planTitle, setPlanTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
+  const [description, setDescription] = useState(prefilledDescription || '');
   const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [additionalFriends, setAdditionalFriends] = useState<string[]>([]);
   const [pingedFriends, setPingedFriends] = useState<string[]>([]);
@@ -73,10 +76,9 @@ export default function PlanSuggestionSheet({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to downward swipes in the top area
+        // Only respond to downward swipes
         return gestureState.dy > 10 && 
-               Math.abs(gestureState.dx) < Math.abs(gestureState.dy) && 
-               gestureState.y0 < 100; // Only activate in top area
+               Math.abs(gestureState.dx) < Math.abs(gestureState.dy);
       },
       onPanResponderMove: (_, gestureState) => {
         if (gestureState.dy > 0) {
@@ -104,23 +106,33 @@ export default function PlanSuggestionSheet({
   useEffect(() => {
     if (!visible) {
       // Reset states when modal closes
-      resetStates();
+      setTimeout(() => {
+        resetStates();
+      }, 0);
     } else {
+      // Initialize with prefilled data when modal opens
+      setTimeout(() => {
+        setPlanTitle(prefilledTitle || '');
+        setDescription(prefilledDescription || '');
+      }, 0);
+      
       Animated.timing(slideAnim, {
         toValue: 1,
         duration: 300,
         useNativeDriver: true,
       }).start();
     }
-  }, [visible, slideAnim]);
+  }, [visible, slideAnim, prefilledTitle, prefilledDescription]);
   
   const resetStates = () => {
-    setPlanTitle('');
-    setDescription('');
-    setShowInvitePanel(false);
-    setAdditionalFriends([]);
-    setPingedFriends([]);
-    setRemovedFriends([]);
+    setTimeout(() => {
+      setPlanTitle('');
+      setDescription('');
+      setShowInvitePanel(false);
+      setAdditionalFriends([]);
+      setPingedFriends([]);
+      setRemovedFriends([]);
+    }, 0);
   };
   
   const translateY = slideAnim.interpolate({
@@ -128,64 +140,48 @@ export default function PlanSuggestionSheet({
     outputRange: [height, 0],
   });
   
-  const handleSubmit = () => {
-    // Create a new plan object
-    const newPlan = {
-      id: Date.now().toString(), // Generate a unique ID
-      title: planTitle,
-      description: description,
-      type: isAnonymous ? 'anonymous' as const : 'normal' as const,
-      creator: isAnonymous ? null : {
-        id: user.id,
-        name: user.name,
-        avatar: user.avatar
-      },
-      participants: getAllFriends().map(friend => ({
-        id: friend.id,
-        name: friend.name,
-        avatar: friend.avatar,
-        status: friend.id === user.id ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
-      })),
-      date: 'Tomorrow, 7:00 PM', // This would be set by the user in a real app
-      location: 'To be determined', // This would be set by the user in a real app
-      isRead: true, // Mark as read since you created it
-      createdAt: new Date().toISOString()
-    };
-    
-    // DISABLED: Optimistic plan addition that causes race conditions
-    // Plans should only be added after server confirmation
-    // addPlan(newPlan);
-    
-    // Animate the sheet closing
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
+  const handleSubmit = async () => {
+    try {
+      // Create plan data for API
+      const planData = {
+        title: planTitle,
+        description: description,
+        isAnonymous: isAnonymous,
+        date: 'Today, 7:00 PM', // This would be set by the user in a real app
+        location: 'To be determined', // This would be set by the user in a real app
+        maxParticipants: null,
+        invitedFriends: getAllFriends()
+          .filter(friend => friend.id !== 'current')
+          .map(friend => friend.id)
+      };
+      
+      // Create the plan via API
+      await createPlan(planData);
+      
       // Clear selected friends in the store
       clearSelectedFriends();
+      
       // Notify parent component that plan was submitted
       onPlanSubmitted();
-      // Close the plan sheet
-      onClose();
       
-      // Navigate to the appropriate tab based on plan type
-      if (isAnonymous) {
-        router.push('/plans');
-        // Set a timeout to ensure the navigation completes before showing success message
+      // Close the plan sheet with animation
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        onClose();
+        
+        // Navigate to plans tab with immediate effect
         setTimeout(() => {
-          // In a real app, you would show a success message here
-          console.log('Anonymous plan created successfully!');
-        }, 300);
-      } else {
-        router.push('/plans');
-        // Set a timeout to ensure the navigation completes before showing success message
-        setTimeout(() => {
-          // In a real app, you would show a success message here
-          console.log('Plan created successfully!');
-        }, 300);
-      }
-    });
+          router.push('/plans?newPlan=true');
+        }, 100); // Small delay to ensure sheet is closed
+      });
+      
+    } catch (error) {
+      console.error('❌ Error creating plan:', error);
+      // You might want to show an error message to the user here
+    }
   };
   
   const handleClose = () => {
@@ -242,6 +238,7 @@ export default function PlanSuggestionSheet({
     // Add current user with (you) label
     const currentUser = {
       ...user,
+      id: 'current',
       name: `${user.name} (you)`,
       status: 'available' as const
     };
@@ -313,16 +310,14 @@ export default function PlanSuggestionSheet({
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={100}
               >
-                <ScrollView
+                <ScrollView 
                   ref={scrollViewRef}
                   style={styles.content}
                   contentContainerStyle={styles.contentContainer}
                   keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode="on-drag"
+                  nestedScrollEnabled={true}
                   scrollEventThrottle={16}
                   showsVerticalScrollIndicator={true}
-                  bounces={true}
-                  alwaysBounceVertical={true}
                 >
                   <Text style={[
                     styles.title,
@@ -419,31 +414,30 @@ export default function PlanSuggestionSheet({
                           <Text style={styles.inviteSectionTitle}>Friends available now</Text>
                           <ScrollView 
                             style={styles.availableFriendsScrollView}
-                            contentContainerStyle={styles.availableFriendsContainer}
                             nestedScrollEnabled={true}
                             showsVerticalScrollIndicator={true}
-                            scrollEventThrottle={16}
-                            bounces={false}
                           >
-                            {getAvailableFriendsToAdd().map((friend) => (
-                              <TouchableOpacity 
-                                key={friend.id}
-                                style={styles.availableFriendItem}
-                                onPress={() => toggleAdditionalFriend(friend.id)}
-                              >
-                                <View style={styles.availableFriendAvatarContainer}>
-                                  <Image source={{ uri: friend.avatar }} style={styles.availableFriendAvatar} />
-                                  <View style={[styles.availableFriendStatusDot, styles.onlineDot]} />
-                                </View>
-                                <View style={styles.availableFriendInfo}>
-                                  <Text style={styles.availableFriendName}>{friend.name}</Text>
-                                  <Text style={styles.availableFriendActivity}>{friend.activity}</Text>
-                                </View>
-                                <View style={styles.addFriendButton}>
-                                  <Plus size={16} color={Colors.light.primary} />
-                                </View>
-                              </TouchableOpacity>
-                            ))}
+                            <View style={styles.availableFriendsContainer}>
+                              {getAvailableFriendsToAdd().map((friend) => (
+                                <TouchableOpacity 
+                                  key={friend.id}
+                                  style={styles.availableFriendItem}
+                                  onPress={() => toggleAdditionalFriend(friend.id)}
+                                >
+                                  <View style={styles.availableFriendAvatarContainer}>
+                                    <Image source={{ uri: friend.avatar }} style={styles.availableFriendAvatar} />
+                                    <View style={[styles.availableFriendStatusDot, styles.onlineDot]} />
+                                  </View>
+                                  <View style={styles.availableFriendInfo}>
+                                    <Text style={styles.availableFriendName}>{friend.name}</Text>
+                                    <Text style={styles.availableFriendActivity}>{friend.activity}</Text>
+                                  </View>
+                                  <View style={styles.addFriendButton}>
+                                    <Plus size={16} color={Colors.light.primary} />
+                                  </View>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
                           </ScrollView>
                         </>
                       ) : (
@@ -501,21 +495,21 @@ export default function PlanSuggestionSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Light white overlay instead of black
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: Colors.light.background,
+    backgroundColor: 'white',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
     paddingBottom: 30,
-    maxHeight: '95%',
-    minHeight: '80%',
+    maxHeight: '90%',
+    minHeight: '70%', // Increased to 70% of screen height
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 12,
     elevation: 8,
   },
   anonymousSheet: {
@@ -590,8 +584,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     marginBottom: 20,
-    backgroundColor: Colors.light.cardBackground,
-    color: Colors.light.text,
+    backgroundColor: Colors.light.buttonBackground,
   },
   textArea: {
     minHeight: 100,
@@ -603,8 +596,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.light.border,
     borderRadius: 10,
-    backgroundColor: Colors.light.cardBackground,
-    overflow: 'hidden',
+    backgroundColor: Colors.light.buttonBackground,
   },
   personRow: {
     flexDirection: 'row',
@@ -637,7 +629,7 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: Colors.light.cardBackground,
+    borderColor: Colors.light.buttonBackground,
   },
   onlineDot: {
     backgroundColor: Colors.light.onlineGreen,
@@ -655,9 +647,7 @@ const styles = StyleSheet.create({
   removeButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: Colors.light.background,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.buttonBackground,
   },
   // Add more people button
   addMoreButton: {
@@ -678,12 +668,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   invitePanel: {
-    backgroundColor: Colors.light.cardBackground,
+    backgroundColor: Colors.light.buttonBackground,
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
   },
   invitePanelHeader: {
     flexDirection: 'row',
@@ -704,22 +692,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   availableFriendsScrollView: {
-    maxHeight: 200,
-    backgroundColor: Colors.light.cardBackground,
-    borderRadius: 8,
-    paddingHorizontal: 8,
+    // Remove maxHeight to allow full scrolling
   },
   availableFriendsContainer: {
-    paddingVertical: 8,
+    marginBottom: 16,
   },
   availableFriendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     borderRadius: 8,
-    marginVertical: 2,
-    backgroundColor: Colors.light.background,
   },
   availableFriendAvatarContainer: {
     position: 'relative',
@@ -738,7 +721,7 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: Colors.light.background,
+    borderColor: Colors.light.buttonBackground,
   },
   availableFriendInfo: {
     flex: 1,

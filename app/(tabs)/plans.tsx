@@ -11,6 +11,8 @@ import CompletedPlanDetailView from '@/components/plans/CompletedPlanDetailView'
 import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { realtimeManager } from '@/lib/RealtimeManager';
 
 export default function PlansScreen() {
   const [activeTab, setActiveTab] = useState('Plan');
@@ -21,9 +23,11 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   // DISABLED: const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const rtProbeChannelRef = useRef<any>(null);
   
   const { user } = useAuth();
-  const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates } = usePlansStore();
+  const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -40,13 +44,40 @@ export default function PlansScreen() {
       console.log('🔄 Loading plans for user:', user.id);
       console.log('🔄 User object:', { id: user.id, email: user.email });
       loadPlans(user.id);
-      startRealTimeUpdates(user.id);
+
+      // Start realtime subscriptions via RealtimeManager
+      realtimeManager.start(user.id);
+
+      // Temporary rt_probe subscription
+      rtProbeChannelRef.current = supabase
+        .channel(`rt_probe_channel_${user.id}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'rt_probe'
+          },
+          (payload) => {
+            console.log('RT_PROBE EVENT:', payload.eventType, payload.table, (payload.new as any)?.id, (payload.new as any)?.note);
+          }
+        )
+        .subscribe((status) => {
+          console.log('RT_PROBE STATUS:', status);
+        });
     }
-    
+
     return () => {
-      stopRealTimeUpdates();
+      // Stop realtime subscriptions via RealtimeManager
+      realtimeManager.stop();
+
+      // Cleanup rt_probe subscription
+      if (rtProbeChannelRef.current) {
+        supabase.removeChannel(rtProbeChannelRef.current);
+        rtProbeChannelRef.current = null;
+      }
     };
-  }, [loadPlans, user?.id, startRealTimeUpdates, stopRealTimeUpdates]);
+  }, [loadPlans, user?.id]);
 
   // Handle pull-to-refresh
   const handleRefresh = async () => {
@@ -392,7 +423,7 @@ export default function PlansScreen() {
             visible={modalVisible}
             plan={selectedPlan}
             onClose={handleCloseModal}
-            onRespond={activeTab === 'Completed' ? () => {} : handleRespondToPlan}
+            onRespond={activeTab === 'Completed' ? async () => {} : handleRespondToPlan}
             isCompleted={activeTab === 'Completed'}
             onAttendanceUpdate={activeTab === 'Completed' ? updateAttendance : undefined}
           />
