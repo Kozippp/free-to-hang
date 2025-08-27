@@ -73,16 +73,37 @@ const requireAuth = async (req, res, next) => {
 // Helper function to notify plan updates
 const notifyPlanUpdate = async (planId, updateType, triggeredBy, metadata = {}) => {
   try {
-    await supabase
+    console.log('🔔 Sending real-time notification:', {
+      planId,
+      updateType,
+      triggeredBy,
+      metadata
+    });
+
+    const result = await supabase
       .from('plan_updates')
       .insert({
         plan_id: planId,
         update_type: updateType,
         triggered_by: triggeredBy,
         metadata
-      });
+      })
+      .select();
+
+    console.log('✅ Real-time notification sent successfully:', {
+      planId,
+      updateType,
+      result: result.data ? 'INSERTED' : 'FAILED',
+      error: result.error
+    });
+
+    if (result.error) {
+      console.error('❌ Error inserting plan update notification:', result.error);
+    }
+
   } catch (error) {
-    console.error('Error creating plan update notification:', error);
+    console.error('❌ Error creating plan update notification:', error);
+    console.error('❌ Stack trace:', error.stack);
   }
 };
 
@@ -690,6 +711,36 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+// GET /plans/test-realtime - Test real-time functionality
+router.get('/test-realtime', async (req, res) => {
+  try {
+    console.log('🧪 Testing real-time functionality...');
+
+    // Test by inserting a dummy plan update
+    const testPlanId = 'test-plan-' + Date.now();
+    const testUpdateType = 'test_notification';
+    const testTriggeredBy = 'system-test';
+
+    await notifyPlanUpdate(testPlanId, testUpdateType, testTriggeredBy, {
+      test: true,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      message: 'Real-time test notification sent',
+      testData: {
+        planId: testPlanId,
+        updateType: testUpdateType,
+        triggeredBy: testTriggeredBy
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error in test-realtime:', error);
+    res.status(500).json({ error: 'Real-time test failed', details: error.message });
+  }
+});
+
 // GET /plans/:id - Get specific plan details
 router.get('/:id', requireAuth, async (req, res) => {
   try {
@@ -865,8 +916,10 @@ router.post('/', requireAuth, async (req, res) => {
     const fullPlan = await getPlanWithDetails(plan.id, userId);
     
     // Notify plan creation and visibility updates
+    console.log('🚀 Sending real-time notifications for new plan:', plan.id);
     await notifyPlanUpdate(plan.id, 'plan_created', userId);
     await notifyPlanUpdate(plan.id, 'participant_joined', userId);
+    console.log('✅ Real-time notifications sent for plan creation');
 
     res.status(201).json(fullPlan);
   } catch (error) {
