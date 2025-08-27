@@ -967,10 +967,17 @@ const usePlansStore = create<PlansState>((set, get) => ({
             console.log('✅ Plans real-time subscription started - READY FOR LIVE UPDATES!');
             console.log('🔥 Listening for: plans, plan_participants, plan_updates, plan_polls, plan_poll_votes');
           } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Plans real-time channel error - REALTIME WILL NOT WORK!');
+            console.log('❌ Plans real-time channel error - CHECK SUPABASE REALTIME CONFIG!');
+            console.log('💡 Go to Supabase Dashboard → Database → Replication → Enable realtime for:');
+            console.log('   - plans');
+            console.log('   - plan_participants');
+            console.log('   - plan_updates');
+            console.log('   - plan_polls');
+            console.log('   - plan_poll_votes');
             isSubscribed = false;
           } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Plans real-time timed out - RETRYING...');
+            console.log('⏰ Plans real-time timed out - SUPABASE REALTIME NOT ENABLED!');
+            console.log('🔧 Solution: Enable Supabase Realtime for plans tables');
             isSubscribed = false;
           } else if (status === 'CLOSED') {
             console.log('🔒 Plans real-time closed');
