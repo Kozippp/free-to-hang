@@ -1002,22 +1002,23 @@ function handlePlanUpdate(payload: any, currentUserId: string) {
       const isAnonymous = !!(row?.is_private || row?.is_anonymous);
       const creatorId = row?.creator_id;
       const isCreator = creatorId && creatorId === (usePlansStore.getState().currentUserId || currentUserId);
-      // Kui looja ise, ära lisa optimistlikult – sünkroniseeri ainult serverist
-      if (!isCreator) {
-        const lightweightPlan: any = {
-          id: row.id,
-          title: row.title,
-          description: row.description,
-          type: isAnonymous ? 'anonymous' : 'normal',
-          creator: isAnonymous ? null : { id: creatorId, name: '', avatar_url: '' },
-          participants: [],
-          date: row.date,
-          location: row.location,
-          isRead: false,
-          createdAt: row.created_at,
-        };
-        usePlansStore.getState().addPlan(lightweightPlan);
-      }
+      // DISABLED: Ära lisa optimistlikult üldse - sünkroniseeri ainult serverist
+      // See väldib race condition probleeme anonüümsete plaanidega
+      // if (!isCreator) {
+      //   const lightweightPlan: any = {
+      //     id: row.id,
+      //     title: row.title,
+      //     description: row.description,
+      //     type: isAnonymous ? 'anonymous' : 'normal',
+      //     creator: isAnonymous ? null : { id: creatorId, name: '', avatar_url: '' },
+      //     participants: [],
+      //     date: row.date,
+      //     location: row.location,
+      //     isRead: false,
+      //     createdAt: row.created_at,
+      //   };
+      //   usePlansStore.getState().addPlan(lightweightPlan);
+      // }
       // Seejärel alati täis reload
       loadPlans(currentUserId);
     } catch (e) {
