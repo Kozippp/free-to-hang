@@ -159,7 +159,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
           description: plan.description,
           type: plan.isAnonymous ? 'anonymous' : 'normal',
           creator: plan.creator ? {
-            id: plan.creator.id,
+            id: plan.creator.id === currentUserId ? 'current' : plan.creator.id,
             name: plan.creator.name,
             avatar: plan.creator.avatar_url || ''
           } : null,
@@ -220,7 +220,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         description: newPlan.description,
         type: newPlan.isAnonymous ? 'anonymous' : 'normal',
         creator: newPlan.creator ? {
-          id: newPlan.creator.id,
+          id: newPlan.creator.id === (userId || 'unknown') ? 'current' : newPlan.creator.id,
           name: newPlan.creator.name,
           avatar: newPlan.creator.avatar_url || ''
         } : null,
@@ -1024,8 +1024,8 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     
     console.log('📢 New plan update:', { updateType, planId });
     
-    // For poll-related updates, reload the specific plan
-    if (updateType === 'poll_created' || updateType === 'poll_voted') {
+    // Reload on important update types
+    if (updateType === 'poll_created' || updateType === 'poll_voted' || updateType === 'plan_created' || updateType === 'participant_joined') {
       loadPlans(currentUserId);
     }
   }
