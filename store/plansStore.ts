@@ -937,26 +937,60 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const userPlans = await plansService.getPlans();
       const userPlanIds = userPlans.map(plan => plan.id);
 
-      // 0. PLANS CHANNEL - Listen for new plans (main table INSERT events)
+      // 0. PLANS CHANNEL - Listen for ALL plans events (bulletproof diagnostics)
+      const plansChannelName = `plans_channel_${userId}_${Date.now()}`;
+      const plansSubscribeParams = {
+        event: '*',
+        schema: 'public',
+        table: 'plans'
+      };
+
+      console.log('🛰️ Plans subscribe params:', plansSubscribeParams);
+      console.log('📺 Plans channel topic:', plansChannelName);
+
       plansChannel = supabase
-        .channel(`plans_channel_${userId}_${Date.now()}`)
+        .channel(plansChannelName)
         .on(
           'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'plans'
-          },
+          plansSubscribeParams,
           (payload) => {
-            console.log('🆕 New plan INSERT event:', payload);
+            console.log('PLANS EVENT:', payload.eventType, payload.table, payload.commit_timestamp, payload.new?.id);
             handlePlansInsert(payload, userId);
           }
-        );
+        )
+        .on('broadcast', { event: 'phx_error' }, (payload) => {
+          console.log('PLANS BROADCAST ERROR:', payload);
+        })
+        .on('broadcast', { event: '*' }, (payload) => {
+          console.log('PLANS BROADCAST ANY:', payload);
+        });
 
       console.log('🛰️ Plans realtime: subscribing now');
+
+      let plansSubscribed = false;
       plansChannel.subscribe((status) => {
-        console.log('📡 Plans channel status:', status);
+        console.log('PLANS CHANNEL STATUS:', status);
+
+        if (status === 'SUBSCRIBED') {
+          plansSubscribed = true;
+        } else if (status === 'CHANNEL_ERROR') {
+          console.log('PLANS CHANNEL ERROR: subscription failed');
+          plansSubscribed = false;
+        } else if (status === 'CLOSED') {
+          console.log('PLANS CHANNEL CLOSED');
+          plansSubscribed = false;
+        } else if (status === 'TIMED_OUT') {
+          console.log('PLANS TIMEOUT: subscription timed out');
+          plansSubscribed = false;
+        }
       });
+
+      // 8-second timeout check
+      setTimeout(() => {
+        if (!plansSubscribed) {
+          console.log('PLANS TIMEOUT: not subscribed after 8 seconds');
+        }
+      }, 8000);
 
       // 1. PLAN UPDATES CHANNEL - The main notification system
       updatesChannel = supabase
@@ -1039,7 +1073,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         isSubscribed = true;
         console.log('✅ Plans real-time subscriptions started successfully!');
         console.log('🔥 Listening for:');
-        console.log('  🆕 plans - new plan INSERT events');
+        console.log('  🆕 plans - ALL plan events (diagnostics mode)');
         console.log('  📢 plan_updates - main notification system');
         console.log('  👥 participants - status changes in user plans');
         console.log('  📊 polls - new polls in user plans');

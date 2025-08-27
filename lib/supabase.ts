@@ -38,5 +38,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// SUPABASE STARTUP DIAGNOSTICS - Log once at startup (sanitized)
+const url = new URL(supabaseUrl);
+console.log('SUPABASE URL HOST:', url.host);
+console.log('PROJECT REF:', url.pathname.split('/')[1] || 'unknown');
+console.log('supabase-js version:', '^2.50.0');
+
 export const SUPABASE_ACTIVE_PROJECT = ACTIVE;
 export const SUPABASE_URL = supabaseUrl;
