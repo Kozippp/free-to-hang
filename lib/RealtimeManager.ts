@@ -47,12 +47,14 @@ class RealtimeManager {
 
 
   // Configuration
-  private readonly MAX_RESUB_ATTEMPTS = 2; // Storm guard: hard cap for resubscribe attempts
-  private readonly COOL_OFF_MS = 60_000; // Storm guard: 60s cool-off period
-  private readonly INITIAL_BACKOFF_MS = 1000;
+  private readonly MAX_RESUB_ATTEMPTS = 3; // Storm guard: hard cap for resubscribe attempts
+  private readonly COOL_OFF_MS = 30_000; // Storm guard: 30s cool-off period (reduced)
+  private readonly INITIAL_BACKOFF_MS = 2000; // Increased initial backoff
   private readonly MAX_BACKOFF_MS = 30000;
   private readonly STATUS_LOG_THROTTLE_MS = 5000; // Throttle repeating status logs
+  private readonly RESUB_LOG_THROTTLE_MS = 15000; // Throttle resubscribe logs (increased)
   private statusLogCache: Map<string, number> = new Map();
+  private resubLogCache: Map<string, number> = new Map();
 
   private constructor() {}
 
@@ -133,6 +135,7 @@ class RealtimeManager {
     this.channels.clear();
     this.eventHandlers.clear();
     this.statusLogCache.clear();
+    this.resubLogCache.clear();
 
     // Reset session state
     this.isStarted = false;
@@ -389,7 +392,9 @@ class RealtimeManager {
     const now = Date.now();
     const lastLogTime = this.statusLogCache.get(cacheKey) || 0;
 
-    if (now - lastLogTime > this.STATUS_LOG_THROTTLE_MS) {
+    // Only log important status changes to reduce spam
+    const importantStatuses = ['SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT'];
+    if (importantStatuses.includes(status) && now - lastLogTime > this.STATUS_LOG_THROTTLE_MS) {
       // Use specific format for plans_list channel
       if (channelKey === 'plans_list') {
         console.log(`📡 plans_list status: ${status}`);
@@ -404,13 +409,27 @@ class RealtimeManager {
       // Reset attempts and cool-off on successful subscription
       channelInfo.attempts = 0;
       channelInfo.coolOffUntil = null;
-      console.log(`✅ ${channelKey} SUBSCRIBED (attempts reset)`);
+
+      // Only log successful subscription for important channels
+      if (channelKey === 'plans_list') {
+        const subscribedKey = `${channelKey}:subscribed`;
+        const lastSubscribedLog = this.resubLogCache.get(subscribedKey) || 0;
+        if (Date.now() - lastSubscribedLog > this.RESUB_LOG_THROTTLE_MS) {
+          console.log(`✅ ${channelKey} SUBSCRIBED (attempts reset)`);
+          this.resubLogCache.set(subscribedKey, Date.now());
+        }
+      }
     } else if (this.isResubscribeableStatus(status)) {
       channelInfo.isSubscribed = false;
 
       // Check if still in cool-off period
       if (channelInfo.coolOffUntil && now < channelInfo.coolOffUntil) {
-        console.log(`⏸ cooling off ${channelKey} until ${new Date(channelInfo.coolOffUntil).toISOString()}`);
+        const coolOffKey = `${channelKey}:cooling_off`;
+        const lastCoolOffLog = this.resubLogCache.get(coolOffKey) || 0;
+        if (now - lastCoolOffLog > this.RESUB_LOG_THROTTLE_MS) {
+          console.log(`⏸ cooling off ${channelKey} until ${new Date(channelInfo.coolOffUntil).toISOString()}`);
+          this.resubLogCache.set(coolOffKey, now);
+        }
         return;
       }
 
@@ -435,7 +454,12 @@ class RealtimeManager {
           channelInfo.channel = null;
         }
 
-        console.log(`🧊 max attempts, cooling off ${channelKey}`);
+        const maxAttemptsKey = `${channelKey}:max_attempts`;
+        const lastMaxAttemptsLog = this.resubLogCache.get(maxAttemptsKey) || 0;
+        if (now - lastMaxAttemptsLog > this.RESUB_LOG_THROTTLE_MS) {
+          console.log(`🧊 max attempts, cooling off ${channelKey}`);
+          this.resubLogCache.set(maxAttemptsKey, now);
+        }
         return;
       }
 
@@ -445,12 +469,22 @@ class RealtimeManager {
       }
 
       channelInfo.attempts += 1;
-      console.log(`⏰ resub attempt ${channelInfo.attempts} for ${channelKey}`);
+      const resubAttemptKey = `${channelKey}:resub_attempt_${channelInfo.attempts}`;
+      const lastResubAttemptLog = this.resubLogCache.get(resubAttemptKey) || 0;
+      if (now - lastResubAttemptLog > this.RESUB_LOG_THROTTLE_MS) {
+        console.log(`⏰ resub attempt ${channelInfo.attempts} for ${channelKey}`);
+        this.resubLogCache.set(resubAttemptKey, now);
+      }
 
       channelInfo.activeTimer = setTimeout(async () => {
         // Remove old channel before recreate
         if (channelInfo.channel) {
-          console.log(`🧹 removing old channel before recreate ${channelKey}`);
+          const removeChannelKey = `${channelKey}:remove_channel`;
+          const lastRemoveChannelLog = this.resubLogCache.get(removeChannelKey) || 0;
+          if (now - lastRemoveChannelLog > this.RESUB_LOG_THROTTLE_MS) {
+            console.log(`🧹 removing old channel before recreate ${channelKey}`);
+            this.resubLogCache.set(removeChannelKey, now);
+          }
           try {
             supabase.removeChannel(channelInfo.channel);
           } catch (error) {
@@ -462,7 +496,7 @@ class RealtimeManager {
         // Recreate ONLY this specific channel (never call global initializers!)
         await this.recreateChannel(channelKey);
         channelInfo.activeTimer = null;
-      }, 1000);
+      }, this.INITIAL_BACKOFF_MS);
     }
   }
 
@@ -488,7 +522,12 @@ class RealtimeManager {
       return;
     }
 
-    console.log(`🔄 Recreating single channel: ${channelKey} (${config.eventName})`);
+    const recreateKey = `${channelKey}:recreate_channel`;
+    const lastRecreateLog = this.resubLogCache.get(recreateKey) || 0;
+    if (Date.now() - lastRecreateLog > this.RESUB_LOG_THROTTLE_MS) {
+      console.log(`🔄 Recreating single channel: ${channelKey} (${config.eventName})`);
+      this.resubLogCache.set(recreateKey, Date.now());
+    }
 
     // Remove old channel from map if it exists
     const existingInfo = this.channels.get(channelKey);
