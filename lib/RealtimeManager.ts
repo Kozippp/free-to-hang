@@ -47,12 +47,12 @@ class RealtimeManager {
 
 
   // Configuration
-  private readonly MAX_RESUB_ATTEMPTS = 3; // Storm guard: hard cap for resubscribe attempts
-  private readonly COOL_OFF_MS = 30_000; // Storm guard: 30s cool-off period (reduced)
-  private readonly INITIAL_BACKOFF_MS = 2000; // Increased initial backoff
+  private readonly MAX_RESUB_ATTEMPTS = 2; // Storm guard: reduced attempts to prevent spam
+  private readonly COOL_OFF_MS = 60_000; // Storm guard: 60s cool-off period (increased)
+  private readonly INITIAL_BACKOFF_MS = 5000; // Increased initial backoff to reduce spam
   private readonly MAX_BACKOFF_MS = 30000;
-  private readonly STATUS_LOG_THROTTLE_MS = 5000; // Throttle repeating status logs
-  private readonly RESUB_LOG_THROTTLE_MS = 15000; // Throttle resubscribe logs (increased)
+  private readonly STATUS_LOG_THROTTLE_MS = 10000; // Throttle status logs more aggressively
+  private readonly RESUB_LOG_THROTTLE_MS = 30000; // Throttle resubscribe logs aggressively
   private statusLogCache: Map<string, number> = new Map();
   private resubLogCache: Map<string, number> = new Map();
 
@@ -215,15 +215,12 @@ class RealtimeManager {
     console.log('📋 Starting plans-only realtime channels...');
     this.plansInitialized = true;
 
-    // TEMPORARILY DISABLED: plans_list channel causing spam
-    // TODO: Re-enable once channel stability issues are resolved
-    console.log('🚫 plans_list channel temporarily disabled to prevent spam');
-    /*
-    // Only create the plans_list channel
+    // Create plans channels with spam control
     const plansOnlyChannelKeys = ['plans_list'];
     for (const channelKey of plansOnlyChannelKeys) {
       const config = this.getChannelConfig(channelKey);
       if (config) {
+        console.log(`📡 Creating plans channel: ${channelKey}`);
         this.createChannel({
           key: channelKey,
           name: `${channelKey}_channel_${this.currentUserId}_${Date.now()}`,
@@ -232,7 +229,6 @@ class RealtimeManager {
         });
       }
     }
-    */
   }
 
   private startPlansChannels(): void {
