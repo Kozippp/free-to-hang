@@ -151,11 +151,34 @@ try {
   app.use('/api/friends', friendsRoutes);
   app.use('/api/plans', plansRoutes);
   app.use('/api/storage', storageRoutes);
-  
+
   console.log('✅ Routes loaded successfully');
 } catch (error) {
   console.error('❌ Failed to load routes:', error.message);
   console.log('🚨 Server will start but API routes will not be available');
+}
+
+// Start plan scheduler if supabase is available
+if (supabase) {
+  try {
+    const scheduler = require('./services/scheduler');
+    scheduler.start();
+
+    // Graceful shutdown for scheduler
+    process.on('SIGTERM', () => {
+      console.log('🛑 SIGTERM received, stopping scheduler...');
+      scheduler.stop();
+    });
+
+    process.on('SIGINT', () => {
+      console.log('🛑 SIGINT received, stopping scheduler...');
+      scheduler.stop();
+    });
+  } catch (error) {
+    console.error('❌ Failed to start scheduler:', error.message);
+  }
+} else {
+  console.log('⚠️ Supabase not available, scheduler will not start');
 }
 
 // 404 handler
