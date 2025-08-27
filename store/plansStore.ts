@@ -250,20 +250,20 @@ const usePlansStore = create<PlansState>((set, get) => ({
         })) : []
       };
       
-      // Add to correct list per spec:
-      // - Anonymous → invitations (including creator)
-      // - Normal   → active (creator auto-accepted)
-      set(state => {
-        const planWithDefaults = ensurePlanDefaults(transformedPlan);
-        if (planWithDefaults.type === 'anonymous') {
-          return { 
-            invitations: [planWithDefaults, ...state.invitations]
-          } as any;
-        }
-        return { 
-          activePlans: [planWithDefaults, ...state.activePlans]
-        } as any;
-      });
+      // DISABLED: Optimistic update that causes race conditions
+      // Plans will be added only after server reload via loadPlans()
+      // This prevents anonymous plans from appearing in wrong tabs
+      // set(state => {
+      //   const planWithDefaults = ensurePlanDefaults(transformedPlan);
+      //   if (planWithDefaults.type === 'anonymous') {
+      //     return {
+      //       invitations: [planWithDefaults, ...state.invitations]
+      //     } as any;
+      //   }
+      //   return {
+      //     activePlans: [planWithDefaults, ...state.activePlans]
+      //   } as any;
+      // });
       
     } catch (error) {
       console.error('❌ Error creating plan:', error);

@@ -152,8 +152,9 @@ export default function PlanSuggestionSheet({
       createdAt: new Date().toISOString()
     };
     
-    // Add the plan to the store
-    addPlan(newPlan);
+    // DISABLED: Optimistic plan addition that causes race conditions
+    // Plans should only be added after server confirmation
+    // addPlan(newPlan);
     
     // Animate the sheet closing
     Animated.timing(slideAnim, {
