@@ -16,8 +16,8 @@ export default function PlansScreen() {
   const [activeTab, setActiveTab] = useState('Plan');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [newPlanTitle, setNewPlanTitle] = useState('');
+  // DISABLED: const [showSuccessModal, setShowSuccessModal] = useState(false);
+  // DISABLED: const [newPlanTitle, setNewPlanTitle] = useState('');
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -88,7 +88,7 @@ export default function PlansScreen() {
         
         // Immediately switch to the correct tab
         setActiveTab(targetTab);
-        setNewPlanTitle(newestPlan.title);
+        // DISABLED: setNewPlanTitle(newestPlan.title);
         setIsAnonymousPlan(newestPlan.type === 'anonymous');
         setHighlightedPlanId(newestPlan.id);
         
@@ -102,15 +102,15 @@ export default function PlansScreen() {
           velocity: 8,
         }).start();
         
-        // Show success modal with short delay for smooth transition
-        setTimeout(() => {
-          setShowSuccessModal(true);
-        }, 300);
-        
-        // Start new plan highlight animation after modal appears
-        setTimeout(() => {
-          startNewPlanAnimation();
-        }, 400);
+        // DISABLED: Show success modal with short delay for smooth transition
+        // setTimeout(() => {
+        //   setShowSuccessModal(true);
+        // }, 300);
+
+        // DISABLED: Start new plan highlight animation after modal appears
+        // setTimeout(() => {
+        //   startNewPlanAnimation();
+        // }, 400);
         
         // Clear the URL parameter after handling
         setTimeout(() => {
@@ -402,12 +402,14 @@ export default function PlansScreen() {
           />
         )}
         
+        {/* DISABLED: PlanCreatedSuccessModal
         <PlanCreatedSuccessModal
           visible={showSuccessModal}
           planTitle={newPlanTitle}
           isAnonymous={isAnonymousPlan}
           onClose={() => setShowSuccessModal(false)}
         />
+        */}
       </SafeAreaView>
     </>
   );

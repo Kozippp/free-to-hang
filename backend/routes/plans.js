@@ -109,7 +109,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
       console.warn('Could not fetch creator info:', creatorError);
     }
 
-    // Get participants (without user relationship)
+    // Get participants with new schema (status instead of response)
     const { data: participants, error: participantsError } = await supabase
       .from('plan_participants')
       .select('*')
@@ -304,7 +304,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
         id: p.user_id,
         name: user?.name || 'Unknown',
         avatar: user?.avatar_url,
-        status: actualStatus || p.status || p.response,
+        status: actualStatus || p.status,
         conditionalFriends: conditionalFriends,
         joinedAt: p.created_at
       };
@@ -375,17 +375,17 @@ const processConditionalDependencies = async (planId) => {
         // Check if all conditional friends are accepted
         const allFriendsAccepted = conditionalFriends.every(friendId => {
           const friend = participants.find(p => p.user_id === friendId);
-          return friend && friend.status === 'accepted';
+          return friend && friend.status === 'going';
         });
         
         if (allFriendsAccepted) {
-          console.log('✅ Converting conditional participant to accepted:', participant.user_id);
+          console.log('✅ Converting conditional participant to going:', participant.user_id);
           
-          // Update participant to accepted
+          // Update participant to going
           const { error: updateError } = await supabase
             .from('plan_participants')
-            .update({ 
-              status: 'accepted'
+            .update({
+              status: 'going'
               // updated_at is handled by database trigger
             })
             .eq('plan_id', planId)
@@ -627,7 +627,7 @@ router.get('/', requireAuth, async (req, res) => {
           id: p.user_id,
           name: user?.name || 'Unknown',
           avatar: user?.avatar_url,
-          status: p.status ?? p.response,
+          status: p.status,
           joinedAt: p.created_at
         };
       });
@@ -805,13 +805,13 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to create plan' });
     }
 
-    // Add creator as participant (use legacy 'response' column for compatibility)
+    // Add creator as participant with new status column
     const { error: creatorInsertError } = await supabase
       .from('plan_participants')
       .insert({
         plan_id: plan.id,
         user_id: userId,
-        response: isAnonymous ? 'pending' : 'accepted'
+        status: isAnonymous ? 'pending' : 'going'
       });
     if (creatorInsertError) {
       // As a secondary attempt, try 'status' for newer schemas
@@ -832,25 +832,25 @@ router.post('/', requireAuth, async (req, res) => {
     // Add invited friends as participants
     if (invitedFriends.length > 0) {
       console.log('🎯 Adding invited friends as participants:', invitedFriends);
-      const participantInsertsResponse = invitedFriends.map(friendId => ({
+      const participantInserts = invitedFriends.map(friendId => ({
         plan_id: plan.id,
         user_id: friendId,
-        response: 'pending'
+        status: 'pending'
       }));
 
       const { error: inviteError } = await supabase
         .from('plan_participants')
-        .insert(participantInsertsResponse);
+        .insert(participantInserts);
       if (inviteError) {
-        // Try 'status' as secondary attempt
-        const participantInsertsStatus = invitedFriends.map(friendId => ({
+        // Try 'response' as fallback for old schema compatibility
+        const participantInsertsResponse = invitedFriends.map(friendId => ({
           plan_id: plan.id,
           user_id: friendId,
-          status: 'pending'
+          response: 'pending'
         }));
         const { error: inviteErrorFallback } = await supabase
           .from('plan_participants')
-          .insert(participantInsertsStatus);
+          .insert(participantInsertsResponse);
         if (inviteErrorFallback) {
           console.error('❌ Error inviting friends:', inviteErrorFallback);
         }
@@ -879,21 +879,21 @@ router.post('/', requireAuth, async (req, res) => {
 router.post('/:id/respond', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { response, conditionalFriends } = req.body;
+    const { status, conditionalFriends } = req.body;
     const userId = req.user.id;
 
-    // Validate response and map to backend format
-    const validResponses = ['pending', 'accepted', 'maybe', 'declined', 'conditional'];
-    const responseMapping = {
-      'accepted': 'accepted',
-      'maybe': 'maybe', 
+    // Validate status
+    const validStatuses = ['pending', 'going', 'maybe', 'declined', 'conditional'];
+    const statusMapping = {
+      'going': 'going',
+      'maybe': 'maybe',
       'declined': 'declined',
       'pending': 'pending',
-      'conditional': 'maybe' // Store conditional as maybe in DB, handle logic in frontend
+      'conditional': 'conditional' // Store conditional directly in DB
     };
-    
-    if (!validResponses.includes(response)) {
-      return res.status(400).json({ error: 'Invalid response' });
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
     }
 
     // Check if participant already exists
@@ -907,13 +907,13 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
     let participant;
     let error;
 
-    // Prepare participant data (prefer legacy 'response' column for compat)
-    const participantDataResponse = {
-      response: responseMapping[response] || response
+    // Prepare participant data with new status column
+    const participantData = {
+      status: statusMapping[status] || status
     };
 
     // Handle conditional friends data
-    if (response === 'conditional' && conditionalFriends && conditionalFriends.length > 0) {
+    if (status === 'conditional' && conditionalFriends && conditionalFriends.length > 0) {
       // First, remove any existing conditional data for this user
       await supabase
         .from('plan_updates')
@@ -954,7 +954,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       try {
         const resp = await supabase
           .from('plan_participants')
-          .update(participantDataResponse)
+          .update(participantData)
           .eq('plan_id', id)
           .eq('user_id', userId)
           .select()
@@ -969,7 +969,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       if (updateError) {
         const { data: updated2, error: updateError2 } = await supabase
           .from('plan_participants')
-          .update({ status: responseMapping[response] || response })
+          .update({ status: statusMapping[status] || status })
           .eq('plan_id', id)
           .eq('user_id', userId)
           .select()
@@ -989,7 +989,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
           .insert({
             plan_id: id,
             user_id: userId,
-            ...participantDataResponse,
+            ...participantData,
             created_at: new Date().toISOString()
           })
           .select()
@@ -1006,7 +1006,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
           .insert({
             plan_id: id,
             user_id: userId,
-            status: responseMapping[response] || response,
+            status: statusMapping[status] || status,
             created_at: new Date().toISOString()
           })
           .select()
@@ -1104,8 +1104,8 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'accepted') {
-      return res.status(403).json({ error: 'Only accepted participants can create polls' });
+    if (participantError || !participant || participant.status !== 'going') {
+      return res.status(403).json({ error: 'Only going participants can create polls' });
     }
 
     // Create poll
@@ -1184,8 +1184,8 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'accepted') {
-      return res.status(403).json({ error: 'Only accepted participants can vote' });
+    if (participantError || !participant || participant.status !== 'going') {
+      return res.status(403).json({ error: 'Only going participants can vote' });
     }
 
     // Remove existing votes for this poll
