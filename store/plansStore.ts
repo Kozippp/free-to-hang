@@ -77,7 +77,7 @@ interface PlansState {
   // markPlanAsSeen: (planId: string) => Promise<void>; // TODO: Enable when backend is ready
   
   // Real-time subscriptions
-  startRealTimeUpdates: (userId: string) => void;
+  startRealTimeUpdates: (userId: string) => Promise<void>;
   stopRealTimeUpdates: () => void;
   
   // Actions
@@ -125,6 +125,12 @@ interface PlansState {
 
 // Global variables for real-time subscriptions
 let plansChannel: any = null;
+let participantsChannel: any = null;
+let pollsChannel: any = null;
+let pollOptionsChannel: any = null;
+let pollVotesChannel: any = null;
+let updatesChannel: any = null;
+let attendanceChannel: any = null;
 let isSubscribed = false;
 
 const usePlansStore = create<PlansState>((set, get) => ({
@@ -905,352 +911,290 @@ const usePlansStore = create<PlansState>((set, get) => ({
     });
   },
   
-  // Real-time subscriptions
-  startRealTimeUpdates: (userId: string) => {
-    if (isSubscribed || plansChannel) {
-      console.log('🛑 Plans real-time subscription already active');
+  // Real-time subscriptions - separate channels for each table
+  startRealTimeUpdates: async (userId: string) => {
+    if (isSubscribed) {
+      console.log('🛑 Plans real-time subscriptions already active');
       return;
     }
 
-    console.log('🚀 Starting plans real-time updates...');
+    console.log('🚀 Starting plans real-time updates with separate channels...');
 
     try {
-      // Remember current user for insert categorization
+      // Remember current user for filtering
       set({ currentUserId: userId });
-      // Create channel for plans tables with filtering (like friend requests)
+
+      // Stop any existing channels first
+      await stopAllRealtimeChannels();
+
+      // Load initial data immediately when real-time starts
+      console.log('📊 Loading initial plans data...');
+      await get().loadPlans(userId);
+
+      // Get user's plans for filtering other subscriptions
+      const userPlans = await plansService.getPlans();
+      const userPlanIds = userPlans.map(plan => plan.id);
+
+      // 0. PLANS CHANNEL - Listen for new plans (main table INSERT events)
       plansChannel = supabase
-        .channel(`plans_updates_${userId}_${Date.now()}`)
+        .channel(`plans_channel_${userId}_${Date.now()}`)
         .on(
           'postgres_changes',
           {
-            event: '*',
-            schema: 'public',
-            table: 'plans',
-            filter: `creator_id=eq.${userId}`
-          },
-          (payload) => {
-            console.log('📡 Plans table update (creator):', payload);
-            handlePlansRealtimeChange(payload, userId);
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'plan_participants',
-            filter: `user_id=eq.${userId}`
-          },
-          (payload) => {
-            console.log('📡 Plan participants update (participant):', payload);
-            handlePlansRealtimeChange(payload, userId);
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'DELETE',
+            event: 'INSERT',
             schema: 'public',
             table: 'plans'
           },
           (payload) => {
-            console.log('📡 Plans DELETE event (global):', payload);
-            // DELETE events don't have filters, so we process all and let handler decide
-            handlePlansRealtimeChange(payload, userId);
+            console.log('🆕 New plan INSERT event:', payload);
+            handlePlansInsert(payload, userId);
           }
         )
+        .subscribe((status) => {
+          console.log('📡 Plans channel status:', status);
+        });
+
+      // 1. PLAN UPDATES CHANNEL - The main notification system
+      updatesChannel = supabase
+        .channel(`plan_updates_channel_${userId}_${Date.now()}`)
         .on(
           'postgres_changes',
           {
-            event: 'DELETE',
+            event: '*',
+            schema: 'public',
+            table: 'plan_updates'
+          },
+          (payload) => {
+            console.log('📢 Plan update notification:', payload);
+            handlePlanUpdateNotification(payload, userId);
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Plan updates channel status:', status);
+        });
+
+      // 2. PARTICIPANTS CHANNEL - Listen for participant changes in user's plans
+      participantsChannel = supabase
+        .channel(`participants_channel_${userId}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
             schema: 'public',
             table: 'plan_participants'
           },
           (payload) => {
-            console.log('📡 Plan participants DELETE event (global):', payload);
-            handlePlansRealtimeChange(payload, userId);
+            console.log('👥 Participants table change:', payload);
+            handleParticipantsChange(payload, userId);
           }
         )
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_updates'
-        }, (payload) => {
-          console.log('📡 Plan updates table update:', payload);
-          handlePlanUpdateNotification(payload, userId);
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_polls'
-        }, (payload) => {
-          console.log('📡 Plan polls update:', payload);
-          handlePollUpdate(payload, userId);
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_poll_votes'
-        }, (payload) => {
-          console.log('📡 Plan poll votes update:', payload);
-          handlePollVoteUpdate(payload, userId);
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_poll_options'
-        }, (payload) => {
-          console.log('📡 Plan poll options update:', payload);
-          handlePollUpdate(payload, userId);
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'plan_attendance'
-        }, (payload) => {
-          console.log('📡 Plan attendance update:', payload);
-          loadPlans(currentUserId);
-        })
         .subscribe((status) => {
-          console.log('📡 Plans channel status:', status);
-          if (status === 'SUBSCRIBED') {
-            isSubscribed = true;
-            console.log('✅ Plans real-time subscription started - READY FOR LIVE UPDATES!');
-            console.log('🔥 Listening for (with filters like friend requests):');
-            console.log('  - plans (creator_id filter)');
-            console.log('  - plan_participants (user_id filter)');
-            console.log('  - plan_updates (no filter)');
-            console.log('  - plan_polls (no filter)');
-            console.log('  - plan_poll_votes (no filter)');
-            console.log('  - plan_poll_options (no filter)');
-            console.log('  - plan_attendance (no filter)');
-
-            // Test realtime by sending a test notification
-            setTimeout(async () => {
-              console.log('🧪 Testing realtime connection...');
-              try {
-                const supabase = (await import('@/lib/supabase')).supabase;
-                const { error } = await supabase
-                  .from('plan_updates')
-                  .insert({
-                    plan_id: 'test-connection-' + Date.now(),
-                    update_type: 'connection_test',
-                    triggered_by: 'system-test',
-                    metadata: { test: true, timestamp: new Date().toISOString() }
-                  });
-                if (error) {
-                  console.log('❌ Test notification failed:', error);
-                } else {
-                  console.log('✅ Test notification sent - if you see this in logs, realtime works!');
-                }
-              } catch (e) {
-                console.log('❌ Test failed:', e);
-              }
-            }, 2000);
-
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Plans real-time channel error!');
-            console.log('🔧 POSSIBLE SOLUTIONS:');
-            console.log('   1. Network/firewall blocking WebSocket connections');
-            console.log('   2. Supabase project configuration issue');
-            console.log('   3. Check browser console for CORS or network errors');
-            console.log('   4. Try different network or disable VPN');
-            isSubscribed = false;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Plans real-time timed out!');
-            console.log('🔧 POSSIBLE CAUSES:');
-            console.log('   1. Slow network connection');
-            console.log('   2. Supabase servers overloaded');
-            console.log('   3. Firewall blocking WebSocket connections');
-            console.log('   4. Try refreshing the page');
-            isSubscribed = false;
-          } else if (status === 'CLOSED') {
-            console.log('🔒 Plans real-time closed');
-            isSubscribed = false;
-          } else {
-            console.log('❓ Unknown plans channel status:', status);
-            isSubscribed = false;
-          }
+          console.log('📡 Participants channel status:', status);
         });
+
+      // 3. POLLS CHANNEL - Listen for polls in user's plans
+      pollsChannel = supabase
+        .channel(`polls_channel_${userId}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'plan_polls'
+          },
+          (payload) => {
+            console.log('📊 Polls table change:', payload);
+            handlePollsChange(payload, userId);
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Polls channel status:', status);
+        });
+
+      // 4. POLL VOTES CHANNEL - Listen for vote changes
+      pollVotesChannel = supabase
+        .channel(`poll_votes_channel_${userId}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'plan_poll_votes'
+          },
+          (payload) => {
+            console.log('🗳️ Poll votes change:', payload);
+            handlePollVotesChange(payload, userId);
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Poll votes channel status:', status);
+        });
+
+      // Wait a moment for all subscriptions to establish
+      setTimeout(() => {
+        isSubscribed = true;
+        console.log('✅ Plans real-time subscriptions started successfully!');
+        console.log('🔥 Listening for:');
+        console.log('  🆕 plans - new plan INSERT events');
+        console.log('  📢 plan_updates - main notification system');
+        console.log('  👥 participants - status changes in user plans');
+        console.log('  📊 polls - new polls in user plans');
+        console.log('  🗳️ poll_votes - vote changes');
+      }, 1000);
+
     } catch (error) {
       console.error('❌ Error starting plans real-time updates:', error);
       isSubscribed = false;
+      await stopAllRealtimeChannels();
     }
   },
   
   stopRealTimeUpdates: () => {
-    console.log('🛑 Stopping plans real-time updates...');
-    
-    if (plansChannel) {
-      supabase.removeChannel(plansChannel);
-      plansChannel = null;
-    }
-    
-    isSubscribed = false;
-    console.log('✅ Plans real-time updates stopped');
+    console.log('🛑 Stopping all plans real-time updates...');
+    stopAllRealtimeChannels();
+    console.log('✅ All plans real-time updates stopped');
   }
 }));
 
-// Handle real-time plan updates
-function handlePlanUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
-  
-  if (payload.eventType === 'INSERT') {
-    console.log('📝 New plan created via real-time');
-    try {
-      const row = payload.new;
-      const isAnonymous = !!(row?.is_private || row?.is_anonymous);
-      const creatorId = row?.creator_id;
-      const isCreator = creatorId && creatorId === (usePlansStore.getState().currentUserId || currentUserId);
-      // DISABLED: Ära lisa optimistlikult üldse - sünkroniseeri ainult serverist
-      // See väldib race condition probleeme anonüümsete plaanidega
-      // if (!isCreator) {
-      //   const lightweightPlan: any = {
-      //     id: row.id,
-      //     title: row.title,
-      //     description: row.description,
-      //     type: isAnonymous ? 'anonymous' : 'normal',
-      //     creator: isAnonymous ? null : { id: creatorId, name: '', avatar_url: '' },
-      //     participants: [],
-      //     date: row.date,
-      //     location: row.location,
-      //     isRead: false,
-      //     createdAt: row.created_at,
-      //   };
-      //   usePlansStore.getState().addPlan(lightweightPlan);
-      // }
-      // Seejärel alati täis reload
-      loadPlans(currentUserId);
-    } catch (e) {
-      loadPlans(currentUserId);
+// Helper function to stop all realtime channels
+async function stopAllRealtimeChannels() {
+  const channels = [plansChannel, updatesChannel, participantsChannel, pollsChannel, pollVotesChannel];
+  const channelNames = ['plans', 'plan_updates', 'participants', 'polls', 'poll_votes'];
+
+  for (let i = 0; i < channels.length; i++) {
+    if (channels[i]) {
+      try {
+        await supabase.removeChannel(channels[i]);
+        console.log(`🛑 Stopped ${channelNames[i]} channel`);
+      } catch (error) {
+        console.error(`❌ Error stopping ${channelNames[i]} channel:`, error);
+      }
+      channels[i] = null;
     }
-  } else if (payload.eventType === 'UPDATE') {
-    console.log('📝 Plan updated via real-time');
-    // Reload plans to get updated data
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'DELETE') {
-    console.log('🗑️ Plan deleted via real-time');
-    // Reload plans to remove deleted plan
-    loadPlans(currentUserId);
   }
+
+  isSubscribed = false;
 }
 
-// Handle real-time participant updates
-function handleParticipantUpdate(payload: any, currentUserId: string) {
-  const { loadPlans } = usePlansStore.getState();
-  
-  console.log('👥 Plan participant changed via real-time');
-  // Reload plans to get updated participant data
-  loadPlans(currentUserId);
-}
-
-// Handle plans realtime changes (like friend requests handleRealtimeChange)
-function handlePlansRealtimeChange(payload: any, currentUserId: string) {
+// Handle plans table INSERT events
+function handlePlansInsert(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
-  const { loadPlans } = usePlansStore.getState();
 
-  console.log('📡 Processing plans realtime change:', {
+  console.log('📋 Processing plans INSERT event:', {
     eventType,
-    table: payload.table,
+    planId: newRecord?.id,
+    title: newRecord?.title,
+    creatorId: newRecord?.creator_id,
     currentUserId
   });
 
-  if (eventType === 'INSERT') {
-    console.log('📝 New plan record inserted via real-time');
-    // Force reload plans data (bypass cache)
-    loadPlans(currentUserId).then(() => {
-      console.log('✅ Plans updated via real-time INSERT');
-    }).catch(error => {
-      console.error('❌ Error updating plans via real-time:', error);
-    });
+  if (eventType === 'INSERT' && newRecord) {
+    console.log('🎯 New plan inserted - refreshing plans data');
 
-  } else if (eventType === 'UPDATE') {
-    console.log('📝 Plan record updated via real-time');
-    // Force reload plans data (bypass cache)
+    // Reload plans data to include the new plan
+    const { loadPlans } = usePlansStore.getState();
     loadPlans(currentUserId).then(() => {
-      console.log('✅ Plans updated via real-time UPDATE');
+      console.log('✅ Plans refreshed after new plan INSERT');
     }).catch(error => {
-      console.error('❌ Error updating plans via real-time:', error);
-    });
-
-  } else if (eventType === 'DELETE') {
-    console.log('🗑️ Plan record deleted via real-time');
-    // Force reload plans data (bypass cache)
-    loadPlans(currentUserId).then(() => {
-      console.log('✅ Plans updated via real-time DELETE');
-    }).catch(error => {
-      console.error('❌ Error updating plans via real-time:', error);
+      console.error('❌ Error refreshing plans after INSERT:', error);
     });
   }
 }
 
-// Handle real-time plan update notifications
+// Handle plan update notifications - MAIN NOTIFICATION SYSTEM
 function handlePlanUpdateNotification(payload: any, currentUserId: string) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
   const { loadPlans } = usePlansStore.getState();
 
-  console.log('📢 Plan update notification received:', payload);
-  console.log('👤 Current user ID:', currentUserId);
-  console.log('📡 Event type:', payload.eventType);
+  console.log('📢 Processing plan update notification:', {
+    eventType,
+    updateType: newRecord?.update_type,
+    planId: newRecord?.plan_id,
+    triggeredBy: newRecord?.triggered_by,
+    currentUserId
+  });
 
-  // Handle different types of updates
-  if (payload.eventType === 'INSERT') {
-    const updateType = payload.new?.update_type;
-    const planId = payload.new?.plan_id;
-    const triggeredBy = payload.new?.triggered_by;
+  if (eventType === 'INSERT' && newRecord) {
+    const updateType = newRecord.update_type;
+    const planId = newRecord.plan_id;
+    const triggeredBy = newRecord.triggered_by;
 
-    console.log('📢 New plan update details:', {
-      updateType,
-      planId,
-      triggeredBy,
-      fullPayload: payload.new
-    });
-
-    // Reload on important update types
-    if (updateType === 'poll_created' || updateType === 'poll_voted' || updateType === 'plan_created' || updateType === 'participant_joined') {
-      console.log('🔄 Reloading plans due to:', updateType, 'for plan:', planId);
-      loadPlans(currentUserId);
+    // Handle different types of plan updates
+    if (updateType === 'plan_created') {
+      console.log('🎯 New plan created - refreshing plans data');
+      loadPlans(currentUserId).then(() => {
+        console.log('✅ Plans refreshed after new plan creation');
+      }).catch(error => {
+        console.error('❌ Error refreshing plans after creation:', error);
+      });
+    } else if (updateType === 'participant_joined') {
+      console.log('👥 Participant joined/changed status - refreshing plans data');
+      loadPlans(currentUserId).then(() => {
+        console.log('✅ Plans refreshed after participant change');
+      }).catch(error => {
+        console.error('❌ Error refreshing plans after participant change:', error);
+      });
+    } else if (updateType === 'poll_created' || updateType === 'poll_voted') {
+      console.log('📊 Poll activity - refreshing plans data');
+      loadPlans(currentUserId).then(() => {
+        console.log('✅ Plans refreshed after poll activity');
+      }).catch(error => {
+        console.error('❌ Error refreshing plans after poll activity:', error);
+      });
     } else {
-      console.log('⏭️ Skipping reload for update type:', updateType);
+      console.log(`🔄 Other update type (${updateType}) - refreshing plans data`);
+      loadPlans(currentUserId).then(() => {
+        console.log('✅ Plans refreshed after update');
+      }).catch(error => {
+        console.error('❌ Error refreshing plans after update:', error);
+      });
     }
-  } else {
-    console.log('⏭️ Skipping non-INSERT event:', payload.eventType);
   }
 }
 
-// Handle real-time poll updates
-function handlePollUpdate(payload: any, currentUserId: string) {
+// Handle participants table changes
+function handleParticipantsChange(payload: any, currentUserId: string) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
   const { loadPlans } = usePlansStore.getState();
-  
-  console.log('📊 Poll update received:', payload);
-  
-  if (payload.eventType === 'INSERT') {
-    console.log('📊 New poll created via real-time');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'UPDATE') {
-    console.log('📊 Poll updated via real-time');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'DELETE') {
-    console.log('📊 Poll deleted via real-time');
-    loadPlans(currentUserId);
-  }
+
+  console.log('👥 Processing participants table change:', { eventType, currentUserId });
+
+  // Reload plans data for any participant change
+  loadPlans(currentUserId).then(() => {
+    console.log('✅ Plans updated after participants table change');
+  }).catch(error => {
+    console.error('❌ Error updating plans after participants table change:', error);
+  });
 }
 
-// Handle real-time poll vote updates
-function handlePollVoteUpdate(payload: any, currentUserId: string) {
+// Handle polls table changes
+function handlePollsChange(payload: any, currentUserId: string) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
   const { loadPlans } = usePlansStore.getState();
-  
-  console.log('🗳️ Poll vote update received:', payload);
-  
-  if (payload.eventType === 'INSERT') {
-    console.log('🗳️ New poll vote via real-time');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'UPDATE') {
-    console.log('🗳️ Poll vote updated via real-time');
-    loadPlans(currentUserId);
-  } else if (payload.eventType === 'DELETE') {
-    console.log('🗳️ Poll vote deleted via real-time');
-    loadPlans(currentUserId);
-  }
+
+  console.log('📊 Processing polls table change:', { eventType, currentUserId });
+
+  // Reload plans data to get updated polls
+  loadPlans(currentUserId).then(() => {
+    console.log('✅ Plans updated after polls table change');
+  }).catch(error => {
+    console.error('❌ Error updating plans after polls table change:', error);
+  });
+}
+
+// Handle poll votes changes
+function handlePollVotesChange(payload: any, currentUserId: string) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+  const { loadPlans } = usePlansStore.getState();
+
+  console.log('🗳️ Processing poll votes change:', { eventType, currentUserId });
+
+  // Reload plans data to get updated vote counts
+  loadPlans(currentUserId).then(() => {
+    console.log('✅ Plans updated after poll votes change');
+  }).catch(error => {
+    console.error('❌ Error updating plans after poll votes change:', error);
+  });
 }
 
 export default usePlansStore;
