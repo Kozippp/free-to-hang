@@ -145,17 +145,17 @@ class PlanScheduler {
     this.tasks.push(task);
   }
 
-  // Reevaluate conditional statuses
+  // Reevaluate conditional statuses (Node implementation, no DB RPC)
   scheduleConditionalReevaluation() {
     const task = cron.schedule('*/2 * * * *', async () => {
       try {
         console.log('🔄 Checking conditional statuses...');
 
-        // Get all plans with conditional participants
+        // Get all plans that potentially have conditional participants (stored as 'maybe')
         const { data: conditionalParticipants, error } = await supabase
           .from('plan_participants')
-          .select('plan_id, user_id')
-          .eq('status', 'maybe'); // Conditional participants are stored as 'maybe'
+          .select('plan_id')
+          .eq('status', 'maybe');
 
         if (error) {
           console.error('❌ Error fetching conditional participants:', error);
@@ -166,26 +166,16 @@ class PlanScheduler {
           return;
         }
 
-        // Group by plan
-        const plansMap = new Map();
-        conditionalParticipants.forEach(cp => {
-          if (!plansMap.has(cp.plan_id)) {
-            plansMap.set(cp.plan_id, []);
-          }
-          plansMap.get(cp.plan_id).push(cp.user_id);
-        });
+        // Get unique plan ids
+        const planIds = [...new Set(conditionalParticipants.map(cp => cp.plan_id))];
 
-        // Process each plan
-        for (const [planId, userIds] of plansMap) {
+        // Process each plan using the same TS logic as in the route
+        for (const planId of planIds) {
           try {
-            // Call the conditional processing function
-            const { data, error: processError } = await supabase.rpc('process_conditional_dependencies', {
-              plan_id: planId
-            });
-
-            if (processError) {
-              console.error(`❌ Error processing conditional dependencies for plan ${planId}:`, processError);
-            } else {
+            // Dynamically import the plans router to access the helper
+            const plansRouter = require('../routes/plans');
+            if (typeof plansRouter.processConditionalDependencies === 'function') {
+              await plansRouter.processConditionalDependencies(planId);
               console.log(`✅ Processed conditional dependencies for plan ${planId}`);
             }
           } catch (planError) {

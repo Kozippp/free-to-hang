@@ -226,7 +226,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
       .from('plan_updates')
       .select('triggered_by, metadata')
       .eq('plan_id', planId)
-      .like('metadata', '%is_conditional%')
+      .contains('metadata', { is_conditional: true })
       .order('created_at', { ascending: false });
 
     if (conditionalError) throw conditionalError;
@@ -368,7 +368,7 @@ const processConditionalDependencies = async (planId) => {
       .select('triggered_by, metadata')
       .eq('plan_id', planId)
       .eq('update_type', 'participant_joined')
-      .like('metadata', '%is_conditional%')
+      .contains('metadata', { is_conditional: true })
       .order('created_at', { ascending: false });
 
     if (conditionalError) throw conditionalError;
@@ -426,7 +426,7 @@ const processConditionalDependencies = async (planId) => {
               .eq('plan_id', planId)
               .eq('update_type', 'participant_joined')
               .eq('triggered_by', participant.user_id)
-              .like('metadata', '%is_conditional%');
+              .contains('metadata', { is_conditional: true });
             
             // Update local data
             participant.status = 'going';
@@ -984,7 +984,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
         .eq('plan_id', id)
         .eq('update_type', 'participant_joined')
         .eq('triggered_by', userId)
-        .like('metadata', '%is_conditional%');
+        .contains('metadata', { is_conditional: true });
       
       // Store new conditional friends metadata using 'participant_joined' type
       await supabase
@@ -1007,7 +1007,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
         .eq('plan_id', id)
         .eq('update_type', 'participant_joined')
         .eq('triggered_by', userId)
-        .like('metadata', '%is_conditional%');
+        .contains('metadata', { is_conditional: true });
     }
 
     if (existingParticipant) {
@@ -1342,4 +1342,6 @@ router.post('/:id/attendance', requireAuth, async (req, res) => {
   }
 });
 
-module.exports = router; 
+// Export the router as default, but also expose internal helpers for scheduler
+router.processConditionalDependencies = processConditionalDependencies;
+module.exports = router;
