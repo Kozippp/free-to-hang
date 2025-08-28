@@ -215,10 +215,11 @@ class PlansService {
   // }
 
   // Respond to plan invitation
-  async respondToPlan(planId: string, response: 'accepted' | 'maybe' | 'declined' | 'pending' | 'conditional', conditionalFriends?: string[]): Promise<Plan> {
+  async respondToPlan(planId: string, response: 'going' | 'maybe' | 'declined' | 'pending' | 'conditional', conditionalFriends?: string[]): Promise<Plan> {
     try {
       console.log('📝 Responding to plan:', planId, 'with:', response, conditionalFriends ? `(conditional friends: ${conditionalFriends.length})` : '');
-      const body: any = { response };
+      // Backend expects { status: ... }
+      const body: any = { status: response };
       if (response === 'conditional' && conditionalFriends) {
         body.conditionalFriends = conditionalFriends;
       }

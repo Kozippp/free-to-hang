@@ -22,9 +22,9 @@ export default function PlanUserStatus({
   const [showConditionalModal, setShowConditionalModal] = useState(false);
 
   const handleStatusChange = (newStatus: ParticipantStatus) => {
-    // Show warning only when going FROM 'accepted' (going) TO maybe/conditional
+    // Show warning only when going FROM 'going' TO maybe/conditional
     // because only when you're "going" you can actually vote and have votes to lose
-    if (currentStatus === 'accepted' && (newStatus === 'maybe' || newStatus === 'conditional')) {
+    if (currentStatus === 'going' && (newStatus === 'maybe' || newStatus === 'conditional')) {
       Alert.alert(
         'Change Status',
         'Changing your status will remove all your votes. Are you sure?',
@@ -104,12 +104,12 @@ export default function PlanUserStatus({
 
   const getStatusStyle = (status: ParticipantStatus) => {
     switch (status) {
-      case 'accepted':
+      case 'going':
         return {
-          backgroundColor: currentStatus === 'accepted' ? '#4CAF50' : '#E8F5E8',
+          backgroundColor: currentStatus === 'going' ? '#4CAF50' : '#E8F5E8',
           borderColor: '#4CAF50',
-          iconColor: currentStatus === 'accepted' ? 'white' : '#4CAF50',
-          textColor: currentStatus === 'accepted' ? 'white' : '#4CAF50'
+          iconColor: currentStatus === 'going' ? 'white' : '#4CAF50',
+          textColor: currentStatus === 'going' ? 'white' : '#4CAF50'
         };
       case 'maybe':
         return {
@@ -152,18 +152,18 @@ export default function PlanUserStatus({
             style={[
               styles.statusButton,
               {
-                backgroundColor: getStatusStyle('accepted').backgroundColor,
-                borderColor: getStatusStyle('accepted').borderColor,
+                backgroundColor: getStatusStyle('going').backgroundColor,
+                borderColor: getStatusStyle('going').borderColor,
                 borderWidth: 2,
               }
             ]}
-            onPress={() => handleStatusChange('accepted')}
+            onPress={() => handleStatusChange('going')}
             activeOpacity={0.8}
           >
-            <CheckCircle size={20} color={getStatusStyle('accepted').iconColor} />
+            <CheckCircle size={20} color={getStatusStyle('going').iconColor} />
             <Text style={[
               styles.statusText,
-              { color: getStatusStyle('accepted').textColor, fontWeight: currentStatus === 'accepted' ? '600' : '500' }
+              { color: getStatusStyle('going').textColor, fontWeight: currentStatus === 'going' ? '600' : '500' }
             ]}>
               Going
             </Text>

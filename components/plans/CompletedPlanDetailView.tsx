@@ -51,7 +51,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
   const currentUserAttended = latestPlan.attendanceRecord?.['current'] ?? null;
   
   // Group participants by status
-  const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'accepted');
+  const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
   const maybeParticipants = latestPlan.participants.filter(p => 
     p.status === 'maybe' || p.status === 'conditional'
   );

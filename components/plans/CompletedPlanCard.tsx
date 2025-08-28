@@ -11,8 +11,8 @@ interface CompletedPlanCardProps {
 }
 
 export default function CompletedPlanCard({ plan, onPress, userAttended }: CompletedPlanCardProps) {
-  // Get participants who actually joined (accepted status)
-  const joinedParticipants = plan.participants.filter(p => p.status === 'accepted');
+  // Get participants who actually joined (going status)
+  const joinedParticipants = plan.participants.filter(p => p.status === 'going');
   
   // Format creation date to short format
   const formatDate = (createdAt: string) => {

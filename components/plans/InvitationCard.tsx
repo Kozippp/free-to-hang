@@ -23,7 +23,7 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
 
   // Get participants by status
   const acceptedParticipants = plan.participants.filter(p => 
-    p.status === 'accepted' || p.status === 'maybe' || p.status === 'conditional'
+    p.status === 'going' || p.status === 'maybe' || p.status === 'conditional'
   );
   
   // Get total participants excluding current user
@@ -74,7 +74,7 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
   
   // Get status badge for the current user
   const getUserStatusBadge = () => {
-    if (currentUserStatus === 'accepted') {
+    if (currentUserStatus === 'going') {
       return (
         <View style={[styles.statusBadge, styles.goingBadge]}>
           <CheckCircle size={12} color="white" style={styles.statusBadgeIcon} />
@@ -174,11 +174,11 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
               {/* Status indicator on avatar */}
               <View style={[
                 styles.avatarStatus,
-                participant.status === 'accepted' && styles.acceptedStatus,
+                participant.status === 'going' && styles.acceptedStatus,
                 participant.status === 'maybe' && styles.maybeStatus,
                 participant.status === 'conditional' && styles.conditionalStatus
               ]}>
-                {participant.status === 'accepted' && (
+                {participant.status === 'going' && (
                   <Check size={10} color="white" />
                 )}
                 {participant.status === 'maybe' && (

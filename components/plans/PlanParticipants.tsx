@@ -34,12 +34,12 @@ export default function PlanParticipants({
             <Image source={{ uri: participant.avatar }} style={styles.avatar} />
             <View style={[
               styles.statusIndicator,
-              participant.status === 'accepted' && styles.acceptedIndicator,
+              participant.status === 'going' && styles.acceptedIndicator,
               participant.status === 'maybe' && styles.maybeIndicator,
               participant.status === 'conditional' && styles.conditionalIndicator,
               participant.status === 'pending' && styles.pendingIndicator,
             ]}>
-              {participant.status === 'accepted' && (
+              {participant.status === 'going' && (
                 <Check size={10} color="white" />
               )}
               {participant.status === 'maybe' && (

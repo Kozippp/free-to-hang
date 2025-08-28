@@ -144,7 +144,7 @@ export default function PlanSuggestionSheet({
         id: friend.id,
         name: friend.name,
         avatar: friend.avatar,
-        status: friend.id === user.id ? 'accepted' as ParticipantStatus : 'pending' as ParticipantStatus
+        status: friend.id === user.id ? 'going' as ParticipantStatus : 'pending' as ParticipantStatus
       })),
       date: 'Tomorrow, 7:00 PM', // This would be set by the user in a real app
       location: 'To be determined', // This would be set by the user in a real app

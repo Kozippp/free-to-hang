@@ -499,7 +499,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
           if (index !== -1) {
             updatedParticipants[index] = {
               ...updatedParticipants[index],
-              status: 'accepted',
+              status: 'going',
               conditionalFriends: undefined
             };
             hasChanges = true;
@@ -547,8 +547,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const friend = allParticipants.find(p => p.id === friendId);
       if (!friend) return false;
       
-      // If friend is already accepted, condition is met
-      if (friend.status === 'accepted') return true;
+      // If friend is already going, condition is met
+      if (friend.status === 'going') return true;
       
       // If friend is conditional, check if they can be accepted
       if (friend.status === 'conditional' && friend.conditionalFriends) {
@@ -698,18 +698,18 @@ const usePlansStore = create<PlansState>((set, get) => ({
         if (planCreatedAt < cutoffTime) {
           // Filter participants based on their response
           const respondedParticipants = plan.participants.filter(p => 
-            p.status === 'accepted' || p.status === 'declined'
+            p.status === 'going' || p.status === 'declined'
           );
           
           // Only include the plan in completed if current user responded
           const currentUser = plan.participants.find(p => p.id === 'current');
-          if (currentUser && (currentUser.status === 'accepted' || currentUser.status === 'declined')) {
+          if (currentUser && (currentUser.status === 'going' || currentUser.status === 'declined')) {
             const completedPlan = {
               ...plan,
               participants: respondedParticipants,
-              // Add attendance record - automatically mark "accepted" users as attended
+              // Add attendance record - automatically mark "going" users as attended
               attendanceRecord: respondedParticipants.reduce((record: Record<string, boolean>, participant) => {
-                record[participant.id] = participant.status === 'accepted';
+                record[participant.id] = participant.status === 'going';
                 return record;
               }, {}),
             };
@@ -753,7 +753,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
     
     // Plan can be marked as completed if it's been 4+ hours AND not already completed
     const votedUsers = plan.completionVotes || [];
-    const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
+    const acceptedParticipants = plan.participants.filter(p => p.status === 'going');
     const maybeParticipants = plan.participants.filter(p => p.status === 'maybe');
     
     // Use new completion logic

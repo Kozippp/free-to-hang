@@ -67,7 +67,7 @@ export default function ConditionalFriendsModal({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'accepted': return '#4CAF50';
+      case 'going': return '#4CAF50';
       case 'maybe': return '#FF9800';
       case 'conditional': return '#2196F3';
       case 'declined': return '#F44336';
@@ -77,7 +77,7 @@ export default function ConditionalFriendsModal({
 
   const getStatusText = (participant: Participant) => {
     switch (participant.status) {
-      case 'accepted': return 'Going';
+      case 'going': return 'Going';
       case 'maybe': return 'Maybe';
       case 'conditional': 
         if (participant.conditionalFriends && participant.conditionalFriends.length > 0) {
