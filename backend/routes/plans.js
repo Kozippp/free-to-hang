@@ -423,7 +423,7 @@ const processConditionalDependencies = async (planId) => {
               .like('metadata', '%is_conditional%');
             
             // Update local data
-            participant.status = 'accepted';
+            participant.status = 'going';
             conditionalMap.delete(participant.user_id);
             iterationChanges = true;
             hasChanges = true;
@@ -932,7 +932,11 @@ router.post('/', requireAuth, async (req, res) => {
 router.post('/:id/respond', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, conditionalFriends } = req.body;
+    // Backward compatibility: accept both `status` and legacy `response`
+    let { status, conditionalFriends, response } = req.body;
+    if (!status && response) {
+      status = response === 'accepted' ? 'going' : response;
+    }
     const userId = req.user.id;
 
     // Validate status

@@ -115,11 +115,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const currentUser = latestPlan.participants.find(p => p.id === user.id);
   const currentUserStatus = currentUser?.status || 'pending';
   
-  // Check if user is going (has responded with 'accepted')
-  const isInYesGang = currentUserStatus === 'accepted';
+  // Check if user is going
+  const isInYesGang = currentUserStatus === 'going';
   
   // Group participants by status
-  const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'accepted');
+  const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
   const maybeParticipants = latestPlan.participants.filter(p => 
     p.status === 'maybe' || p.status === 'conditional'
   );
@@ -410,8 +410,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // Check if this is a first-time response (user is currently pending)
     const isFirstTimeResponse = currentUserStatus === 'pending';
     
-    // If changing from 'accepted' to 'maybe' or 'conditional', remove all votes first
-    if (currentUserStatus === 'accepted' && (status === 'maybe' || status === 'conditional')) {
+    // If changing from 'going' to 'maybe' or 'conditional', remove all votes first
+    if (currentUserStatus === 'going' && (status === 'maybe' || status === 'conditional')) {
       // Remove user votes from all polls
       polls.forEach(poll => {
         const userVotes = getUserVotesForPoll(poll.id);
@@ -459,8 +459,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       return; // Exit early for decline
     }
 
-    // Handle accepted, maybe, conditional responses
-    if (status === 'accepted' || status === 'maybe' || status === 'conditional') {
+    // Handle going, maybe, conditional responses
+    if (status === 'going' || status === 'maybe' || status === 'conditional') {
       if (isFirstTimeResponse) {
         // FIRST-TIME RESPONSE: Show confirmation modal and navigate to Plans tab
         setPendingResponse({ status, conditionalFriends });
@@ -468,7 +468,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         // Set the status text for display
         let statusText = '';
         switch (status) {
-          case 'accepted':
+          case 'going':
             statusText = 'Going';
             break;
           case 'maybe':
