@@ -6,7 +6,7 @@ export interface PlanParticipant {
   id: string;
   name: string;
   avatar: string;
-  status: 'pending' | 'accepted' | 'maybe' | 'declined' | 'conditional';
+  status: 'pending' | 'going' | 'maybe' | 'declined' | 'conditional';
   conditionalFriends?: string[];
   joinedAt: string;
 }
@@ -396,21 +396,21 @@ class PlansService {
   }
 
   // Helper to check if user can vote on polls
-  canUserVote(plan: Plan, userId: string): boolean {
-    const participant = plan.participants.find(p => p.id === userId);
-    return participant?.status === 'accepted';
-  }
+canUserVote(plan: Plan, userId: string): boolean {
+  const participant = plan.participants.find(p => p.id === userId);
+  return participant?.status === 'going';
+}
 
   // Helper to get completion voting status (deprecated)
-  getCompletionVotingStatus(plan: Plan) {
-    return {
-      currentVotes: 0,
-      requiredVotes: 0,
-      goingParticipants: plan.participants.filter(p => p.status === 'accepted').length,
-      canComplete: false,
-      percentage: 0
-    };
-  }
+getCompletionVotingStatus(plan: Plan) {
+  return {
+    currentVotes: 0,
+    requiredVotes: 0,
+    goingParticipants: plan.participants.filter(p => p.status === 'going').length,
+    canComplete: false,
+    percentage: 0
+  };
+}
 
   // Helper to format plan data for frontend components
   formatPlanForFrontend(plan: Plan) {

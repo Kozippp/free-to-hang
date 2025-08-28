@@ -4,7 +4,7 @@ import { notifyPlanUpdate } from '@/utils/notifications';
 import { plansService } from '@/lib/plans-service';
 import { supabase } from '@/lib/supabase';
 
-export type ParticipantStatus = 'pending' | 'accepted' | 'maybe' | 'conditional' | 'declined';
+export type ParticipantStatus = 'pending' | 'going' | 'maybe' | 'conditional' | 'declined';
 
 export interface Participant {
   id: string;
@@ -198,7 +198,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
           invitations.push(transformedPlan);
         } else if (userStatus === 'pending') {
           invitations.push(transformedPlan);
-        } else if (userStatus === 'accepted' || userStatus === 'maybe' || userStatus === 'conditional') {
+        } else if (userStatus === 'going' || userStatus === 'maybe' || userStatus === 'conditional') {
           activePlans.push(transformedPlan);
         }
       });
@@ -362,8 +362,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
           };
         }
         
-        // If response is 'accepted', 'maybe', or 'conditional', move to activePlans
-        if (response === 'accepted' || response === 'maybe' || response === 'conditional') {
+        // If response is 'going', 'maybe', or 'conditional', move to activePlans
+        if (response === 'going' || response === 'maybe' || response === 'conditional') {
           return {
             invitations: state.invitations.filter(p => p.id !== planId),
             activePlans: [...state.activePlans, transformedPlan],
@@ -806,11 +806,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   getCompletionVotingStatus: (plan: Plan) => {
     const votedUsers = plan.completionVotes || [];
-    const acceptedParticipants = plan.participants.filter(p => p.status === 'accepted');
+    const goingParticipants = plan.participants.filter(p => p.status === 'going');
     const maybeParticipants = plan.participants.filter(p => p.status === 'maybe');
     
     // Calculate weighted votes
-    const totalVoteWeight = acceptedParticipants.length * 1 + maybeParticipants.length * 0.25;
+    const totalVoteWeight = goingParticipants.length * 1 + maybeParticipants.length * 0.25;
     const requiredVoteWeight = Math.ceil(totalVoteWeight * 0.5);
     const requiredMinimumPeople = 2;
     

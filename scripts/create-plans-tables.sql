@@ -398,10 +398,25 @@ FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- 10. Fix plan_participants table to use 'status' instead of 'response'
 -- Add status column if it doesn't exist
-ALTER TABLE plan_participants ADD COLUMN IF NOT EXISTS status TEXT CHECK (status IN ('pending', 'accepted', 'maybe', 'declined', 'conditional')) DEFAULT 'pending';
+ALTER TABLE plan_participants ADD COLUMN IF NOT EXISTS status TEXT CHECK (status IN ('pending', 'going', 'maybe', 'declined', 'conditional')) DEFAULT 'pending';
 
 -- Copy data from response to status if response exists
 UPDATE plan_participants SET status = response WHERE response IS NOT NULL AND status = 'pending';
+
+-- Fix existing databases that might have 'accepted' constraint instead of 'going'
+-- Drop the existing check constraint if it exists
+ALTER TABLE plan_participants DROP CONSTRAINT IF EXISTS plan_participants_status_check;
+
+-- Add the correct check constraint
+ALTER TABLE plan_participants ADD CONSTRAINT plan_participants_status_check
+CHECK (status IN ('pending', 'going', 'maybe', 'declined', 'conditional'));
+
+-- Update any existing 'accepted' statuses to 'going'
+UPDATE plan_participants SET status = 'going' WHERE status = 'accepted';
+
+-- Add helpful comment
+-- This migration fixes the status column to use 'going' instead of 'accepted'
+-- as specified in the PLANS_FUNCTIONAL_SPEC.md
 
 -- Drop response column if it exists
 ALTER TABLE plan_participants DROP COLUMN IF EXISTS response;
