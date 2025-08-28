@@ -871,7 +871,7 @@ router.post('/', requireAuth, async (req, res) => {
         .insert({
           plan_id: plan.id,
           user_id: userId,
-          status: isAnonymous ? 'pending' : 'accepted'
+          status: isAnonymous ? 'pending' : 'going'
         });
       if (secondaryError) {
         console.error('Error adding creator as participant:', secondaryError);
