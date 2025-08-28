@@ -193,9 +193,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
         
         if (plan.status === 'completed') {
           completedPlans.push(transformedPlan);
-        } else if (transformedPlan.type === 'anonymous') {
-          // Anonymous plans are always invitations (even for creator)
-          invitations.push(transformedPlan);
         } else if (userStatus === 'pending') {
           invitations.push(transformedPlan);
         } else if (userStatus === 'going' || userStatus === 'maybe' || userStatus === 'conditional') {
@@ -403,17 +400,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
         completionVotes: []
       };
       
-      // Anonymous plans always go to invitations (including creator starts as pending)
-      if (plan.type === 'anonymous') {
-        return {
-          invitations: [planWithDefaults, ...state.invitations], // Add to top
-          activePlans: state.activePlans,
-          completedPlans: state.completedPlans
-        };
-      }
-      
-      // If the plan is created by the current user and is normal, add it to activePlans
-      if (plan.creator?.id === 'current' && plan.type === 'normal') {
+      // If the plan is created by the current user and their status is non-pending, add to active
+      const currentUser = plan.participants.find(p => p.id === 'current');
+      if (currentUser && (currentUser.status === 'going' || currentUser.status === 'maybe' || currentUser.status === 'conditional')) {
         return {
           invitations: state.invitations,
           activePlans: [planWithDefaults, ...state.activePlans], // Add to top
@@ -421,7 +410,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         };
       }
       
-      // Otherwise (received invitation), add it to invitations
+      // Otherwise add to invitations (pending)
       return {
         invitations: [planWithDefaults, ...state.invitations], // Add to top
         activePlans: state.activePlans,
