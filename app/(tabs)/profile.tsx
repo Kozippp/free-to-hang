@@ -713,9 +713,9 @@ export default function ProfileScreen() {
   );
 
   // Listen for blocked users changes
-  useEffect(() => {
-    console.log('Profile: Blocked users state changed:', blockedUsers.length, blockedUsers);
-  }, [blockedUsers]);
+  //useEffect(() => {
+  //  console.log('Profile: Blocked users state changed:', blockedUsers.length, blockedUsers);
+  //}, [blockedUsers]);
 
   return (
     <>
