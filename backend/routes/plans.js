@@ -952,7 +952,8 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       'maybe': 'maybe',
       'declined': 'declined',
       'pending': 'pending',
-      'conditional': 'conditional' // Store conditional directly in DB
+      // Store conditional as 'maybe' in DB; metadata marks it conditional
+      'conditional': 'maybe'
     };
 
     if (!validStatuses.includes(status)) {
