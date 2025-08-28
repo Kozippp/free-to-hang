@@ -221,11 +221,12 @@ const getPlanWithDetails = async (planId, userId = null) => {
     // Completion votes deprecated: plans auto-complete after 24h
 
     // Get conditional friends data from plan_updates
+    // We store conditional selections as participant_joined with metadata.is_conditional=true
     const { data: conditionalUpdates, error: conditionalError } = await supabase
       .from('plan_updates')
       .select('triggered_by, metadata')
       .eq('plan_id', planId)
-      .eq('update_type', 'participant_conditional')
+      .like('metadata', '%is_conditional%')
       .order('created_at', { ascending: false });
 
     if (conditionalError) throw conditionalError;
@@ -312,13 +313,18 @@ const getPlanWithDetails = async (planId, userId = null) => {
         update.triggered_by === p.user_id && update.metadata?.user_id === p.user_id
       );
       
-      // Determine actual status - if user has conditional data and response is 'maybe', it's actually 'conditional'
+      // Determine display status
+      // Storage: conditional is represented as status='maybe' + metadata.is_conditional=true
+      // Display: only the current user sees 'conditional'; others see 'maybe'
       let actualStatus = p.status;
       let conditionalFriends = undefined;
-      
       if (conditionalData && p.status === 'maybe') {
-        actualStatus = 'conditional';
-        conditionalFriends = conditionalData.metadata?.conditional_friends;
+        if (userId && userId === p.user_id) {
+          actualStatus = 'conditional';
+          conditionalFriends = conditionalData.metadata?.conditional_friends;
+        } else {
+          actualStatus = 'maybe';
+        }
       }
       
       return {
