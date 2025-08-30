@@ -943,8 +943,7 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       'maybe': 'maybe',
       'declined': 'declined',
       'pending': 'pending',
-      // Store conditional as 'maybe' in DB; metadata marks it conditional
-      'conditional': 'maybe'
+      'conditional': 'conditional'
     };
 
     if (!validStatuses.includes(status)) {
@@ -967,39 +966,30 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       status: statusMapping[status] || status
     };
 
-    // Handle conditional friends data
-    if (status === 'conditional' && conditionalFriends && conditionalFriends.length > 0) {
-      // First, remove any existing conditional data for this user
+    // Handle conditional friends data in dedicated table
+    if (status === 'conditional') {
+      // Clear existing deps for this user
       await supabase
-        .from('plan_updates')
+        .from('plan_conditional_dependencies')
         .delete()
         .eq('plan_id', id)
-        .eq('update_type', 'participant_joined')
-        .eq('triggered_by', userId)
-        .contains('metadata', { is_conditional: true });
+        .eq('user_id', userId);
       
-      // Store new conditional friends metadata using 'participant_joined' type
-      await supabase
-        .from('plan_updates')
-        .insert({
+      if (conditionalFriends && conditionalFriends.length > 0) {
+        const rows = conditionalFriends.map(friendId => ({
           plan_id: id,
-          update_type: 'participant_joined',
-          triggered_by: userId,
-          metadata: {
-            conditional_friends: conditionalFriends,
-            user_id: userId,
-            is_conditional: true
-          }
-        });
+          user_id: userId,
+          friend_id: friendId
+        }));
+        await supabase.from('plan_conditional_dependencies').insert(rows);
+      }
     } else {
-      // If not conditional, remove any existing conditional data
+      // Remove any deps if user leaves conditional
       await supabase
-        .from('plan_updates')
+        .from('plan_conditional_dependencies')
         .delete()
         .eq('plan_id', id)
-        .eq('update_type', 'participant_joined')
-        .eq('triggered_by', userId)
-        .contains('metadata', { is_conditional: true });
+        .eq('user_id', userId);
     }
 
     if (existingParticipant) {
