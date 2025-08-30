@@ -107,6 +107,30 @@ const notifyPlanUpdate = async (planId, updateType, triggeredBy, metadata = {}) 
   }
 };
 
+// Helper function to transform participant status for conditional visibility
+const transformParticipantStatus = (participant, currentUserId) => {
+  // Apply conditional status transformation
+  let actualStatus = participant.status;
+  let conditionalFriends = undefined;
+
+  if (participant.status === 'conditional') {
+    if (currentUserId && currentUserId === participant.user_id) {
+      // Current user sees their own conditional status
+      actualStatus = 'conditional';
+      conditionalFriends = participant.conditional_friends || [];
+    } else {
+      // Other users see conditional as "maybe"
+      actualStatus = 'maybe';
+    }
+  }
+
+  return {
+    ...participant,
+    status: actualStatus,
+    conditionalFriends: conditionalFriends
+  };
+};
+
 // Helper function to get plan with full details
 const getPlanWithDetails = async (planId, userId = null) => {
   try {
@@ -309,30 +333,19 @@ const getPlanWithDetails = async (planId, userId = null) => {
     // Transform participants with user data and conditional friends
     const transformedParticipants = participants.map(p => {
       const user = participantUsers.find(u => u.id === p.user_id);
-      
-      const conditionalFriendsList = depsMap.get(p.user_id);
-      
-      // Determine display status
-      // Display: only the current user sees 'conditional'; others see 'maybe'
-      let actualStatus = p.status;
-      let conditionalFriends = undefined;
-      if (p.status === 'conditional') {
-        if (userId && userId === p.user_id) {
-          actualStatus = 'conditional';
-          conditionalFriends = conditionalFriendsList || [];
-        } else {
-          actualStatus = 'maybe';
-        }
-      }
-      
-      return {
+      const conditionalFriendsList = depsMap.get(p.user_id) || [];
+
+      // Apply conditional status transformation using helper function
+      const transformedParticipant = {
         id: p.user_id,
         name: user?.name || 'Unknown',
         avatar: user?.avatar_url,
-        status: actualStatus || p.status,
-        conditionalFriends: conditionalFriends,
+        status: p.status,
+        conditionalFriends: conditionalFriendsList,
         joinedAt: p.created_at
       };
+
+      return transformParticipantStatus(transformedParticipant, userId);
     });
 
     return {
@@ -630,24 +643,52 @@ router.get('/', requireAuth, async (req, res) => {
         .from('users')
         .select('id, name, username, avatar_url')
         .in('id', pollCreatorIds);
-      
+
       if (!creatorError) {
         pollCreators = creatorData || [];
       }
     }
+
+    // Get conditional dependencies for all plans
+    let conditionalDeps = [];
+    if (planIds.length > 0) {
+      const { data: depsData, error: depsError } = await supabase
+        .from('plan_conditional_dependencies')
+        .select('plan_id, user_id, friend_id')
+        .in('plan_id', planIds);
+
+      if (!depsError && depsData) {
+        conditionalDeps = depsData;
+      }
+    }
+
+    // Create conditional dependencies map
+    const depsMap = new Map();
+    conditionalDeps.forEach(dep => {
+      const key = `${dep.plan_id}-${dep.user_id}`;
+      if (!depsMap.has(key)) depsMap.set(key, []);
+      depsMap.get(key).push(dep.friend_id);
+    });
 
     // Transform plans for frontend
     const transformedPlans = plans.map(plan => {
       const planParticipants = allParticipants.filter(p => p.plan_id === plan.id);
       const participantsWithUserData = planParticipants.map(p => {
         const user = participantUsers.find(u => u.id === p.user_id);
-        return {
+        const depsKey = `${plan.id}-${p.user_id}`;
+        const conditionalFriends = depsMap.get(depsKey) || [];
+
+        // Apply conditional status transformation
+        const transformedParticipant = {
           id: p.user_id,
           name: user?.name || 'Unknown',
           avatar: user?.avatar_url,
           status: p.status,
+          conditionalFriends: conditionalFriends,
           joinedAt: p.created_at
         };
+
+        return transformParticipantStatus(transformedParticipant, userId);
       });
 
       // Get polls for this plan
