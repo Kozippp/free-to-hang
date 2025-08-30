@@ -220,16 +220,18 @@ const getPlanWithDetails = async (planId, userId = null) => {
 
     // Completion votes deprecated: plans auto-complete after 24h
 
-    // Get conditional friends data from plan_updates
-    // We store conditional selections as participant_joined with metadata.is_conditional=true
-    const { data: conditionalUpdates, error: conditionalError } = await supabase
-      .from('plan_updates')
-      .select('triggered_by, metadata')
-      .eq('plan_id', planId)
-      .contains('metadata', { is_conditional: true })
-      .order('created_at', { ascending: false });
+    // Get conditional dependencies from dedicated table
+    const { data: depsRows, error: depsError } = await supabase
+      .from('plan_conditional_dependencies')
+      .select('user_id, friend_id')
+      .eq('plan_id', planId);
 
-    if (conditionalError) throw conditionalError;
+    if (depsError) throw depsError;
+    const depsMap = new Map();
+    depsRows?.forEach(r => {
+      if (!depsMap.has(r.user_id)) depsMap.set(r.user_id, []);
+      depsMap.get(r.user_id).push(r.friend_id);
+    });
 
     // Get attendance if plan is completed
     let attendance = [];
@@ -308,20 +310,16 @@ const getPlanWithDetails = async (planId, userId = null) => {
     const transformedParticipants = participants.map(p => {
       const user = participantUsers.find(u => u.id === p.user_id);
       
-      // Check if this user has conditional friends data
-      const conditionalData = conditionalUpdates?.find(update => 
-        update.triggered_by === p.user_id && update.metadata?.user_id === p.user_id
-      );
+      const conditionalFriendsList = depsMap.get(p.user_id);
       
       // Determine display status
-      // Storage: conditional is represented as status='maybe' + metadata.is_conditional=true
       // Display: only the current user sees 'conditional'; others see 'maybe'
       let actualStatus = p.status;
       let conditionalFriends = undefined;
-      if (conditionalData && p.status === 'maybe') {
+      if (p.status === 'conditional') {
         if (userId && userId === p.user_id) {
           actualStatus = 'conditional';
-          conditionalFriends = conditionalData.metadata?.conditional_friends;
+          conditionalFriends = conditionalFriendsList || [];
         } else {
           actualStatus = 'maybe';
         }
@@ -362,23 +360,18 @@ const processConditionalDependencies = async (planId) => {
 
     if (participantsError) throw participantsError;
 
-    // Get conditional friends data
-    const { data: conditionalUpdates, error: conditionalError } = await supabase
-      .from('plan_updates')
-      .select('triggered_by, metadata')
-      .eq('plan_id', planId)
-      .eq('update_type', 'participant_joined')
-      .contains('metadata', { is_conditional: true })
-      .order('created_at', { ascending: false });
+    // Get conditional dependencies
+    const { data: depRows, error: depError } = await supabase
+      .from('plan_conditional_dependencies')
+      .select('user_id, friend_id')
+      .eq('plan_id', planId);
 
-    if (conditionalError) throw conditionalError;
+    if (depError) throw depError;
 
-    // Build map of conditional dependencies
     const conditionalMap = new Map();
-    conditionalUpdates?.forEach(update => {
-      if (update.metadata?.conditional_friends && update.metadata?.user_id) {
-        conditionalMap.set(update.metadata.user_id, update.metadata.conditional_friends);
-      }
+    depRows?.forEach(r => {
+      if (!conditionalMap.has(r.user_id)) conditionalMap.set(r.user_id, []);
+      conditionalMap.get(r.user_id).push(r.friend_id);
     });
 
     // Process conditional participants
@@ -389,8 +382,8 @@ const processConditionalDependencies = async (planId) => {
       let iterationChanges = false;
       
       for (const participant of participants) {
-        // Skip if not conditional or already accepted
-        if (participant.status !== 'maybe' || !conditionalMap.has(participant.user_id)) {
+        // Skip if not conditional or no dependencies
+        if (participant.status !== 'conditional' || !conditionalMap.has(participant.user_id)) {
           continue;
         }
         
@@ -419,14 +412,12 @@ const processConditionalDependencies = async (planId) => {
             .eq('user_id', participant.user_id);
           
           if (!updateError) {
-            // Remove conditional data
+            // Remove conditional dependencies for this user
             await supabase
-              .from('plan_updates')
+              .from('plan_conditional_dependencies')
               .delete()
               .eq('plan_id', planId)
-              .eq('update_type', 'participant_joined')
-              .eq('triggered_by', participant.user_id)
-              .contains('metadata', { is_conditional: true });
+              .eq('user_id', participant.user_id);
             
             // Update local data
             participant.status = 'going';
