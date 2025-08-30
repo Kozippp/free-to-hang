@@ -117,7 +117,7 @@ const transformParticipantStatus = (participant, currentUserId) => {
     if (currentUserId && currentUserId === participant.user_id) {
       // Current user sees their own conditional status
       actualStatus = 'conditional';
-      conditionalFriends = participant.conditional_friends || [];
+      conditionalFriends = participant.conditionalFriends || [];
     } else {
       // Other users see conditional as "maybe"
       actualStatus = 'maybe';
