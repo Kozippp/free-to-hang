@@ -91,10 +91,13 @@ export default function PlanUserStatus({
   };
 
   const handleConditionalConfirm = (selectedFriendIds: string[]) => {
+    console.log('🎯 PlanUserStatus: handleConditionalConfirm called with friends:', selectedFriendIds);
     if (selectedFriendIds.length > 0) {
+      console.log('🎯 PlanUserStatus: Setting conditional status with', selectedFriendIds.length, 'friends');
       // Set as conditional with selected friends
       animateAndChangeStatus('conditional', selectedFriendIds);
     } else {
+      console.log('🎯 PlanUserStatus: No friends selected, setting as maybe');
       // If no friends selected, just set as maybe
       animateAndChangeStatus('maybe');
     }

@@ -461,10 +461,12 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
 
     // Handle going, maybe, conditional responses
     if (status === 'going' || status === 'maybe' || status === 'conditional') {
+      console.log('🎯 PlanDetailView: Processing status change:', status, 'with conditionalFriends:', conditionalFriends);
       if (isFirstTimeResponse) {
+        console.log('🎯 PlanDetailView: First time response, showing confirmation modal');
         // FIRST-TIME RESPONSE: Show confirmation modal and navigate to Plans tab
         setPendingResponse({ status, conditionalFriends });
-        
+
         // Set the status text for display
         let statusText = '';
         switch (status) {
@@ -478,10 +480,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             statusText = 'If';
             break;
         }
-        
+
         setConfirmationMessage(statusText);
         setShowConfirmationModal(true);
       } else {
+        console.log('🎯 PlanDetailView: Status change, applying immediately');
         // STATUS CHANGE: Apply immediately without any alerts
         try {
           await onRespond(plan.id, status, conditionalFriends);
