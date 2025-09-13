@@ -342,10 +342,10 @@ const styles = StyleSheet.create({
   conditionalTermsContainer: {
     marginTop: 12,
     padding: 12,
-    backgroundColor: `${Colors.light.warning}15`,
+    backgroundColor: '#E3F2FD',
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.light.warning,
+    borderLeftColor: '#2196F3',
   },
   conditionalTermsTitle: {
     fontSize: 16,
