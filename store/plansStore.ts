@@ -79,6 +79,7 @@ interface PlansState {
   // Real-time subscriptions
   startRealTimeUpdates: (userId: string) => Promise<void>;
   stopRealTimeUpdates: () => void;
+  checkAndRestartSubscriptions: (userId: string) => Promise<void>;
   
   // Actions
   markAsRead: (planId: string) => void;
@@ -938,6 +939,22 @@ const usePlansStore = create<PlansState>((set, get) => ({
         )
         .subscribe((status) => {
           console.log('📡 Plans channel status:', status);
+
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Plans channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Plans channel error - marking as unsubscribed');
+            isSubscribed = false;
+            plansChannel = null;
+          } else if (status === 'CLOSED') {
+            console.log('🔒 Plans channel closed - marking as unsubscribed');
+            isSubscribed = false;
+            plansChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Plans channel timed out - marking as unsubscribed');
+            isSubscribed = false;
+            plansChannel = null;
+          }
         });
 
       // 1. PLAN UPDATES CHANNEL - The main notification system
@@ -957,6 +974,22 @@ const usePlansStore = create<PlansState>((set, get) => ({
         )
         .subscribe((status) => {
           console.log('📡 Plan updates channel status:', status);
+
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Plan updates channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Plan updates channel error - marking as unsubscribed');
+            isSubscribed = false;
+            updatesChannel = null;
+          } else if (status === 'CLOSED') {
+            console.log('🔒 Plan updates channel closed - marking as unsubscribed');
+            isSubscribed = false;
+            updatesChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Plan updates channel timed out - marking as unsubscribed');
+            isSubscribed = false;
+            updatesChannel = null;
+          }
         });
 
       // 2. PARTICIPANTS CHANNEL - Listen for participant changes in user's plans
@@ -976,6 +1009,22 @@ const usePlansStore = create<PlansState>((set, get) => ({
         )
         .subscribe((status) => {
           console.log('📡 Participants channel status:', status);
+
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Participants channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Participants channel error - marking as unsubscribed');
+            isSubscribed = false;
+            participantsChannel = null;
+          } else if (status === 'CLOSED') {
+            console.log('🔒 Participants channel closed - marking as unsubscribed');
+            isSubscribed = false;
+            participantsChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Participants channel timed out - marking as unsubscribed');
+            isSubscribed = false;
+            participantsChannel = null;
+          }
         });
 
       // 3. POLLS CHANNEL - Listen for polls in user's plans
@@ -995,6 +1044,22 @@ const usePlansStore = create<PlansState>((set, get) => ({
         )
         .subscribe((status) => {
           console.log('📡 Polls channel status:', status);
+
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Polls channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Polls channel error - marking as unsubscribed');
+            isSubscribed = false;
+            pollsChannel = null;
+          } else if (status === 'CLOSED') {
+            console.log('🔒 Polls channel closed - marking as unsubscribed');
+            isSubscribed = false;
+            pollsChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Polls channel timed out - marking as unsubscribed');
+            isSubscribed = false;
+            pollsChannel = null;
+          }
         });
 
       // 4. POLL VOTES CHANNEL - Listen for vote changes
@@ -1014,6 +1079,22 @@ const usePlansStore = create<PlansState>((set, get) => ({
         )
         .subscribe((status) => {
           console.log('📡 Poll votes channel status:', status);
+
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Poll votes channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Poll votes channel error - marking as unsubscribed');
+            isSubscribed = false;
+            pollVotesChannel = null;
+          } else if (status === 'CLOSED') {
+            console.log('🔒 Poll votes channel closed - marking as unsubscribed');
+            isSubscribed = false;
+            pollVotesChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Poll votes channel timed out - marking as unsubscribed');
+            isSubscribed = false;
+            pollVotesChannel = null;
+          }
         });
 
       // Wait a moment for all subscriptions to establish
@@ -1039,6 +1120,24 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.log('🛑 Stopping all plans real-time updates...');
     stopAllRealtimeChannels();
     console.log('✅ All plans real-time updates stopped');
+  },
+
+  checkAndRestartSubscriptions: async (userId: string) => {
+    console.log('🔍 Checking plans real-time subscriptions status...');
+
+    // If already subscribed and all channels exist, no need to restart
+    if (isSubscribed && plansChannel && updatesChannel && participantsChannel && pollsChannel && pollVotesChannel) {
+      console.log('✅ All plans real-time subscriptions are active');
+      return;
+    }
+
+    console.log('🔄 Plans subscriptions missing or failed - restarting...');
+
+    // Stop any existing channels first
+    await stopAllRealtimeChannels();
+
+    // Restart subscriptions
+    await get().startRealTimeUpdates(userId);
   }
 }));
 
