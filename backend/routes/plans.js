@@ -272,10 +272,13 @@ const getPlanWithDetails = async (planId, userId = null) => {
     // Completion votes deprecated: plans auto-complete after 24h
 
     // Get conditional dependencies from dedicated table
+    console.log('🔍 Fetching conditional dependencies for planId:', planId);
     const { data: depsRows, error: depsError } = await supabase
       .from('plan_conditional_dependencies')
       .select('user_id, friend_id')
       .eq('plan_id', planId);
+
+    console.log('🔍 depsRows:', depsRows, 'depsError:', depsError);
 
     if (depsError) throw depsError;
     const depsMap = new Map();
@@ -283,6 +286,8 @@ const getPlanWithDetails = async (planId, userId = null) => {
       if (!depsMap.has(r.user_id)) depsMap.set(r.user_id, []);
       depsMap.get(r.user_id).push(r.friend_id);
     });
+
+    console.log('🔍 depsMap after building:', Array.from(depsMap.entries()));
 
     // Get attendance if plan is completed
     let attendance = [];
