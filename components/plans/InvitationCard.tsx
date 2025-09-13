@@ -91,7 +91,7 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
     } else if (currentUserStatus === 'conditional') {
       return (
         <View style={[styles.statusBadge, styles.conditionalBadge]}>
-          <Clock size={12} color="white" style={styles.statusBadgeIcon} />
+          <Eye size={12} color="white" style={styles.statusBadgeIcon} />
           <Text style={styles.statusBadgeText}>If</Text>
         </View>
       );
@@ -185,7 +185,7 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
                   <Text style={styles.questionMark}>?</Text>
                 )}
                 {participant.status === 'conditional' && (
-                  <Clock size={10} color="white" />
+                  <Eye size={10} color="white" />
                 )}
               </View>
             </View>
