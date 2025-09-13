@@ -104,6 +104,13 @@ export default function PlanUserStatus({
 
   const currentUser = participants.find(p => p.id === currentUserId);
 
+  // DEBUG: Log current user lookup
+  console.log('🎯 PlanUserStatus: currentUserId:', currentUserId);
+  console.log('🎯 PlanUserStatus: participants:', participants.map(p => ({ id: p.id, status: p.status, conditionalFriends: p.conditionalFriends })));
+  console.log('🎯 PlanUserStatus: currentUser found:', currentUser);
+  console.log('🎯 PlanUserStatus: currentUser status:', currentUser?.status);
+  console.log('🎯 PlanUserStatus: currentUser conditionalFriends:', currentUser?.conditionalFriends);
+
   const getStatusStyle = (status: ParticipantStatus) => {
     switch (status) {
       case 'going':
