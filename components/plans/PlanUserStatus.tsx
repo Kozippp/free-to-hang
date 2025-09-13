@@ -261,8 +261,8 @@ export default function PlanUserStatus({
           (currentStatus === 'conditional' && (!currentUser?.conditionalFriends || currentUser.conditionalFriends.length === 0))) && (
           <View style={styles.disclaimerContainer}>
             <Text style={styles.disclaimerText}>
-              {currentStatus === 'maybe' 
-                ? 'As "Maybe", you can view but not vote or edit this plan until you respond "Going".'
+              {currentStatus === 'maybe'
+                ? 'You can\'t vote or edit this plan until you respond "Going".'
                 : 'As "If", you can view but not vote or edit this plan until you respond "Going".'
               }
             </Text>
