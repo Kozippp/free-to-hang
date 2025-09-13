@@ -370,7 +370,7 @@ const getPlanWithDetails = async (planId, userId = null) => {
 
 const processConditionalDependencies = async (planId) => {
   try {
-    
+
     // Get all participants
     const { data: participants, error: participantsError } = await supabase
       .from('plan_participants')
@@ -393,73 +393,104 @@ const processConditionalDependencies = async (planId) => {
       conditionalMap.get(r.user_id).push(r.friend_id);
     });
 
-    // Process conditional participants
-    let hasChanges = false;
-    const maxIterations = 10; // Prevent infinite loops
-    
-    for (let iteration = 0; iteration < maxIterations; iteration++) {
-      let iterationChanges = false;
-      
-      for (const participant of participants) {
-        // Skip if not conditional or no dependencies
-        if (participant.status !== 'conditional' || !conditionalMap.has(participant.user_id)) {
-          continue;
-        }
-        
-        const conditionalFriends = conditionalMap.get(participant.user_id);
-        if (!conditionalFriends || conditionalFriends.length === 0) {
-          continue;
-        }
-        
-        // Check if all conditional friends are accepted
-        const allFriendsAccepted = conditionalFriends.every(friendId => {
-          const friend = participants.find(p => p.user_id === friendId);
-          return friend && friend.status === 'going';
-        });
-        
-        if (allFriendsAccepted) {
-          console.log('✅ Converting conditional participant to going:', participant.user_id);
-          
-          // Update participant to going
-          const { error: updateError } = await supabase
-            .from('plan_participants')
-            .update({
-              status: 'going'
-              // updated_at is handled by database trigger
-            })
-            .eq('plan_id', planId)
-            .eq('user_id', participant.user_id);
-          
-          if (!updateError) {
-            // Remove conditional dependencies for this user
-            await supabase
-              .from('plan_conditional_dependencies')
-              .delete()
-              .eq('plan_id', planId)
-              .eq('user_id', participant.user_id);
-            
-            // Update local data
-            participant.status = 'going';
-            conditionalMap.delete(participant.user_id);
-            iterationChanges = true;
-            hasChanges = true;
-            
-            // Notify about status change
-            await notifyPlanUpdate(planId, 'participant_accepted_conditionally', participant.user_id);
-          }
+    // Helper function to check if a participant can become "going"
+    const canBecomeGoing = (userId, visited = new Set(), memo = new Map()) => {
+      // Check memoization first
+      if (memo.has(userId)) {
+        return memo.get(userId);
+      }
+
+      // Cycle detection - if we've seen this user in current path, assume cycle can be resolved
+      if (visited.has(userId)) {
+        return true;
+      }
+
+      const participant = participants.find(p => p.user_id === userId);
+      if (!participant) {
+        memo.set(userId, false);
+        return false;
+      }
+
+      // If already going, satisfied
+      if (participant.status === 'going') {
+        memo.set(userId, true);
+        return true;
+      }
+
+      // If not conditional, cannot become going
+      if (participant.status !== 'conditional') {
+        memo.set(userId, false);
+        return false;
+      }
+
+      const dependencies = conditionalMap.get(userId) || [];
+      if (dependencies.length === 0) {
+        // No dependencies = can go
+        memo.set(userId, true);
+        return true;
+      }
+
+      // Add to current path for cycle detection
+      visited.add(userId);
+
+      // Check if all dependencies can be satisfied
+      const canSatisfyAll = dependencies.every(depId => {
+        return canBecomeGoing(depId, new Set(visited), memo);
+      });
+
+      // Remove from current path
+      visited.delete(userId);
+
+      memo.set(userId, canSatisfyAll);
+      return canSatisfyAll;
+    };
+
+    // Find all conditional participants that can become "going"
+    const participantsToConvert = [];
+    for (const participant of participants) {
+      if (participant.status === 'conditional') {
+        if (canBecomeGoing(participant.user_id)) {
+          participantsToConvert.push(participant);
         }
       }
-      
-      // If no changes this iteration, we're done
-      if (!iterationChanges) {
-        break;
+    }
+
+    // Convert all eligible participants to "going" in one batch
+    if (participantsToConvert.length > 0) {
+      console.log('✅ Converting conditional participants to going:', participantsToConvert.map(p => p.user_id));
+
+      // Update all participants to going
+      const userIdsToConvert = participantsToConvert.map(p => p.user_id);
+      const { error: batchUpdateError } = await supabase
+        .from('plan_participants')
+        .update({
+          status: 'going'
+          // updated_at is handled by database trigger
+        })
+        .eq('plan_id', planId)
+        .in('user_id', userIdsToConvert);
+
+      if (!batchUpdateError) {
+        // Remove conditional dependencies for all converted users
+        await supabase
+          .from('plan_conditional_dependencies')
+          .delete()
+          .eq('plan_id', planId)
+          .in('user_id', userIdsToConvert);
+
+        // Notify about status changes for each participant
+        for (const participant of participantsToConvert) {
+          await notifyPlanUpdate(planId, 'participant_accepted_conditionally', participant.user_id);
+        }
+
+        console.log(`✅ Successfully converted ${participantsToConvert.length} conditional participants to going`);
+      } else {
+        console.error('❌ Error updating participants:', batchUpdateError);
       }
+    } else {
+      console.log('ℹ️ No conditional participants can be converted to going');
     }
-    
-    if (hasChanges) {
-      console.log('✅ Conditional dependencies processed with changes');
-    }
-    
+
   } catch (error) {
     console.error('❌ Error processing conditional dependencies:', error);
   }
