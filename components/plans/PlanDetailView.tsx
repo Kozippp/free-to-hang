@@ -114,12 +114,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Get current user's status from latest plan data
   const currentUser = latestPlan.participants.find(p => p.id === user.id);
   const currentUserStatus = currentUser?.status || 'pending';
-
-  // DEBUG: Log current user status lookup
-  console.log('🎯 PlanDetailView: user.id:', user.id);
-  console.log('🎯 PlanDetailView: latestPlan.participants:', latestPlan.participants.map(p => ({ id: p.id, status: p.status, conditionalFriends: p.conditionalFriends })));
-  console.log('🎯 PlanDetailView: currentUser found:', currentUser);
-  console.log('🎯 PlanDetailView: currentUserStatus set to:', currentUserStatus);
   
   // Check if user is going
   const isInYesGang = currentUserStatus === 'going';
@@ -409,15 +403,12 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
   
   const handleStatusChange = async (status: ParticipantStatus, conditionalFriends?: string[]) => {
-    console.log('🎯 PlanDetailView: handleStatusChange called with status:', status, 'conditionalFriends:', conditionalFriends, 'friends count:', conditionalFriends?.length || 0);
-
     // Always close any existing confirmation modal first
     setShowConfirmationModal(false);
     setPendingResponse(null);
 
     // Check if this is a first-time response (user is currently pending)
     const isFirstTimeResponse = currentUserStatus === 'pending';
-    console.log('🎯 PlanDetailView: isFirstTimeResponse:', isFirstTimeResponse, 'currentUserStatus:', currentUserStatus);
     
     // If changing from 'going' to 'maybe' or 'conditional', remove all votes first
     if (currentUserStatus === 'going' && (status === 'maybe' || status === 'conditional')) {
@@ -470,9 +461,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
 
     // Handle going, maybe, conditional responses
     if (status === 'going' || status === 'maybe' || status === 'conditional') {
-      console.log('🎯 PlanDetailView: Processing status change:', status, 'with conditionalFriends:', conditionalFriends);
       if (isFirstTimeResponse) {
-        console.log('🎯 PlanDetailView: First time response, showing confirmation modal');
         // FIRST-TIME RESPONSE: Show confirmation modal and navigate to Plans tab
         setPendingResponse({ status, conditionalFriends });
 
@@ -493,7 +482,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         setConfirmationMessage(statusText);
         setShowConfirmationModal(true);
       } else {
-        console.log('🎯 PlanDetailView: Status change, applying immediately');
         // STATUS CHANGE: Apply immediately without any alerts
         try {
           await onRespond(plan.id, status, conditionalFriends);
