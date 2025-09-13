@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     fontSize: 13,
-    color: Colors.light.warning,
+    color: 'black',
     fontStyle: 'italic',
     lineHeight: 18,
   },
