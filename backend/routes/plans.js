@@ -1009,32 +1009,34 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
 
     // Handle conditional friends data in dedicated table
     if (status === 'conditional') {
-      console.log('🔄 Setting conditional status for user:', userId, 'with friends:', conditionalFriends);
-      // Clear existing deps for this user
+      console.log('🔄 SETTING CONDITIONAL STATUS for user:', userId, 'with friends:', conditionalFriends, 'friends length:', conditionalFriends?.length || 0);
+
+      // ALWAYS clear existing deps for this user first
+      console.log('🗑️ Clearing existing conditional dependencies for user:', userId);
       await supabase
         .from('plan_conditional_dependencies')
         .delete()
         .eq('plan_id', id)
         .eq('user_id', userId);
 
-      if (conditionalFriends && conditionalFriends.length > 0) {
-        console.log('💾 Saving', conditionalFriends.length, 'conditional dependencies');
-        const rows = conditionalFriends.map(friendId => ({
-          plan_id: id,
-          user_id: userId,
-          friend_id: friendId
-        }));
-        const { error: insertError } = await supabase.from('plan_conditional_dependencies').insert(rows);
-        if (insertError) {
-          console.error('❌ Error saving conditional dependencies:', insertError);
-        } else {
-          console.log('✅ Conditional dependencies saved successfully');
-        }
+      // ALWAYS save conditional friends - even if empty array
+      console.log('💾 Saving conditional dependencies (even if empty array)');
+      const friendsToSave = conditionalFriends || [];
+      const rows = friendsToSave.map(friendId => ({
+        plan_id: id,
+        user_id: userId,
+        friend_id: friendId
+      }));
+
+      console.log('📝 Inserting rows:', rows.length, 'conditional dependency rows');
+      const { error: insertError } = await supabase.from('plan_conditional_dependencies').insert(rows);
+      if (insertError) {
+        console.error('❌ Error saving conditional dependencies:', insertError);
       } else {
-        console.log('⚠️ No conditional friends provided');
+        console.log('✅ Conditional dependencies saved successfully:', rows.length, 'rows inserted');
       }
     } else {
-      console.log('🔄 Removing conditional status for user:', userId);
+      console.log('🔄 REMOVING CONDITIONAL STATUS for user:', userId, 'setting status to:', status);
       // Remove any deps if user leaves conditional
       await supabase
         .from('plan_conditional_dependencies')

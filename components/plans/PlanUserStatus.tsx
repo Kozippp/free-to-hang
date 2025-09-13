@@ -71,15 +71,18 @@ export default function PlanUserStatus({
   };
 
   const animateAndChangeStatus = (newStatus: ParticipantStatus, conditionalFriends?: string[]) => {
+    console.log('🎯 PlanUserStatus: animateAndChangeStatus called with status:', newStatus, 'conditionalFriends:', conditionalFriends, 'friends count:', conditionalFriends?.length || 0);
+
     // Simple, smooth, and satisfying animation
     Animated.timing(statusAnimation, {
       toValue: 0.95,
       duration: 100,
       useNativeDriver: true
     }).start(() => {
+      console.log('🎯 PlanUserStatus: Calling onStatusChange with:', newStatus, conditionalFriends);
       // Change status immediately after the press feedback
       onStatusChange(newStatus, conditionalFriends);
-      
+
       // Smooth bounce back
       Animated.spring(statusAnimation, {
         toValue: 1,
@@ -92,15 +95,11 @@ export default function PlanUserStatus({
 
   const handleConditionalConfirm = (selectedFriendIds: string[]) => {
     console.log('🎯 PlanUserStatus: handleConditionalConfirm called with friends:', selectedFriendIds);
-    if (selectedFriendIds.length > 0) {
-      console.log('🎯 PlanUserStatus: Setting conditional status with', selectedFriendIds.length, 'friends');
-      // Set as conditional with selected friends
-      animateAndChangeStatus('conditional', selectedFriendIds);
-    } else {
-      console.log('🎯 PlanUserStatus: No friends selected, setting as maybe');
-      // If no friends selected, just set as maybe
-      animateAndChangeStatus('maybe');
-    }
+
+    // ALWAYS set as conditional - even with empty friends array
+    // This is the foolproof logic: "If..." button always means conditional status
+    console.log('🎯 PlanUserStatus: Setting conditional status with', selectedFriendIds.length, 'friends');
+    animateAndChangeStatus('conditional', selectedFriendIds);
   };
 
   const currentUser = participants.find(p => p.id === currentUserId);

@@ -403,12 +403,15 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
   
   const handleStatusChange = async (status: ParticipantStatus, conditionalFriends?: string[]) => {
+    console.log('🎯 PlanDetailView: handleStatusChange called with status:', status, 'conditionalFriends:', conditionalFriends, 'friends count:', conditionalFriends?.length || 0);
+
     // Always close any existing confirmation modal first
     setShowConfirmationModal(false);
     setPendingResponse(null);
-    
+
     // Check if this is a first-time response (user is currently pending)
     const isFirstTimeResponse = currentUserStatus === 'pending';
+    console.log('🎯 PlanDetailView: isFirstTimeResponse:', isFirstTimeResponse, 'currentUserStatus:', currentUserStatus);
     
     // If changing from 'going' to 'maybe' or 'conditional', remove all votes first
     if (currentUserStatus === 'going' && (status === 'maybe' || status === 'conditional')) {
