@@ -37,6 +37,12 @@ export default function ConditionalFriendsModal({
       // Load existing conditional friends or start with empty array
       const currentUser = participants.find(p => p.id === currentUserId);
       const existingConditionalFriends = currentUser?.conditionalFriends || [];
+
+      console.log('🎯 ConditionalFriendsModal: Loading modal for user:', currentUserId);
+      console.log('🎯 ConditionalFriendsModal: currentUser found:', currentUser);
+      console.log('🎯 ConditionalFriendsModal: existingConditionalFriends:', existingConditionalFriends);
+      console.log('🎯 ConditionalFriendsModal: Setting selectedFriends to:', existingConditionalFriends);
+
       setSelectedFriends(existingConditionalFriends);
 
       Animated.timing(fadeAnim, {

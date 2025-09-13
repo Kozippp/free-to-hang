@@ -114,6 +114,12 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Get current user's status from latest plan data
   const currentUser = latestPlan.participants.find(p => p.id === user.id);
   const currentUserStatus = currentUser?.status || 'pending';
+
+  // DEBUG: Log current user status lookup
+  console.log('🎯 PlanDetailView: user.id:', user.id);
+  console.log('🎯 PlanDetailView: latestPlan.participants:', latestPlan.participants.map(p => ({ id: p.id, status: p.status, conditionalFriends: p.conditionalFriends })));
+  console.log('🎯 PlanDetailView: currentUser found:', currentUser);
+  console.log('🎯 PlanDetailView: currentUserStatus set to:', currentUserStatus);
   
   // Check if user is going
   const isInYesGang = currentUserStatus === 'going';
