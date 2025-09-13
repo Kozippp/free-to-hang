@@ -238,17 +238,14 @@ export default function PlanUserStatus({
             
             return (
               <View style={styles.conditionalTermsContainer}>
-                <Text style={styles.conditionalTermsTitle}>Your conditions:</Text>
-                <View style={styles.conditionalFriendsList}>
-                  {dependentFriends.map((friend) => (
-                    <View key={friend!.id} style={styles.conditionalFriendItem}>
-                      <Image source={{ uri: friend!.avatar }} style={styles.conditionalAvatar} />
-                      <Text style={styles.conditionalFriendName}>{friend!.name}</Text>
-                    </View>
-                  ))}
-                </View>
-                <Text style={styles.conditionalTermsSubtext}>
-                  You'll be marked as "Going" if {dependentFriends.length === 1 ? 'they come' : 'they all come'} too.
+                <Text style={styles.conditionalTermsText}>
+                  Your status will be set as "Going" if these people come: <Text style={styles.conditionalFriendsInline}>
+                    {dependentFriends.map((friend, index) => (
+                      <Text key={friend!.id}>
+                        {friend!.name}{index < dependentFriends.length - 1 ? ', ' : ''}
+                      </Text>
+                    ))}
+                  </Text> Until then your friends see you as "Maybe".
                 </Text>
               </View>
             );
@@ -347,35 +344,13 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: '#2196F3',
   },
-  conditionalTermsTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+  conditionalTermsText: {
+    fontSize: 14,
     color: Colors.light.text,
-    marginBottom: 8,
+    lineHeight: 20,
   },
-  conditionalFriendsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  conditionalFriendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  conditionalAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  conditionalFriendName: {
-    fontSize: 12,
+  conditionalFriendsInline: {
+    fontWeight: '600',
     color: Colors.light.text,
-  },
-  conditionalTermsSubtext: {
-    fontSize: 13,
-    color: Colors.light.text,
-    fontStyle: 'italic',
-    lineHeight: 18,
   },
 });
