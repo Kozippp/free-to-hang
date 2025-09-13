@@ -128,17 +128,17 @@ const transformParticipantStatus = (participant, currentUserId) => {
   let conditionalFriends = participant.conditionalFriends; // Keep original conditionalFriends!
 
   if (participant.status === 'conditional') {
-    if (currentUserId && currentUserId === participant.user_id) {
+    //if (currentUserId && currentUserId === participant.user_id) {
       console.log('🎯 Current user viewing their own conditional status');
       // Current user sees their own conditional status
       actualStatus = 'conditional';
       conditionalFriends = participant.conditionalFriends || [];
-    } else {
-      console.log('👥 Other user viewing conditional status - hiding details');
+   // } else {
+  //    console.log('👥 Other user viewing conditional status - hiding details');
       // Other users see conditional as "maybe"
-      actualStatus = 'maybe';
-      conditionalFriends = undefined; // Hide conditionalFriends from other users
-    }
+   //   actualStatus = 'maybe';
+    //  conditionalFriends = undefined; // Hide conditionalFriends from other users
+   // }
   }
 
   const result = {
