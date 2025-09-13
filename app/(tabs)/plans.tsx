@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity, RefreshControl } from 'react-native';
+import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity, RefreshControl, AppState } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import Colors from '@/constants/colors';
 import TabBar from '@/components/plans/TabBar';
 import InvitationCard from '@/components/plans/InvitationCard';
@@ -23,7 +23,7 @@ export default function PlansScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const { user } = useAuth();
-  const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates } = usePlansStore();
+  const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates, checkAndRestartSubscriptions } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -168,6 +168,34 @@ export default function PlansScreen() {
       }
     }
   }, [invitations, activePlans, completedPlans, selectedPlan]);
+
+  // Handle app state changes (background/foreground) to restart realtime subscriptions
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && user?.id) {
+        console.log('📱 App came to foreground - checking plans realtime subscriptions');
+        // Small delay to ensure app is fully active
+        setTimeout(() => {
+          checkAndRestartSubscriptions(user.id);
+        }, 1000);
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [user?.id, checkAndRestartSubscriptions]);
+
+  // Handle navigation focus (when user returns to plans tab)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user?.id) {
+        console.log('🎯 Plans tab focused - checking realtime subscriptions');
+        // Check subscriptions when tab becomes active
+        checkAndRestartSubscriptions(user.id);
+      }
+    }, [user?.id, checkAndRestartSubscriptions])
+  );
 
   // DISABLED: const startNewPlanAnimation = () => {
   //   // Use only transform animations with native driver

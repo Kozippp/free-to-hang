@@ -4,6 +4,9 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
 import { Platform, Alert } from 'react-native';
 import * as Linking from 'expo-linking';
+import usePlansStore from '@/store/plansStore';
+import useFriendsStore from '@/store/friendsStore';
+import useHangStore from '@/store/hangStore';
 
 // TEMPORARY: Mock mode for database setup
 // Automatically enabled when placeholder keys are used
@@ -44,6 +47,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [initialSessionChecked, setInitialSessionChecked] = useState(false);
   const router = useRouter();
   const segments = useSegments();
+
+  // Access to realtime subscription stores
+  const { startRealTimeUpdates: startPlansRealtime, checkAndRestartSubscriptions } = usePlansStore();
+  const { startRealTimeUpdates: startFriendsRealtime } = useFriendsStore();
+  const { startRealTimeUpdates: startHangRealtime } = useHangStore();
 
   // Initial session check on app startup
   useEffect(() => {
@@ -116,6 +124,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsCheckingOnboarding(false);
             setNavigationReady(false);
           }
+
+          // Restart realtime subscriptions after sign-in
+          console.log('🔄 Restarting realtime subscriptions after sign-in');
+          setTimeout(() => {
+            try {
+              startHangRealtime();
+              startPlansRealtime(session.user.id);
+              startFriendsRealtime(session.user.id);
+              console.log('✅ Realtime subscriptions restarted after sign-in');
+            } catch (error) {
+              console.error('❌ Error restarting realtime subscriptions:', error);
+            }
+          }, 1000); // Small delay to ensure auth state is stable
         }
         
         if (event === 'SIGNED_OUT') {
@@ -125,8 +146,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setNavigationReady(true);
         }
         
-        if (event === 'TOKEN_REFRESHED' && __DEV__) {
-          console.log('🔄 Token refreshed');
+        if (event === 'TOKEN_REFRESHED') {
+          if (__DEV__) {
+            console.log('🔄 Token refreshed');
+          }
+
+          // Check and restart realtime subscriptions after token refresh
+          if (session?.user) {
+            console.log('🔄 Checking realtime subscriptions after token refresh');
+            setTimeout(() => {
+              try {
+                checkAndRestartSubscriptions(session.user.id);
+                console.log('✅ Realtime subscriptions checked after token refresh');
+              } catch (error) {
+                console.error('❌ Error checking realtime subscriptions after token refresh:', error);
+              }
+            }, 500);
+          }
         }
         
         setUser(session?.user ?? null);
