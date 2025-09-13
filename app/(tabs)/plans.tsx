@@ -157,6 +157,18 @@ export default function PlansScreen() {
     return () => clearInterval(interval);
   }, [processCompletedPlans]);
 
+  // Update selectedPlan when the corresponding plan in store is updated
+  useEffect(() => {
+    if (selectedPlan) {
+      const allPlans = [...invitations, ...activePlans, ...completedPlans];
+      const updatedPlan = allPlans.find(p => p.id === selectedPlan.id);
+      if (updatedPlan && JSON.stringify(updatedPlan) !== JSON.stringify(selectedPlan)) {
+        console.log('🔄 Updating selectedPlan with latest data');
+        setSelectedPlan(updatedPlan);
+      }
+    }
+  }, [invitations, activePlans, completedPlans, selectedPlan]);
+
   // DISABLED: const startNewPlanAnimation = () => {
   //   // Use only transform animations with native driver
   //   Animated.timing(newPlanAnimation, {
