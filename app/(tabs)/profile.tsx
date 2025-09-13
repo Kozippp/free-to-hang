@@ -63,7 +63,7 @@ export default function ProfileScreen() {
   const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
   
   // Use real friends store for friend requests and relationships
-  const { 
+  const {
     incomingRequests,
     outgoingRequests,
     friends: storeFriends,
@@ -71,7 +71,9 @@ export default function ProfileScreen() {
     acceptFriendRequest,
     declineFriendRequest,
     loadAllRelationships,
-    forceRefresh
+    forceRefresh,
+    startRealTimeUpdates,
+    stopRealTimeUpdates
   } = useFriendsStore();
   
   // Blocked users functionality not implemented yet
@@ -95,7 +97,22 @@ export default function ProfileScreen() {
   
   // Friend relationships disabled - no loading needed
 
-  // Realtime is now managed globally in layout - no need to start/stop here
+  // Start friends realtime when profile tab mounts
+  useEffect(() => {
+    if (authUser) {
+      console.log('👥 Starting friends realtime in profile tab...');
+      startRealTimeUpdates();
+
+      // Load initial friend data
+      loadAllRelationships();
+    }
+
+    // Stop realtime when leaving profile tab
+    return () => {
+      console.log('👥 Stopping friends realtime when leaving profile tab...');
+      stopRealTimeUpdates();
+    };
+  }, [authUser, startRealTimeUpdates, stopRealTimeUpdates, loadAllRelationships]);
 
   // Update local state when hangStore data changes
   useEffect(() => {

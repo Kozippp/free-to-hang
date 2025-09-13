@@ -35,10 +35,10 @@ export default function TabLayout() {
       }
       
       console.log('🚀 Starting global realtime systems...');
-      
-      // Start both realtime systems
+
+      // Start hang realtime system globally
       startHangRealtime();
-      await startFriendsRealtime();
+      // Friends realtime starts individually in profile tab to avoid duplication
     };
     
     if (user) {
