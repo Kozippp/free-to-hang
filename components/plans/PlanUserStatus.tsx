@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     borderLeftColor: '#2196F3',
   },
   conditionalTermsTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.light.text,
     marginBottom: 12,
