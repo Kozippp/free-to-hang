@@ -111,7 +111,7 @@ const notifyPlanUpdate = async (planId, updateType, triggeredBy, metadata = {}) 
 const transformParticipantStatus = (participant, currentUserId) => {
   // Apply conditional status transformation
   let actualStatus = participant.status;
-  let conditionalFriends = undefined;
+  let conditionalFriends = participant.conditionalFriends; // Keep original conditionalFriends!
 
   if (participant.status === 'conditional') {
     if (currentUserId && currentUserId === participant.user_id) {
@@ -121,6 +121,7 @@ const transformParticipantStatus = (participant, currentUserId) => {
     } else {
       // Other users see conditional as "maybe"
       actualStatus = 'maybe';
+      conditionalFriends = undefined; // Hide conditionalFriends from other users
     }
   }
 
