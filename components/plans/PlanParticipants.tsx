@@ -35,18 +35,14 @@ export default function PlanParticipants({
             <View style={[
               styles.statusIndicator,
               participant.status === 'going' && styles.acceptedIndicator,
-              participant.status === 'maybe' && styles.maybeIndicator,
-              participant.status === 'conditional' && styles.conditionalIndicator,
+              (participant.status === 'maybe' || participant.status === 'conditional') && styles.maybeIndicator,
               participant.status === 'pending' && styles.pendingIndicator,
             ]}>
               {participant.status === 'going' && (
                 <Check size={10} color="white" />
               )}
-              {participant.status === 'maybe' && (
+              {(participant.status === 'maybe' || participant.status === 'conditional') && (
                 <Text style={styles.questionMark}>?</Text>
-              )}
-              {participant.status === 'conditional' && (
-                <Clock size={10} color="white" />
               )}
               {participant.status === 'pending' && (
                 <View style={styles.eyeIcon}>

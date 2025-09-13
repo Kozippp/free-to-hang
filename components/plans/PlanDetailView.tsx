@@ -120,13 +120,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   // Group participants by status
   const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
-  const maybeParticipants = latestPlan.participants.filter(p => {
-    // Praegune conditional kasutaja ei tohi sattuda maybe sektsiooni
-    if (p.id === user.id && p.status === 'conditional') {
-      return false;
-    }
-    return p.status === 'maybe' || p.status === 'conditional';
-  });
+  const maybeParticipants = latestPlan.participants.filter(p =>
+    p.status === 'maybe' || p.status === 'conditional'
+  );
   const pendingParticipants = latestPlan.participants.filter(p => p.status === 'pending');
   
   // Get polls from the plan
