@@ -34,7 +34,11 @@ export default function ConditionalFriendsModal({
 
   React.useEffect(() => {
     if (visible) {
-      setSelectedFriends([]);
+      // Load existing conditional friends or start with empty array
+      const currentUser = participants.find(p => p.id === currentUserId);
+      const existingConditionalFriends = currentUser?.conditionalFriends || [];
+      setSelectedFriends(existingConditionalFriends);
+
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 200,
