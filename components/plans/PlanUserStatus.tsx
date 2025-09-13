@@ -238,14 +238,17 @@ export default function PlanUserStatus({
             
             return (
               <View style={styles.conditionalTermsContainer}>
-                <Text style={styles.conditionalTermsText}>
-                  Your status will be set as "Going" if these people come: <Text style={styles.conditionalFriendsInline}>
-                    {dependentFriends.map((friend, index) => (
-                      <Text key={friend!.id}>
-                        {friend!.name}{index < dependentFriends.length - 1 ? ', ' : ''}
-                      </Text>
-                    ))}
-                  </Text> Until then your friends see you as "Maybe".
+                <Text style={styles.conditionalTermsTitle}>Your status will be set as "Going" if these people come:</Text>
+                <View style={styles.conditionalFriendsList}>
+                  {dependentFriends.map((friend) => (
+                    <View key={friend!.id} style={styles.conditionalFriendItem}>
+                      <Image source={{ uri: friend!.avatar }} style={styles.conditionalAvatar} />
+                      <Text style={styles.conditionalFriendName}>{friend!.name}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.conditionalTermsSubtext}>
+                  Until then your friends see you as "Maybe".
                 </Text>
               </View>
             );
@@ -344,13 +347,34 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: '#2196F3',
   },
-  conditionalTermsText: {
+  conditionalTermsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 12,
+  },
+  conditionalFriendsList: {
+    marginBottom: 8,
+  },
+  conditionalFriendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  conditionalAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  conditionalFriendName: {
     fontSize: 14,
     color: Colors.light.text,
-    lineHeight: 20,
   },
-  conditionalFriendsInline: {
-    fontWeight: '600',
+  conditionalTermsSubtext: {
+    fontSize: 13,
     color: Colors.light.text,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
 });
