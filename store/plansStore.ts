@@ -307,11 +307,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   respondToPlan: async (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
     try {
-      console.log('📝 Responding to plan via API...', planId, response, 'conditionalFriends:', conditionalFriends);
+      console.log('📝 Responding to plan via API...', planId, response, 'conditionalFriends:', conditionalFriends, 'friends count:', conditionalFriends?.length || 0);
 
       // Call API to update status with conditional friends
       const updatedPlan = await plansService.respondToPlan(planId, response, conditionalFriends);
-      console.log('✅ Plan response updated via API, user status in response:', updatedPlan.participants?.find(p => p.id === get().currentUserId)?.status);
+
+      const currentUserInResponse = updatedPlan.participants?.find(p => p.id === get().currentUserId);
+      console.log('✅ Plan response updated via API, user status in response:', currentUserInResponse?.status, 'conditionalFriends in response:', currentUserInResponse?.conditionalFriends);
       
       // Transform API response to store format
       const transformedPlan: Plan = {

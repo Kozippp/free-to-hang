@@ -65,7 +65,8 @@ export default function ConditionalFriendsModal({
   };
 
   const handleConfirm = () => {
-    console.log('🎯 ConditionalFriendsModal: Confirming with selected friends:', selectedFriends);
+    console.log('🎯 ConditionalFriendsModal: Confirming with selected friends:', selectedFriends, 'count:', selectedFriends.length);
+    console.log('🎯 ConditionalFriendsModal: Sending to PlanUserStatus:', selectedFriends);
     onConfirm(selectedFriends);
     onClose();
   };
