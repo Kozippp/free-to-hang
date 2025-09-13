@@ -120,8 +120,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   // Group participants by status
   const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
-  const conditionalParticipants = latestPlan.participants.filter(p => p.status === 'conditional');
-  const maybeParticipants = latestPlan.participants.filter(p => p.status === 'maybe');
+  const maybeParticipants = latestPlan.participants.filter(p =>
+    p.status === 'maybe' || p.status === 'conditional'
+  );
   const pendingParticipants = latestPlan.participants.filter(p => p.status === 'pending');
   
   // Get polls from the plan
@@ -857,7 +858,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           {/* Participants Section with Invitations */}
           <PlanParticipants
             acceptedParticipants={acceptedParticipants}
-            conditionalParticipants={conditionalParticipants}
             maybeParticipants={maybeParticipants}
             pendingParticipants={pendingParticipants}
             invitationPolls={invitationPolls}

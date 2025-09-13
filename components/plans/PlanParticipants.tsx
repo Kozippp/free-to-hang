@@ -7,7 +7,6 @@ import InvitationVotingPoll from './InvitationVotingPoll';
 
 interface PlanParticipantsProps {
   acceptedParticipants: Participant[];
-  conditionalParticipants: Participant[];
   maybeParticipants: Participant[];
   pendingParticipants: Participant[];
   invitationPolls: Poll[];
@@ -19,7 +18,6 @@ interface PlanParticipantsProps {
 
 export default function PlanParticipants({
   acceptedParticipants,
-  conditionalParticipants,
   maybeParticipants,
   pendingParticipants,
   invitationPolls,
@@ -74,13 +72,6 @@ export default function PlanParticipants({
           <View style={styles.participantGroup}>
             <Text style={styles.groupTitle}>Going ({acceptedParticipants.length})</Text>
             {acceptedParticipants.map(renderParticipant)}
-          </View>
-        )}
-
-        {conditionalParticipants.length > 0 && (
-          <View style={styles.participantGroup}>
-            <Text style={styles.groupTitle}>If... ({conditionalParticipants.length})</Text>
-            {conditionalParticipants.map(renderParticipant)}
           </View>
         )}
 
