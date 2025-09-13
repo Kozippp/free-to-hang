@@ -38,11 +38,6 @@ export default function ConditionalFriendsModal({
       const currentUser = participants.find(p => p.id === currentUserId);
       const existingConditionalFriends = currentUser?.conditionalFriends || [];
 
-      console.log('🎯 ConditionalFriendsModal: Loading modal for user:', currentUserId);
-      console.log('🎯 ConditionalFriendsModal: currentUser found:', currentUser);
-      console.log('🎯 ConditionalFriendsModal: existingConditionalFriends:', existingConditionalFriends);
-      console.log('🎯 ConditionalFriendsModal: Setting selectedFriends to:', existingConditionalFriends);
-
       setSelectedFriends(existingConditionalFriends);
 
       Animated.timing(fadeAnim, {
@@ -71,8 +66,6 @@ export default function ConditionalFriendsModal({
   };
 
   const handleConfirm = () => {
-    console.log('🎯 ConditionalFriendsModal: Confirming with selected friends:', selectedFriends, 'count:', selectedFriends.length);
-    console.log('🎯 ConditionalFriendsModal: Sending to PlanUserStatus:', selectedFriends);
     onConfirm(selectedFriends);
     onClose();
   };

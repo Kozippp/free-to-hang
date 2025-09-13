@@ -217,14 +217,12 @@ class PlansService {
   // Respond to plan invitation
   async respondToPlan(planId: string, response: 'going' | 'maybe' | 'declined' | 'pending' | 'conditional', conditionalFriends?: string[]): Promise<Plan> {
     try {
-      console.log('📝 Responding to plan:', planId, 'with:', response, 'conditionalFriends:', conditionalFriends, 'friends count:', conditionalFriends?.length || 0);
       // Backend expects { status: ... }
       const body: any = { status: response };
 
       // ALWAYS send conditionalFriends if status is conditional - even if empty array
       if (response === 'conditional') {
         body.conditionalFriends = conditionalFriends || [];
-        console.log('📤 Sending to backend - status:', response, 'conditionalFriends:', body.conditionalFriends, 'friends count:', body.conditionalFriends.length);
       }
       
       const plan = await this.apiRequest(`/plans/${planId}/respond`, {

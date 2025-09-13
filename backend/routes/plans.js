@@ -109,57 +109,33 @@ const notifyPlanUpdate = async (planId, updateType, triggeredBy, metadata = {}) 
 
 // Helper function to transform participant status for conditional visibility
 const transformParticipantStatus = (participant, currentUserId) => {
-  // DEBUG: Log currentUserId and participant info
-  console.log('🔄 transformParticipantStatus called:', {
-    participantId: participant.user_id,
-    participantStatus: participant.status,
-    currentUserId: currentUserId,
-    isCurrentUser: currentUserId && currentUserId === participant.user_id,
-    conditionalFriends: participant.conditionalFriends
-  });
-
-  // CRITICAL DEBUG: Check if currentUserId is null/undefined
-  if (!currentUserId) {
-    console.log('❌ CRITICAL: currentUserId is null/undefined! This is why conditional logic fails!');
-  }
 
   // Apply conditional status transformation
   let actualStatus = participant.status;
   let conditionalFriends = participant.conditionalFriends; // Keep original conditionalFriends!
 
   if (participant.status === 'conditional') {
-    //if (currentUserId && currentUserId === participant.user_id) {
-      console.log('🎯 Current user viewing their own conditional status');
+    if (currentUserId && currentUserId === participant.user_id) {
       // Current user sees their own conditional status
       actualStatus = 'conditional';
       conditionalFriends = participant.conditionalFriends || [];
-   // } else {
-  //    console.log('👥 Other user viewing conditional status - hiding details');
+    } else {
       // Other users see conditional as "maybe"
-   //   actualStatus = 'maybe';
-    //  conditionalFriends = undefined; // Hide conditionalFriends from other users
-   // }
+      actualStatus = 'maybe';
+      conditionalFriends = undefined; // Hide conditionalFriends from other users
+    }
   }
 
-  const result = {
+  return {
     ...participant,
     status: actualStatus,
     conditionalFriends: conditionalFriends
   };
-
-  console.log('🔄 transformParticipantStatus result:', {
-    originalStatus: participant.status,
-    finalStatus: result.status,
-    finalConditionalFriends: result.conditionalFriends
-  });
-
-  return result;
 };
 
 // Helper function to get plan with full details
 const getPlanWithDetails = async (planId, userId = null) => {
   try {
-    console.log('🔍 getPlanWithDetails called with planId:', planId, 'userId:', userId);
 
     // Get basic plan info
     const { data: plan, error: planError } = await supabase
@@ -272,13 +248,10 @@ const getPlanWithDetails = async (planId, userId = null) => {
     // Completion votes deprecated: plans auto-complete after 24h
 
     // Get conditional dependencies from dedicated table
-    console.log('🔍 Fetching conditional dependencies for planId:', planId);
     const { data: depsRows, error: depsError } = await supabase
       .from('plan_conditional_dependencies')
       .select('user_id, friend_id')
       .eq('plan_id', planId);
-
-    console.log('🔍 depsRows:', depsRows, 'depsError:', depsError);
 
     if (depsError) throw depsError;
     const depsMap = new Map();
@@ -286,8 +259,6 @@ const getPlanWithDetails = async (planId, userId = null) => {
       if (!depsMap.has(r.user_id)) depsMap.set(r.user_id, []);
       depsMap.get(r.user_id).push(r.friend_id);
     });
-
-    console.log('🔍 depsMap after building:', Array.from(depsMap.entries()));
 
     // Get attendance if plan is completed
     let attendance = [];
@@ -367,14 +338,6 @@ const getPlanWithDetails = async (planId, userId = null) => {
       const user = participantUsers.find(u => u.id === p.user_id);
       const conditionalFriendsList = depsMap.get(p.user_id) || [];
 
-      console.log('🔄 Transforming participant:', {
-        user_id: p.user_id,
-        user_name: user?.name,
-        status: p.status,
-        conditionalFriendsList: conditionalFriendsList,
-        depsMapKeys: Array.from(depsMap.keys()),
-        depsMapHasUser: depsMap.has(p.user_id)
-      });
 
       // Apply conditional status transformation using helper function
       const transformedParticipant = {
@@ -397,12 +360,6 @@ const getPlanWithDetails = async (planId, userId = null) => {
       attendance: attendance
     };
 
-    console.log('📤 API Response participants:', response.participants.map(p => ({
-      id: p.id,
-      name: p.name,
-      status: p.status,
-      conditionalFriends: p.conditionalFriends
-    })));
 
     return response;
   } catch (error) {
@@ -413,7 +370,6 @@ const getPlanWithDetails = async (planId, userId = null) => {
 
 const processConditionalDependencies = async (planId) => {
   try {
-    console.log('🔄 Processing conditional dependencies for plan:', planId);
     
     // Get all participants
     const { data: participants, error: participantsError } = await supabase
@@ -1059,10 +1015,8 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
 
     // Handle conditional friends data in dedicated table
     if (status === 'conditional') {
-      console.log('🔄 SETTING CONDITIONAL STATUS for user:', userId, 'with friends:', conditionalFriends, 'friends length:', conditionalFriends?.length || 0);
 
       // ALWAYS clear existing deps for this user first
-      console.log('🗑️ Clearing existing conditional dependencies for user:', userId);
       await supabase
         .from('plan_conditional_dependencies')
         .delete()
@@ -1078,7 +1032,6 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
         friend_id: friendId
       }));
 
-      console.log('📝 Inserting rows:', rows.length, 'conditional dependency rows');
       const { error: insertError } = await supabase.from('plan_conditional_dependencies').insert(rows);
       if (insertError) {
         console.error('❌ Error saving conditional dependencies:', insertError);
@@ -1086,7 +1039,6 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
         console.log('✅ Conditional dependencies saved successfully:', rows.length, 'rows inserted');
       }
     } else {
-      console.log('🔄 REMOVING CONDITIONAL STATUS for user:', userId, 'setting status to:', status);
       // Remove any deps if user leaves conditional
       await supabase
         .from('plan_conditional_dependencies')
