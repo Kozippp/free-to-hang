@@ -314,6 +314,12 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       const currentUserInResponse = updatedPlan.participants?.find(p => p.id === get().currentUserId);
       console.log('✅ Plan response updated via API, user status in response:', currentUserInResponse?.status, 'conditionalFriends in response:', currentUserInResponse?.conditionalFriends);
+      console.log('📥 Full API response participants:', updatedPlan.participants?.map(p => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        conditionalFriends: p.conditionalFriends
+      })));
       
       // Transform API response to store format
       const transformedPlan: Plan = {

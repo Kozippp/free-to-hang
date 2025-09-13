@@ -335,6 +335,15 @@ const getPlanWithDetails = async (planId, userId = null) => {
       const user = participantUsers.find(u => u.id === p.user_id);
       const conditionalFriendsList = depsMap.get(p.user_id) || [];
 
+      console.log('🔄 Transforming participant:', {
+        user_id: p.user_id,
+        user_name: user?.name,
+        status: p.status,
+        conditionalFriendsList: conditionalFriendsList,
+        depsMapKeys: Array.from(depsMap.keys()),
+        depsMapHasUser: depsMap.has(p.user_id)
+      });
+
       // Apply conditional status transformation using helper function
       const transformedParticipant = {
         id: p.user_id,
@@ -348,13 +357,22 @@ const getPlanWithDetails = async (planId, userId = null) => {
       return transformParticipantStatus(transformedParticipant, userId);
     });
 
-    return {
+    const response = {
       ...plan,
       creator: creator,
       participants: transformedParticipants,
       polls: transformedPolls,
       attendance: attendance
     };
+
+    console.log('📤 API Response participants:', response.participants.map(p => ({
+      id: p.id,
+      name: p.name,
+      status: p.status,
+      conditionalFriends: p.conditionalFriends
+    })));
+
+    return response;
   } catch (error) {
     console.error('Error getting plan details:', error);
     throw error;
