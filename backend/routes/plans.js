@@ -109,27 +109,46 @@ const notifyPlanUpdate = async (planId, updateType, triggeredBy, metadata = {}) 
 
 // Helper function to transform participant status for conditional visibility
 const transformParticipantStatus = (participant, currentUserId) => {
+  // DEBUG: Log currentUserId and participant info
+  console.log('🔄 transformParticipantStatus called:', {
+    participantId: participant.user_id,
+    participantStatus: participant.status,
+    currentUserId: currentUserId,
+    isCurrentUser: currentUserId && currentUserId === participant.user_id,
+    conditionalFriends: participant.conditionalFriends
+  });
+
   // Apply conditional status transformation
   let actualStatus = participant.status;
   let conditionalFriends = participant.conditionalFriends; // Keep original conditionalFriends!
 
   if (participant.status === 'conditional') {
     if (currentUserId && currentUserId === participant.user_id) {
+      console.log('🎯 Current user viewing their own conditional status');
       // Current user sees their own conditional status
       actualStatus = 'conditional';
       conditionalFriends = participant.conditionalFriends || [];
     } else {
+      console.log('👥 Other user viewing conditional status - hiding details');
       // Other users see conditional as "maybe"
-      actualStatus = 'conditional';
-      conditionalFriends = participant.conditionalFriends; // Hide conditionalFriends from other users
+      actualStatus = 'maybe';
+      conditionalFriends = undefined; // Hide conditionalFriends from other users
     }
   }
 
-  return {
+  const result = {
     ...participant,
     status: actualStatus,
     conditionalFriends: conditionalFriends
   };
+
+  console.log('🔄 transformParticipantStatus result:', {
+    originalStatus: participant.status,
+    finalStatus: result.status,
+    finalConditionalFriends: result.conditionalFriends
+  });
+
+  return result;
 };
 
 // Helper function to get plan with full details
