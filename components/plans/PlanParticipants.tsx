@@ -1,12 +1,13 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image, FlatList, Alert } from 'react-native';
-import { UserPlus, X, Check, Clock } from 'lucide-react-native';
+import { UserPlus, X, Check, Clock, Eye } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Participant, Poll } from '@/store/plansStore';
 import InvitationVotingPoll from './InvitationVotingPoll';
 
 interface PlanParticipantsProps {
   acceptedParticipants: Participant[];
+  conditionalParticipants: Participant[];
   maybeParticipants: Participant[];
   pendingParticipants: Participant[];
   invitationPolls: Poll[];
@@ -16,9 +17,10 @@ interface PlanParticipantsProps {
   isInYesGang: boolean;
 }
 
-export default function PlanParticipants({ 
-  acceptedParticipants, 
-  maybeParticipants, 
+export default function PlanParticipants({
+  acceptedParticipants,
+  conditionalParticipants,
+  maybeParticipants,
   pendingParticipants,
   invitationPolls,
   onInvite,
@@ -35,14 +37,18 @@ export default function PlanParticipants({
             <View style={[
               styles.statusIndicator,
               participant.status === 'going' && styles.acceptedIndicator,
-              (participant.status === 'maybe' || participant.status === 'conditional') && styles.maybeIndicator,
+              participant.status === 'maybe' && styles.maybeIndicator,
+              participant.status === 'conditional' && styles.conditionalIndicator,
               participant.status === 'pending' && styles.pendingIndicator,
             ]}>
               {participant.status === 'going' && (
                 <Check size={10} color="white" />
               )}
-              {(participant.status === 'maybe' || participant.status === 'conditional') && (
+              {participant.status === 'maybe' && (
                 <Text style={styles.questionMark}>?</Text>
+              )}
+              {participant.status === 'conditional' && (
+                <Eye size={10} color="white" />
               )}
               {participant.status === 'pending' && (
                 <View style={styles.eyeIcon}>
@@ -70,7 +76,14 @@ export default function PlanParticipants({
             {acceptedParticipants.map(renderParticipant)}
           </View>
         )}
-        
+
+        {conditionalParticipants.length > 0 && (
+          <View style={styles.participantGroup}>
+            <Text style={styles.groupTitle}>If... ({conditionalParticipants.length})</Text>
+            {conditionalParticipants.map(renderParticipant)}
+          </View>
+        )}
+
         {maybeParticipants.length > 0 && (
           <View style={styles.participantGroup}>
             <Text style={styles.groupTitle}>Maybe ({maybeParticipants.length})</Text>
