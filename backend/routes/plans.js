@@ -118,6 +118,11 @@ const transformParticipantStatus = (participant, currentUserId) => {
     conditionalFriends: participant.conditionalFriends
   });
 
+  // CRITICAL DEBUG: Check if currentUserId is null/undefined
+  if (!currentUserId) {
+    console.log('❌ CRITICAL: currentUserId is null/undefined! This is why conditional logic fails!');
+  }
+
   // Apply conditional status transformation
   let actualStatus = participant.status;
   let conditionalFriends = participant.conditionalFriends; // Keep original conditionalFriends!
@@ -154,6 +159,8 @@ const transformParticipantStatus = (participant, currentUserId) => {
 // Helper function to get plan with full details
 const getPlanWithDetails = async (planId, userId = null) => {
   try {
+    console.log('🔍 getPlanWithDetails called with planId:', planId, 'userId:', userId);
+
     // Get basic plan info
     const { data: plan, error: planError } = await supabase
       .from('plans')
