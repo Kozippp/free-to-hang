@@ -122,7 +122,7 @@ const transformParticipantStatus = (participant, currentUserId) => {
     } else {
       // Other users see conditional as "maybe"
       actualStatus = 'maybe';
-      conditionalFriends = undefined; // Hide conditionalFriends from other users
+      conditionalFriends = undefined; // Hide conditionalFriends from other users s
     }
   }
 
