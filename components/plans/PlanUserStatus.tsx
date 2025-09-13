@@ -238,7 +238,7 @@ export default function PlanUserStatus({
             
             return (
               <View style={styles.conditionalTermsContainer}>
-                <Text style={styles.conditionalTermsTitle}>Your status will be set as "Going" if these people come:</Text>
+                <Text style={styles.conditionalTermsTitle}>Your status will be set to "Going" if these people come:</Text>
                 <View style={styles.conditionalFriendsList}>
                   {dependentFriends.map((friend) => (
                     <View key={friend!.id} style={styles.conditionalFriendItem}>
