@@ -232,6 +232,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   const handlePollSubmit = async (question: string, options: string[]) => {
     try {
+      console.log('🚀 Starting poll submit, setting loading to true');
       setIsPollLoading(true);
 
       // Check if user is authenticated
@@ -282,11 +283,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       }
 
       // Close the poll creator and reset state
+      console.log('✅ Poll submit successful, setting loading to false');
       setShowPollCreator(false);
       setEditingPoll(null);
       setIsPollLoading(false);
     } catch (error) {
       console.error('❌ Error creating poll:', error);
+      console.log('❌ Poll submit failed, setting loading to false');
       setIsPollLoading(false);
 
       let errorMessage = 'Failed to create poll. Please try again.';

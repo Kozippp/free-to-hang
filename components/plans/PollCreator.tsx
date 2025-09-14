@@ -35,6 +35,7 @@ export default function PollCreator({
   existingPoll,
   isLoading = false
 }: PollCreatorProps) {
+  console.log('🔍 PollCreator rendered with isLoading:', isLoading, 'existingPoll:', !!existingPoll);
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
 
