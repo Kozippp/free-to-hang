@@ -106,6 +106,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [realTimeUpdates, setRealTimeUpdates] = useState<Set<string>>(new Set());
   const [isPollLoading, setIsPollLoading] = useState(false);
   const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
+  const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
   
   // Decline animation states
   const [isClosing, setIsClosing] = useState(false);
@@ -690,6 +691,10 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Helper function to handle poll deletion
   const handleDeletePoll = async (pollId: string) => {
     try {
+      // Set loading state for deletion
+      console.log('🗑️ Starting poll deletion:', pollId);
+      setDeletingPollId(pollId);
+
       console.log('🗑️ Deleting poll via API:', pollId);
       await plansService.deletePoll(plan.id, pollId);
       console.log('✅ Poll deleted successfully via API');
@@ -718,6 +723,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         errorMessage,
         [{ text: 'OK', style: 'default' }]
       );
+    } finally {
+      // Clear loading state
+      setDeletingPollId(null);
     }
   };
 
@@ -878,7 +886,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     totalGoingParticipants={acceptedParticipants.length}
                     onDelete={() => handleDeletePoll(poll.id)}
                     isRealTimeUpdate={realTimeUpdates.has(poll.id)}
-                    isLoading={loadingPollId === poll.id}
+                    isLoading={loadingPollId === poll.id || deletingPollId === poll.id}
+                    loadingText={deletingPollId === poll.id ? "Deleting poll..." : "Updating poll..."}
                   />
                 </View>
               ))}

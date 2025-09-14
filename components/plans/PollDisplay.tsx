@@ -37,6 +37,7 @@ interface PollDisplayProps {
   onDelete?: () => void; // New prop for deleting custom polls
   isRealTimeUpdate?: boolean; // New prop to indicate if this is a real-time update
   isLoading?: boolean; // New prop to show loading state on the poll
+  loadingText?: string; // Custom loading text
 }
 
 export default function PollDisplay({
@@ -52,7 +53,8 @@ export default function PollDisplay({
   hideQuestion = false,
   onDelete,
   isRealTimeUpdate = false,
-  isLoading = false
+  isLoading = false,
+  loadingText = "Updating poll..."
 }: PollDisplayProps) {
   // Local state to manage poll data independently
   const [localOptions, setLocalOptions] = useState<PollOption[]>(options);
@@ -275,7 +277,7 @@ export default function PollDisplay({
         <View style={[StyleSheet.absoluteFill, styles.pollLoadingOverlay]}>
           <View style={styles.pollLoadingContent}>
             <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.pollLoadingText}>Updating poll...</Text>
+            <Text style={styles.pollLoadingText}>{loadingText}</Text>
           </View>
         </View>
       )}
