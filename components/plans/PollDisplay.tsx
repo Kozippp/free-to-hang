@@ -187,7 +187,7 @@ export default function PollDisplay({
   const goingParticipants = Math.max(totalGoingParticipants, totalVoters);
 
   const getPercentage = (votes: number) => {
-    return totalVoters > 0 ? Math.round((votes / totalVoters) * 100) : 0;
+    return goingParticipants > 0 ? Math.round((votes / goingParticipants) * 100) : 0;
   };
 
   // Sort options by vote count (descending)
