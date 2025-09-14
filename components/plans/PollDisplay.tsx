@@ -57,13 +57,16 @@ export default function PollDisplay({
     return values;
   });
 
-  const [voteCounts, setVoteCounts] = useState<Record<string, number>>(() => {
-    const counts: Record<string, number> = {};
+  const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
+
+  // Initialize vote counts on first render
+  React.useEffect(() => {
+    const initialCounts: Record<string, number> = {};
     options.forEach(option => {
-      counts[option.id] = option.votes;
+      initialCounts[option.id] = option.votes;
     });
-    return counts;
-  });
+    setVoteCounts(initialCounts);
+  }, []); // Empty dependency array - only run once on mount
 
   // Update vote counts when options change (for real-time updates)
   React.useEffect(() => {
