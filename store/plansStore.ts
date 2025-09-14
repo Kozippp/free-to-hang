@@ -134,6 +134,12 @@ let updatesChannel: any = null;
 let attendanceChannel: any = null;
 let isSubscribed = false;
 
+// Debouncing for real-time updates to prevent rate limiting
+let plansRefreshTimeout: NodeJS.Timeout | null = null;
+let participantsRefreshTimeout: NodeJS.Timeout | null = null;
+let pollsRefreshTimeout: NodeJS.Timeout | null = null;
+let pollVotesRefreshTimeout: NodeJS.Timeout | null = null;
+
 const usePlansStore = create<PlansState>((set, get) => ({
   invitations: [],
   activePlans: [],
@@ -1118,6 +1124,25 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   stopRealTimeUpdates: () => {
     console.log('🛑 Stopping all plans real-time updates...');
+
+    // Clear all debounced timeouts
+    if (plansRefreshTimeout) {
+      clearTimeout(plansRefreshTimeout);
+      plansRefreshTimeout = null;
+    }
+    if (participantsRefreshTimeout) {
+      clearTimeout(participantsRefreshTimeout);
+      participantsRefreshTimeout = null;
+    }
+    if (pollsRefreshTimeout) {
+      clearTimeout(pollsRefreshTimeout);
+      pollsRefreshTimeout = null;
+    }
+    if (pollVotesRefreshTimeout) {
+      clearTimeout(pollVotesRefreshTimeout);
+      pollVotesRefreshTimeout = null;
+    }
+
     stopAllRealtimeChannels();
     console.log('✅ All plans real-time updates stopped');
   },
@@ -1132,6 +1157,24 @@ const usePlansStore = create<PlansState>((set, get) => ({
     }
 
     console.log('🔄 Plans subscriptions missing or failed - restarting...');
+
+    // Clear any pending timeouts
+    if (plansRefreshTimeout) {
+      clearTimeout(plansRefreshTimeout);
+      plansRefreshTimeout = null;
+    }
+    if (participantsRefreshTimeout) {
+      clearTimeout(participantsRefreshTimeout);
+      participantsRefreshTimeout = null;
+    }
+    if (pollsRefreshTimeout) {
+      clearTimeout(pollsRefreshTimeout);
+      pollsRefreshTimeout = null;
+    }
+    if (pollVotesRefreshTimeout) {
+      clearTimeout(pollVotesRefreshTimeout);
+      pollVotesRefreshTimeout = null;
+    }
 
     // Stop any existing channels first
     await stopAllRealtimeChannels();
@@ -1189,7 +1232,6 @@ function handlePlansInsert(payload: any, currentUserId: string) {
 // Handle plan update notifications - MAIN NOTIFICATION SYSTEM
 function handlePlanUpdateNotification(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
-  const { loadPlans } = usePlansStore.getState();
 
   console.log('📢 Processing plan update notification:', {
     eventType,
@@ -1204,35 +1246,36 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     const planId = newRecord.plan_id;
     const triggeredBy = newRecord.triggered_by;
 
-    // Handle different types of plan updates
-    if (updateType === 'plan_created') {
-      console.log('🎯 New plan created - refreshing plans data');
+    // Debounced refresh to prevent rate limiting
+    const debouncedRefresh = () => {
+      const { loadPlans } = usePlansStore.getState();
+      console.log('🔄 Debounced refresh triggered for update type:', updateType);
+
       loadPlans(currentUserId).then(() => {
-        console.log('✅ Plans refreshed after new plan creation');
-      }).catch(error => {
-        console.error('❌ Error refreshing plans after creation:', error);
-      });
-    } else if (updateType === 'participant_joined') {
-      console.log('👥 Participant joined/changed status - refreshing plans data');
-      loadPlans(currentUserId).then(() => {
-        console.log('✅ Plans refreshed after participant change');
-      }).catch(error => {
-        console.error('❌ Error refreshing plans after participant change:', error);
-      });
-    } else if (updateType === 'poll_created' || updateType === 'poll_voted') {
-      console.log('📊 Poll activity - refreshing plans data');
-      loadPlans(currentUserId).then(() => {
-        console.log('✅ Plans refreshed after poll activity');
-      }).catch(error => {
-        console.error('❌ Error refreshing plans after poll activity:', error);
-      });
-    } else {
-      console.log(`🔄 Other update type (${updateType}) - refreshing plans data`);
-      loadPlans(currentUserId).then(() => {
-        console.log('✅ Plans refreshed after update');
+        console.log('✅ Plans refreshed after update:', updateType);
       }).catch(error => {
         console.error('❌ Error refreshing plans after update:', error);
       });
+    };
+
+    // Clear existing timeout
+    if (plansRefreshTimeout) {
+      clearTimeout(plansRefreshTimeout);
+    }
+
+    // Handle different types of plan updates with debouncing
+    if (updateType === 'plan_created') {
+      console.log('🎯 New plan created - immediate refresh needed');
+      debouncedRefresh(); // Immediate for new plans
+    } else if (updateType === 'participant_joined') {
+      console.log('👥 Participant joined/changed status - debounced refresh');
+      plansRefreshTimeout = setTimeout(debouncedRefresh, 1000); // 1 second debounce
+    } else if (updateType === 'poll_created' || updateType === 'poll_voted') {
+      console.log('📊 Poll activity - debounced refresh');
+      plansRefreshTimeout = setTimeout(debouncedRefresh, 1500); // 1.5 second debounce
+    } else {
+      console.log(`🔄 Other update type (${updateType}) - debounced refresh`);
+      plansRefreshTimeout = setTimeout(debouncedRefresh, 1000); // 1 second debounce
     }
   }
 }
@@ -1240,46 +1283,76 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
 // Handle participants table changes
 function handleParticipantsChange(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
-  const { loadPlans } = usePlansStore.getState();
 
   console.log('👥 Processing participants table change:', { eventType, currentUserId });
 
-  // Reload plans data for any participant change
-  loadPlans(currentUserId).then(() => {
-    console.log('✅ Plans updated after participants table change');
-  }).catch(error => {
-    console.error('❌ Error updating plans after participants table change:', error);
-  });
+  // Debounced refresh to prevent rate limiting
+  const debouncedRefresh = () => {
+    const { loadPlans } = usePlansStore.getState();
+    loadPlans(currentUserId).then(() => {
+      console.log('✅ Plans updated after participants table change');
+    }).catch(error => {
+      console.error('❌ Error updating plans after participants table change:', error);
+    });
+  };
+
+  // Clear existing timeout
+  if (participantsRefreshTimeout) {
+    clearTimeout(participantsRefreshTimeout);
+  }
+
+  // Debounce participants changes by 2 seconds
+  participantsRefreshTimeout = setTimeout(debouncedRefresh, 2000);
 }
 
 // Handle polls table changes
 function handlePollsChange(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
-  const { loadPlans } = usePlansStore.getState();
 
   console.log('📊 Processing polls table change:', { eventType, currentUserId });
 
-  // Reload plans data to get updated polls
-  loadPlans(currentUserId).then(() => {
-    console.log('✅ Plans updated after polls table change');
-  }).catch(error => {
-    console.error('❌ Error updating plans after polls table change:', error);
-  });
+  // Debounced refresh to prevent rate limiting
+  const debouncedRefresh = () => {
+    const { loadPlans } = usePlansStore.getState();
+    loadPlans(currentUserId).then(() => {
+      console.log('✅ Plans updated after polls table change');
+    }).catch(error => {
+      console.error('❌ Error updating plans after polls table change:', error);
+    });
+  };
+
+  // Clear existing timeout
+  if (pollsRefreshTimeout) {
+    clearTimeout(pollsRefreshTimeout);
+  }
+
+  // Debounce polls changes by 1.5 seconds
+  pollsRefreshTimeout = setTimeout(debouncedRefresh, 1500);
 }
 
 // Handle poll votes changes
 function handlePollVotesChange(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
-  const { loadPlans } = usePlansStore.getState();
 
   console.log('🗳️ Processing poll votes change:', { eventType, currentUserId });
 
-  // Reload plans data to get updated vote counts
-  loadPlans(currentUserId).then(() => {
-    console.log('✅ Plans updated after poll votes change');
-  }).catch(error => {
-    console.error('❌ Error updating plans after poll votes change:', error);
-  });
+  // Debounced refresh to prevent rate limiting
+  const debouncedRefresh = () => {
+    const { loadPlans } = usePlansStore.getState();
+    loadPlans(currentUserId).then(() => {
+      console.log('✅ Plans updated after poll votes change');
+    }).catch(error => {
+      console.error('❌ Error updating plans after poll votes change:', error);
+    });
+  };
+
+  // Clear existing timeout
+  if (pollVotesRefreshTimeout) {
+    clearTimeout(pollVotesRefreshTimeout);
+  }
+
+  // Debounce poll votes changes by 1 second (most frequent updates)
+  pollVotesRefreshTimeout = setTimeout(debouncedRefresh, 1000);
 }
 
 export default usePlansStore;
