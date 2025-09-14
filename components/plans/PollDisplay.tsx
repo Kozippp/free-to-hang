@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.light.text,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   selectedPercentageText: {
     color: Colors.light.primary,
