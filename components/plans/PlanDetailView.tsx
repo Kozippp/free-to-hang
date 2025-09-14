@@ -535,13 +535,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const getUserVotesForPoll = (pollId: string): string[] => {
     const poll = polls.find(p => p.id === pollId);
     if (!poll) return [];
-    
+
     const userVotes = poll.options
       .filter(option => option.votes.includes(user.id))
       .map(option => option.id);
-    
+
     console.log('🔍 getUserVotesForPoll:', { pollId, userVotes, userId: user.id, pollOptions: poll.options.map(o => ({ id: o.id, votes: o.votes })) });
-    
+
     return userVotes;
   };
   
@@ -592,7 +592,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     try {
       const currentVotes = getUserVotesForPoll(pollId);
       let newVotes: string[];
-      
+
       if (currentVotes.includes(optionId)) {
         // Remove vote if already selected
         newVotes = currentVotes.filter(id => id !== optionId);
@@ -600,27 +600,27 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         // Add vote if not selected
         newVotes = [...currentVotes, optionId];
       }
-      
+
       // Optimistic update - update UI immediately
       console.log('🚀 Optimistic vote update:', { pollId, newVotes });
       voteOnPollOptimistic(plan.id, pollId, newVotes, user.id);
-      
+
       // Use API to vote on poll
       console.log('🗳️ Voting on poll via API:', { pollId, newVotes });
       await plansService.voteOnPoll(plan.id, pollId, newVotes);
       console.log('✅ Vote submitted successfully via API');
-      
+
       // Real-time subscription will handle updating the store
       // No need to manually reload plans
     } catch (error) {
       console.error('❌ Error voting on poll:', error);
-      
+
       // Revert optimistic update on error
       console.log('🔄 Reverting optimistic update due to error');
       await loadPlans(user.id);
-      
+
       let errorMessage = 'Failed to submit vote. Please try again.';
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           errorMessage = 'Your session has expired. Please sign out and sign back in.';
@@ -630,7 +630,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           errorMessage = error.message;
         }
       }
-      
+
       Alert.alert(
         'Error Voting',
         errorMessage,
