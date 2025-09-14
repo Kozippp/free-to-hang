@@ -104,6 +104,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [pollType, setPollType] = useState<'when' | 'where' | 'custom'>('custom');
   const [editingPoll, setEditingPoll] = useState<Poll | null>(null);
   const [realTimeUpdates, setRealTimeUpdates] = useState<Set<string>>(new Set());
+  const [isPollLoading, setIsPollLoading] = useState(false);
   
   // Decline animation states
   const [isClosing, setIsClosing] = useState(false);
@@ -231,6 +232,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   const handlePollSubmit = async (question: string, options: string[]) => {
     try {
+      setIsPollLoading(true);
+
       // Check if user is authenticated
       if (!user) {
         Alert.alert(
@@ -262,30 +265,32 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         // Create a new poll using API
         console.log('📊 Creating poll via API:', { question, options, type: pollType });
         console.log('👤 User ID:', user.id);
-        
+
         const pollData = {
           question,
           options,
           type: pollType
         };
-        
+
         // Use plansService to create poll via API
         const updatedPlan = await plansService.createPoll(latestPlan.id, pollData);
         console.log('✅ Poll created successfully via API:', updatedPlan);
-        
+
         // Manually reload plans to ensure UI updates immediately
         // Real-time subscription should also handle this, but this ensures immediate feedback
         await loadPlans(user.id);
       }
-      
+
       // Close the poll creator and reset state
       setShowPollCreator(false);
       setEditingPoll(null);
+      setIsPollLoading(false);
     } catch (error) {
       console.error('❌ Error creating poll:', error);
-      
+      setIsPollLoading(false);
+
       let errorMessage = 'Failed to create poll. Please try again.';
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           errorMessage = 'Your session has expired. Please sign out and sign back in.';
@@ -295,7 +300,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           errorMessage = error.message;
         }
       }
-      
+
       Alert.alert(
         'Error Creating Poll',
         errorMessage,
@@ -913,6 +918,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         onSubmit={handlePollSubmit}
         pollType={pollType}
         existingPoll={editingPoll}
+        isLoading={isPollLoading}
       />
       
       {/* Poll Voting Modal */}
