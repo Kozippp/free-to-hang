@@ -9,7 +9,6 @@ import {
   Image,
   Platform
 } from 'react-native';
-import { Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PollOption {
@@ -82,64 +81,45 @@ export default function PollVoting({
               const isSelected = selectedOptions.includes(option.id);
               
               return (
-                <View style={styles.optionRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.checkboxButton,
-                      isSelected && styles.checkboxButtonSelected
-                    ]}
-                    onPress={() => toggleOption(option.id)}
-                  >
-                    <View style={[
-                      styles.checkbox,
-                      isSelected && styles.checkedBox
-                    ]}>
-                      {isSelected && (
-                        <Check size={16} color="white" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
+                <TouchableOpacity
+                  key={option.id}
+                  style={[
+                    styles.optionButton,
+                    isSelected && styles.selectedOption
+                  ]}
+                  onPress={() => toggleOption(option.id)}
+                >
+                  <Text style={styles.optionText}>{option.text}</Text>
 
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[
-                      styles.optionButton,
-                      isSelected && styles.selectedOption
-                    ]}
-                    onPress={() => toggleOption(option.id)}
-                  >
-                    <Text style={styles.optionText}>{option.text}</Text>
+                  <View style={styles.votersContainer}>
+                    {option.voters.length === 0 ? (
+                      <View style={styles.emptyVotersPlaceholder} />
+                    ) : (
+                      <>
+                        {option.voters.slice(0, 5).map((voter, index) => (
+                          <View
+                            key={voter.id}
+                            style={[
+                              styles.voterAvatar,
+                              { marginLeft: index > 0 ? -10 : 0 }
+                            ]}
+                          >
+                            <Image
+                              source={{ uri: voter.avatar }}
+                              style={styles.avatarImage}
+                            />
+                          </View>
+                        ))}
 
-                    <View style={styles.votersContainer}>
-                      {option.voters.length === 0 ? (
-                        <View style={styles.emptyVotersPlaceholder} />
-                      ) : (
-                        <>
-                          {option.voters.slice(0, 5).map((voter, index) => (
-                            <View
-                              key={voter.id}
-                              style={[
-                                styles.voterAvatar,
-                                { marginLeft: index > 0 ? -10 : 0 }
-                              ]}
-                            >
-                              <Image
-                                source={{ uri: voter.avatar }}
-                                style={styles.avatarImage}
-                              />
-                            </View>
-                          ))}
-
-                          {option.voters.length > 5 && (
-                            <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
-                              <Text style={styles.moreVotersText}>+{option.voters.length - 5}</Text>
-                            </View>
-                          )}
-                        </>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </View>
+                        {option.voters.length > 5 && (
+                          <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
+                            <Text style={styles.moreVotersText}>+{option.voters.length - 5}</Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
+                </TouchableOpacity>
               );
             })}
           </ScrollView>
@@ -199,48 +179,19 @@ const styles = StyleSheet.create({
   optionsContainer: {
     maxHeight: 400,
   },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  checkboxButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  checkboxButtonSelected: {
-    backgroundColor: `${Colors.light.primary}10`, // Light background when selected
-    borderRadius: 8,
-  },
   optionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.buttonBackground, // Light gray background
     borderRadius: 10,
     padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.light.border,
   },
   selectedOption: {
     backgroundColor: `${Colors.light.primary}15`, // Light blue when selected
     borderColor: Colors.light.primary,
-    marginLeft: 12, // Shift content to the right when selected
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkedBox: {
-    backgroundColor: Colors.light.primary,
   },
   optionText: {
     fontSize: 16,
