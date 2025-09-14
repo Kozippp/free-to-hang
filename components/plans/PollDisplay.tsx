@@ -217,15 +217,16 @@ export default function PollDisplay({
     totalVoters >= minParticipation
   );
   
-  // Randomly select one winner from top options to avoid confusion
+  // Select the first option by ID when there are ties (deterministic selection)
+  // Note: The authoritative winner determination with timestamps is handled by the backend
   const selectedWinner = React.useMemo(() => {
     if (topOptions.length === 0) return null;
     if (topOptions.length === 1) return topOptions[0];
-    
-    // Use a stable random selection based on option IDs to ensure consistency
+
+    // Sort by option ID and select the first one for consistency
+    // This is for real-time display; backend determines true winner by timestamp
     const sortedTopOptions = [...topOptions].sort((a, b) => a.id.localeCompare(b.id));
-    const randomIndex = Math.abs(sortedTopOptions[0].id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % sortedTopOptions.length;
-    return sortedTopOptions[randomIndex];
+    return sortedTopOptions[0];
   }, [topOptions]);
   
   // An option is winning if it's the selected winner
@@ -333,7 +334,7 @@ export default function PollDisplay({
             )}
             {hasWinner && isRandomlySelected && (
               <Text style={styles.randomSelectionText}>
-                Winner selected randomly from top voted options
+                Winner determined by first to reach vote threshold
               </Text>
             )}
           </View>
@@ -357,7 +358,7 @@ export default function PollDisplay({
             )}
             {hasWinner && isRandomlySelected && (
               <Text style={styles.randomSelectionText}>
-                Winner selected randomly from top voted options
+                Winner determined by first to reach vote threshold
               </Text>
             )}
           </View>
@@ -383,6 +384,7 @@ export default function PollDisplay({
                 styles.optionRow,
                 isSelected && styles.selectedOptionRow,
                 isWinningOption && styles.winningOptionRow,
+                isSelected && isWinningOption && styles.selectedWinningOptionRow,
                 {
                   transform: [
                     {
@@ -408,7 +410,10 @@ export default function PollDisplay({
                 )}
                 
                 <View style={styles.optionContent}>
-                  <View style={styles.optionLeft}>
+                  <View style={[
+                    styles.optionLeft,
+                    isSelected && styles.selectedOptionLeft
+                  ]}>
                     {/* Crown for winner */}
                     {isWinningOption && (
                       <View style={styles.crownContainer}>
@@ -546,6 +551,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  selectedWinningOptionRow: {
+    borderColor: Colors.light.primary, // Blue border when selected and winning
+    backgroundColor: '#FFF9E6', // Keep golden background
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   optionButton: {
     padding: 0,
   },
@@ -577,6 +589,9 @@ const styles = StyleSheet.create({
   selectedOptionText: {
     fontWeight: '600',
     color: Colors.light.primary,
+  },
+  selectedOptionLeft: {
+    paddingLeft: 28, // Push text to the right to avoid overlap with checkbox
   },
   winningOptionText: {
     fontWeight: '700',
@@ -673,8 +688,8 @@ const styles = StyleSheet.create({
   },
   checkmarkTopLeft: {
     position: 'absolute',
-    top: 8,
-    left: 8,
+    top: '50%',
+    left: 12, // Position on the left side, accounting for optionContent padding
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -682,6 +697,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
+    transform: [
+      { translateY: -10 }, // Center vertically (half of height)
+    ],
   },
   awaitingText: {
     fontSize: 12,

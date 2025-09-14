@@ -638,12 +638,13 @@ router.get('/:planId/:pollId/results', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch options' });
     }
 
-    // Get vote counts
+    // Get vote counts with timestamps
     const optionIds = options?.map(o => o.id) || [];
     const { data: votes, error: votesError } = await supabase
       .from('plan_poll_votes')
-      .select('option_id, user_id')
-      .in('option_id', optionIds);
+      .select('option_id, user_id, created_at')
+      .in('option_id', optionIds)
+      .order('created_at', { ascending: true });
 
     if (votesError) {
       console.error('Error fetching votes:', votesError);
@@ -652,10 +653,17 @@ router.get('/:planId/:pollId/results', requireAuth, async (req, res) => {
 
     // Calculate vote counts and get going participants count
     const voteCounts = {};
+    const voteTimestamps = {};
     const uniqueVoters = new Set();
     (votes || []).forEach(vote => {
       voteCounts[vote.option_id] = (voteCounts[vote.option_id] || 0) + 1;
       uniqueVoters.add(vote.user_id);
+
+      // Store timestamps for each option
+      if (!voteTimestamps[vote.option_id]) {
+        voteTimestamps[vote.option_id] = [];
+      }
+      voteTimestamps[vote.option_id].push(new Date(vote.created_at));
     });
 
     const { data: goingParticipants, error: participantsError } = await supabase
@@ -700,12 +708,27 @@ router.get('/:planId/:pollId/results', requireAuth, async (req, res) => {
     if (potentialWinners.length === 1) {
       winner = potentialWinners[0];
     } else if (potentialWinners.length > 1) {
-      // Multiple winners with same vote count - select randomly for consistency
-      const sortedById = potentialWinners.sort((a, b) => a.id.localeCompare(b.id));
-      const randomIndex = Math.abs(pollId.split('').reduce((acc, char) =>
-        acc + char.charCodeAt(0), 0)) % sortedById.length;
-      winner = sortedById[randomIndex];
-      isRandomlySelected = true;
+      // Multiple winners with same vote count - select the one that reached the vote count first
+      const maxVotes = potentialWinners[0].votes; // All have same vote count
+
+      // Find the earliest timestamp when any option reached the winning vote count
+      let earliestWinner = null;
+      let earliestTime = null;
+
+      potentialWinners.forEach(option => {
+        const timestamps = voteTimestamps[option.id] || [];
+        if (timestamps.length >= maxVotes) {
+          // The timestamp of the Nth vote (where N = maxVotes) is when this option reached the winning count
+          const timeReached = timestamps[maxVotes - 1];
+          if (!earliestTime || timeReached < earliestTime) {
+            earliestTime = timeReached;
+            earliestWinner = option;
+          }
+        }
+      });
+
+      winner = earliestWinner;
+      isRandomlySelected = false; // No longer random
     }
 
     const result = {
