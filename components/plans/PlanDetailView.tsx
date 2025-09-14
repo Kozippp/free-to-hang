@@ -555,7 +555,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       .filter(option => option.votes.includes(user.id))
       .map(option => option.id);
 
-    console.log('🔍 getUserVotesForPoll:', { pollId, userVotes, userId: user.id, pollOptions: poll.options.map(o => ({ id: o.id, votes: o.votes })) });
+    //console.log('🔍 getUserVotesForPoll:', { pollId, userVotes, userId: user.id, pollOptions: poll.options.map(o => ({ id: o.id, votes: o.votes })) });
 
     return userVotes;
   };
