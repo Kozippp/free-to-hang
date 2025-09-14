@@ -241,7 +241,7 @@ class PlansService {
   async createPoll(planId: string, pollData: CreatePollData): Promise<Plan> {
     try {
       console.log('📊 Creating poll for plan:', planId);
-      const poll = await this.apiRequest(`/polls/${planId}`, {
+      const poll = await this.apiRequest(`/plans/${planId}/polls`, {
         method: 'POST',
         body: JSON.stringify(pollData)
       });
@@ -275,7 +275,7 @@ class PlansService {
   async voteOnPoll(planId: string, pollId: string, optionIds: string[]): Promise<Plan> {
     try {
       console.log('🗳️ Voting on poll:', pollId, 'options:', optionIds);
-      await this.apiRequest(`/polls/${planId}/${pollId}/vote`, {
+      await this.apiRequest(`/plans/${planId}/polls/${pollId}/vote`, {
         method: 'POST',
         body: JSON.stringify({ optionIds })
       });
@@ -293,7 +293,7 @@ class PlansService {
   async editPoll(planId: string, pollId: string, question: string, options: string[]): Promise<Plan> {
     try {
       console.log('✏️ Editing poll:', pollId);
-      await this.apiRequest(`/polls/${planId}/${pollId}`, {
+      await this.apiRequest(`/plans/${planId}/polls/${pollId}`, {
         method: 'PUT',
         body: JSON.stringify({ question, options })
       });
@@ -311,7 +311,7 @@ class PlansService {
   async deletePoll(planId: string, pollId: string): Promise<Plan> {
     try {
       console.log('🗑️ Deleting poll:', pollId);
-      await this.apiRequest(`/polls/${planId}/${pollId}`, {
+      await this.apiRequest(`/plans/${planId}/polls/${pollId}`, {
         method: 'DELETE'
       });
       console.log('✅ Poll deleted successfully');
@@ -328,7 +328,7 @@ class PlansService {
   async getPollResults(planId: string, pollId: string) {
     try {
       console.log('📊 Getting poll results:', pollId);
-      const results = await this.apiRequest(`/polls/${planId}/${pollId}/results`);
+      const results = await this.apiRequest(`/plans/${planId}/polls/${pollId}/results`);
       console.log('✅ Poll results retrieved successfully');
       return results;
     } catch (error) {
@@ -341,7 +341,7 @@ class PlansService {
   async getPolls(planId: string): Promise<Poll[]> {
     try {
       console.log('📋 Getting polls for plan:', planId);
-      const polls = await this.apiRequest(`/polls/${planId}`);
+      const polls = await this.apiRequest(`/plans/${planId}/polls`);
       console.log('✅ Polls retrieved successfully');
       return polls;
     } catch (error) {
