@@ -102,31 +102,35 @@ export default function PollVoting({
                   </View>
                   
                   <Text style={styles.optionText}>{option.text}</Text>
-                  
-                  {option.voters.length > 0 && (
-                    <View style={styles.votersContainer}>
-                      {option.voters.slice(0, 3).map((voter, index) => (
-                        <View 
-                          key={voter.id} 
-                          style={[
-                            styles.voterAvatar,
-                            { marginLeft: index > 0 ? -10 : 0 }
-                          ]}
-                        >
-                          <Image 
-                            source={{ uri: voter.avatar }} 
-                            style={styles.avatarImage} 
-                          />
-                        </View>
-                      ))}
-                      
-                      {option.voters.length > 3 && (
-                        <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
-                          <Text style={styles.moreVotersText}>+{option.voters.length - 3}</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
+
+                  <View style={styles.votersContainer}>
+                    {option.voters.length === 0 ? (
+                      <View style={styles.emptyVotersPlaceholder} />
+                    ) : (
+                      <>
+                        {option.voters.slice(0, 3).map((voter, index) => (
+                          <View
+                            key={voter.id}
+                            style={[
+                              styles.voterAvatar,
+                              { marginLeft: index > 0 ? -10 : 0 }
+                            ]}
+                          >
+                            <Image
+                              source={{ uri: voter.avatar }}
+                              style={styles.avatarImage}
+                            />
+                          </View>
+                        ))}
+
+                        {option.voters.length > 3 && (
+                          <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
+                            <Text style={styles.moreVotersText}>+{option.voters.length - 3}</Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -224,6 +228,11 @@ const styles = StyleSheet.create({
   votersContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 28, // Ensure consistent height
+  },
+  emptyVotersPlaceholder: {
+    width: 28,
+    height: 28,
   },
   voterAvatar: {
     width: 28,
