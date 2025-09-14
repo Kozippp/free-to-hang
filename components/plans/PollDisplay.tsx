@@ -239,8 +239,8 @@ export default function PollDisplay({
 
   // Render voters avatars
   const VotersAvatars = ({ voters }: { voters: PollOption['voters'] }) => {
-    const displayVoters = voters.slice(0, 3);
-    const remainingCount = voters.length - 3;
+    const displayVoters = voters.slice(0, 5);
+    const remainingCount = voters.length - 5;
 
     return (
       <View style={styles.votersContainer}>
