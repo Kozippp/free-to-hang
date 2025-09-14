@@ -140,6 +140,9 @@ let participantsRefreshTimeout: NodeJS.Timeout | null = null;
 let pollsRefreshTimeout: NodeJS.Timeout | null = null;
 let pollVotesRefreshTimeout: NodeJS.Timeout | null = null;
 
+// Track which polls are currently being updated to prevent duplicate requests
+let updatingPolls = new Set<string>();
+
 const usePlansStore = create<PlansState>((set, get) => ({
   invitations: [],
   activePlans: [],
@@ -1143,6 +1146,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
       pollVotesRefreshTimeout = null;
     }
 
+    // Clear updating polls set
+    updatingPolls.clear();
+
     stopAllRealtimeChannels();
     console.log('✅ All plans real-time updates stopped');
   },
@@ -1333,26 +1339,43 @@ function handlePollsChange(payload: any, currentUserId: string) {
 // Handle poll votes changes - now updates only specific poll
 function handlePollVotesChange(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
+  const pollId = newRecord?.poll_id || oldRecord?.poll_id;
 
   console.log('🗳️ Processing poll votes change:', {
     eventType,
-    pollId: newRecord?.poll_id || oldRecord?.poll_id,
-    currentUserId
+    pollId,
+    currentUserId,
+    currentlyUpdating: Array.from(updatingPolls)
   });
 
-  if (newRecord) {
-    const pollId = newRecord.poll_id;
-    const planId = newRecord.plan_id;
+  if (newRecord && pollId) {
+    // Check if this poll is already being updated
+    if (updatingPolls.has(pollId)) {
+      console.log('⚠️ Poll already updating, skipping duplicate request:', pollId);
+      return;
+    }
 
-    // Instead of full refresh, we could emit a more targeted update
-    // For now, we'll keep the debounced refresh but with a shorter delay
-    const debouncedRefresh = () => {
-      const { loadPlans } = usePlansStore.getState();
-      loadPlans(currentUserId).then(() => {
+    // Mark this poll as being updated
+    updatingPolls.add(pollId);
+
+    const debouncedRefresh = async () => {
+      try {
+        console.log('🔄 Starting poll update for:', pollId);
+        const { loadPlans } = usePlansStore.getState();
+        await loadPlans(currentUserId);
         console.log('✅ Plans updated after poll votes change for poll:', pollId);
-      }).catch(error => {
+      } catch (error) {
         console.error('❌ Error updating plans after poll votes change:', error);
-      });
+        // Check if it's a rate limit error
+        if (error instanceof Error && error.message.includes('429')) {
+          console.log('⏰ Rate limit hit, will retry later for poll:', pollId);
+          // Could implement retry logic here
+        }
+      } finally {
+        // Always remove from updating set
+        updatingPolls.delete(pollId);
+        console.log('🧹 Cleaned up updating poll:', pollId, 'Remaining:', Array.from(updatingPolls));
+      }
     };
 
     // Clear existing timeout
@@ -1360,8 +1383,9 @@ function handlePollVotesChange(payload: any, currentUserId: string) {
       clearTimeout(pollVotesRefreshTimeout);
     }
 
-    // Shorter debounce for poll votes - only 500ms instead of 1000ms
-    pollVotesRefreshTimeout = setTimeout(debouncedRefresh, 500);
+    // Longer debounce time to prevent rate limiting - 2000ms
+    console.log('⏰ Setting debounce timeout for poll:', pollId, 'Duration: 2000ms');
+    pollVotesRefreshTimeout = setTimeout(debouncedRefresh, 2000);
   }
 }
 
