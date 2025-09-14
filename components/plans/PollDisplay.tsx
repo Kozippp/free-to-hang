@@ -242,29 +242,34 @@ export default function PollDisplay({
     const displayVoters = voters.slice(0, 3);
     const remainingCount = voters.length - 3;
 
-    if (voters.length === 0) return null;
-
     return (
       <View style={styles.votersContainer}>
-        {displayVoters.map((voter, index) => (
-          <View 
-            key={voter.id} 
-            style={[
-              styles.voterAvatar,
-              { marginLeft: index > 0 ? -10 : 0, zIndex: 3 - index }
-            ]}
-          >
-            <Image 
-              source={{ uri: voter.avatar }} 
-              style={styles.avatarImage} 
-            />
-          </View>
-        ))}
-        
-        {remainingCount > 0 && (
-          <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
-            <Text style={styles.moreVotersText}>+{remainingCount}</Text>
-          </View>
+        {voters.length === 0 ? (
+          // Show placeholder to maintain consistent height
+          <View style={styles.emptyVotersPlaceholder} />
+        ) : (
+          <>
+            {displayVoters.map((voter, index) => (
+              <View
+                key={voter.id}
+                style={[
+                  styles.voterAvatar,
+                  { marginLeft: index > 0 ? -10 : 0, zIndex: 3 - index }
+                ]}
+              >
+                <Image
+                  source={{ uri: voter.avatar }}
+                  style={styles.avatarImage}
+                />
+              </View>
+            ))}
+
+            {remainingCount > 0 && (
+              <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
+                <Text style={styles.moreVotersText}>+{remainingCount}</Text>
+              </View>
+            )}
+          </>
         )}
       </View>
     );
@@ -422,8 +427,8 @@ export default function PollDisplay({
                   </View>
                   
                   <View style={styles.optionRight}>
-                    {/* Percentage and voters in column */}
-                    <View style={styles.rightColumn}>
+                    {/* Percentage and voters in row */}
+                    <View style={styles.rightRow}>
                       <View style={styles.percentageContainer}>
                         <Text style={[
                           styles.percentageText,
@@ -456,8 +461,8 @@ export default function PollDisplay({
                           </Animated.View>
                         )}
                       </View>
-                      
-                      {/* Voters avatars under percentage */}
+
+                      {/* Voters avatars next to percentage */}
                       <VotersAvatars voters={option.voters} />
                     </View>
                   </View>
@@ -582,9 +587,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  rightColumn: {
+  rightRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   checkmark: {
     width: 18,
@@ -610,6 +616,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 28, // Ensure consistent height
+  },
+  emptyVotersPlaceholder: {
+    width: 28,
+    height: 28,
   },
   voterAvatar: {
     width: 28,
