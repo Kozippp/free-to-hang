@@ -1392,7 +1392,7 @@ router.put('/:id/polls/:pollId', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Only going participants can edit polls' });
     }
 
-    // Check if poll exists and user is the creator
+    // Check if poll exists
     const { data: existingPoll, error: pollError } = await supabase
       .from('plan_polls')
       .select('created_by')
@@ -1404,9 +1404,8 @@ router.put('/:id/polls/:pollId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Poll not found' });
     }
 
-    if (existingPoll.created_by !== userId) {
-      return res.status(403).json({ error: 'Only poll creator can edit poll' });
-    }
+    // For collaborative planning, allow all "going" participants to edit polls
+    // (we already checked above that the user is going and a participant)
 
     // Update poll title
     const { error: updatePollError } = await supabase
@@ -1538,7 +1537,7 @@ router.delete('/:id/polls/:pollId', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Only going participants can delete polls' });
     }
 
-    // Check if poll exists and user is the creator
+    // Check if poll exists
     const { data: existingPoll, error: pollError } = await supabase
       .from('plan_polls')
       .select('created_by')
@@ -1550,9 +1549,8 @@ router.delete('/:id/polls/:pollId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Poll not found' });
     }
 
-    if (existingPoll.created_by !== userId) {
-      return res.status(403).json({ error: 'Only poll creator can delete poll' });
-    }
+    // For collaborative planning, allow all "going" participants to delete polls
+    // (we already checked above that the user is going and a participant)
 
     // Delete poll options first (due to foreign key constraint)
     const { error: deleteOptionsError } = await supabase
