@@ -1438,6 +1438,29 @@ router.put('/:id/polls/:pollId', requireAuth, async (req, res) => {
       existingOptionMap.set(option.option_text.toLowerCase().trim(), option.id);
     });
 
+    // Separate new options from existing ones
+    const newOptions = [];
+    const existingOptionsToUpdate = [];
+
+    options.forEach((optionText, index) => {
+      const existingId = existingOptionMap.get(optionText.toLowerCase().trim());
+      if (existingId) {
+        // This option exists, we need to update it
+        existingOptionsToUpdate.push({
+          id: existingId,
+          option_text: optionText,
+          option_order: index
+        });
+      } else {
+        // This is a new option, we need to insert it
+        newOptions.push({
+          poll_id: pollId,
+          option_text: optionText,
+          option_order: index
+        });
+      }
+    });
+
     // Delete existing options that are not in the new options list
     const newOptionsLower = options.map(opt => opt.toLowerCase().trim());
     const optionsToDelete = existingOptions?.filter(opt =>
@@ -1452,32 +1475,38 @@ router.put('/:id/polls/:pollId', requireAuth, async (req, res) => {
 
       if (deleteOptionsError) {
         console.error('Error deleting old options:', deleteOptionsError);
-        return res.status(500).json({ error: 'Failed to update options' });
+        return res.status(500).json({ error: 'Failed to delete old options' });
       }
     }
 
-    // Insert or update options
-    const optionInserts = options.map((optionText, index) => {
-      const existingId = existingOptionMap.get(optionText.toLowerCase().trim());
-      return {
-        ...(existingId ? { id: existingId } : {}),
-        poll_id: pollId,
-        option_text: optionText,
-        option_order: index
-      };
-    });
+    // Update existing options
+    if (existingOptionsToUpdate.length > 0) {
+      for (const option of existingOptionsToUpdate) {
+        const { error: updateError } = await supabase
+          .from('plan_poll_options')
+          .update({
+            option_text: option.option_text,
+            option_order: option.option_order
+          })
+          .eq('id', option.id);
 
-    // Use upsert to handle both insert and update
-    const { error: upsertOptionsError } = await supabase
-      .from('plan_poll_options')
-      .upsert(optionInserts, {
-        onConflict: 'id',
-        ignoreDuplicates: false
-      });
+        if (updateError) {
+          console.error('Error updating option:', updateError);
+          return res.status(500).json({ error: 'Failed to update existing options' });
+        }
+      }
+    }
 
-    if (upsertOptionsError) {
-      console.error('Error upserting options:', upsertOptionsError);
-      return res.status(500).json({ error: 'Failed to update poll options' });
+    // Insert new options
+    if (newOptions.length > 0) {
+      const { error: insertOptionsError } = await supabase
+        .from('plan_poll_options')
+        .insert(newOptions);
+
+      if (insertOptionsError) {
+        console.error('Error inserting new options:', insertOptionsError);
+        return res.status(500).json({ error: 'Failed to insert new options' });
+      }
     }
 
     // Notify poll update
