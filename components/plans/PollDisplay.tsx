@@ -196,7 +196,7 @@ export default function PollDisplay({
   };
 
   // Sort options by vote count (descending)
-  const sortedOptions = [...localOptions].sort((a, b) => b.votes - a.votes);
+  const optionsSortedByVotes = [...localOptions].sort((a, b) => b.votes - a.votes);
   
   // Dynamic threshold algorithm for determining winner
   const getWinnerThreshold = () => {
@@ -228,6 +228,22 @@ export default function PollDisplay({
     const sortedTopOptions = [...topOptions].sort((a, b) => a.id.localeCompare(b.id));
     return sortedTopOptions[0];
   }, [topOptions]);
+
+  // Apply winner-first sorting to the vote-sorted options
+  const sortedOptions = React.useMemo(() => {
+    const result = [...optionsSortedByVotes];
+
+    // If there's a winner, move it to the first position
+    if (selectedWinner) {
+      const winnerIndex = result.findIndex(option => option.id === selectedWinner.id);
+      if (winnerIndex > 0) {
+        const [winner] = result.splice(winnerIndex, 1);
+        result.unshift(winner);
+      }
+    }
+
+    return result;
+  }, [optionsSortedByVotes, selectedWinner]);
   
   // An option is winning if it's the selected winner
   const isWinning = (optionId: string) => {
