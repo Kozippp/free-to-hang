@@ -656,13 +656,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
   processExpiredInvitationPolls: () => {
     // This function is kept for backward compatibility but should not be used
     // Expired polls are now handled via API
-    console.warn('⚠️ processExpiredInvitationPolls should not be called directly. Use API instead.');
+    //console.warn('⚠️ processExpiredInvitationPolls should not be called directly. Use API instead.');
   },
   
   createInvitationPollWithAutoVote: (planId: string, friendIds: string[], friendNames: string[], creatorId: string) => {
     // This function is kept for backward compatibility but should not be used
     // Invitation polls are now created via API calls
-    console.warn('⚠️ createInvitationPollWithAutoVote should not be called directly. Use API instead.');
+   // console.warn('⚠️ createInvitationPollWithAutoVote should not be called directly. Use API instead.');
   },
   
   // Completion actions
