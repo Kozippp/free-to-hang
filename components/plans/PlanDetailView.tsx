@@ -105,6 +105,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [editingPoll, setEditingPoll] = useState<Poll | null>(null);
   const [realTimeUpdates, setRealTimeUpdates] = useState<Set<string>>(new Set());
   const [isPollLoading, setIsPollLoading] = useState(false);
+  const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
   
   // Decline animation states
   const [isClosing, setIsClosing] = useState(false);
@@ -232,8 +233,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   const handlePollSubmit = async (question: string, options: string[]) => {
     try {
-      console.log('🚀 Starting poll submit, setting loading to true');
-      setIsPollLoading(true);
+      console.log('🚀 Starting poll submit, setting loading for poll:', editingPoll?.id);
+      setLoadingPollId(editingPoll?.id || null);
 
       // Check if user is authenticated
       if (!user) {
@@ -283,14 +284,14 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       }
 
       // Close the poll creator and reset state
-      console.log('✅ Poll submit successful, setting loading to false');
+      console.log('✅ Poll submit successful, clearing loading');
       setShowPollCreator(false);
       setEditingPoll(null);
-      setIsPollLoading(false);
+      setLoadingPollId(null);
     } catch (error) {
       console.error('❌ Error creating poll:', error);
-      console.log('❌ Poll submit failed, setting loading to false');
-      setIsPollLoading(false);
+      console.log('❌ Poll submit failed, clearing loading');
+      setLoadingPollId(null);
 
       let errorMessage = 'Failed to create poll. Please try again.';
 
@@ -772,6 +773,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
                     isRealTimeUpdate={realTimeUpdates.has(whenPoll.id)}
+                    isLoading={loadingPollId === whenPoll.id}
                   />
                 </View>
               ) : isInYesGang ? (
@@ -811,6 +813,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
                     isRealTimeUpdate={realTimeUpdates.has(wherePoll.id)}
+                    isLoading={loadingPollId === wherePoll.id}
                   />
                 </View>
               ) : isInYesGang ? (
@@ -846,6 +849,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     totalGoingParticipants={acceptedParticipants.length}
                     onDelete={() => handleDeletePoll(poll.id)}
                     isRealTimeUpdate={realTimeUpdates.has(poll.id)}
+                    isLoading={loadingPollId === poll.id}
                   />
                 </View>
               ))}
@@ -921,7 +925,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         onSubmit={handlePollSubmit}
         pollType={pollType}
         existingPoll={editingPoll}
-        isLoading={isPollLoading}
       />
       
       {/* Poll Voting Modal */}

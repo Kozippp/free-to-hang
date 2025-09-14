@@ -24,7 +24,6 @@ interface PollCreatorProps {
   onSubmit: (question: string, options: string[]) => void;
   pollType: 'when' | 'where' | 'custom';
   existingPoll?: Poll | null;
-  isLoading?: boolean;
 }
 
 export default function PollCreator({
@@ -32,10 +31,8 @@ export default function PollCreator({
   onClose,
   onSubmit,
   pollType,
-  existingPoll,
-  isLoading = false
+  existingPoll
 }: PollCreatorProps) {
-  console.log('🔍 PollCreator rendered with isLoading:', isLoading, 'existingPoll:', !!existingPoll);
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
 
@@ -235,43 +232,22 @@ export default function PollCreator({
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
 
-        {/* Loading Overlay */}
-        {isLoading && (
-          <View style={[StyleSheet.absoluteFill, styles.loadingOverlay]}>
-            {console.log('🎭 LOADING OVERLAY RENDERING')}
-            <View style={styles.loadingContent}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>
-                {existingPoll ? 'Updating poll...' : 'Creating poll...'}
-              </Text>
-            </View>
-          </View>
-        )}
-
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={[styles.cancelButton, isLoading && styles.disabledButton]}
-            disabled={isLoading}
-          >
-            <Text style={[styles.cancelText, isLoading && styles.disabledText]}>Cancel</Text>
+          <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
+            <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
 
           <Text style={styles.title}>{existingPoll ? 'Edit Poll' : 'Poll'}</Text>
 
           <TouchableOpacity
             onPress={handleSubmit}
-            style={[styles.doneButton, (!canSubmit() || isLoading) && styles.disabledButton]}
-            disabled={!canSubmit() || isLoading}
+            style={[styles.doneButton, !canSubmit() && styles.disabledButton]}
+            disabled={!canSubmit()}
           >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#007AFF" />
-            ) : (
-              <Text style={[styles.doneText, !canSubmit() && styles.disabledText]}>
-                Done
-              </Text>
-            )}
+            <Text style={[styles.doneText, !canSubmit() && styles.disabledText]}>
+              Done
+            </Text>
           </TouchableOpacity>
         </View>
         
@@ -366,16 +342,12 @@ export default function PollCreator({
               {/* Create Poll button inline with options */}
               <TouchableOpacity
                 onPress={handleSubmit}
-                style={[styles.inlineCreateButton, (!canSubmit() || isLoading) && styles.disabledCreateButton]}
-                disabled={!canSubmit() || isLoading}
+                style={[styles.inlineCreateButton, !canSubmit() && styles.disabledCreateButton]}
+                disabled={!canSubmit()}
               >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={[styles.createButtonText, !canSubmit() && styles.disabledCreateButtonText]}>
-                    {existingPoll ? 'Update Poll' : 'Create Poll'}
-                  </Text>
-                )}
+                <Text style={[styles.createButtonText, !canSubmit() && styles.disabledCreateButtonText]}>
+                  {existingPoll ? 'Update Poll' : 'Create Poll'}
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -544,34 +516,5 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginTop: 16,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 0, 0, 0.8)', // TEMP: Bright red to make it visible
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  loadingContent: {
-    backgroundColor: 'white',
-    padding: 24,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-    textAlign: 'center',
   },
 });

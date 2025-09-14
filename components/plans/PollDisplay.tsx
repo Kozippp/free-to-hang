@@ -35,6 +35,7 @@ interface PollDisplayProps {
   hideQuestion?: boolean; // New prop to hide question for preset polls
   onDelete?: () => void; // New prop for deleting custom polls
   isRealTimeUpdate?: boolean; // New prop to indicate if this is a real-time update
+  isLoading?: boolean; // New prop to show loading state on the poll
 }
 
 export default function PollDisplay({
@@ -49,7 +50,8 @@ export default function PollDisplay({
   totalGoingParticipants = 0,
   hideQuestion = false,
   onDelete,
-  isRealTimeUpdate = false
+  isRealTimeUpdate = false,
+  isLoading = false
 }: PollDisplayProps) {
   // Local state to manage poll data independently
   const [localOptions, setLocalOptions] = useState<PollOption[]>(options);
@@ -267,6 +269,16 @@ export default function PollDisplay({
 
   return (
     <View style={styles.container}>
+      {/* Loading Overlay */}
+      {isLoading && (
+        <View style={[StyleSheet.absoluteFill, styles.pollLoadingOverlay]}>
+          <View style={styles.pollLoadingContent}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.pollLoadingText}>Updating poll...</Text>
+          </View>
+        </View>
+      )}
+
       {/* Header with question and stats - only show if not hidden */}
       {!hideQuestion && (
         <>
@@ -671,5 +683,28 @@ const styles = StyleSheet.create({
   },
   compactStatsContainer: {
     flex: 1,
+  },
+  pollLoadingOverlay: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  pollLoadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.2)',
+  },
+  pollLoadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#007AFF',
   },
 });
