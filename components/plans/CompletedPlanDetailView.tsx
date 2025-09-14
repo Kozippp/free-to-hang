@@ -180,16 +180,18 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
   // Helper function to get poll results
   const getPollResults = (poll: Poll) => {
     const totalVotes = poll.options.reduce((sum, option) => sum + option.votes.length, 0);
-    const winningOption = poll.options.reduce((winner, current) => 
+    const goingParticipants = latestPlan.participants.filter(p => p.status === 'going').length;
+    const winningOption = poll.options.reduce((winner, current) =>
       current.votes.length > winner.votes.length ? current : winner
     );
-    
+
     return {
       totalVotes,
+      goingParticipants,
       winningOption,
       options: poll.options.map(option => ({
         ...option,
-        percentage: totalVotes > 0 ? Math.round((option.votes.length / totalVotes) * 100) : 0
+        percentage: goingParticipants > 0 ? Math.round((option.votes.length / goingParticipants) * 100) : 0
       }))
     };
   };
@@ -209,7 +211,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
     return (
       <View key={poll.id} style={styles.pollResultsContainer}>
         <Text style={styles.pollStats}>
-          {results.totalVotes} {results.totalVotes === 1 ? 'vote' : 'votes'}
+          {results.totalVotes} out of {results.goingParticipants} going {results.totalVotes === 1 ? 'voted' : 'voted'}
           {results.totalVotes > 0 && (
             <Text style={styles.winnerIndicator}> • Winner: {results.winningOption.text}</Text>
           )}
