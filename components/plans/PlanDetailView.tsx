@@ -410,16 +410,24 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // Check if this is a first-time response (user is currently pending)
     const isFirstTimeResponse = currentUserStatus === 'pending';
     
-    // If changing from 'going' to 'maybe' or 'conditional', remove all votes first
-    if (currentUserStatus === 'going' && (status === 'maybe' || status === 'conditional')) {
-      // Remove user votes from all polls
-      polls.forEach(poll => {
+    // If changing from 'going' to 'maybe', 'conditional', or 'declined', remove all votes first
+    if (currentUserStatus === 'going' && (status === 'maybe' || status === 'conditional' || status === 'declined')) {
+      // Remove user votes from all polls using API calls
+      const voteRemovalPromises = polls.map(async (poll) => {
         const userVotes = getUserVotesForPoll(poll.id);
         if (userVotes.length > 0) {
-          // Remove all votes by voting for empty array
-          voteOnPoll(plan.id, poll.id, [], user.id);
+          try {
+            console.log('🗳️ Removing votes from poll:', poll.id, 'for user:', user.id);
+            await plansService.voteOnPoll(plan.id, poll.id, []);
+            console.log('✅ Votes removed successfully from poll:', poll.id);
+          } catch (error) {
+            console.error('❌ Error removing votes from poll:', poll.id, error);
+          }
         }
       });
+
+      // Wait for all vote removals to complete
+      await Promise.all(voteRemovalPromises);
     }
 
     if (status === 'declined') {
