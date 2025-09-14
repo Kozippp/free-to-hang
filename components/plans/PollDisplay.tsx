@@ -23,6 +23,7 @@ interface PollOption {
 }
 
 interface PollDisplayProps {
+  pollId: string; // Add pollId for identification
   question: string;
   options: PollOption[];
   onVote: (optionId: string) => void;
@@ -37,6 +38,7 @@ interface PollDisplayProps {
 }
 
 export default function PollDisplay({
+  pollId,
   question,
   options,
   onVote,
@@ -49,6 +51,11 @@ export default function PollDisplay({
   onDelete,
   isRealTimeUpdate = false
 }: PollDisplayProps) {
+  // Local state to manage poll data independently
+  const [localOptions, setLocalOptions] = useState<PollOption[]>(options);
+  const [localUserVotes, setLocalUserVotes] = useState<string[]>(userVotes);
+  const [localTotalVotes, setLocalTotalVotes] = useState<number>(totalVotes);
+
   const [animatedValues] = useState(() => {
     const values: Record<string, Animated.Value> = {};
     options.forEach(option => {
@@ -58,6 +65,13 @@ export default function PollDisplay({
   });
 
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
+
+  // Sync local state with props when they change
+  React.useEffect(() => {
+    setLocalOptions(options);
+    setLocalUserVotes(userVotes);
+    setLocalTotalVotes(totalVotes);
+  }, [options, userVotes, totalVotes]);
 
   // Initialize vote counts on first render
   React.useEffect(() => {
@@ -71,7 +85,7 @@ export default function PollDisplay({
   // Update vote counts when options change (for real-time updates)
   React.useEffect(() => {
     const newCounts: Record<string, number> = {};
-    options.forEach(option => {
+    localOptions.forEach(option => {
       const oldCount = voteCounts[option.id] || 0;
       const newCount = option.votes;
 
@@ -95,22 +109,22 @@ export default function PollDisplay({
       newCounts[option.id] = newCount;
     });
     setVoteCounts(newCounts);
-  }, [options, isRealTimeUpdate]); // Removed voteCounts and animatedValues to prevent infinite loops
+  }, [localOptions, isRealTimeUpdate]); // Removed voteCounts and animatedValues to prevent infinite loops
 
   // Ensure all options have animation values
   React.useEffect(() => {
-    options.forEach(option => {
+    localOptions.forEach(option => {
       if (!animatedValues[option.id]) {
         animatedValues[option.id] = new Animated.Value(0);
       }
     });
-  }, [options]); // Removed animatedValues to prevent infinite loops
+  }, [localOptions]); // Removed animatedValues to prevent infinite loops
 
   // Real-time update animation
   React.useEffect(() => {
     if (isRealTimeUpdate) {
       // Animate all options with a subtle pulse
-      const animations = options.map(option => 
+      const animations = localOptions.map(option =>
         Animated.sequence([
           Animated.timing(animatedValues[option.id], {
             toValue: 1,
@@ -124,10 +138,10 @@ export default function PollDisplay({
           })
         ])
       );
-      
+
       Animated.parallel(animations).start();
     }
-  }, [isRealTimeUpdate, options]); // Removed animatedValues to prevent infinite loops
+  }, [isRealTimeUpdate, localOptions]); // Removed animatedValues to prevent infinite loops
 
   const handleVote = (optionId: string) => {
     if (!canVote) {
@@ -161,7 +175,7 @@ export default function PollDisplay({
   // Calculate statistics
   const getTotalVoters = () => {
     const uniqueVoters = new Set<string>();
-    options.forEach(option => {
+    localOptions.forEach(option => {
       option.voters.forEach(voter => {
         uniqueVoters.add(voter.id);
       });
@@ -177,7 +191,7 @@ export default function PollDisplay({
   };
 
   // Sort options by vote count (descending)
-  const sortedOptions = [...options].sort((a, b) => b.votes - a.votes);
+  const sortedOptions = [...localOptions].sort((a, b) => b.votes - a.votes);
   
   // Dynamic threshold algorithm for determining winner
   const getWinnerThreshold = () => {
@@ -187,13 +201,13 @@ export default function PollDisplay({
   };
 
   const winnerThreshold = getWinnerThreshold();
-  const maxVotes = Math.max(...options.map(option => option.votes));
+  const maxVotes = Math.max(...localOptions.map(option => option.votes));
   const minParticipation = Math.min(3, goingParticipants);
-  
+
   // Find all options with the maximum votes that meet ALL criteria
-  const topOptions = options.filter(option => 
-    option.votes === maxVotes && 
-    option.votes >= winnerThreshold && 
+  const topOptions = localOptions.filter(option =>
+    option.votes === maxVotes &&
+    option.votes >= winnerThreshold &&
     option.votes > 0 &&
     totalVoters >= minParticipation
   );
@@ -292,7 +306,7 @@ export default function PollDisplay({
                 {totalVoters} out of {goingParticipants} voted
               </Text>
             </View>
-            {!hasWinner && totalVoters > 0 && (
+            {!hasWinner && localTotalVotes > 0 && (
               <Text style={styles.awaitingText}>
                 Awaiting more votes…
               </Text>
@@ -316,7 +330,7 @@ export default function PollDisplay({
                 {totalVoters} out of {goingParticipants} voted
               </Text>
             </View>
-            {!hasWinner && totalVoters > 0 && (
+            {!hasWinner && localTotalVotes > 0 && (
               <Text style={styles.awaitingText}>
                 Awaiting more votes…
               </Text>
@@ -339,7 +353,7 @@ export default function PollDisplay({
       <View style={[styles.optionsContainer, hideQuestion && styles.compactOptionsContainer]}>
         {sortedOptions.map((option, index) => {
           const percentage = getPercentage(option.votes);
-          const isSelected = userVotes.includes(option.id);
+          const isSelected = localUserVotes.includes(option.id);
           const isWinningOption = isWinning(option.id);
           
           return (

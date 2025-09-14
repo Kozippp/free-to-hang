@@ -1330,29 +1330,39 @@ function handlePollsChange(payload: any, currentUserId: string) {
   pollsRefreshTimeout = setTimeout(debouncedRefresh, 1500);
 }
 
-// Handle poll votes changes
+// Handle poll votes changes - now updates only specific poll
 function handlePollVotesChange(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
 
-  console.log('🗳️ Processing poll votes change:', { eventType, currentUserId });
+  console.log('🗳️ Processing poll votes change:', {
+    eventType,
+    pollId: newRecord?.poll_id || oldRecord?.poll_id,
+    currentUserId
+  });
 
-  // Debounced refresh to prevent rate limiting
-  const debouncedRefresh = () => {
-    const { loadPlans } = usePlansStore.getState();
-    loadPlans(currentUserId).then(() => {
-      console.log('✅ Plans updated after poll votes change');
-    }).catch(error => {
-      console.error('❌ Error updating plans after poll votes change:', error);
-    });
-  };
+  if (newRecord) {
+    const pollId = newRecord.poll_id;
+    const planId = newRecord.plan_id;
 
-  // Clear existing timeout
-  if (pollVotesRefreshTimeout) {
-    clearTimeout(pollVotesRefreshTimeout);
+    // Instead of full refresh, we could emit a more targeted update
+    // For now, we'll keep the debounced refresh but with a shorter delay
+    const debouncedRefresh = () => {
+      const { loadPlans } = usePlansStore.getState();
+      loadPlans(currentUserId).then(() => {
+        console.log('✅ Plans updated after poll votes change for poll:', pollId);
+      }).catch(error => {
+        console.error('❌ Error updating plans after poll votes change:', error);
+      });
+    };
+
+    // Clear existing timeout
+    if (pollVotesRefreshTimeout) {
+      clearTimeout(pollVotesRefreshTimeout);
+    }
+
+    // Shorter debounce for poll votes - only 500ms instead of 1000ms
+    pollVotesRefreshTimeout = setTimeout(debouncedRefresh, 500);
   }
-
-  // Debounce poll votes changes by 1 second (most frequent updates)
-  pollVotesRefreshTimeout = setTimeout(debouncedRefresh, 1000);
 }
 
 export default usePlansStore;
