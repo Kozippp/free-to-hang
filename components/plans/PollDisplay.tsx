@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
     minHeight: 28, // Ensure consistent height
   },
   emptyVotersPlaceholder: {
-    width: 28,
+    width: 0,
     height: 28,
   },
   voterAvatar: {
