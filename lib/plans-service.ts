@@ -241,12 +241,14 @@ class PlansService {
   async createPoll(planId: string, pollData: CreatePollData): Promise<Plan> {
     try {
       console.log('📊 Creating poll for plan:', planId);
-      const plan = await this.apiRequest(`/plans/${planId}/polls`, {
+      const poll = await this.apiRequest(`/polls/${planId}`, {
         method: 'POST',
         body: JSON.stringify(pollData)
       });
       console.log('✅ Poll created successfully');
-      return plan;
+
+      // Return updated plan with the new poll
+      return await this.getPlan(planId);
     } catch (error) {
       console.error('❌ Error creating poll:', error);
       throw error;
@@ -273,14 +275,77 @@ class PlansService {
   async voteOnPoll(planId: string, pollId: string, optionIds: string[]): Promise<Plan> {
     try {
       console.log('🗳️ Voting on poll:', pollId, 'options:', optionIds);
-      const plan = await this.apiRequest(`/plans/${planId}/polls/${pollId}/vote`, {
+      await this.apiRequest(`/polls/${planId}/${pollId}/vote`, {
         method: 'POST',
         body: JSON.stringify({ optionIds })
       });
       console.log('✅ Vote submitted successfully');
-      return plan;
+
+      // Return updated plan with the new vote
+      return await this.getPlan(planId);
     } catch (error) {
       console.error('❌ Error voting on poll:', error);
+      throw error;
+    }
+  }
+
+  // Edit poll
+  async editPoll(planId: string, pollId: string, question: string, options: string[]): Promise<Plan> {
+    try {
+      console.log('✏️ Editing poll:', pollId);
+      await this.apiRequest(`/polls/${planId}/${pollId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ question, options })
+      });
+      console.log('✅ Poll edited successfully');
+
+      // Return updated plan with the edited poll
+      return await this.getPlan(planId);
+    } catch (error) {
+      console.error('❌ Error editing poll:', error);
+      throw error;
+    }
+  }
+
+  // Delete poll
+  async deletePoll(planId: string, pollId: string): Promise<Plan> {
+    try {
+      console.log('🗑️ Deleting poll:', pollId);
+      await this.apiRequest(`/polls/${planId}/${pollId}`, {
+        method: 'DELETE'
+      });
+      console.log('✅ Poll deleted successfully');
+
+      // Return updated plan without the deleted poll
+      return await this.getPlan(planId);
+    } catch (error) {
+      console.error('❌ Error deleting poll:', error);
+      throw error;
+    }
+  }
+
+  // Get poll results with winner determination
+  async getPollResults(planId: string, pollId: string) {
+    try {
+      console.log('📊 Getting poll results:', pollId);
+      const results = await this.apiRequest(`/polls/${planId}/${pollId}/results`);
+      console.log('✅ Poll results retrieved successfully');
+      return results;
+    } catch (error) {
+      console.error('❌ Error getting poll results:', error);
+      throw error;
+    }
+  }
+
+  // Get all polls for a plan (separate from plan details)
+  async getPolls(planId: string): Promise<Poll[]> {
+    try {
+      console.log('📋 Getting polls for plan:', planId);
+      const polls = await this.apiRequest(`/polls/${planId}`);
+      console.log('✅ Polls retrieved successfully');
+      return polls;
+    } catch (error) {
+      console.error('❌ Error getting polls:', error);
       throw error;
     }
   }

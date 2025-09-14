@@ -71,9 +71,9 @@ export default function PollDisplay({
     options.forEach(option => {
       const oldCount = voteCounts[option.id] || 0;
       const newCount = option.votes;
-      
+
       // If vote count increased, trigger +1 animation
-      if (newCount > oldCount && isRealTimeUpdate) {
+      if (newCount > oldCount && isRealTimeUpdate && animatedValues[option.id]) {
         // Trigger a quick pulse animation for the increased vote
         Animated.sequence([
           Animated.timing(animatedValues[option.id], {
@@ -88,11 +88,11 @@ export default function PollDisplay({
           })
         ]).start();
       }
-      
+
       newCounts[option.id] = newCount;
     });
     setVoteCounts(newCounts);
-  }, [options, isRealTimeUpdate, voteCounts, animatedValues]);
+  }, [options, isRealTimeUpdate]); // Removed voteCounts and animatedValues to prevent infinite loops
 
   // Ensure all options have animation values
   React.useEffect(() => {
@@ -101,7 +101,7 @@ export default function PollDisplay({
         animatedValues[option.id] = new Animated.Value(0);
       }
     });
-  }, [options, animatedValues]);
+  }, [options]); // Removed animatedValues to prevent infinite loops
 
   // Real-time update animation
   React.useEffect(() => {
@@ -124,7 +124,7 @@ export default function PollDisplay({
       
       Animated.parallel(animations).start();
     }
-  }, [isRealTimeUpdate, options, animatedValues]);
+  }, [isRealTimeUpdate, options]); // Removed animatedValues to prevent infinite loops
 
   const handleVote = (optionId: string) => {
     if (!canVote) {

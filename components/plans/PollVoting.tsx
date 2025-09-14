@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -42,7 +42,14 @@ export default function PollVoting({
   userVotes,
   currentUserId
 }: PollVotingProps) {
-  const [selectedOptions, setSelectedOptions] = useState<string[]>(userVotes);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+
+  // Sync selectedOptions with userVotes when modal opens
+  useEffect(() => {
+    if (visible) {
+      setSelectedOptions([...userVotes]);
+    }
+  }, [visible, userVotes]);
 
   const toggleOption = (optionId: string) => {
     if (selectedOptions.includes(optionId)) {

@@ -86,7 +86,7 @@ export default function PlanDetailModal({
         useNativeDriver: true,
       }).start();
     }
-  }, [visible, slideAnim]);
+  }, [visible]); // Removed slideAnim to prevent infinite loops
   
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
