@@ -100,7 +100,7 @@ export default function PollVoting({
                       )}
                     </View>
                   </View>
-                  
+
                   <Text style={styles.optionText}>{option.text}</Text>
 
                   <View style={styles.votersContainer}>
@@ -197,23 +197,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.buttonBackground, // Light gray background
     borderRadius: 10,
     padding: 16,
-    paddingLeft: 48, // Make room for the absolutely positioned checkbox
+    paddingLeft: 56, // Make room for checkbox on the left
     marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    position: 'relative', // For absolute positioning of checkbox
+    position: 'relative',
   },
   selectedOption: {
     backgroundColor: `${Colors.light.primary}15`, // Light blue when selected
     borderColor: Colors.light.primary,
-    paddingLeft: 60, // Additional padding to shift content further right when selected
+    paddingLeft: 68, // Shift content further right when selected
   },
   checkboxContainer: {
-    marginRight: 12,
     position: 'absolute',
-    left: 12,
+    left: 16,
     top: '50%',
     transform: [{ translateY: -12 }], // Vertically center the checkbox
+    width: 24,
+    height: 24,
   },
   checkbox: {
     width: 24,
