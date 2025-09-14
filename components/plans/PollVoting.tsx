@@ -27,6 +27,7 @@ interface PollVotingProps {
   visible: boolean;
   onClose: () => void;
   question: string;
+  pollId: string;
   options: PollOption[];
   onVote: (selectedOptionIds: string[]) => void;
   userVotes: string[];
@@ -37,6 +38,7 @@ export default function PollVoting({
   visible,
   onClose,
   question,
+  pollId,
   options,
   onVote,
   userVotes,

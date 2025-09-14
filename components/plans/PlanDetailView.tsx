@@ -746,6 +746,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     <Text style={styles.pollTitle}>What time works best?</Text>
                   </View>
                   <PollDisplay
+                    pollId={whenPoll.id}
                     question={whenPoll.question}
                     options={preparePollForDisplay(whenPoll).options}
                     onVote={(optionId) => handlePollVote(whenPoll.id, optionId)}
@@ -784,6 +785,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
                     <Text style={styles.pollTitle}>Where should we meet?</Text>
                   </View>
                   <PollDisplay
+                    pollId={wherePoll.id}
                     question={wherePoll.question}
                     options={preparePollForDisplay(wherePoll).options}
                     onVote={(optionId) => handlePollVote(wherePoll.id, optionId)}
@@ -818,6 +820,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
               {customPolls.map((poll) => (
                 <View key={poll.id} style={styles.pollContainer}>
                   <PollDisplay
+                    pollId={poll.id}
                     question={poll.question}
                     options={preparePollForDisplay(poll).options}
                     onVote={(optionId) => handlePollVote(poll.id, optionId)}
@@ -911,6 +914,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           visible={showPollVoting}
           onClose={() => setShowPollVoting(false)}
           question={polls.find(p => p.id === currentPollId)?.question || ''}
+          pollId={currentPollId || ''}
           options={(() => {
             const poll = polls.find(p => p.id === currentPollId);
             if (!poll) return [];
