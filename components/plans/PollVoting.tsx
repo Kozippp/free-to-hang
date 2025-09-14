@@ -82,15 +82,14 @@ export default function PollVoting({
               const isSelected = selectedOptions.includes(option.id);
               
               return (
-                <TouchableOpacity
-                  key={option.id}
-                  style={[
-                    styles.optionButton,
-                    isSelected && styles.selectedOption
-                  ]}
-                  onPress={() => toggleOption(option.id)}
-                >
-                  <View style={styles.checkboxContainer}>
+                <View style={styles.optionRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.checkboxButton,
+                      isSelected && styles.checkboxButtonSelected
+                    ]}
+                    onPress={() => toggleOption(option.id)}
+                  >
                     <View style={[
                       styles.checkbox,
                       isSelected && styles.checkedBox
@@ -99,39 +98,48 @@ export default function PollVoting({
                         <Check size={16} color="white" />
                       )}
                     </View>
-                  </View>
+                  </TouchableOpacity>
 
-                  <Text style={styles.optionText}>{option.text}</Text>
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[
+                      styles.optionButton,
+                      isSelected && styles.selectedOption
+                    ]}
+                    onPress={() => toggleOption(option.id)}
+                  >
+                    <Text style={styles.optionText}>{option.text}</Text>
 
-                  <View style={styles.votersContainer}>
-                    {option.voters.length === 0 ? (
-                      <View style={styles.emptyVotersPlaceholder} />
-                    ) : (
-                      <>
-                        {option.voters.slice(0, 5).map((voter, index) => (
-                          <View
-                            key={voter.id}
-                            style={[
-                              styles.voterAvatar,
-                              { marginLeft: index > 0 ? -10 : 0 }
-                            ]}
-                          >
-                            <Image
-                              source={{ uri: voter.avatar }}
-                              style={styles.avatarImage}
-                            />
-                          </View>
-                        ))}
+                    <View style={styles.votersContainer}>
+                      {option.voters.length === 0 ? (
+                        <View style={styles.emptyVotersPlaceholder} />
+                      ) : (
+                        <>
+                          {option.voters.slice(0, 5).map((voter, index) => (
+                            <View
+                              key={voter.id}
+                              style={[
+                                styles.voterAvatar,
+                                { marginLeft: index > 0 ? -10 : 0 }
+                              ]}
+                            >
+                              <Image
+                                source={{ uri: voter.avatar }}
+                                style={styles.avatarImage}
+                              />
+                            </View>
+                          ))}
 
-                        {option.voters.length > 5 && (
-                          <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
-                            <Text style={styles.moreVotersText}>+{option.voters.length - 5}</Text>
-                          </View>
-                        )}
-                      </>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                          {option.voters.length > 5 && (
+                            <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
+                              <Text style={styles.moreVotersText}>+{option.voters.length - 5}</Text>
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </View>
               );
             })}
           </ScrollView>
@@ -191,30 +199,36 @@ const styles = StyleSheet.create({
   optionsContainer: {
     maxHeight: 400,
   },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  checkboxButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  checkboxButtonSelected: {
+    backgroundColor: `${Colors.light.primary}10`, // Light background when selected
+    borderRadius: 8,
+  },
   optionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.buttonBackground, // Light gray background
     borderRadius: 10,
     padding: 16,
-    paddingLeft: 56, // Make room for checkbox on the left
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    position: 'relative',
   },
   selectedOption: {
     backgroundColor: `${Colors.light.primary}15`, // Light blue when selected
     borderColor: Colors.light.primary,
-    paddingLeft: 68, // Shift content further right when selected
-  },
-  checkboxContainer: {
-    position: 'absolute',
-    left: 16,
-    top: '50%',
-    transform: [{ translateY: -12 }], // Vertically center the checkbox
-    width: 24,
-    height: 24,
+    marginLeft: 12, // Shift content to the right when selected
   },
   checkbox: {
     width: 24,
