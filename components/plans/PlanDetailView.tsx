@@ -688,8 +688,37 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
 
   // Helper function to handle poll deletion
-  const handleDeletePoll = (pollId: string) => {
-    deletePoll(plan.id, pollId);
+  const handleDeletePoll = async (pollId: string) => {
+    try {
+      console.log('🗑️ Deleting poll via API:', pollId);
+      await plansService.deletePoll(plan.id, pollId);
+      console.log('✅ Poll deleted successfully via API');
+
+      // Manually reload plans to ensure UI updates immediately
+      console.log('🔄 Reloading plans after poll deletion...');
+      await loadPlans(user.id);
+      console.log('✅ Plans reloaded after poll deletion');
+    } catch (error) {
+      console.error('❌ Error deleting poll:', error);
+
+      let errorMessage = 'Failed to delete poll. Please try again.';
+
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          errorMessage = 'Your session has expired. Please sign out and sign back in.';
+        } else if (error.message.includes('403')) {
+          errorMessage = 'You need to respond "Going" to the plan to delete polls.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      Alert.alert(
+        'Error Deleting Poll',
+        errorMessage,
+        [{ text: 'OK', style: 'default' }]
+      );
+    }
   };
 
   // Manual completion voting removed; plans auto-complete after 24h
