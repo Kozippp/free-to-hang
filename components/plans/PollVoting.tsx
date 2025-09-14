@@ -108,7 +108,7 @@ export default function PollVoting({
                       <View style={styles.emptyVotersPlaceholder} />
                     ) : (
                       <>
-                        {option.voters.slice(0, 3).map((voter, index) => (
+                        {option.voters.slice(0, 5).map((voter, index) => (
                           <View
                             key={voter.id}
                             style={[
@@ -123,9 +123,9 @@ export default function PollVoting({
                           </View>
                         ))}
 
-                        {option.voters.length > 3 && (
+                        {option.voters.length > 5 && (
                           <View style={[styles.voterAvatar, styles.moreVoters, { marginLeft: -10 }]}>
-                            <Text style={styles.moreVotersText}>+{option.voters.length - 3}</Text>
+                            <Text style={styles.moreVotersText}>+{option.voters.length - 5}</Text>
                           </View>
                         )}
                       </>
