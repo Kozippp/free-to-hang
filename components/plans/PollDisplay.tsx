@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-  Animated
+  Animated,
+  ActivityIndicator
 } from 'react-native';
 import { Check, Crown, Edit2, Users, Trash2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
