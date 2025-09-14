@@ -216,12 +216,14 @@ try {
   const userRoutes = require('./routes/user');
   const friendsRoutes = require('./routes/friends');
   const plansRoutes = require('./routes/plans');
+  const pollsRoutes = require('./routes/polls');
   const storageRoutes = require('./routes/storage');
 
   // API routes
   app.use('/api/user', userRoutes);
   app.use('/api/friends', friendsRoutes);
   app.use('/api/plans', plansRoutes);
+  app.use('/api/polls', pollsRoutes);
   app.use('/api/storage', storageRoutes);
 
   console.log('✅ Routes loaded successfully');
