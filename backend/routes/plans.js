@@ -1308,6 +1308,7 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
     // This allows users to "unvote" by selecting no options
 
     // Check if user can vote (is accepted participant)
+    // Allow vote removal (empty array) for users who were previously going, but prevent new votes
     const { data: participant, error: participantError } = await supabase
       .from('plan_participants')
       .select('status')
@@ -1315,7 +1316,15 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
       .eq('user_id', userId)
       .single();
 
-    if (participantError || !participant || participant.status !== 'going') {
+    if (participantError || !participant) {
+      return res.status(403).json({ error: 'Participant not found' });
+    }
+
+    // Allow voting if:
+    // 1. User is currently going, OR
+    // 2. User is removing all votes (empty array) - allow cleanup when changing status
+    const canVote = participant.status === 'going' || (Array.isArray(optionIds) && optionIds.length === 0);
+    if (!canVote) {
       return res.status(403).json({ error: 'Only going participants can vote' });
     }
 
