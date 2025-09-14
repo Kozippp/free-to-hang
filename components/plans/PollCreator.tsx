@@ -237,7 +237,8 @@ export default function PollCreator({
 
         {/* Loading Overlay */}
         {isLoading && (
-          <View style={styles.loadingOverlay}>
+          <View style={[StyleSheet.absoluteFill, styles.loadingOverlay]}>
+            {console.log('🎭 LOADING OVERLAY RENDERING')}
             <View style={styles.loadingContent}>
               <ActivityIndicator size="large" color="#007AFF" />
               <Text style={styles.loadingText}>
@@ -550,7 +551,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(242, 242, 247, 0.8)',
+    backgroundColor: 'rgba(255, 0, 0, 0.8)', // TEMP: Bright red to make it visible
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
