@@ -1368,6 +1368,307 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
   }
 });
 
+// PUT /plans/:id/polls/:pollId - Update poll
+router.put('/:id/polls/:pollId', requireAuth, async (req, res) => {
+  try {
+    const { id, pollId } = req.params;
+    const { question, options } = req.body;
+    const userId = req.user.id;
+
+    // Validate input
+    if (!question || !options || options.length < 2) {
+      return res.status(400).json({ error: 'Question and at least 2 options required' });
+    }
+
+    // Check if user is participant and can edit polls
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant || participant.status !== 'going') {
+      return res.status(403).json({ error: 'Only going participants can edit polls' });
+    }
+
+    // Check if poll exists and user is the creator
+    const { data: existingPoll, error: pollError } = await supabase
+      .from('plan_polls')
+      .select('created_by')
+      .eq('id', pollId)
+      .eq('plan_id', id)
+      .single();
+
+    if (pollError || !existingPoll) {
+      return res.status(404).json({ error: 'Poll not found' });
+    }
+
+    if (existingPoll.created_by !== userId) {
+      return res.status(403).json({ error: 'Only poll creator can edit poll' });
+    }
+
+    // Update poll title
+    const { error: updatePollError } = await supabase
+      .from('plan_polls')
+      .update({ title: question })
+      .eq('id', pollId)
+      .eq('plan_id', id);
+
+    if (updatePollError) {
+      console.error('Error updating poll:', updatePollError);
+      return res.status(500).json({ error: 'Failed to update poll' });
+    }
+
+    // Get existing options to preserve votes where possible
+    const { data: existingOptions, error: optionsError } = await supabase
+      .from('plan_poll_options')
+      .select('id, option_text')
+      .eq('poll_id', pollId)
+      .order('option_order');
+
+    if (optionsError) {
+      console.error('Error fetching existing options:', optionsError);
+      return res.status(500).json({ error: 'Failed to fetch existing options' });
+    }
+
+    // Create a map of existing option text to option ID to preserve votes
+    const existingOptionMap = new Map();
+    existingOptions?.forEach(option => {
+      existingOptionMap.set(option.option_text.toLowerCase().trim(), option.id);
+    });
+
+    // Delete existing options that are not in the new options list
+    const newOptionsLower = options.map(opt => opt.toLowerCase().trim());
+    const optionsToDelete = existingOptions?.filter(opt =>
+      !newOptionsLower.includes(opt.option_text.toLowerCase().trim())
+    ) || [];
+
+    if (optionsToDelete.length > 0) {
+      const { error: deleteOptionsError } = await supabase
+        .from('plan_poll_options')
+        .delete()
+        .in('id', optionsToDelete.map(opt => opt.id));
+
+      if (deleteOptionsError) {
+        console.error('Error deleting old options:', deleteOptionsError);
+        return res.status(500).json({ error: 'Failed to update options' });
+      }
+    }
+
+    // Insert or update options
+    const optionInserts = options.map((optionText, index) => {
+      const existingId = existingOptionMap.get(optionText.toLowerCase().trim());
+      return {
+        ...(existingId ? { id: existingId } : {}),
+        poll_id: pollId,
+        option_text: optionText,
+        option_order: index
+      };
+    });
+
+    // Use upsert to handle both insert and update
+    const { error: upsertOptionsError } = await supabase
+      .from('plan_poll_options')
+      .upsert(optionInserts, {
+        onConflict: 'id',
+        ignoreDuplicates: false
+      });
+
+    if (upsertOptionsError) {
+      console.error('Error upserting options:', upsertOptionsError);
+      return res.status(500).json({ error: 'Failed to update poll options' });
+    }
+
+    // Notify poll update
+    await notifyPlanUpdate(id, 'poll_updated', userId, { poll_id: pollId });
+
+    const fullPlan = await getPlanWithDetails(id, userId);
+    res.json(fullPlan);
+  } catch (error) {
+    console.error('Error in PUT /plans/:id/polls/:pollId:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /plans/:id/polls/:pollId - Delete poll
+router.delete('/:id/polls/:pollId', requireAuth, async (req, res) => {
+  try {
+    const { id, pollId } = req.params;
+    const userId = req.user.id;
+
+    // Check if user is participant and can delete polls
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant || participant.status !== 'going') {
+      return res.status(403).json({ error: 'Only going participants can delete polls' });
+    }
+
+    // Check if poll exists and user is the creator
+    const { data: existingPoll, error: pollError } = await supabase
+      .from('plan_polls')
+      .select('created_by')
+      .eq('id', pollId)
+      .eq('plan_id', id)
+      .single();
+
+    if (pollError || !existingPoll) {
+      return res.status(404).json({ error: 'Poll not found' });
+    }
+
+    if (existingPoll.created_by !== userId) {
+      return res.status(403).json({ error: 'Only poll creator can delete poll' });
+    }
+
+    // Delete poll options first (due to foreign key constraint)
+    const { error: deleteOptionsError } = await supabase
+      .from('plan_poll_options')
+      .delete()
+      .eq('poll_id', pollId);
+
+    if (deleteOptionsError) {
+      console.error('Error deleting poll options:', deleteOptionsError);
+      return res.status(500).json({ error: 'Failed to delete poll options' });
+    }
+
+    // Delete poll votes
+    const { error: deleteVotesError } = await supabase
+      .from('plan_poll_votes')
+      .delete()
+      .eq('poll_id', pollId);
+
+    if (deleteVotesError) {
+      console.error('Error deleting poll votes:', deleteVotesError);
+      return res.status(500).json({ error: 'Failed to delete poll votes' });
+    }
+
+    // Delete poll
+    const { error: deletePollError } = await supabase
+      .from('plan_polls')
+      .delete()
+      .eq('id', pollId)
+      .eq('plan_id', id);
+
+    if (deletePollError) {
+      console.error('Error deleting poll:', deletePollError);
+      return res.status(500).json({ error: 'Failed to delete poll' });
+    }
+
+    // Notify poll deletion
+    await notifyPlanUpdate(id, 'poll_deleted', userId, { poll_id: pollId });
+
+    const fullPlan = await getPlanWithDetails(id, userId);
+    res.json(fullPlan);
+  } catch (error) {
+    console.error('Error in DELETE /plans/:id/polls/:pollId:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /plans/:id/polls - Get all polls for a plan
+router.get('/:id/polls', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Check if user has access to this plan
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant) {
+      return res.status(403).json({ error: 'Access denied to plan' });
+    }
+
+    const fullPlan = await getPlanWithDetails(id, userId);
+    res.json(fullPlan.polls || []);
+  } catch (error) {
+    console.error('Error in GET /plans/:id/polls:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /plans/:id/polls/:pollId/results - Get poll results
+router.get('/:id/polls/:pollId/results', requireAuth, async (req, res) => {
+  try {
+    const { id, pollId } = req.params;
+    const userId = req.user.id;
+
+    // Check if user has access to this plan
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant) {
+      return res.status(403).json({ error: 'Access denied to plan' });
+    }
+
+    // Get poll with options and votes
+    const { data: poll, error: pollError } = await supabase
+      .from('plan_polls')
+      .select('*')
+      .eq('id', pollId)
+      .eq('plan_id', id)
+      .single();
+
+    if (pollError || !poll) {
+      return res.status(404).json({ error: 'Poll not found' });
+    }
+
+    // Get poll options
+    const { data: options, error: optionsError } = await supabase
+      .from('plan_poll_options')
+      .select('*')
+      .eq('poll_id', pollId)
+      .order('option_order');
+
+    if (optionsError) {
+      return res.status(500).json({ error: 'Failed to fetch poll options' });
+    }
+
+    // Get poll votes
+    const { data: votes, error: votesError } = await supabase
+      .from('plan_poll_votes')
+      .select('*')
+      .eq('poll_id', pollId);
+
+    if (votesError) {
+      return res.status(500).json({ error: 'Failed to fetch poll votes' });
+    }
+
+    // Transform data to match frontend format
+    const transformedPoll = {
+      id: poll.id,
+      question: poll.title,
+      type: poll.poll_type,
+      expiresAt: poll.ends_at,
+      createdBy: { id: poll.created_by, name: '', username: '', avatar_url: '' },
+      options: options.map(option => ({
+        id: option.id,
+        text: option.option_text,
+        votes: votes.filter(v => v.option_id === option.id).map(v => v.user_id),
+        voters: [] // We'll populate this if needed
+      }))
+    };
+
+    res.json(transformedPoll);
+  } catch (error) {
+    console.error('Error in GET /plans/:id/polls/:pollId/results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /plans/:id/complete-vote - Vote for plan completion
 // Deprecated: manual completion voting removed in favor of 24h auto-complete
 router.post('/:id/complete-vote', requireAuth, async (req, res) => {

@@ -242,23 +242,22 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       }
 
       if (editingPoll) {
-        // Update existing poll - TODO: Implement poll update API
-        const updatedPoll: Poll = {
-          ...editingPoll,
+        // Update existing poll using API
+        console.log('✏️ Updating poll via API:', editingPoll.id);
+        console.log('👤 User ID:', user.id);
+
+        const pollData = {
           question,
-          options: options.map((text, index) => {
-            // Keep existing votes if option text hasn't changed
-            const existingOption = editingPoll.options.find(opt => opt.text === text);
-            return {
-              id: existingOption?.id || `option-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${index}`,
-              text,
-              votes: existingOption?.votes || []
-            };
-          })
+          options
         };
-        
-        // Update the poll in the store
-        addPoll(latestPlan.id, updatedPoll);
+
+        // Use plansService to update poll via API
+        const updatedPlan = await plansService.editPoll(latestPlan.id, editingPoll.id, question, options);
+        console.log('✅ Poll updated successfully via API:', updatedPlan);
+
+        // Manually reload plans to ensure UI updates immediately
+        // Real-time subscription should also handle this, but this ensures immediate feedback
+        await loadPlans(user.id);
       } else {
         // Create a new poll using API
         console.log('📊 Creating poll via API:', { question, options, type: pollType });
