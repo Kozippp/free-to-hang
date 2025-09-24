@@ -66,28 +66,16 @@ function IndividualVoteBlock({
       ? Colors.light.secondaryText
       : '#F44336';
 
-  const acceptBadgeStyle = [
-    styles.voteCountBadge,
-    acceptSelected ? styles.voteCountBadgeSelected : styles.voteCountBadgeAccept,
-    isDisabled && styles.voteCountBadgeDisabled
-  ] as const;
-
-  const denyBadgeStyle = [
-    styles.voteCountBadge,
-    denySelected ? styles.voteCountBadgeSelected : styles.voteCountBadgeDeny,
-    isDisabled && styles.voteCountBadgeDisabled
-  ] as const;
-
   const acceptCountTextStyle = [
-    styles.voteCountText,
-    acceptSelected ? styles.voteCountTextSelected : styles.voteCountTextAccept,
-    isDisabled && styles.voteCountTextDisabled
+    styles.countText,
+    acceptSelected ? styles.countTextSelected : styles.countTextAccept,
+    isDisabled && styles.countTextDisabled
   ] as const;
 
   const denyCountTextStyle = [
-    styles.voteCountText,
-    denySelected ? styles.voteCountTextSelected : styles.voteCountTextDeny,
-    isDisabled && styles.voteCountTextDisabled
+    styles.countText,
+    denySelected ? styles.countTextSelected : styles.countTextDeny,
+    isDisabled && styles.countTextDisabled
   ] as const;
 
   return (
@@ -135,9 +123,7 @@ function IndividualVoteBlock({
           >
             <View style={styles.voteButtonContent}>
               <Check size={16} color={acceptIconColor} />
-              <View style={acceptBadgeStyle}>
-                <Text style={acceptCountTextStyle}>{allowVotes}</Text>
-              </View>
+              <Text style={acceptCountTextStyle}>{allowVotes}</Text>
             </View>
           </TouchableOpacity>
 
@@ -166,9 +152,7 @@ function IndividualVoteBlock({
           >
             <View style={styles.voteButtonContent}>
               <X size={16} color={denyIconColor} />
-              <View style={denyBadgeStyle}>
-                <Text style={denyCountTextStyle}>{denyVotes}</Text>
-              </View>
+              <Text style={denyCountTextStyle}>{denyVotes}</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -277,8 +261,8 @@ const styles = StyleSheet.create({
   voteButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
     minWidth: 50,
@@ -286,41 +270,21 @@ const styles = StyleSheet.create({
   },
   acceptButton: {
     borderColor: '#4CAF50',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(76, 175, 80, 0.12)',
   },
   denyButton: {
     borderColor: '#F44336',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(244, 67, 54, 0.12)',
   },
   selectedButton: {
     backgroundColor: '#4CAF50',
     borderColor: '#4CAF50',
     borderWidth: 2,
-    shadowColor: '#4CAF50',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-    transform: [{ scaleX: 1.05 }, { scaleY: 1.05 }],
-    marginHorizontal: -2, // kompenseerime scale'i poolt lisatud ruumi
   },
   selectedDenyButton: {
     backgroundColor: '#F44336',
     borderColor: '#F44336',
     borderWidth: 2,
-    shadowColor: '#F44336',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-    transform: [{ scaleX: 1.05 }, { scaleY: 1.05 }],
-    marginHorizontal: -2, // kompenseerime scale'i poolt lisatud ruumi
   },
   disabledButton: {
     opacity: 0.5,
@@ -330,39 +294,22 @@ const styles = StyleSheet.create({
   voteButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  voteCountBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  voteCountBadgeAccept: {
-    backgroundColor: 'rgba(76, 175, 80, 0.12)',
-  },
-  voteCountBadgeDeny: {
-    backgroundColor: 'rgba(244, 67, 54, 0.12)',
-  },
-  voteCountBadgeSelected: {
-    backgroundColor: 'rgba(255, 255, 255, 0.24)',
-  },
-  voteCountBadgeDisabled: {
-    backgroundColor: Colors.light.buttonBackground,
-  },
-  voteCountText: {
-    fontSize: 12,
+  countText: {
+    fontSize: 13,
     fontWeight: '700',
   },
-  voteCountTextAccept: {
+  countTextAccept: {
     color: '#4CAF50',
   },
-  voteCountTextDeny: {
+  countTextDeny: {
     color: '#F44336',
   },
-  voteCountTextSelected: {
+  countTextSelected: {
     color: 'white',
   },
-  voteCountTextDisabled: {
+  countTextDisabled: {
     color: Colors.light.secondaryText,
   },
   separator: {
