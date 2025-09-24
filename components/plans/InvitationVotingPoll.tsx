@@ -9,17 +9,11 @@ import {
 } from 'react-native';
 import { Clock, Check, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { Poll } from '@/store/plansStore';
+import { InvitationPoll } from '@/lib/plans-service';
 
 interface InvitationVotingPollProps {
-  poll: Poll;
-  onVote: (pollId: string, optionId: string) => void;
-  userVoted: boolean;
-  invitedUsers: {
-    id: string;
-    name: string;
-    avatar: string;
-  }[];
+  poll: InvitationPoll;
+  onVote: (pollId: string, vote: 'allow' | 'deny') => void;
   canVote: boolean;
 }
 
@@ -154,8 +148,6 @@ function IndividualVoteBlock({
 export default function InvitationVotingPoll({
   poll,
   onVote,
-  userVoted,
-  invitedUsers,
   canVote
 }: InvitationVotingPollProps) {
   const [timeLeft, setTimeLeft] = useState(0);
@@ -165,7 +157,7 @@ export default function InvitationVotingPoll({
 
     const updateTimer = () => {
       const now = Date.now();
-      const remaining = Math.max(0, poll.expiresAt! - now);
+      const remaining = Math.max(0, new Date(poll.expiresAt).getTime() - Date.now());
       setTimeLeft(remaining);
     };
 
@@ -176,51 +168,27 @@ export default function InvitationVotingPoll({
   }, [poll.expiresAt]);
 
   const isExpired = timeLeft === 0;
-  const allowOption = poll.options.find(opt => opt.text === 'Allow');
-  const denyOption = poll.options.find(opt => opt.text === 'Deny');
-  
-  const allowVotes = allowOption?.votes.length || 0;
-  const denyVotes = denyOption?.votes.length || 0;
-
-  // Determine user's current vote choice
-  const getUserVoteChoice = (): 'accept' | 'deny' | null => {
-    if (allowOption?.votes.includes('current')) return 'accept';
-    if (denyOption?.votes.includes('current')) return 'deny';
-    return null;
-  };
-
-  const userVoteChoice = getUserVoteChoice();
 
   const handleVote = (accept: boolean) => {
-    if (isExpired) return;
-    
-    const optionId = accept ? allowOption?.id : denyOption?.id;
-    if (optionId) {
-      onVote(poll.id, optionId);
-    }
+    if (isExpired || !canVote) return;
+
+    const vote = accept ? 'allow' : 'deny';
+    onVote(poll.id, vote);
   };
 
   return (
     <View style={styles.container}>
-      {invitedUsers.map((user, index) => (
-        <View key={user.id}>
-          <IndividualVoteBlock
-            user={user}
-            timeLeft={timeLeft}
-            onVote={handleVote}
-            userVoted={userVoted}
-            allowVotes={allowVotes}
-            denyVotes={denyVotes}
-            isExpired={isExpired}
-            userVoteChoice={userVoteChoice}
-            canVote={canVote}
-          />
-          {/* Add separator between items, but not after the last item */}
-          {index < invitedUsers.length - 1 && (
-            <View style={styles.separator} />
-          )}
-        </View>
-      ))}
+      <IndividualVoteBlock
+        user={poll.invitedUser}
+        timeLeft={timeLeft}
+        onVote={handleVote}
+        userVoted={!!poll.currentUserVote}
+        allowVotes={poll.allowVotes}
+        denyVotes={poll.denyVotes}
+        isExpired={isExpired}
+        userVoteChoice={poll.currentUserVote === 'allow' ? 'accept' : poll.currentUserVote === 'deny' ? 'deny' : null}
+        canVote={canVote}
+      />
     </View>
   );
 }

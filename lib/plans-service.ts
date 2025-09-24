@@ -81,6 +81,64 @@ export interface CreatePollData {
   invitedUsers?: string[];
 }
 
+export interface InvitationPoll {
+  id: string;
+  invitedUser: {
+    id: string;
+    name: string;
+    avatar: string;
+  };
+  createdBy: {
+    id: string;
+    name: string;
+    avatar: string;
+  };
+  timeLeft: number;
+  isExpired: boolean;
+  allowVotes: number;
+  denyVotes: number;
+  currentUserVote: 'allow' | 'deny' | null;
+  canVote: boolean;
+}
+
+export interface InvitationPollVote {
+  id: string;
+  vote: 'allow' | 'deny';
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    username: string;
+    avatar: string;
+  };
+}
+
+export interface InvitationPollDetails {
+  id: string;
+  invitedUser: {
+    id: string;
+    name: string;
+    avatar: string;
+  };
+  createdBy: {
+    id: string;
+    name: string;
+    avatar: string;
+  };
+  planTitle: string;
+  createdAt: string;
+  expiresAt: string;
+  status: string;
+  timeLeft: number;
+  isExpired: boolean;
+  allowVotes: number;
+  denyVotes: number;
+  totalVotes: number;
+  currentUserVote: 'allow' | 'deny' | null;
+  canVote: boolean;
+  votes: InvitationPollVote[];
+}
+
 class PlansService {
   private async getAuthHeaders() {
     // First try to get the current session
@@ -469,15 +527,75 @@ canUserVote(plan: Plan, userId: string): boolean {
 }
 
   // Helper to get completion voting status (deprecated)
-getCompletionVotingStatus(plan: Plan) {
-  return {
-    currentVotes: 0,
-    requiredVotes: 0,
-    goingParticipants: plan.participants.filter(p => p.status === 'going').length,
-    canComplete: false,
-    percentage: 0
-  };
-}
+  getCompletionVotingStatus(plan: Plan) {
+    return {
+      currentVotes: 0,
+      requiredVotes: 0,
+      goingParticipants: plan.participants.filter(p => p.status === 'going').length,
+      canComplete: false,
+      percentage: 0
+    };
+  }
+
+  // ===== INVITATION POLL METHODS =====
+
+  // Create invitation polls for multiple users
+  async createInvitationPolls(planId: string, invitedUserIds: string[]): Promise<Plan> {
+    try {
+      console.log('📊 Creating invitation polls for plan:', planId, 'users:', invitedUserIds);
+      const plan = await this.apiRequest(`/plans/${planId}/invitation-polls`, {
+        method: 'POST',
+        body: JSON.stringify({ invitedUserIds })
+      });
+      console.log('✅ Invitation polls created successfully');
+      return plan;
+    } catch (error) {
+      console.error('❌ Error creating invitation polls:', error);
+      throw error;
+    }
+  }
+
+  // Get invitation polls for a plan
+  async getInvitationPolls(planId: string): Promise<InvitationPoll[]> {
+    try {
+      console.log('📋 Getting invitation polls for plan:', planId);
+      const polls = await this.apiRequest(`/plans/${planId}/invitation-polls`);
+      console.log('✅ Invitation polls retrieved successfully');
+      return polls;
+    } catch (error) {
+      console.error('❌ Error getting invitation polls:', error);
+      throw error;
+    }
+  }
+
+  // Vote on invitation poll
+  async voteOnInvitationPoll(planId: string, pollId: string, vote: 'allow' | 'deny'): Promise<Plan> {
+    try {
+      console.log('🗳️ Voting on invitation poll:', pollId, 'vote:', vote);
+      const plan = await this.apiRequest(`/plans/${planId}/invitation-polls/${pollId}/vote`, {
+        method: 'POST',
+        body: JSON.stringify({ vote })
+      });
+      console.log('✅ Vote submitted successfully');
+      return plan;
+    } catch (error) {
+      console.error('❌ Error voting on invitation poll:', error);
+      throw error;
+    }
+  }
+
+  // Get specific invitation poll details
+  async getInvitationPoll(planId: string, pollId: string): Promise<InvitationPollDetails> {
+    try {
+      console.log('📋 Getting invitation poll details:', pollId);
+      const poll = await this.apiRequest(`/plans/${planId}/invitation-polls/${pollId}`);
+      console.log('✅ Invitation poll details retrieved successfully');
+      return poll;
+    } catch (error) {
+      console.error('❌ Error getting invitation poll details:', error);
+      throw error;
+    }
+  }
 
   // Helper to format plan data for frontend components
   formatPlanForFrontend(plan: Plan) {

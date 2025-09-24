@@ -1276,8 +1276,10 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     } else if (updateType === 'participant_joined') {
       console.log('👥 Participant joined/changed status - debounced refresh');
       plansRefreshTimeout = setTimeout(debouncedRefresh, 1000); // 1 second debounce
-    } else if (updateType === 'poll_created' || updateType === 'poll_voted') {
-      console.log('📊 Poll activity - debounced refresh');
+    } else if (updateType === 'poll_created' || updateType === 'poll_voted' ||
+               updateType === 'invitation_poll_created' || updateType === 'invitation_poll_voted' ||
+               updateType === 'participant_invited') {
+      console.log('📊 Poll or invitation activity - debounced refresh');
       plansRefreshTimeout = setTimeout(debouncedRefresh, 1500); // 1.5 second debounce
     } else {
       console.log(`🔄 Other update type (${updateType}) - debounced refresh`);
