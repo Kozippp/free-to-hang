@@ -188,7 +188,6 @@ export default function InvitationVotingPoll({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.voteTitle}>Your Vote</Text>
       <IndividualVoteBlock
         user={poll.invitedUser}
         timeLeft={timeLeft}
@@ -207,13 +206,6 @@ export default function InvitationVotingPoll({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
-  },
-  voteTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: 8,
-    textAlign: 'center',
   },
   voteBlock: {
     backgroundColor: 'transparent',
