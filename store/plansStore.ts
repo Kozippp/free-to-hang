@@ -1469,14 +1469,29 @@ function handlePollVotesChange(payload: any, currentUserId: string) {
 // Handle invitation poll votes changes (similar to poll votes)
 function handleInvitationPollVotesChange(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
-  const pollId = newRecord?.poll_id || oldRecord?.poll_id;
+  const pollId = newRecord?.poll_id || oldRecord?.poll_id || newRecord?.id || oldRecord?.id;
 
   console.log('🗳️ Processing invitation poll votes change:', {
     eventType,
     pollId,
+    table: payload.table,
     currentUserId
   });
 
+  // Handle invitation_polls table changes (DELETE events when polls are removed)
+  if (payload.table === 'invitation_polls') {
+    if (eventType === 'DELETE' && oldRecord) {
+      console.log('🗑️ Invitation poll deleted, refreshing plans immediately:', pollId);
+      // Immediate refresh when poll is deleted (no debounce needed)
+      const { loadPlans } = usePlansStore.getState();
+      loadPlans(currentUserId).catch(error => {
+        console.error('❌ Error refreshing plans after invitation poll deletion:', error);
+      });
+      return;
+    }
+  }
+
+  // Handle invitation_poll_votes table changes (INSERT/UPDATE events)
   if (newRecord && pollId) {
     const debouncedRefresh = async () => {
       try {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Animated,
 } from 'react-native';
 import { Clock, Check, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -32,6 +33,7 @@ interface IndividualVoteBlockProps {
   isExpired: boolean;
   userVoteChoice: 'accept' | 'deny' | null;
   canVote: boolean;
+  showExpiredAnimation: boolean;
 }
 
 function IndividualVoteBlock({
@@ -43,7 +45,8 @@ function IndividualVoteBlock({
   denyVotes,
   isExpired,
   userVoteChoice,
-  canVote
+  canVote,
+  showExpiredAnimation
 }: IndividualVoteBlockProps) {
   const formatTime = (ms: number) => {
     const minutes = Math.floor(ms / 60000);
@@ -71,13 +74,13 @@ function IndividualVoteBlock({
     styles.countText,
     acceptSelected ? styles.countTextSelected : styles.countTextAccept,
     isDisabled && styles.countTextDisabled
-  ] as const;
+  ];
 
   const denyCountTextStyle = [
     styles.countText,
     denySelected ? styles.countTextSelected : styles.countTextDeny,
     isDisabled && styles.countTextDisabled
-  ] as const;
+  ];
 
   return (
     <View style={styles.voteBlock}>
@@ -86,7 +89,10 @@ function IndividualVoteBlock({
         {/* User info */}
         <View style={styles.userInfo}>
           <Image source={{ uri: user.avatar }} style={styles.avatar} />
-          <Text style={styles.userName}>{user.name}</Text>
+          <Text style={[
+            styles.userName,
+            showExpiredAnimation && styles.userNameExpired
+          ]}>{user.name}</Text>
         </View>
 
         {/* Timer */}
@@ -170,6 +176,11 @@ export default function InvitationVotingPoll({
 }: InvitationVotingPollProps) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [expiredNotified, setExpiredNotified] = useState(false);
+  const [showExpiredAnimation, setShowExpiredAnimation] = useState(false);
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!poll.expiresAt) return;
@@ -188,15 +199,39 @@ export default function InvitationVotingPoll({
 
   const isExpired = timeLeft === 0;
 
-  // Notify parent when this poll expires so it can be removed/refreshed
+  // Notify parent when this poll expires and start animation
   useEffect(() => {
     if (isExpired && !expiredNotified) {
       setExpiredNotified(true);
+      setShowExpiredAnimation(true);
+
+      // Start fade out animation after 3 seconds
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 0.95,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          // Notify parent after animation completes
+          if (onExpired) {
+            onExpired(poll.id);
+          }
+        });
+      }, 3000);
+
+      // Also notify parent immediately for real-time updates
       if (onExpired) {
         onExpired(poll.id);
       }
     }
-  }, [isExpired, expiredNotified, onExpired, poll.id]);
+  }, [isExpired, expiredNotified, onExpired, poll.id, fadeAnim, scaleAnim]);
 
   const handleVote = (accept: boolean) => {
     if (isExpired || !canVote) return;
@@ -206,7 +241,13 @@ export default function InvitationVotingPoll({
   };
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[
+      styles.container,
+      {
+        opacity: fadeAnim,
+        transform: [{ scale: scaleAnim }]
+      }
+    ]}>
       <IndividualVoteBlock
         user={poll.invitedUser}
         timeLeft={timeLeft}
@@ -217,8 +258,9 @@ export default function InvitationVotingPoll({
         isExpired={isExpired}
         userVoteChoice={poll.currentUserVote === 'allow' ? 'accept' : poll.currentUserVote === 'deny' ? 'deny' : null}
         canVote={canVote}
+        showExpiredAnimation={showExpiredAnimation}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -251,6 +293,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: Colors.light.text,
+  },
+  userNameExpired: {
+    color: '#4CAF50', // Green color for successful invitation
+    fontWeight: '600',
   },
   timer: {
     flexDirection: 'row',
