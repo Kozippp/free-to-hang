@@ -1,58 +1,120 @@
-import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  Modal, 
-  TouchableOpacity, 
-  Image, 
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  Image,
   ScrollView,
   TextInput,
   Alert
 } from 'react-native';
 import { X, Check, Search, UserPlus, Link, Mail } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { offlineFriends } from '@/constants/mockData';
+import { Plan } from '@/store/plansStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface InviteFriendsModalProps {
   visible: boolean;
   onClose: () => void;
   onInvite: (friendIds: string[]) => void;
   onCreateInvitationPoll: (friendIds: string[], friendNames: string[]) => void;
+  plan: Plan;
 }
 
-export default function InviteFriendsModal({ 
-  visible, 
-  onClose, 
+interface FriendUser {
+  id: string;
+  name: string;
+  username?: string;
+  avatar: string;
+}
+
+export default function InviteFriendsModal({
+  visible,
+  onClose,
   onInvite,
-  onCreateInvitationPoll 
+  onCreateInvitationPoll,
+  plan
 }: InviteFriendsModalProps) {
+  const { user } = useAuth();
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
+  // Get IDs of users already in the plan
+  const existingUserIds = plan.participants.map(p => p.id);
+
   // Mock friends data - in a real app, this would come from a backend
-  const availableFriends = [
-    ...offlineFriends,
+  // Filter out users who are already in the plan
+  const allMockFriends = [
     {
-      id: '11',
-      name: 'Sarah Johnson',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=256&q=80',
-      status: 'offline' as const,
-      lastSeen: '1 day ago',
+      id: '1',
+      name: 'Alice Smith',
+      username: 'alice_smith',
+      avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face'
     },
     {
-      id: '12',
-      name: 'David Lee',
-      avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=256&q=80',
-      status: 'offline' as const,
-      lastSeen: '3 hours ago',
+      id: '2',
+      name: 'Bob Johnson',
+      username: 'bob_j',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face'
+    },
+    {
+      id: '3',
+      name: 'Carol Davis',
+      username: 'carol_d',
+      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face'
+    },
+    {
+      id: '4',
+      name: 'David Wilson',
+      username: 'david_w',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
+    },
+    {
+      id: '5',
+      name: 'Emma Brown',
+      username: 'emma_b',
+      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face'
+    },
+    {
+      id: '6',
+      name: 'Frank Miller',
+      username: 'frank_m',
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face'
+    },
+    {
+      id: '7',
+      name: 'Grace Lee',
+      username: 'grace_l',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face'
+    },
+    {
+      id: '8',
+      name: 'Henry Taylor',
+      username: 'henry_t',
+      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
     }
   ];
-  
-  // Filter friends based on search query
-  const filteredFriends = availableFriends.filter(friend => 
-    friend.name.toLowerCase().includes(searchQuery.toLowerCase())
+
+  // Filter out users already in the plan
+  const availableFriends = allMockFriends.filter(friend =>
+    !existingUserIds.includes(friend.id)
   );
+
+  // Filter friends based on search query
+  const filteredFriends = availableFriends.filter(friend =>
+    friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (friend.username && friend.username.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // Clear selections when modal opens/closes
+  useEffect(() => {
+    if (!visible) {
+      setSelectedFriends([]);
+      setSearchQuery('');
+    }
+  }, [visible]);
   
   const toggleFriendSelection = (friendId: string) => {
     if (selectedFriends.includes(friendId)) {

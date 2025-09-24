@@ -2,16 +2,17 @@ import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image, FlatList, Alert } from 'react-native';
 import { UserPlus, X, Check, Clock, Eye } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { Participant, Poll } from '@/store/plansStore';
+import { Participant } from '@/store/plansStore';
+import { InvitationPoll } from '@/lib/plans-service';
 import InvitationVotingPoll from './InvitationVotingPoll';
 
 interface PlanParticipantsProps {
   acceptedParticipants: Participant[];
   maybeParticipants: Participant[];
   pendingParticipants: Participant[];
-  invitationPolls: Poll[];
+  invitationPolls: InvitationPoll[];
   onInvite: () => void;
-  onInvitationVote: (pollId: string, optionId: string) => void;
+  onInvitationVote: (pollId: string, vote: 'allow' | 'deny') => void;
   canInvite: boolean;
   isInYesGang: boolean;
 }
@@ -113,22 +114,15 @@ export default function PlanParticipants({
               };
             }) || [];
 
-            const hasUserVoted = poll.options.some(option => 
-              option.votes.includes('current')
-            );
-
             return (
               <InvitationVotingPoll
                 key={poll.id}
                 poll={poll}
-                onVote={(pollId, optionId) => {
-                  // Only allow voting if user is "going"
+                onVote={(pollId, vote) => {
                   if (isInYesGang) {
-                    onInvitationVote(pollId, optionId);
+                    onInvitationVote(pollId, vote);
                   }
                 }}
-                userVoted={hasUserVoted}
-                invitedUsers={invitedUsers}
                 canVote={isInYesGang}
               />
             );

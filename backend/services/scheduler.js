@@ -100,39 +100,13 @@ class PlanScheduler {
       try {
         console.log('🎯 Checking for expired invitation polls...');
 
-        // Find expired invitation polls
-        const { data: expiredPolls, error } = await supabase
-          .from('plan_polls')
-          .select('id, plan_id, invited_users')
-          .eq('poll_type', 'invitation')
-          .lt('ends_at', new Date().toISOString());
+        // Process expired invitation polls using the new function
+        const { data, error } = await supabase.rpc('process_expired_invitation_polls');
 
         if (error) {
-          console.error('❌ Error fetching expired polls:', error);
-          return;
-        }
-
-        if (!expiredPolls || expiredPolls.length === 0) {
-          return;
-        }
-
-        console.log(`📊 Processing ${expiredPolls.length} expired invitation polls`);
-
-        for (const poll of expiredPolls) {
-          try {
-            // Process the invitation poll
-            const { data, error: processError } = await supabase.rpc('process_invitation_poll', {
-              poll_id_param: poll.id
-            });
-
-            if (processError) {
-              console.error(`❌ Error processing invitation poll ${poll.id}:`, processError);
-            } else {
-              console.log(`✅ Processed invitation poll ${poll.id} for plan ${poll.plan_id}`);
-            }
-          } catch (pollError) {
-            console.error(`❌ Exception processing poll ${poll.id}:`, pollError);
-          }
+          console.error('❌ Error processing expired invitation polls:', error);
+        } else {
+          console.log('✅ Processed expired invitation polls');
         }
       } catch (error) {
         console.error('❌ Invitation poll processing task failed:', error);
@@ -207,19 +181,11 @@ class PlanScheduler {
 
   async triggerInvitationProcessing() {
     console.log('🔧 Manually triggering invitation poll processing...');
-    const { data: expiredPolls, error } = await supabase
-      .from('plan_polls')
-      .select('id')
-      .eq('poll_type', 'invitation')
-      .lt('ends_at', new Date().toISOString());
+    const { data, error } = await supabase.rpc('process_expired_invitation_polls');
 
     if (error) {
-      console.error('❌ Error fetching expired polls:', error);
+      console.error('❌ Manual invitation poll processing failed:', error);
       return false;
-    }
-
-    for (const poll of expiredPolls) {
-      await supabase.rpc('process_invitation_poll', { poll_id_param: poll.id });
     }
 
     console.log('✅ Manual invitation poll processing completed');

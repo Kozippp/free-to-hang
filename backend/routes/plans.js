@@ -1747,6 +1747,345 @@ router.post('/:id/attendance', requireAuth, async (req, res) => {
   }
 });
 
+// ===== INVITATION POLLS ENDPOINTS =====
+
+// POST /plans/:id/invitation-polls - Create invitation polls for multiple users
+router.post('/:id/invitation-polls', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { invitedUserIds } = req.body; // Array of user IDs to invite
+    const userId = req.user.id;
+
+    // Validate input
+    if (!Array.isArray(invitedUserIds) || invitedUserIds.length === 0) {
+      return res.status(400).json({ error: 'invitedUserIds must be a non-empty array' });
+    }
+
+    if (invitedUserIds.length > 10) {
+      return res.status(400).json({ error: 'Cannot create more than 10 invitation polls at once' });
+    }
+
+    // Check if user can create invitation polls (must be "going" participant)
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant || participant.status !== 'going') {
+      return res.status(403).json({ error: 'Only going participants can create invitation polls' });
+    }
+
+    // Check if invited users are not already in the plan
+    const { data: existingParticipants, error: existingError } = await supabase
+      .from('plan_participants')
+      .select('user_id')
+      .eq('plan_id', id)
+      .in('user_id', invitedUserIds);
+
+    if (existingError) {
+      console.error('Error checking existing participants:', existingError);
+      return res.status(500).json({ error: 'Failed to validate participants' });
+    }
+
+    const existingUserIds = existingParticipants?.map(p => p.user_id) || [];
+    const validUserIds = invitedUserIds.filter(id => !existingUserIds.includes(id));
+
+    if (validUserIds.length === 0) {
+      return res.status(400).json({ error: 'All selected users are already in the plan' });
+    }
+
+    // Check for existing active invitation polls for these users
+    const { data: existingPolls, error: pollsError } = await supabase
+      .from('invitation_polls')
+      .select('invited_user_id')
+      .eq('plan_id', id)
+      .eq('status', 'active')
+      .in('invited_user_id', validUserIds);
+
+    if (pollsError) {
+      console.error('Error checking existing polls:', pollsError);
+      return res.status(500).json({ error: 'Failed to check existing polls' });
+    }
+
+    const existingPollUserIds = existingPolls?.map(p => p.invited_user_id) || [];
+    const finalUserIds = validUserIds.filter(id => !existingPollUserIds.includes(id));
+
+    if (finalUserIds.length === 0) {
+      return res.status(400).json({ error: 'All selected users already have active invitation polls' });
+    }
+
+    // Create invitation polls for each user
+    const pollsToCreate = finalUserIds.map(invitedUserId => ({
+      plan_id: id,
+      invited_user_id: invitedUserId,
+      created_by: userId,
+      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
+      status: 'active'
+    }));
+
+    const { data: createdPolls, error: createError } = await supabase
+      .from('invitation_polls')
+      .insert(pollsToCreate)
+      .select();
+
+    if (createError) {
+      console.error('Error creating invitation polls:', createError);
+      return res.status(500).json({ error: 'Failed to create invitation polls' });
+    }
+
+    // Notify about new invitation polls
+    for (const poll of createdPolls) {
+      await notifyPlanUpdate(id, 'invitation_poll_created', userId, {
+        poll_id: poll.id,
+        invited_user_id: poll.invited_user_id
+      });
+    }
+
+    console.log(`✅ Created ${createdPolls.length} invitation polls for plan ${id}`);
+
+    // Return updated plan with new polls
+    const fullPlan = await getPlanWithDetails(id, userId);
+    res.status(201).json(fullPlan);
+
+  } catch (error) {
+    console.error('Error in POST /plans/:id/invitation-polls:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /plans/:id/invitation-polls - Get invitation polls for a plan
+router.get('/:id/invitation-polls', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Check if user has access to this plan
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant) {
+      return res.status(403).json({ error: 'Access denied to plan' });
+    }
+
+    // Get invitation polls with vote details
+    const { data: polls, error: pollsError } = await supabase
+      .from('invitation_poll_details')
+      .select('*')
+      .eq('plan_id', id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+
+    if (pollsError) {
+      console.error('Error fetching invitation polls:', pollsError);
+      return res.status(500).json({ error: 'Failed to fetch invitation polls' });
+    }
+
+    // Transform data to match frontend format
+    const transformedPolls = polls.map(poll => ({
+      id: poll.id,
+      invitedUser: {
+        id: poll.invited_user_id,
+        name: poll.invited_user_name,
+        avatar: poll.invited_user_avatar
+      },
+      createdBy: {
+        id: poll.created_by,
+        name: poll.creator_name,
+        avatar: poll.creator_avatar
+      },
+      timeLeft: Math.max(0, Math.floor((new Date(poll.expires_at).getTime() - Date.now()) / 1000)),
+      isExpired: new Date(poll.expires_at) <= new Date(),
+      allowVotes: poll.allow_votes,
+      denyVotes: poll.deny_votes,
+      currentUserVote: poll.current_user_vote,
+      canVote: participant.status === 'going'
+    }));
+
+    res.json(transformedPolls);
+
+  } catch (error) {
+    console.error('Error in GET /plans/:id/invitation-polls:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /plans/:id/invitation-polls/:pollId/vote - Vote on invitation poll
+router.post('/:id/invitation-polls/:pollId/vote', requireAuth, async (req, res) => {
+  try {
+    const { id, pollId } = req.params;
+    const { vote } = req.body; // 'allow' or 'deny'
+    const userId = req.user.id;
+
+    // Validate vote
+    if (!['allow', 'deny'].includes(vote)) {
+      return res.status(400).json({ error: 'Vote must be either "allow" or "deny"' });
+    }
+
+    // Check if user can vote (must be "going" participant)
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant || participant.status !== 'going') {
+      return res.status(403).json({ error: 'Only going participants can vote on invitation polls' });
+    }
+
+    // Check if poll exists and is active
+    const { data: poll, error: pollError } = await supabase
+      .from('invitation_polls')
+      .select('*')
+      .eq('id', pollId)
+      .eq('plan_id', id)
+      .eq('status', 'active')
+      .single();
+
+    if (pollError || !poll) {
+      return res.status(404).json({ error: 'Invitation poll not found or not active' });
+    }
+
+    // Check if poll has expired
+    if (new Date(poll.expires_at) <= new Date()) {
+      return res.status(400).json({ error: 'Invitation poll has expired' });
+    }
+
+    // Insert or update vote
+    const { error: voteError } = await supabase
+      .from('invitation_poll_votes')
+      .upsert({
+        poll_id: pollId,
+        user_id: userId,
+        vote: vote
+      }, {
+        onConflict: 'poll_id,user_id'
+      });
+
+    if (voteError) {
+      console.error('Error voting on invitation poll:', voteError);
+      return res.status(500).json({ error: 'Failed to submit vote' });
+    }
+
+    // Notify about the vote
+    await notifyPlanUpdate(id, 'invitation_poll_voted', userId, {
+      poll_id: pollId,
+      vote: vote
+    });
+
+    console.log(`✅ Vote submitted: ${vote} on poll ${pollId} by user ${userId}`);
+
+    // Return updated plan
+    const fullPlan = await getPlanWithDetails(id, userId);
+    res.json(fullPlan);
+
+  } catch (error) {
+    console.error('Error in POST /plans/:id/invitation-polls/:pollId/vote:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /plans/:id/invitation-polls/:pollId - Get specific invitation poll details
+router.get('/:id/invitation-polls/:pollId', requireAuth, async (req, res) => {
+  try {
+    const { id, pollId } = req.params;
+    const userId = req.user.id;
+
+    // Check if user has access to this plan
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (participantError || !participant) {
+      return res.status(403).json({ error: 'Access denied to plan' });
+    }
+
+    // Get poll details
+    const { data: poll, error: pollError } = await supabase
+      .from('invitation_poll_details')
+      .select('*')
+      .eq('id', pollId)
+      .eq('plan_id', id)
+      .single();
+
+    if (pollError || !poll) {
+      return res.status(404).json({ error: 'Invitation poll not found' });
+    }
+
+    // Get all votes for this poll
+    const { data: votes, error: votesError } = await supabase
+      .from('invitation_poll_votes')
+      .select(`
+        id,
+        vote,
+        created_at,
+        user_id,
+        users!inner(name, username, avatar_url)
+      `)
+      .eq('poll_id', pollId);
+
+    if (votesError) {
+      console.error('Error fetching poll votes:', votesError);
+      return res.status(500).json({ error: 'Failed to fetch poll votes' });
+    }
+
+    // Transform votes
+    const transformedVotes = votes.map(vote => ({
+      id: vote.id,
+      vote: vote.vote,
+      createdAt: vote.created_at,
+      user: {
+        id: vote.user_id,
+        name: vote.users.name,
+        username: vote.users.username,
+        avatar: vote.users.avatar_url
+      }
+    }));
+
+    // Return poll details
+    const pollDetails = {
+      id: poll.id,
+      invitedUser: {
+        id: poll.invited_user_id,
+        name: poll.invited_user_name,
+        avatar: poll.invited_user_avatar
+      },
+      createdBy: {
+        id: poll.created_by,
+        name: poll.creator_name,
+        avatar: poll.creator_avatar
+      },
+      planTitle: poll.plan_title,
+      createdAt: poll.created_at,
+      expiresAt: poll.expires_at,
+      status: poll.status,
+      timeLeft: Math.max(0, Math.floor((new Date(poll.expires_at).getTime() - Date.now()) / 1000)),
+      isExpired: new Date(poll.expires_at) <= new Date(),
+      allowVotes: poll.allow_votes,
+      denyVotes: poll.deny_votes,
+      totalVotes: poll.total_votes,
+      currentUserVote: poll.current_user_vote,
+      canVote: participant.status === 'going',
+      votes: transformedVotes
+    };
+
+    res.json(pollDetails);
+
+  } catch (error) {
+    console.error('Error in GET /plans/:id/invitation-polls/:pollId:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Export the router as default, but also expose internal helpers for scheduler
 router.processConditionalDependencies = processConditionalDependencies;
 module.exports = router;

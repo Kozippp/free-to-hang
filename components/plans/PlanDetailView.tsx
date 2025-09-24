@@ -44,7 +44,7 @@ import usePlansStore from '@/store/plansStore';
 import useChatStore from '@/store/chatStore';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { plansService } from '@/lib/plans-service';
+import { plansService, InvitationPoll } from '@/lib/plans-service';
 
 interface PlanDetailViewProps {
   plan: Plan;
@@ -107,6 +107,10 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [isPollLoading, setIsPollLoading] = useState(false);
   const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
+
+  // Invitation polls state
+  const [invitationPolls, setInvitationPolls] = useState<InvitationPoll[]>([]);
+  const [loadingInvitationPolls, setLoadingInvitationPolls] = useState(false);
   
   // Decline animation states
   const [isClosing, setIsClosing] = useState(false);
@@ -133,7 +137,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const whenPoll = polls.find(poll => poll.type === 'when');
   const wherePoll = polls.find(poll => poll.type === 'where');
   const customPolls = polls.filter(poll => poll.type === 'custom');
-  const invitationPolls = polls.filter(poll => poll.type === 'invitation');
   
   // Animation for highlighting new plan
   const highlightAnim = useRef(new Animated.Value(0)).current;
@@ -146,12 +149,29 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // }
   }, [plan.id, currentUserStatus]);
 
+  // Load invitation polls when plan changes
+  React.useEffect(() => {
+    const loadInvitationPolls = async () => {
+      try {
+        setLoadingInvitationPolls(true);
+        const polls = await plansService.getInvitationPolls(latestPlan.id);
+        setInvitationPolls(polls);
+      } catch (error) {
+        console.error('Error loading invitation polls:', error);
+      } finally {
+        setLoadingInvitationPolls(false);
+      }
+    };
+
+    loadInvitationPolls();
+  }, [latestPlan.id]);
+
   // Process expired invitation polls periodically
   React.useEffect(() => {
     const interval = setInterval(() => {
       processExpiredInvitationPolls();
     }, 5000); // Check every 5 seconds
-    
+
     return () => clearInterval(interval);
   }, [processExpiredInvitationPolls]);
 
@@ -363,46 +383,57 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     setShowInviteModal(true);
   };
 
+  const handleInvitationVote = async (pollId: string, vote: 'allow' | 'deny') => {
+    try {
+      console.log('🗳️ Voting on invitation poll:', pollId, 'vote:', vote);
+      await plansService.voteOnInvitationPoll(latestPlan.id, pollId, vote);
+      console.log('✅ Vote submitted successfully');
+
+      // Reload invitation polls to update UI
+      const updatedPolls = await plansService.getInvitationPolls(latestPlan.id);
+      setInvitationPolls(updatedPolls);
+    } catch (error) {
+      console.error('❌ Error voting on invitation poll:', error);
+
+      let errorMessage = 'Failed to submit vote. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          errorMessage = 'Your session has expired. Please sign out and sign back in.';
+        } else if (error.message.includes('expired')) {
+          errorMessage = 'This poll has expired.';
+        }
+      }
+
+      Alert.alert('Error Voting', errorMessage, [{ text: 'OK', style: 'default' }]);
+    }
+  };
+
   const handleCreateInvitationPoll = async (friendIds: string[], friendNames: string[]) => {
     try {
-      console.log('📊 Creating invitation polls via API:', { friendIds, friendNames });
-      
-      // Create invitation polls for each friend
-      for (let i = 0; i < friendIds.length; i++) {
-        const friendId = friendIds[i];
-        const friendName = friendNames[i];
-        
-        const pollData = {
-          question: `Should we invite ${friendName} to this plan?`,
-          options: ['Allow', 'Deny'],
-          type: 'invitation' as const,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
-          invitedUsers: [friendId]
-        };
-        
-        console.log('📊 Creating invitation poll for:', friendName);
-        await plansService.createPoll(latestPlan.id, pollData);
-      }
-      
-      console.log('✅ Invitation polls created successfully via API');
+      console.log('📊 Creating invitation polls via new API:', { friendIds, friendNames });
+
+      // Use the new invitation polls API
+      await plansService.createInvitationPolls(latestPlan.id, friendIds);
+
+      console.log('✅ Invitation polls created successfully via new API');
       setShowInviteModal(false);
-      
+
       // Real-time subscription will handle updating the store
     } catch (error) {
       console.error('❌ Error creating invitation polls:', error);
-      
+
       let errorMessage = 'Failed to create invitation polls. Please try again.';
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           errorMessage = 'Your session has expired. Please sign out and sign back in.';
         } else if (error.message.includes('403')) {
-          errorMessage = 'You need to respond "Going" to the plan to create polls.';
-        } else {
-          errorMessage = error.message;
+          errorMessage = 'Only going participants can create invitation polls.';
+        } else if (error.message.includes('400')) {
+          errorMessage = 'Some selected users are already in the plan or have active polls.';
         }
       }
-      
+
       Alert.alert(
         'Error Creating Polls',
         errorMessage,
@@ -656,37 +687,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     }
   };
 
-  // Helper function to handle invitation poll voting (single selection)
-  const handleInvitationVote = async (pollId: string, optionId: string) => {
-    try {
-      // For invitation polls, only allow one vote (either Allow or Deny)
-      console.log('🗳️ Voting on invitation poll via API:', { pollId, optionId });
-      await plansService.voteOnPoll(plan.id, pollId, [optionId]);
-      console.log('✅ Invitation vote submitted successfully via API');
-      
-      // Real-time subscription will handle updating the store
-    } catch (error) {
-      console.error('❌ Error voting on invitation poll:', error);
-      
-      let errorMessage = 'Failed to submit vote. Please try again.';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Authentication')) {
-          errorMessage = 'Your session has expired. Please sign out and sign back in.';
-        } else if (error.message.includes('403')) {
-          errorMessage = 'You need to respond "Going" to the plan to vote on polls.';
-        } else {
-          errorMessage = error.message;
-        }
-      }
-      
-      Alert.alert(
-        'Error Voting',
-        errorMessage,
-        [{ text: 'OK', style: 'default' }]
-      );
-    }
-  };
 
   // Helper function to handle poll deletion
   const handleDeletePoll = async (pollId: string) => {
@@ -920,7 +920,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             acceptedParticipants={acceptedParticipants}
             maybeParticipants={maybeParticipants}
             pendingParticipants={pendingParticipants}
-            invitationPolls={invitationPolls}
+            invitationPolls={invitationPolls || []}
             onInvite={handleInviteFriends}
             onInvitationVote={handleInvitationVote}
             canInvite={isInYesGang}
@@ -992,6 +992,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           setShowInviteModal(false);
         }}
         onCreateInvitationPoll={handleCreateInvitationPoll}
+        plan={latestPlan}
       />
       
       {/* Response Confirmation Modal */}
