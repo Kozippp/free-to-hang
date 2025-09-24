@@ -45,6 +45,7 @@ import useChatStore from '@/store/chatStore';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { plansService, InvitationPoll } from '@/lib/plans-service';
+import { supabase } from '@/lib/supabase';
 
 interface PlanDetailViewProps {
   plan: Plan;
@@ -184,6 +185,35 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
 
     return () => clearInterval(interval);
   }, [processExpiredInvitationPolls]);
+
+  // Real-time subscription for invitation polls
+  React.useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`invitation_polls_${plan.id}_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'invitation_polls',
+          filter: `plan_id=eq.${plan.id}`
+        },
+        (payload: any) => {
+          console.log('📊 Invitation poll real-time update:', payload);
+          // Refresh invitation polls when any change occurs
+          refreshInvitationPolls();
+        }
+      )
+      .subscribe((status: string) => {
+        console.log('📡 Invitation polls subscription status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [plan.id, user?.id, refreshInvitationPolls]);
 
   // Track real-time updates for animation
   React.useEffect(() => {
