@@ -95,6 +95,7 @@ export interface InvitationPoll {
   };
   timeLeft: number;
   isExpired: boolean;
+  expiresAt: string;
   allowVotes: number;
   denyVotes: number;
   currentUserVote: 'allow' | 'deny' | null;
