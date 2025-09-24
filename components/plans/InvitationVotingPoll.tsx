@@ -88,7 +88,7 @@ function IndividualVoteBlock({
               }
               onVote(true);
             }}
-            disabled={isExpired}
+            disabled={isExpired || !canVote}
           >
             <Check size={16} color={
               userVoteChoice === 'accept' ? 'white' : 
@@ -123,7 +123,7 @@ function IndividualVoteBlock({
               }
               onVote(false);
             }}
-            disabled={isExpired}
+            disabled={isExpired || !canVote}
           >
             <X size={16} color={
               userVoteChoice === 'deny' ? 'white' : 

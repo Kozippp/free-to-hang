@@ -149,7 +149,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // }
   }, [plan.id, currentUserStatus]);
 
-  // Load invitation polls when plan changes
+  // Load invitation polls when plan changes or when plan data updates (for realtime)
   React.useEffect(() => {
     const loadInvitationPolls = async () => {
       try {
@@ -164,7 +164,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     };
 
     loadInvitationPolls();
-  }, [latestPlan.id]);
+  }, [latestPlan.id, latestPlan.updatedAt]); // Also reload when plan data changes (realtime updates)
 
   // Process expired invitation polls periodically
   React.useEffect(() => {

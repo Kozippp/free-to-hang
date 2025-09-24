@@ -130,6 +130,8 @@ let participantsChannel: any = null;
 let pollsChannel: any = null;
 let pollOptionsChannel: any = null;
 let pollVotesChannel: any = null;
+let invitationPollsChannel: any = null;
+let invitationPollVotesChannel: any = null;
 let updatesChannel: any = null;
 let attendanceChannel: any = null;
 let isSubscribed = false;
@@ -138,6 +140,7 @@ let isSubscribed = false;
 let plansRefreshTimeout: NodeJS.Timeout | null = null;
 let participantsRefreshTimeout: NodeJS.Timeout | null = null;
 let pollsRefreshTimeout: NodeJS.Timeout | null = null;
+let invitationPollsRefreshTimeout: NodeJS.Timeout | null = null;
 let pollVotesRefreshTimeout: NodeJS.Timeout | null = null;
 
 // Track which polls are currently being updated to prevent duplicate requests
@@ -1106,6 +1109,76 @@ const usePlansStore = create<PlansState>((set, get) => ({
           }
         });
 
+      // 5. INVITATION POLLS CHANNEL - Listen for invitation poll changes
+      invitationPollsChannel = supabase
+        .channel(`invitation_polls_channel_${userId}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'invitation_polls'
+          },
+          (payload) => {
+            console.log('📊 Invitation polls change:', payload);
+            handleInvitationPollVotesChange(payload, userId);
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Invitation polls channel status:', status);
+
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Invitation polls channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Invitation polls channel error - marking as unsubscribed');
+            isSubscribed = false;
+            invitationPollsChannel = null;
+          } else if (status === 'CLOSED') {
+            console.log('🔒 Invitation polls channel closed - marking as unsubscribed');
+            isSubscribed = false;
+            invitationPollsChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Invitation polls channel timed out - marking as unsubscribed');
+            isSubscribed = false;
+            invitationPollsChannel = null;
+          }
+        });
+
+      // 6. INVITATION POLL VOTES CHANNEL - Listen for invitation poll vote changes
+      invitationPollVotesChannel = supabase
+        .channel(`invitation_poll_votes_channel_${userId}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'invitation_poll_votes'
+          },
+          (payload) => {
+            console.log('🗳️ Invitation poll votes change:', payload);
+            handleInvitationPollVotesChange(payload, userId);
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Invitation poll votes channel status:', status);
+
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Invitation poll votes channel subscribed successfully');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log('❌ Invitation poll votes channel error - marking as unsubscribed');
+            isSubscribed = false;
+            invitationPollVotesChannel = null;
+          } else if (status === 'CLOSED') {
+            console.log('🔒 Invitation poll votes channel closed - marking as unsubscribed');
+            isSubscribed = false;
+            invitationPollVotesChannel = null;
+          } else if (status === 'TIMED_OUT') {
+            console.log('⏰ Invitation poll votes channel timed out - marking as unsubscribed');
+            isSubscribed = false;
+            invitationPollVotesChannel = null;
+          }
+        });
+
       // Wait a moment for all subscriptions to establish
       setTimeout(() => {
         isSubscribed = true;
@@ -1116,6 +1189,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
         console.log('  👥 participants - status changes in user plans');
         console.log('  📊 polls - new polls in user plans');
         console.log('  🗳️ poll_votes - vote changes');
+        console.log('  📊 invitation_polls - invitation poll changes');
+        console.log('  🗳️ invitation_poll_votes - invitation poll vote changes');
       }, 1000);
 
     } catch (error) {
@@ -1157,7 +1232,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.log('🔍 Checking plans real-time subscriptions status...');
 
     // If already subscribed and all channels exist, no need to restart
-    if (isSubscribed && plansChannel && updatesChannel && participantsChannel && pollsChannel && pollVotesChannel) {
+    if (isSubscribed && plansChannel && updatesChannel && participantsChannel && pollsChannel && pollVotesChannel && invitationPollsChannel && invitationPollVotesChannel) {
       console.log('✅ All plans real-time subscriptions are active');
       return;
     }
@@ -1192,8 +1267,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
 // Helper function to stop all realtime channels
 async function stopAllRealtimeChannels() {
-  const channels = [plansChannel, updatesChannel, participantsChannel, pollsChannel, pollVotesChannel];
-  const channelNames = ['plans', 'plan_updates', 'participants', 'polls', 'poll_votes'];
+  const channels = [plansChannel, updatesChannel, participantsChannel, pollsChannel, pollVotesChannel, invitationPollsChannel, invitationPollVotesChannel];
+  const channelNames = ['plans', 'plan_updates', 'participants', 'polls', 'poll_votes', 'invitation_polls', 'invitation_poll_votes'];
 
   for (let i = 0; i < channels.length; i++) {
     if (channels[i]) {
@@ -1388,6 +1463,40 @@ function handlePollVotesChange(payload: any, currentUserId: string) {
     // Longer debounce time to prevent rate limiting - 2000ms
     console.log('⏰ Setting debounce timeout for poll:', pollId, 'Duration: 2000ms');
     pollVotesRefreshTimeout = setTimeout(debouncedRefresh, 2000);
+  }
+}
+
+// Handle invitation poll votes changes (similar to poll votes)
+function handleInvitationPollVotesChange(payload: any, currentUserId: string) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+  const pollId = newRecord?.poll_id || oldRecord?.poll_id;
+
+  console.log('🗳️ Processing invitation poll votes change:', {
+    eventType,
+    pollId,
+    currentUserId
+  });
+
+  if (newRecord && pollId) {
+    const debouncedRefresh = async () => {
+      try {
+        console.log('🔄 Starting invitation poll update for:', pollId);
+        const { loadPlans } = usePlansStore.getState();
+        await loadPlans(currentUserId);
+        console.log('✅ Plans updated after invitation poll votes change for poll:', pollId);
+      } catch (error) {
+        console.error('❌ Error updating plans after invitation poll votes change:', error);
+      }
+    };
+
+    // Clear existing timeout
+    if (invitationPollsRefreshTimeout) {
+      clearTimeout(invitationPollsRefreshTimeout);
+    }
+
+    // Shorter debounce for invitation polls since they expire quickly - 1000ms
+    console.log('⏰ Setting debounce timeout for invitation poll:', pollId, 'Duration: 1000ms');
+    invitationPollsRefreshTimeout = setTimeout(debouncedRefresh, 1000);
   }
 }
 

@@ -1901,6 +1901,7 @@ router.get('/:id/invitation-polls', requireAuth, async (req, res) => {
       },
       timeLeft: Math.max(0, Math.floor((new Date(poll.expires_at).getTime() - Date.now()) / 1000)),
       isExpired: new Date(poll.expires_at) <= new Date(),
+      expiresAt: poll.expires_at,
       allowVotes: poll.allow_votes,
       denyVotes: poll.deny_votes,
       currentUserVote: poll.current_user_vote,
