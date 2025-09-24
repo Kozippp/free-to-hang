@@ -15,6 +15,7 @@ interface PlanParticipantsProps {
   onInvitationVote: (pollId: string, vote: 'allow' | 'deny') => void;
   canInvite: boolean;
   isInYesGang: boolean;
+  onInvitationExpired?: (pollId: string) => void;
 }
 
 export default function PlanParticipants({
@@ -25,7 +26,8 @@ export default function PlanParticipants({
   onInvite,
   onInvitationVote,
   canInvite,
-  isInYesGang
+  isInYesGang,
+  onInvitationExpired
 }: PlanParticipantsProps) {
   const renderParticipant = (participant: Participant) => {
     return (
@@ -125,7 +127,7 @@ export default function PlanParticipants({
                 }}
                 canVote={isInYesGang}
                 onExpired={() => {
-                  // Parent will re-render with fewer polls when higher level state is refreshed
+                  onInvitationExpired && onInvitationExpired(poll.id);
                 }}
               />
             );

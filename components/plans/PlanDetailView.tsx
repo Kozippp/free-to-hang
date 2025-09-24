@@ -176,6 +176,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     }
   }, [latestPlan.id]);
 
+  // Handle single invitation expiry to allow a smoother local removal
+  const handleInvitationExpired = React.useCallback((pollId: string) => {
+    setInvitationPolls((prev) => prev.filter((p) => p.id !== pollId));
+  }, []);
+
   // Process expired invitation polls periodically
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -939,6 +944,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             }}
             canInvite={isInYesGang}
             isInYesGang={isInYesGang}
+            onInvitationExpired={handleInvitationExpired}
           />
           
           {/* Manual plan completion voting removed; plans auto-complete after 24h */}

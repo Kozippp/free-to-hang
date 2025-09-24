@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -79,8 +79,21 @@ function IndividualVoteBlock({
     isDisabled && styles.countTextDisabled
   ] as const;
 
+  // Fade/slide out when expired to provide smooth removal
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isExpired) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: -8, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [isExpired, fadeAnim, slideAnim]);
+
   return (
-    <View style={styles.voteBlock}>
+    <Animated.View style={[styles.voteBlock, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
       {/* User info and voting in one row */}
       <View style={styles.voteRow}>
         {/* User info */}
@@ -158,7 +171,7 @@ function IndividualVoteBlock({
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
