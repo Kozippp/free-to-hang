@@ -166,6 +166,16 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     loadInvitationPolls();
   }, [latestPlan.id, latestPlan.lastUpdatedAt]); // Also reload when plan data changes (realtime updates)
 
+  // Helper to refresh invitation polls (used after vote or expiry)
+  const refreshInvitationPolls = React.useCallback(async () => {
+    try {
+      const polls = await plansService.getInvitationPolls(latestPlan.id);
+      setInvitationPolls(polls);
+    } catch (error) {
+      console.error('Error refreshing invitation polls:', error);
+    }
+  }, [latestPlan.id]);
+
   // Process expired invitation polls periodically
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -922,7 +932,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             pendingParticipants={pendingParticipants}
             invitationPolls={invitationPolls || []}
             onInvite={handleInviteFriends}
-            onInvitationVote={handleInvitationVote}
+            onInvitationVote={async (pollId, vote) => {
+              await handleInvitationVote(pollId, vote);
+              // After successful vote, refresh list to remove finished ones
+              refreshInvitationPolls();
+            }}
             canInvite={isInYesGang}
             isInYesGang={isInYesGang}
           />
