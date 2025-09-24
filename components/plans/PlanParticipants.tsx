@@ -124,6 +124,9 @@ export default function PlanParticipants({
                   }
                 }}
                 canVote={isInYesGang}
+                onExpired={() => {
+                  // Parent will re-render with fewer polls when higher level state is refreshed
+                }}
               />
             );
           })}

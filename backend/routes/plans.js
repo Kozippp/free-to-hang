@@ -1909,8 +1909,10 @@ router.get('/:id/invitation-polls', requireAuth, async (req, res) => {
       userVotesMap[vote.poll_id] = vote.vote;
     });
 
-    // Transform data to match frontend format
-    const transformedPolls = polls.map(poll => ({
+    // Transform data to match frontend format AND filter out those already expired client-side
+    const transformedPolls = polls
+      .filter(poll => new Date(poll.expires_at) > new Date())
+      .map(poll => ({
       id: poll.id,
       invitedUser: {
         id: poll.invited_user_id,

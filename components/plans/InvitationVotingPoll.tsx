@@ -15,6 +15,7 @@ interface InvitationVotingPollProps {
   poll: InvitationPoll;
   onVote: (pollId: string, vote: 'allow' | 'deny') => void;
   canVote: boolean;
+  onExpired?: (pollId: string) => void;
 }
 
 interface IndividualVoteBlockProps {
@@ -164,9 +165,11 @@ function IndividualVoteBlock({
 export default function InvitationVotingPoll({
   poll,
   onVote,
-  canVote
+  canVote,
+  onExpired
 }: InvitationVotingPollProps) {
   const [timeLeft, setTimeLeft] = useState(0);
+  const [expiredNotified, setExpiredNotified] = useState(false);
 
   useEffect(() => {
     if (!poll.expiresAt) return;
@@ -184,6 +187,16 @@ export default function InvitationVotingPoll({
   }, [poll.expiresAt]);
 
   const isExpired = timeLeft === 0;
+
+  // Notify parent when this poll expires so it can be removed/refreshed
+  useEffect(() => {
+    if (isExpired && !expiredNotified) {
+      setExpiredNotified(true);
+      if (onExpired) {
+        onExpired(poll.id);
+      }
+    }
+  }, [isExpired, expiredNotified, onExpired, poll.id]);
 
   const handleVote = (accept: boolean) => {
     if (isExpired || !canVote) return;
