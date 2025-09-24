@@ -156,12 +156,7 @@ SELECT
   -- Vote counts
   COALESCE(stats.allow_votes, 0) as allow_votes,
   COALESCE(stats.deny_votes, 0) as deny_votes,
-  COALESCE(stats.total_votes, 0) as total_votes,
-  -- Current user vote
-  CASE
-    WHEN current_vote.vote IS NOT NULL THEN current_vote.vote
-    ELSE NULL
-  END as current_user_vote
+  COALESCE(stats.total_votes, 0) as total_votes
 FROM invitation_polls ip
 JOIN users u ON u.id = ip.invited_user_id
 JOIN users creator ON creator.id = ip.created_by
@@ -175,7 +170,8 @@ LEFT JOIN (
   FROM invitation_poll_votes
   GROUP BY poll_id
 ) stats ON stats.poll_id = ip.id
-LEFT JOIN invitation_poll_votes current_vote ON current_vote.poll_id = ip.id AND current_vote.user_id = auth.uid();
+-- Note: current_user_vote is calculated in the backend route handler
+-- LEFT JOIN invitation_poll_votes current_vote ON current_vote.poll_id = ip.id AND current_vote.user_id = auth.uid();
 
 -- Grant permissions
 GRANT SELECT ON invitation_poll_details TO authenticated;
