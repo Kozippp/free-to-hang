@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Animated,
 } from 'react-native';
 import { Clock, Check, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -71,13 +72,13 @@ function IndividualVoteBlock({
     styles.countText,
     acceptSelected ? styles.countTextSelected : styles.countTextAccept,
     isDisabled && styles.countTextDisabled
-  ] as const;
+  ].filter(Boolean);
 
   const denyCountTextStyle = [
     styles.countText,
     denySelected ? styles.countTextSelected : styles.countTextDeny,
     isDisabled && styles.countTextDisabled
-  ] as const;
+  ].filter(Boolean);
 
   // Fade/slide out when expired to provide smooth removal
   const fadeAnim = useRef(new Animated.Value(1)).current;
