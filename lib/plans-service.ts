@@ -188,6 +188,9 @@ class PlansService {
       });
 
       console.log('🌐 Response status:', response.status);
+      if (response.status === 204) {
+        return null as any;
+      }
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Network error' }));
         console.log('🌐 Error response:', error);
@@ -549,6 +552,14 @@ canUserVote(plan: Plan, userId: string): boolean {
         body: JSON.stringify({ invitedUserIds })
       });
       console.log('✅ Invitation polls created successfully');
+      if (plan === null) {
+        // No polls created (204) – fetch latest plan to keep UI in sync
+        const all = await this.getPlans('active');
+        const found = all.find(p => p.id === planId);
+        if (found) return found;
+        // fall back to returning a minimal object to avoid breaking callers
+        throw new Error('No new polls created (204)');
+      }
       return plan;
     } catch (error) {
       console.error('❌ Error creating invitation polls:', error);
