@@ -7,7 +7,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { Clock, Check, X, CheckCircle } from 'lucide-react-native';
+import { Clock, Check, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { InvitationPoll } from '@/lib/plans-service';
 
@@ -106,9 +106,6 @@ function IndividualVoteBlock({
             ]}>
               {allowVotes}
             </Text>
-            {userVoteChoice === 'accept' && (
-              <CheckCircle size={12} color="white" style={styles.yourChoiceIndicator} />
-            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -147,9 +144,6 @@ function IndividualVoteBlock({
             ]}>
               {denyVotes}
             </Text>
-            {userVoteChoice === 'deny' && (
-              <CheckCircle size={12} color="white" style={styles.yourChoiceIndicator} />
-            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -264,16 +258,6 @@ const styles = StyleSheet.create({
     minWidth: 50,
     justifyContent: 'center',
   },
-  yourChoiceIndicator: {
-    marginLeft: 6,
-    shadowColor: 'white',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.8,
-    shadowRadius: 2,
-  },
   acceptButton: {
     borderColor: '#4CAF50',
     backgroundColor: 'transparent',
@@ -298,7 +282,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -2, // kompenseerime scale'i poolt lisatud ruumi
   },
   selectedDenyButton: {
-    backgroundColor: '#F55555',
+    backgroundColor: '#F44336',
     borderColor: '#F44336',
     borderWidth: 2,
     shadowColor: '#F44336',
