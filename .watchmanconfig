@@ -1,0 +1,15 @@
+{
+  "ignore_dirs": [
+    "node_modules",
+    "ios",
+    "android",
+    ".git",
+    "assets",
+    "backend",
+    "docs",
+    "scripts",
+    "supabase",
+    ".expo",
+    ".expo-shared"
+  ]
+}
