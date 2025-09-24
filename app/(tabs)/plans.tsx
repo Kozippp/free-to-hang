@@ -46,7 +46,7 @@ export default function PlansScreen() {
     return () => {
       stopRealTimeUpdates();
     };
-  }, [loadPlans, user?.id, startRealTimeUpdates, stopRealTimeUpdates]);
+  }, [user?.id]); // Only depend on user.id to avoid infinite loops
 
   // Handle pull-to-refresh
   const handleRefresh = async () => {

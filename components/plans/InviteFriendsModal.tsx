@@ -46,13 +46,6 @@ export default function InviteFriendsModal({
   // Get IDs of users already in the plan
   const existingUserIds = plan.participants.map(p => p.id);
 
-  // Load friends when modal opens
-  useEffect(() => {
-    if (visible && user) {
-      loadFriends();
-    }
-  }, [visible, user, loadFriends]);
-
   // Map friends data to FriendUser format for display
   const allFriends: FriendUser[] = friends.map(friend => ({
     id: friend.friend_id,

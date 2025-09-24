@@ -112,7 +112,7 @@ export default function ProfileScreen() {
       console.log('👥 Stopping friends realtime when leaving profile tab...');
       stopRealTimeUpdates();
     };
-  }, [authUser, startRealTimeUpdates, stopRealTimeUpdates, loadAllRelationships]);
+  }, [authUser]); // Only depend on authUser to avoid infinite loops
 
   // Update local state when hangStore data changes
   useEffect(() => {
