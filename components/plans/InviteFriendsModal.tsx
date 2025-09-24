@@ -15,6 +15,7 @@ import Colors from '@/constants/colors';
 import { Plan } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
 import useFriendsStore from '@/store/friendsStore';
+import { InvitationPoll } from '@/lib/plans-service';
 
 interface InviteFriendsModalProps {
   visible: boolean;
@@ -22,6 +23,7 @@ interface InviteFriendsModalProps {
   onInvite: (friendIds: string[]) => void;
   onCreateInvitationPoll: (friendIds: string[], friendNames: string[]) => void;
   plan: Plan;
+  invitationPolls?: InvitationPoll[];
 }
 
 interface FriendUser {
@@ -36,7 +38,8 @@ export default function InviteFriendsModal({
   onClose,
   onInvite,
   onCreateInvitationPoll,
-  plan
+  plan,
+  invitationPolls = []
 }: InviteFriendsModalProps) {
   const { user } = useAuth();
   const { friends, isLoadingFriends, loadFriends } = useFriendsStore();
@@ -46,6 +49,11 @@ export default function InviteFriendsModal({
   // Get IDs of users already in the plan
   const existingUserIds = plan.participants.map(p => p.id);
 
+  // Get IDs of users with active invitation polls
+  const activeInvitationUserIds = invitationPolls
+    .filter(poll => !poll.isExpired)
+    .map(poll => poll.invitedUser.id);
+
   // Map friends data to FriendUser format for display
   const allFriends: FriendUser[] = friends.map(friend => ({
     id: friend.friend_id,
@@ -54,9 +62,10 @@ export default function InviteFriendsModal({
     avatar: friend.friend_avatar_url
   }));
 
-  // Filter out users already in the plan
+  // Filter out users already in the plan and users with active invitation polls
+  const unavailableUserIds = [...existingUserIds, ...activeInvitationUserIds];
   const availableFriends = allFriends.filter(friend =>
-    !existingUserIds.includes(friend.id)
+    !unavailableUserIds.includes(friend.id)
   );
 
   // Filter friends based on search query

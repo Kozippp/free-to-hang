@@ -164,7 +164,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     };
 
     loadInvitationPolls();
-  }, [latestPlan.id, latestPlan.updatedAt]); // Also reload when plan data changes (realtime updates)
+  }, [latestPlan.id, latestPlan.lastUpdatedAt]); // Also reload when plan data changes (realtime updates)
 
   // Process expired invitation polls periodically
   React.useEffect(() => {
@@ -993,6 +993,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         }}
         onCreateInvitationPoll={handleCreateInvitationPoll}
         plan={latestPlan}
+        invitationPolls={invitationPolls}
       />
       
       {/* Response Confirmation Modal */}
