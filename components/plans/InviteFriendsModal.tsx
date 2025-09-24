@@ -14,6 +14,7 @@ import { X, Check, Search, UserPlus, Link, Mail } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
+import useFriendsStore from '@/store/friendsStore';
 
 interface InviteFriendsModalProps {
   visible: boolean;
@@ -38,67 +39,30 @@ export default function InviteFriendsModal({
   plan
 }: InviteFriendsModalProps) {
   const { user } = useAuth();
+  const { friends, isLoadingFriends, loadFriends } = useFriendsStore();
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Get IDs of users already in the plan
   const existingUserIds = plan.participants.map(p => p.id);
 
-  // Mock friends data - in a real app, this would come from a backend
-  // Filter out users who are already in the plan
-  const allMockFriends = [
-    {
-      id: '1',
-      name: 'Alice Smith',
-      username: 'alice_smith',
-      avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face'
-    },
-    {
-      id: '2',
-      name: 'Bob Johnson',
-      username: 'bob_j',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face'
-    },
-    {
-      id: '3',
-      name: 'Carol Davis',
-      username: 'carol_d',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face'
-    },
-    {
-      id: '4',
-      name: 'David Wilson',
-      username: 'david_w',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
-    },
-    {
-      id: '5',
-      name: 'Emma Brown',
-      username: 'emma_b',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face'
-    },
-    {
-      id: '6',
-      name: 'Frank Miller',
-      username: 'frank_m',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face'
-    },
-    {
-      id: '7',
-      name: 'Grace Lee',
-      username: 'grace_l',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face'
-    },
-    {
-      id: '8',
-      name: 'Henry Taylor',
-      username: 'henry_t',
-      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face'
+  // Load friends when modal opens
+  useEffect(() => {
+    if (visible && user) {
+      loadFriends();
     }
-  ];
+  }, [visible, user, loadFriends]);
+
+  // Map friends data to FriendUser format for display
+  const allFriends: FriendUser[] = friends.map(friend => ({
+    id: friend.friend_id,
+    name: friend.friend_name,
+    username: friend.friend_username,
+    avatar: friend.friend_avatar_url
+  }));
 
   // Filter out users already in the plan
-  const availableFriends = allMockFriends.filter(friend =>
+  const availableFriends = allFriends.filter(friend =>
     !existingUserIds.includes(friend.id)
   );
 
@@ -174,39 +138,52 @@ export default function InviteFriendsModal({
           </View>
           
           <ScrollView style={styles.friendsList}>
-            {filteredFriends.map((friend) => (
-              <TouchableOpacity
-                key={friend.id}
-                style={[
-                  styles.friendItem,
-                  selectedFriends.includes(friend.id) && styles.selectedFriendItem
-                ]}
-                onPress={() => toggleFriendSelection(friend.id)}
-              >
-                <Image source={{ uri: friend.avatar }} style={styles.friendAvatar} />
-                <View style={styles.friendInfo}>
-                  <Text style={styles.friendName}>{friend.name}</Text>
-                  <Text style={styles.friendStatus}>
-                    {friend.status === 'offline' ? `Last seen ${friend.lastSeen}` : 'Online'}
+            {isLoadingFriends ? (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Loading friends...</Text>
+              </View>
+            ) : (
+              <>
+                {filteredFriends.map((friend) => (
+                  <TouchableOpacity
+                    key={friend.id}
+                    style={[
+                      styles.friendItem,
+                      selectedFriends.includes(friend.id) && styles.selectedFriendItem
+                    ]}
+                    onPress={() => toggleFriendSelection(friend.id)}
+                  >
+                    <Image source={{ uri: friend.avatar }} style={styles.friendAvatar} />
+                    <View style={styles.friendInfo}>
+                      <Text style={styles.friendName}>{friend.name}</Text>
+                      {friend.username && (
+                        <Text style={styles.friendStatus}>
+                          @{friend.username}
+                        </Text>
+                      )}
+                    </View>
+
+                    {selectedFriends.includes(friend.id) ? (
+                      <View style={styles.checkmark}>
+                        <Check size={16} color="white" />
+                      </View>
+                    ) : (
+                      <View style={styles.addButton}>
+                        <UserPlus size={16} color={Colors.light.primary} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+
+                {filteredFriends.length === 0 && !isLoadingFriends && (
+                  <Text style={styles.noResultsText}>
+                    {allFriends.length === 0
+                      ? "You don't have any friends yet"
+                      : `No friends found matching "${searchQuery}"`
+                    }
                   </Text>
-                </View>
-                
-                {selectedFriends.includes(friend.id) ? (
-                  <View style={styles.checkmark}>
-                    <Check size={16} color="white" />
-                  </View>
-                ) : (
-                  <View style={styles.addButton}>
-                    <UserPlus size={16} color={Colors.light.primary} />
-                  </View>
                 )}
-              </TouchableOpacity>
-            ))}
-            
-            {filteredFriends.length === 0 && (
-              <Text style={styles.noResultsText}>
-                No friends found matching "{searchQuery}"
-              </Text>
+              </>
             )}
           </ScrollView>
           
@@ -431,5 +408,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.light.primary,
     marginLeft: 8,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
   },
 });
