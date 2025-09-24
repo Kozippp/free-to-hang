@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -2, // kompenseerime scale'i poolt lisatud ruumi
   },
   selectedDenyButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#F55555',
     borderColor: '#F44336',
     borderWidth: 2,
     shadowColor: '#F44336',

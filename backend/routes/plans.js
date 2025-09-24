@@ -1886,6 +1886,25 @@ router.get('/:id/invitation-polls', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch invitation polls' });
     }
 
+    // Get current user's votes for these polls
+    const pollIds = polls.map(poll => poll.id);
+    const { data: userVotes, error: votesError } = await supabase
+      .from('invitation_poll_votes')
+      .select('poll_id, vote')
+      .in('poll_id', pollIds)
+      .eq('user_id', userId);
+
+    if (votesError) {
+      console.error('Error fetching user votes:', votesError);
+      return res.status(500).json({ error: 'Failed to fetch user votes' });
+    }
+
+    // Create a map of poll_id -> vote for quick lookup
+    const userVotesMap = {};
+    userVotes.forEach(vote => {
+      userVotesMap[vote.poll_id] = vote.vote;
+    });
+
     // Transform data to match frontend format
     const transformedPolls = polls.map(poll => ({
       id: poll.id,
@@ -1904,7 +1923,7 @@ router.get('/:id/invitation-polls', requireAuth, async (req, res) => {
       expiresAt: poll.expires_at,
       allowVotes: poll.allow_votes,
       denyVotes: poll.deny_votes,
-      currentUserVote: poll.current_user_vote,
+      currentUserVote: userVotesMap[poll.id] || null,
       canVote: participant.status === 'going'
     }));
 
