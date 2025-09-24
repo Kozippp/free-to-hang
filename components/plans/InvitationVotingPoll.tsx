@@ -74,7 +74,10 @@ function IndividualVoteBlock({
             style={[
               styles.voteButton,
               styles.acceptButton,
-              userVoteChoice === 'accept' && styles.selectedButton,
+              userVoteChoice === 'accept' && [
+                styles.selectedButton,
+                { backgroundColor: '#4CAF50', borderColor: '#4CAF50', borderWidth: 2 }
+              ],
               (isExpired || !canVote) && styles.disabledButton
             ]}
             onPress={() => {
@@ -112,7 +115,10 @@ function IndividualVoteBlock({
             style={[
               styles.voteButton,
               styles.denyButton,
-              userVoteChoice === 'deny' && styles.selectedDenyButton,
+              userVoteChoice === 'deny' && [
+                styles.selectedDenyButton,
+                { backgroundColor: '#F44336', borderColor: '#F44336', borderWidth: 2 }
+              ],
               (isExpired || !canVote) && styles.disabledButton
             ]}
             onPress={() => {
