@@ -1796,12 +1796,14 @@ router.post('/:id/invitation-polls', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'All selected users are already in the plan' });
     }
 
-    // Check for existing active invitation polls for these users
+    // Check for existing non-expired active invitation polls for these users
+    const nowIso = new Date().toISOString();
     const { data: existingPolls, error: pollsError } = await supabase
       .from('invitation_polls')
-      .select('invited_user_id')
+      .select('invited_user_id, expires_at')
       .eq('plan_id', id)
       .eq('status', 'active')
+      .gt('expires_at', nowIso)
       .in('invited_user_id', validUserIds);
 
     if (pollsError) {
@@ -1812,8 +1814,9 @@ router.post('/:id/invitation-polls', requireAuth, async (req, res) => {
     const existingPollUserIds = existingPolls?.map(p => p.invited_user_id) || [];
     const finalUserIds = validUserIds.filter(id => !existingPollUserIds.includes(id));
 
+    // It's ok if length is 0 - respond with 204 to indicate nothing created
     if (finalUserIds.length === 0) {
-      return res.status(400).json({ error: 'All selected users already have active invitation polls' });
+      return res.status(204).json({});
     }
 
     // Create invitation polls for each user
