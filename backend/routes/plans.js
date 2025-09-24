@@ -1988,6 +1988,7 @@ router.post('/:id/invitation-polls/:pollId/vote', requireAuth, async (req, res) 
       .from('invitation_poll_votes')
       .upsert({
         poll_id: pollId,
+        plan_id: id, // Added plan_id for performance
         user_id: userId,
         vote: vote
       }, {

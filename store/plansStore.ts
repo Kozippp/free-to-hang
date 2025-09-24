@@ -1589,28 +1589,42 @@ function handleInvitationPollVotesChange(payload: any, currentUserId: string) {
   }
 
   // Handle invitation_poll_votes table changes (INSERT/UPDATE events)
-  // Note: invitation_poll_votes table doesn't have plan_id, so we refresh all plans
-  // This is less efficient but votes are less frequent than polls themselves
-  if (newRecord && pollId) {
-    const debouncedRefresh = async () => {
-      try {
-        console.log('🔄 Starting invitation poll votes update for:', pollId);
+  if (payload.table === 'invitation_poll_votes' && newRecord && pollId) {
+    const planId = newRecord.plan_id;
+
+    if (planId) {
+      const debouncedRefresh = async () => {
+        try {
+          console.log('🔄 Starting invitation poll votes update for plan:', planId, 'poll:', pollId);
+          const { loadPlan } = usePlansStore.getState();
+          await loadPlan(planId, currentUserId);
+          console.log('✅ Plan updated after invitation poll votes change for poll:', pollId);
+        } catch (error) {
+          console.error('❌ Error updating plan after invitation poll votes change:', error);
+        }
+      };
+
+      // Clear existing timeout
+      if (invitationPollsRefreshTimeout) {
+        clearTimeout(invitationPollsRefreshTimeout);
+      }
+
+      // Shorter debounce for invitation polls since they expire quickly - 1000ms
+      console.log('⏰ Setting debounce timeout for invitation poll:', pollId, 'Duration: 1000ms');
+      invitationPollsRefreshTimeout = setTimeout(debouncedRefresh, 1000);
+    } else {
+      console.warn('⚠️ No plan_id found in invitation_poll_votes payload, falling back to loadPlans');
+      // Fallback to old behavior if plan_id is missing
+      const debouncedRefresh = async () => {
         const { loadPlans } = usePlansStore.getState();
         await loadPlans(currentUserId);
-        console.log('✅ Plans updated after invitation poll votes change for poll:', pollId);
-      } catch (error) {
-        console.error('❌ Error updating plans after invitation poll votes change:', error);
+      };
+
+      if (invitationPollsRefreshTimeout) {
+        clearTimeout(invitationPollsRefreshTimeout);
       }
-    };
-
-    // Clear existing timeout
-    if (invitationPollsRefreshTimeout) {
-      clearTimeout(invitationPollsRefreshTimeout);
+      invitationPollsRefreshTimeout = setTimeout(debouncedRefresh, 1000);
     }
-
-    // Shorter debounce for invitation polls since they expire quickly - 1000ms
-    console.log('⏰ Setting debounce timeout for invitation poll:', pollId, 'Duration: 1000ms');
-    invitationPollsRefreshTimeout = setTimeout(debouncedRefresh, 1000);
   }
 }
 

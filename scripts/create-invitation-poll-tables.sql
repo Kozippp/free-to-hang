@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS invitation_polls (
 CREATE TABLE IF NOT EXISTS invitation_poll_votes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   poll_id UUID NOT NULL REFERENCES invitation_polls(id) ON DELETE CASCADE,
+  plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE, -- Added for performance
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   vote TEXT NOT NULL CHECK (vote IN ('allow', 'deny')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -29,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_invitation_polls_invited_user_id ON invitation_po
 CREATE INDEX IF NOT EXISTS idx_invitation_polls_status ON invitation_polls(status);
 CREATE INDEX IF NOT EXISTS idx_invitation_polls_expires_at ON invitation_polls(expires_at);
 CREATE INDEX IF NOT EXISTS idx_invitation_poll_votes_poll_id ON invitation_poll_votes(poll_id);
+CREATE INDEX IF NOT EXISTS idx_invitation_poll_votes_plan_id ON invitation_poll_votes(plan_id);
 CREATE INDEX IF NOT EXISTS idx_invitation_poll_votes_user_id ON invitation_poll_votes(user_id);
 
 -- Function to process expired invitation polls
@@ -193,3 +195,27 @@ LEFT JOIN (
 GRANT SELECT ON invitation_poll_details TO authenticated;
 GRANT ALL ON invitation_polls TO authenticated;
 GRANT ALL ON invitation_poll_votes TO authenticated;
+
+-- Migration: Add plan_id column to invitation_poll_votes if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'invitation_poll_votes'
+    AND column_name = 'plan_id'
+  ) THEN
+    -- Add the column
+    ALTER TABLE invitation_poll_votes ADD COLUMN plan_id UUID REFERENCES plans(id) ON DELETE CASCADE;
+
+    -- Populate existing data
+    UPDATE invitation_poll_votes
+    SET plan_id = ip.plan_id
+    FROM invitation_polls ip
+    WHERE invitation_poll_votes.poll_id = ip.id;
+
+    -- Make it NOT NULL after populating
+    ALTER TABLE invitation_poll_votes ALTER COLUMN plan_id SET NOT NULL;
+
+    RAISE NOTICE 'Added plan_id column to invitation_poll_votes and populated existing data';
+  END IF;
+END $$;
