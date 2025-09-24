@@ -123,7 +123,7 @@ function IndividualVoteBlock({
           >
             <View style={styles.voteButtonContent}>
               <Check size={16} color={acceptIconColor} />
-              <Text style={acceptCountTextStyle}>{allowVotes}</Text>
+              <Text style={acceptCountTextStyle}>{String(allowVotes ?? 0)}</Text>
             </View>
           </TouchableOpacity>
 
@@ -152,7 +152,7 @@ function IndividualVoteBlock({
           >
             <View style={styles.voteButtonContent}>
               <X size={16} color={denyIconColor} />
-              <Text style={denyCountTextStyle}>{denyVotes}</Text>
+              <Text style={denyCountTextStyle}>{String(denyVotes ?? 0)}</Text>
             </View>
           </TouchableOpacity>
         </View>
