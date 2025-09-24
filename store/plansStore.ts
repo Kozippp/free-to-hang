@@ -44,6 +44,7 @@ export interface Plan {
   participants: Participant[];
   date: string;
   location: string;
+  status?: 'active' | 'completed'; // Plan status
   isRead: boolean;
   createdAt: string;
   lastUpdatedAt?: string; // Track when plan was last updated
@@ -53,6 +54,43 @@ export interface Plan {
   completionVotes?: string[]; // Array of participant IDs who voted for completion
   attendanceRecord?: Record<string, boolean>; // Track attendance for completed plans
 }
+
+// Helper function to transform API plan to store format
+const transformPlanForStore = (plan: any, currentUserId: string): Plan => {
+  const userParticipant = plan.participants.find((p: any) => p.id === currentUserId);
+  const userStatus = (userParticipant?.status || (userParticipant as any)?.response) || 'pending';
+
+  return {
+    id: plan.id,
+    title: plan.title,
+    description: plan.description,
+    type: plan.isAnonymous ? 'anonymous' : 'normal',
+    creator: plan.creator ? {
+      id: plan.creator.id === currentUserId ? 'current' : plan.creator.id,
+      name: plan.creator.name,
+      avatar: plan.creator.avatar_url || ''
+    } : null,
+    participants: plan.participants.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      avatar: p.avatar || '',
+      status: (p.status || (p as any).response) as ParticipantStatus,
+      conditionalFriends: p.conditionalFriends
+    })),
+    date: plan.date,
+    location: plan.location,
+    status: plan.status || 'active',
+    isRead: true, // Mark as read for now
+    createdAt: plan.createdAt,
+    lastUpdatedAt: plan.updatedAt,
+    hasUnreadUpdates: false,
+    completionVotes: plan.completionVotes || [],
+    polls: plan.polls ? plan.polls.map((poll: any) => ({
+      ...poll,
+      expiresAt: poll.expiresAt ? new Date(poll.expiresAt).getTime() : undefined
+    })) : []
+  };
+};
 
 // Helper function to ensure all plans have required fields
 const ensurePlanDefaults = (plan: any): Plan => {
@@ -65,22 +103,26 @@ const ensurePlanDefaults = (plan: any): Plan => {
 };
 
 interface PlansState {
-  invitations: Plan[];
-  activePlans: Plan[];
-  completedPlans: Plan[];
+  plans: Record<string, Plan>; // planId -> Plan
+  invitations: Plan[]; // computed from plans
+  activePlans: Plan[]; // computed from plans
+  completedPlans: Plan[]; // computed from plans
   isLoading: boolean;
   currentUserId?: string;
-  
+
   // API Actions
   loadPlans: (userId?: string) => Promise<void>;
+  loadPlan: (planId: string, userId?: string) => Promise<void>; // Load single plan
+  updatePlan: (planId: string, plan: Plan) => void; // Update single plan
   createPlan: (planData: any) => Promise<void>;
+  recalculatePlanArrays: () => void; // Recalculate computed arrays from plans object
   // markPlanAsSeen: (planId: string) => Promise<void>; // TODO: Enable when backend is ready
-  
+
   // Real-time subscriptions
   startRealTimeUpdates: (userId: string) => Promise<void>;
   stopRealTimeUpdates: () => void;
   checkAndRestartSubscriptions: (userId: string) => Promise<void>;
-  
+
   // Actions
   markAsRead: (planId: string) => void;
   respondToPlan: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => Promise<void>;
@@ -147,83 +189,114 @@ let pollVotesRefreshTimeout: NodeJS.Timeout | null = null;
 let updatingPolls = new Set<string>();
 
 const usePlansStore = create<PlansState>((set, get) => ({
+  plans: {},
   invitations: [],
   activePlans: [],
   completedPlans: [],
   isLoading: false,
   currentUserId: undefined,
-  
+
+  // Load single plan from API
+  loadPlan: async (planId: string, userId?: string) => {
+    try {
+      console.log('📋 Loading single plan from API:', planId);
+      const plan = await plansService.getPlan(planId);
+      console.log('✅ Single plan loaded from API:', planId);
+
+      const currentUserId = userId || get().currentUserId || 'unknown';
+      const transformedPlan = transformPlanForStore(plan, currentUserId);
+
+      // Update plans object
+      set(state => ({
+        plans: {
+          ...state.plans,
+          [planId]: transformedPlan
+        }
+      }));
+
+      // Recalculate computed arrays
+      get().recalculatePlanArrays();
+
+      console.log('✅ Single plan updated in store:', planId);
+    } catch (error) {
+      console.error('❌ Error loading single plan:', error);
+      throw error;
+    }
+  },
+
+  // Update single plan in state
+  updatePlan: (planId: string, plan: Plan) => {
+    set(state => ({
+      plans: {
+        ...state.plans,
+        [planId]: plan
+      }
+    }));
+
+    // Recalculate computed arrays
+    get().recalculatePlanArrays();
+  },
+
+  // Recalculate invitation/active/completed arrays from plans object
+  recalculatePlanArrays: () => {
+    const state = get();
+    const plans = Object.values(state.plans);
+    const currentUserId = state.currentUserId || 'unknown';
+
+    const invitations: Plan[] = [];
+    const activePlans: Plan[] = [];
+    const completedPlans: Plan[] = [];
+
+    plans.forEach(plan => {
+      const currentUser = plan.participants.find(p => p.id === currentUserId);
+      const userStatus = currentUser?.status || 'pending';
+
+      if (plan.status === 'completed') {
+        completedPlans.push(plan);
+      } else if (userStatus === 'going' || userStatus === 'maybe' || userStatus === 'conditional') {
+        activePlans.push(plan);
+      } else {
+        invitations.push(plan);
+      }
+    });
+
+    set({
+      invitations,
+      activePlans,
+      completedPlans
+    });
+  },
+
   // Load plans from API
   loadPlans: async (userId?: string) => {
     try {
       set({ isLoading: true });
       console.log('📋 Loading plans from API...');
-      
+
       const plans = await plansService.getPlans();
       console.log('✅ Plans loaded from API:', plans.length);
-      
-      // Separate plans into categories based on user's participation status
+
       const currentUserId = userId || get().currentUserId || 'unknown';
-      
-      const invitations: Plan[] = [];
-      const activePlans: Plan[] = [];
-      const completedPlans: Plan[] = [];
-      
+
+      // Update plans object
+      const plansObject: Record<string, Plan> = {};
       plans.forEach(plan => {
-        const userParticipant = plan.participants.find(p => p.id === currentUserId);
-        const userStatus = (userParticipant?.status || (userParticipant as any)?.response) || 'pending';
-        
-        // Transform API plan to store format
-        const transformedPlan: Plan = {
-          id: plan.id,
-          title: plan.title,
-          description: plan.description,
-          type: plan.isAnonymous ? 'anonymous' : 'normal',
-          creator: plan.creator ? {
-            id: plan.creator.id === currentUserId ? 'current' : plan.creator.id,
-            name: plan.creator.name,
-            avatar: plan.creator.avatar_url || ''
-          } : null,
-          participants: plan.participants.map(p => ({
-            id: p.id,
-            name: p.name,
-            avatar: p.avatar || '',
-            status: (p.status || (p as any).response) as ParticipantStatus,
-            conditionalFriends: p.conditionalFriends
-          })),
-          date: plan.date,
-          location: plan.location,
-          isRead: true, // Mark as read for now
-          createdAt: plan.createdAt,
-          lastUpdatedAt: plan.updatedAt,
-          hasUnreadUpdates: false,
-          completionVotes: plan.completionVotes || [],
-          polls: plan.polls ? plan.polls.map(poll => ({
-            ...poll,
-            expiresAt: poll.expiresAt ? new Date(poll.expiresAt).getTime() : undefined
-          })) : []
-        };
-        
-        if (plan.status === 'completed') {
-          completedPlans.push(transformedPlan);
-        } else if (userStatus === 'pending') {
-          invitations.push(transformedPlan);
-        } else if (userStatus === 'going' || userStatus === 'maybe' || userStatus === 'conditional') {
-          activePlans.push(transformedPlan);
-        }
+        const transformedPlan = transformPlanForStore(plan, currentUserId);
+        plansObject[plan.id] = transformedPlan;
       });
-      
+
       set({
-        invitations: invitations.map(ensurePlanDefaults),
-        activePlans: activePlans.map(ensurePlanDefaults),
-        completedPlans: completedPlans.map(ensurePlanDefaults),
+        plans: plansObject,
         isLoading: false
       });
-      
+
+      // Recalculate computed arrays
+      get().recalculatePlanArrays();
+
     } catch (error) {
       console.error('❌ Error loading plans:', error);
       set({ isLoading: false });
-      // Keep mock data on error for now
+      // Keep existing data on error
     }
   },
   
@@ -1327,15 +1400,15 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     const planId = newRecord.plan_id;
     const triggeredBy = newRecord.triggered_by;
 
-    // Debounced refresh to prevent rate limiting
+    // Debounced refresh for specific plan
     const debouncedRefresh = () => {
-      const { loadPlans } = usePlansStore.getState();
-      console.log('🔄 Debounced refresh triggered for update type:', updateType);
+      const { loadPlan } = usePlansStore.getState();
+      console.log('🔄 Debounced refresh triggered for plan:', planId, 'update type:', updateType);
 
-      loadPlans(currentUserId).then(() => {
-        console.log('✅ Plans refreshed after update:', updateType);
+      loadPlan(planId, currentUserId).then(() => {
+        console.log('✅ Plan refreshed after update:', planId, updateType);
       }).catch(error => {
-        console.error('❌ Error refreshing plans after update:', error);
+        console.error('❌ Error refreshing plan after update:', error);
       });
     };
 
@@ -1366,16 +1439,22 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
 // Handle participants table changes
 function handleParticipantsChange(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
+  const planId = newRecord?.plan_id || oldRecord?.plan_id;
 
-  console.log('👥 Processing participants table change:', { eventType, currentUserId });
+  console.log('👥 Processing participants table change:', { eventType, planId, currentUserId });
 
-  // Debounced refresh to prevent rate limiting
+  if (!planId) {
+    console.warn('⚠️ No plan_id found in participants change payload');
+    return;
+  }
+
+  // Debounced refresh for specific plan
   const debouncedRefresh = () => {
-    const { loadPlans } = usePlansStore.getState();
-    loadPlans(currentUserId).then(() => {
-      console.log('✅ Plans updated after participants table change');
+    const { loadPlan } = usePlansStore.getState();
+    loadPlan(planId, currentUserId).then(() => {
+      console.log('✅ Plan updated after participants table change:', planId);
     }).catch(error => {
-      console.error('❌ Error updating plans after participants table change:', error);
+      console.error('❌ Error updating plan after participants table change:', error);
     });
   };
 
@@ -1391,16 +1470,22 @@ function handleParticipantsChange(payload: any, currentUserId: string) {
 // Handle polls table changes
 function handlePollsChange(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
+  const planId = newRecord?.plan_id || oldRecord?.plan_id;
 
-  console.log('📊 Processing polls table change:', { eventType, currentUserId });
+  console.log('📊 Processing polls table change:', { eventType, planId, currentUserId });
 
-  // Debounced refresh to prevent rate limiting
+  if (!planId) {
+    console.warn('⚠️ No plan_id found in polls change payload');
+    return;
+  }
+
+  // Debounced refresh for specific plan
   const debouncedRefresh = () => {
-    const { loadPlans } = usePlansStore.getState();
-    loadPlans(currentUserId).then(() => {
-      console.log('✅ Plans updated after polls table change');
+    const { loadPlan } = usePlansStore.getState();
+    loadPlan(planId, currentUserId).then(() => {
+      console.log('✅ Plan updated after polls table change:', planId);
     }).catch(error => {
-      console.error('❌ Error updating plans after polls table change:', error);
+      console.error('❌ Error updating plan after polls table change:', error);
     });
   };
 
@@ -1480,32 +1565,36 @@ function handleInvitationPollVotesChange(payload: any, currentUserId: string) {
 
   // Handle invitation_polls table changes (INSERT events when polls are created, DELETE events when polls are removed)
   if (payload.table === 'invitation_polls') {
-    if (eventType === 'INSERT' && newRecord) {
-      console.log('📝 New invitation poll created, refreshing plans immediately:', pollId);
+    const planId = newRecord?.plan_id || oldRecord?.plan_id;
+
+    if (eventType === 'INSERT' && newRecord && planId) {
+      console.log('📝 New invitation poll created, refreshing plan immediately:', planId, pollId);
       // Immediate refresh when new poll is created (no debounce needed)
-      const { loadPlans } = usePlansStore.getState();
-      loadPlans(currentUserId).catch(error => {
-        console.error('❌ Error refreshing plans after invitation poll creation:', error);
+      const { loadPlan } = usePlansStore.getState();
+      loadPlan(planId, currentUserId).catch(error => {
+        console.error('❌ Error refreshing plan after invitation poll creation:', error);
       });
       return;
     }
 
-    if (eventType === 'DELETE' && oldRecord) {
-      console.log('🗑️ Invitation poll deleted, refreshing plans immediately:', pollId);
+    if (eventType === 'DELETE' && oldRecord && planId) {
+      console.log('🗑️ Invitation poll deleted, refreshing plan immediately:', planId, pollId);
       // Immediate refresh when poll is deleted (no debounce needed)
-      const { loadPlans } = usePlansStore.getState();
-      loadPlans(currentUserId).catch(error => {
-        console.error('❌ Error refreshing plans after invitation poll deletion:', error);
+      const { loadPlan } = usePlansStore.getState();
+      loadPlan(planId, currentUserId).catch(error => {
+        console.error('❌ Error refreshing plan after invitation poll deletion:', error);
       });
       return;
     }
   }
 
   // Handle invitation_poll_votes table changes (INSERT/UPDATE events)
+  // Note: invitation_poll_votes table doesn't have plan_id, so we refresh all plans
+  // This is less efficient but votes are less frequent than polls themselves
   if (newRecord && pollId) {
     const debouncedRefresh = async () => {
       try {
-        console.log('🔄 Starting invitation poll update for:', pollId);
+        console.log('🔄 Starting invitation poll votes update for:', pollId);
         const { loadPlans } = usePlansStore.getState();
         await loadPlans(currentUserId);
         console.log('✅ Plans updated after invitation poll votes change for poll:', pollId);
