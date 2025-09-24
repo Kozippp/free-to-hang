@@ -90,24 +90,22 @@ function IndividualVoteBlock({
             }}
             disabled={isExpired || !canVote}
           >
-            <View style={styles.voteButtonContent}>
-              <Check size={16} color={
-                userVoteChoice === 'accept' ? 'white' :
-                (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
-              } />
-              <Text style={[
-                styles.voteCount,
-                {
-                  color: userVoteChoice === 'accept' ? 'white' :
-                         (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
-                }
-              ]}>
-                {allowVotes}
-              </Text>
-              {userVoteChoice === 'accept' && (
-                <CheckCircle size={12} color="white" style={styles.yourChoiceIndicator} />
-              )}
-            </View>
+            <Check size={16} color={
+              userVoteChoice === 'accept' ? 'white' :
+              (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
+            } />
+            <Text style={[
+              styles.voteCount,
+              {
+                color: userVoteChoice === 'accept' ? 'white' :
+                       (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
+              }
+            ]}>
+              {allowVotes}
+            </Text>
+            {userVoteChoice === 'accept' && (
+              <CheckCircle size={12} color="white" style={styles.yourChoiceIndicator} />
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -130,24 +128,22 @@ function IndividualVoteBlock({
             }}
             disabled={isExpired || !canVote}
           >
-            <View style={styles.voteButtonContent}>
-              <X size={16} color={
-                userVoteChoice === 'deny' ? 'white' :
-                (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
-              } />
-              <Text style={[
-                styles.voteCount,
-                {
-                  color: userVoteChoice === 'deny' ? 'white' :
-                         (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
-                }
-              ]}>
-                {denyVotes}
-              </Text>
-              {userVoteChoice === 'deny' && (
-                <CheckCircle size={12} color="white" style={styles.yourChoiceIndicator} />
-              )}
-            </View>
+            <X size={16} color={
+              userVoteChoice === 'deny' ? 'white' :
+              (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
+            } />
+            <Text style={[
+              styles.voteCount,
+              {
+                color: userVoteChoice === 'deny' ? 'white' :
+                       (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
+              }
+            ]}>
+              {denyVotes}
+            </Text>
+            {userVoteChoice === 'deny' && (
+              <CheckCircle size={12} color="white" style={styles.yourChoiceIndicator} />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -262,11 +258,6 @@ const styles = StyleSheet.create({
     minWidth: 50,
     justifyContent: 'center',
   },
-  voteButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-  },
   yourChoiceIndicator: {
     marginLeft: 4,
   },
@@ -280,9 +271,11 @@ const styles = StyleSheet.create({
   },
   selectedButton: {
     backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
   },
   selectedDenyButton: {
     backgroundColor: '#F44336',
+    borderColor: '#F44336',
   },
   disabledButton: {
     opacity: 0.5,
