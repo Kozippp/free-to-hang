@@ -259,7 +259,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   yourChoiceIndicator: {
-    marginLeft: 4,
+    marginLeft: 6,
+    shadowColor: 'white',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 2,
   },
   acceptButton: {
     borderColor: '#4CAF50',
@@ -272,10 +279,30 @@ const styles = StyleSheet.create({
   selectedButton: {
     backgroundColor: '#4CAF50',
     borderColor: '#4CAF50',
+    borderWidth: 2,
+    shadowColor: '#4CAF50',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    transform: [{ scale: 1.05 }],
   },
   selectedDenyButton: {
     backgroundColor: '#F44336',
     borderColor: '#F44336',
+    borderWidth: 2,
+    shadowColor: '#F44336',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    transform: [{ scale: 1.05 }],
   },
   disabledButton: {
     opacity: 0.5,
