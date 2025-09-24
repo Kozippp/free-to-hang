@@ -288,7 +288,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
-    transform: [{ scale: 1.05 }],
+    transform: [{ scaleX: 1.05 }, { scaleY: 1.05 }],
+    marginHorizontal: -2, // kompenseerime scale'i poolt lisatud ruumi
   },
   selectedDenyButton: {
     backgroundColor: '#F44336',
@@ -302,7 +303,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
-    transform: [{ scale: 1.05 }],
+    transform: [{ scaleX: 1.05 }, { scaleY: 1.05 }],
+    marginHorizontal: -2, // kompenseerime scale'i poolt lisatud ruumi
   },
   disabledButton: {
     opacity: 0.5,
