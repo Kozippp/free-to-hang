@@ -72,6 +72,13 @@ export default function InviteFriendsModal({
       setSearchQuery('');
     }
   }, [visible]);
+
+  // Load friends data when modal opens
+  useEffect(() => {
+    if (visible) {
+      loadFriends();
+    }
+  }, [visible, loadFriends]);
   
   const toggleFriendSelection = (friendId: string) => {
     if (selectedFriends.includes(friendId)) {
