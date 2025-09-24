@@ -1796,6 +1796,16 @@ router.post('/:id/invitation-polls', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'All selected users are already in the plan' });
     }
 
+    // Proactively process expired polls to free unique constraints
+    try {
+      const { error: rpcError } = await supabase.rpc('process_expired_invitation_polls');
+      if (rpcError) {
+        console.warn('⚠️ process_expired_invitation_polls RPC error (continuing):', rpcError.message);
+      }
+    } catch (e) {
+      console.warn('⚠️ process_expired_invitation_polls threw (continuing):', e.message);
+    }
+
     // Check for existing non-expired active invitation polls for these users
     const nowIso = new Date().toISOString();
     const { data: existingPolls, error: pollsError } = await supabase
