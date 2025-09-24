@@ -272,11 +272,11 @@ const styles = StyleSheet.create({
   },
   acceptButton: {
     borderColor: '#4CAF50',
-    backgroundColor: `#4CAF5010`,
+    backgroundColor: '#E8F5E8',
   },
   denyButton: {
     borderColor: '#F44336',
-    backgroundColor: `#F4433610`,
+    backgroundColor: '#FFEBEE',
   },
   selectedButton: {
     backgroundColor: '#4CAF50',
