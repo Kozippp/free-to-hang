@@ -7,7 +7,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { Clock, Check, X } from 'lucide-react-native';
+import { Clock, Check, X, CheckCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { InvitationPoll } from '@/lib/plans-service';
 
@@ -90,19 +90,24 @@ function IndividualVoteBlock({
             }}
             disabled={isExpired || !canVote}
           >
-            <Check size={16} color={
-              userVoteChoice === 'accept' ? 'white' : 
-              (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
-            } />
-            <Text style={[
-              styles.voteCount,
-              { 
-                color: userVoteChoice === 'accept' ? 'white' : 
-                       (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50' 
-              }
-            ]}>
-              {allowVotes}
-            </Text>
+            <View style={styles.voteButtonContent}>
+              <Check size={16} color={
+                userVoteChoice === 'accept' ? 'white' :
+                (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
+              } />
+              <Text style={[
+                styles.voteCount,
+                {
+                  color: userVoteChoice === 'accept' ? 'white' :
+                         (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
+                }
+              ]}>
+                {allowVotes}
+              </Text>
+              {userVoteChoice === 'accept' && (
+                <CheckCircle size={12} color="white" style={styles.yourChoiceIndicator} />
+              )}
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -125,19 +130,24 @@ function IndividualVoteBlock({
             }}
             disabled={isExpired || !canVote}
           >
-            <X size={16} color={
-              userVoteChoice === 'deny' ? 'white' : 
-              (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
-            } />
-            <Text style={[
-              styles.voteCount,
-              { 
-                color: userVoteChoice === 'deny' ? 'white' : 
-                       (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336' 
-              }
-            ]}>
-              {denyVotes}
-            </Text>
+            <View style={styles.voteButtonContent}>
+              <X size={16} color={
+                userVoteChoice === 'deny' ? 'white' :
+                (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
+              } />
+              <Text style={[
+                styles.voteCount,
+                {
+                  color: userVoteChoice === 'deny' ? 'white' :
+                         (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
+                }
+              ]}>
+                {denyVotes}
+              </Text>
+              {userVoteChoice === 'deny' && (
+                <CheckCircle size={12} color="white" style={styles.yourChoiceIndicator} />
+              )}
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -178,6 +188,7 @@ export default function InvitationVotingPoll({
 
   return (
     <View style={styles.container}>
+      <Text style={styles.voteTitle}>Your Vote</Text>
       <IndividualVoteBlock
         user={poll.invitedUser}
         timeLeft={timeLeft}
@@ -196,6 +207,13 @@ export default function InvitationVotingPoll({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
+  },
+  voteTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   voteBlock: {
     backgroundColor: 'transparent',
@@ -251,6 +269,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minWidth: 50,
     justifyContent: 'center',
+  },
+  voteButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  yourChoiceIndicator: {
+    marginLeft: 4,
   },
   acceptButton: {
     borderColor: '#4CAF50',
