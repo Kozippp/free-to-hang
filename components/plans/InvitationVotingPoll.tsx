@@ -50,6 +50,46 @@ function IndividualVoteBlock({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  const isDisabled = isExpired || !canVote;
+  const acceptSelected = userVoteChoice === 'accept';
+  const denySelected = userVoteChoice === 'deny';
+
+  const acceptIconColor = acceptSelected
+    ? 'white'
+    : isDisabled
+      ? Colors.light.secondaryText
+      : '#4CAF50';
+
+  const denyIconColor = denySelected
+    ? 'white'
+    : isDisabled
+      ? Colors.light.secondaryText
+      : '#F44336';
+
+  const acceptBadgeStyle = [
+    styles.voteCountBadge,
+    acceptSelected ? styles.voteCountBadgeSelected : styles.voteCountBadgeAccept,
+    isDisabled && styles.voteCountBadgeDisabled
+  ] as const;
+
+  const denyBadgeStyle = [
+    styles.voteCountBadge,
+    denySelected ? styles.voteCountBadgeSelected : styles.voteCountBadgeDeny,
+    isDisabled && styles.voteCountBadgeDisabled
+  ] as const;
+
+  const acceptCountTextStyle = [
+    styles.voteCountText,
+    acceptSelected ? styles.voteCountTextSelected : styles.voteCountTextAccept,
+    isDisabled && styles.voteCountTextDisabled
+  ] as const;
+
+  const denyCountTextStyle = [
+    styles.voteCountText,
+    denySelected ? styles.voteCountTextSelected : styles.voteCountTextDeny,
+    isDisabled && styles.voteCountTextDisabled
+  ] as const;
+
   return (
     <View style={styles.voteBlock}>
       {/* User info and voting in one row */}
@@ -93,19 +133,12 @@ function IndividualVoteBlock({
             }}
             disabled={isExpired || !canVote}
           >
-            <Check size={16} color={
-              userVoteChoice === 'accept' ? 'white' :
-              (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
-            } />
-            <Text style={[
-              styles.voteCount,
-              {
-                color: userVoteChoice === 'accept' ? 'white' :
-                       (isExpired || !canVote) ? Colors.light.secondaryText : '#4CAF50'
-              }
-            ]}>
-              {allowVotes}
-            </Text>
+            <View style={styles.voteButtonContent}>
+              <Check size={16} color={acceptIconColor} />
+              <View style={acceptBadgeStyle}>
+                <Text style={acceptCountTextStyle}>{allowVotes}</Text>
+              </View>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -131,19 +164,12 @@ function IndividualVoteBlock({
             }}
             disabled={isExpired || !canVote}
           >
-            <X size={16} color={
-              userVoteChoice === 'deny' ? 'white' :
-              (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
-            } />
-            <Text style={[
-              styles.voteCount,
-              {
-                color: userVoteChoice === 'deny' ? 'white' :
-                       (isExpired || !canVote) ? Colors.light.secondaryText : '#F44336'
-              }
-            ]}>
-              {denyVotes}
-            </Text>
+            <View style={styles.voteButtonContent}>
+              <X size={16} color={denyIconColor} />
+              <View style={denyBadgeStyle}>
+                <Text style={denyCountTextStyle}>{denyVotes}</Text>
+              </View>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -301,10 +327,43 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     backgroundColor: Colors.light.buttonBackground,
   },
-  voteCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 4,
+  voteButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  voteCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  voteCountBadgeAccept: {
+    backgroundColor: 'rgba(76, 175, 80, 0.12)',
+  },
+  voteCountBadgeDeny: {
+    backgroundColor: 'rgba(244, 67, 54, 0.12)',
+  },
+  voteCountBadgeSelected: {
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
+  },
+  voteCountBadgeDisabled: {
+    backgroundColor: Colors.light.buttonBackground,
+  },
+  voteCountText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  voteCountTextAccept: {
+    color: '#4CAF50',
+  },
+  voteCountTextDeny: {
+    color: '#F44336',
+  },
+  voteCountTextSelected: {
+    color: 'white',
+  },
+  voteCountTextDisabled: {
+    color: Colors.light.secondaryText,
   },
   separator: {
     height: 1,
