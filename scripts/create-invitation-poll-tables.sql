@@ -69,12 +69,21 @@ BEGIN
       INSERT INTO plan_updates (plan_id, update_type, triggered_by, metadata)
       VALUES (poll_record.plan_id, 'participant_invited', poll_record.invited_user_id,
               jsonb_build_object('via_invitation_poll', true, 'poll_id', poll_record.id));
-    END IF;
 
-    -- Mark poll as processed
-    UPDATE invitation_polls
-    SET status = 'processed'
-    WHERE id = poll_record.id;
+      -- Mark poll as processed (user was accepted)
+      UPDATE invitation_polls
+      SET status = 'processed'
+      WHERE id = poll_record.id;
+
+    ELSE
+      -- If deny votes win (≤50% allow), delete the poll completely
+      -- This allows the user to be invited again
+      DELETE FROM invitation_poll_votes WHERE poll_id = poll_record.id;
+      DELETE FROM invitation_polls WHERE id = poll_record.id;
+
+      RAISE NOTICE 'Deleted invitation poll % - user % can be invited again',
+                   poll_record.id, poll_record.invited_user_id;
+    END IF;
 
     RAISE NOTICE 'Processed invitation poll % for plan %, user % - allow: %, deny: %, total: %',
                  poll_record.id, poll_record.plan_id, poll_record.invited_user_id,
