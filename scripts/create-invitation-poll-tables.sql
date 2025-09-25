@@ -160,39 +160,7 @@ CREATE POLICY "Users can update their own votes" ON invitation_poll_votes
 ALTER PUBLICATION supabase_realtime ADD TABLE invitation_polls;
 ALTER PUBLICATION supabase_realtime ADD TABLE invitation_poll_votes;
 
--- Create a view for easier querying
-CREATE OR REPLACE VIEW invitation_poll_details AS
-SELECT
-  ip.*,
-  u.name as invited_user_name,
-  u.username as invited_user_username,
-  u.avatar_url as invited_user_avatar,
-  creator.name as creator_name,
-  creator.username as creator_username,
-  creator.avatar_url as creator_avatar,
-  p.title as plan_title,
-  -- Vote counts
-  COALESCE(stats.allow_votes, 0) as allow_votes,
-  COALESCE(stats.deny_votes, 0) as deny_votes,
-  COALESCE(stats.total_votes, 0) as total_votes
-FROM invitation_polls ip
-JOIN users u ON u.id = ip.invited_user_id
-JOIN users creator ON creator.id = ip.created_by
-JOIN plans p ON p.id = ip.plan_id
-LEFT JOIN (
-  SELECT
-    poll_id,
-    COUNT(*) FILTER (WHERE vote = 'allow') as allow_votes,
-    COUNT(*) FILTER (WHERE vote = 'deny') as deny_votes,
-    COUNT(*) as total_votes
-  FROM invitation_poll_votes
-  GROUP BY poll_id
-) stats ON stats.poll_id = ip.id
--- Note: current_user_vote is calculated in the backend route handler
--- LEFT JOIN invitation_poll_votes current_vote ON current_vote.poll_id = ip.id AND current_vote.user_id = auth.uid();
-
--- Grant permissions
-GRANT SELECT ON invitation_poll_details TO authenticated;
+-- View removed - data is now queried directly in backend
 GRANT ALL ON invitation_polls TO authenticated;
 GRANT ALL ON invitation_poll_votes TO authenticated;
 
