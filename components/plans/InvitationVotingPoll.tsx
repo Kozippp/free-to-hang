@@ -199,14 +199,20 @@ export default function InvitationVotingPoll({
 
   const isExpired = timeLeft === 0;
 
-  // Notify parent when this poll expires and start animation
+  // Handle poll expiration and animation
   useEffect(() => {
     if (isExpired && !expiredNotified) {
       setExpiredNotified(true);
       setShowExpiredAnimation(true);
 
-      // Start fade out animation after 3 seconds
-      setTimeout(() => {
+      // Notify parent for real-time updates
+      if (onExpired) {
+        onExpired(poll.id);
+      }
+
+      // Start fade-out animation immediately when poll expires
+      // This provides immediate feedback while database processing happens
+      const animationTimeout = setTimeout(() => {
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 0,
@@ -218,18 +224,10 @@ export default function InvitationVotingPoll({
             duration: 500,
             useNativeDriver: true,
           }),
-        ]).start(() => {
-          // Notify parent after animation completes
-          if (onExpired) {
-            onExpired(poll.id);
-          }
-        });
-      }, 3000);
+        ]).start();
+      }, 100); // Small delay to show final result briefly
 
-      // Also notify parent immediately for real-time updates
-      if (onExpired) {
-        onExpired(poll.id);
-      }
+      return () => clearTimeout(animationTimeout);
     }
   }, [isExpired, expiredNotified, onExpired, poll.id, fadeAnim, scaleAnim]);
 
