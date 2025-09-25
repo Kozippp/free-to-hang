@@ -2064,10 +2064,15 @@ router.get('/:id/invitation-polls/:pollId', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied to plan' });
     }
 
-    // Get poll details
+    // Get poll details from invitation_polls table with joined data
     const { data: poll, error: pollError } = await supabase
-      .from('invitation_poll_details')
-      .select('*')
+      .from('invitation_polls')
+      .select(`
+        *,
+        invited_user:invited_user_id(name, username, avatar_url),
+        created_by_user:created_by(name, username, avatar_url),
+        plan:plan_id(title)
+      `)
       .eq('id', pollId)
       .eq('plan_id', id)
       .single();
@@ -2076,7 +2081,7 @@ router.get('/:id/invitation-polls/:pollId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Invitation poll not found' });
     }
 
-    // Get all votes for this poll
+    // Get all votes for this poll with user data
     const { data: votes, error: votesError } = await supabase
       .from('invitation_poll_votes')
       .select(`
@@ -2092,6 +2097,20 @@ router.get('/:id/invitation-polls/:pollId', requireAuth, async (req, res) => {
       console.error('Error fetching poll votes:', votesError);
       return res.status(500).json({ error: 'Failed to fetch poll votes' });
     }
+
+    // Get current user's vote
+    const currentUserVote = votes.find(v => v.user_id === userId)?.vote || null;
+
+    // Calculate vote counts
+    let allowVotes = 0;
+    let denyVotes = 0;
+    votes.forEach(vote => {
+      if (vote.vote === 'allow') {
+        allowVotes++;
+      } else if (vote.vote === 'deny') {
+        denyVotes++;
+      }
+    });
 
     // Transform votes
     const transformedVotes = votes.map(vote => ({
@@ -2111,24 +2130,24 @@ router.get('/:id/invitation-polls/:pollId', requireAuth, async (req, res) => {
       id: poll.id,
       invitedUser: {
         id: poll.invited_user_id,
-        name: poll.invited_user_name,
-        avatar: poll.invited_user_avatar
+        name: poll.invited_user.name,
+        avatar: poll.invited_user.avatar_url
       },
       createdBy: {
         id: poll.created_by,
-        name: poll.creator_name,
-        avatar: poll.creator_avatar
+        name: poll.created_by_user.name,
+        avatar: poll.created_by_user.avatar_url
       },
-      planTitle: poll.plan_title,
+      planTitle: poll.plan.title,
       createdAt: poll.created_at,
       expiresAt: poll.expires_at,
       status: poll.status,
       timeLeft: Math.max(0, Math.floor((new Date(poll.expires_at).getTime() - Date.now()) / 1000)),
       isExpired: new Date(poll.expires_at) <= new Date(),
-      allowVotes: poll.allow_votes,
-      denyVotes: poll.deny_votes,
-      totalVotes: poll.total_votes,
-      currentUserVote: poll.current_user_vote,
+      allowVotes: allowVotes,
+      denyVotes: denyVotes,
+      totalVotes: allowVotes + denyVotes,
+      currentUserVote: currentUserVote,
       canVote: participant.status === 'going',
       votes: transformedVotes
     };

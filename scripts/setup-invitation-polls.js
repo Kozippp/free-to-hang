@@ -22,7 +22,6 @@ function setupInvitationPolls() {
     console.log('  - invitation_polls table');
     console.log('  - invitation_poll_votes table');
     console.log('  - process_expired_invitation_polls() function');
-    console.log('  - invitation_poll_details view');
     console.log('  - RLS policies and indexes');
     console.log('  - Realtime subscriptions');
 
