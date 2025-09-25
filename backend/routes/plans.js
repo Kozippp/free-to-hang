@@ -1873,7 +1873,7 @@ router.get('/:id/invitation-polls', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied to plan' });
     }
 
-    // Get invitation polls with basic info
+    // Get invitation polls with basic info and calculated vote counts
     const { data: polls, error: pollsError } = await supabase
       .from('invitation_polls')
       .select(`
@@ -1890,48 +1890,76 @@ router.get('/:id/invitation-polls', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch invitation polls' });
     }
 
-    // Get all votes for these polls to determine user's vote
+    // Calculate vote counts for each poll
     const pollIds = polls.map(p => p.id);
-    const { data: votes, error: votesError } = await supabase
+    let voteCounts = {};
+    if (pollIds.length > 0) {
+      const { data: votes, error: votesError } = await supabase
+        .from('invitation_poll_votes')
+        .select('poll_id, vote')
+        .in('poll_id', pollIds);
+
+      if (!votesError && votes) {
+        // Initialize vote counts
+        pollIds.forEach(id => {
+          voteCounts[id] = { allow_votes: 0, deny_votes: 0 };
+        });
+
+        // Count votes
+        votes.forEach(vote => {
+          if (vote.vote === 'allow') {
+            voteCounts[vote.poll_id].allow_votes++;
+          } else if (vote.vote === 'deny') {
+            voteCounts[vote.poll_id].deny_votes++;
+          }
+        });
+      }
+    }
+
+    // Get user votes for these polls
+    const { data: userVotes, error: userVotesError } = await supabase
       .from('invitation_poll_votes')
       .select('poll_id, vote')
       .in('poll_id', pollIds)
       .eq('user_id', userId);
 
-    if (votesError) {
-      console.error('Error fetching user votes:', votesError);
+    if (userVotesError) {
+      console.error('Error fetching user votes:', userVotesError);
       return res.status(500).json({ error: 'Failed to fetch user votes' });
     }
 
     // Create vote lookup map
     const userVotesMap = {};
-    votes.forEach(vote => {
+    userVotes.forEach(vote => {
       userVotesMap[vote.poll_id] = vote.vote;
     });
 
     // Transform data to match frontend format AND filter out those already expired client-side
     const transformedPolls = polls
       .filter(poll => new Date(poll.expires_at) > new Date())
-      .map(poll => ({
-      id: poll.id,
-      invitedUser: {
-        id: poll.invited_user_id,
-        name: poll.invited_user.name,
-        avatar: poll.invited_user.avatar_url
-      },
-      createdBy: {
-        id: poll.created_by,
-        name: poll.created_by_user.name,
-        avatar: poll.created_by_user.avatar_url
-      },
-      timeLeft: Math.max(0, Math.floor((new Date(poll.expires_at).getTime() - Date.now()) / 1000)),
-      isExpired: new Date(poll.expires_at) <= new Date(),
-      expiresAt: poll.expires_at,
-      allowVotes: poll.allow_votes,
-      denyVotes: poll.deny_votes,
-      currentUserVote: userVotesMap[poll.id] || null,
-      canVote: participant.status === 'going'
-    }));
+      .map(poll => {
+        const counts = voteCounts[poll.id] || { allow_votes: 0, deny_votes: 0 };
+        return {
+          id: poll.id,
+          invitedUser: {
+            id: poll.invited_user_id,
+            name: poll.invited_user.name,
+            avatar: poll.invited_user.avatar_url
+          },
+          createdBy: {
+            id: poll.created_by,
+            name: poll.created_by_user.name,
+            avatar: poll.created_by_user.avatar_url
+          },
+          timeLeft: Math.max(0, Math.floor((new Date(poll.expires_at).getTime() - Date.now()) / 1000)),
+          isExpired: new Date(poll.expires_at) <= new Date(),
+          expiresAt: poll.expires_at,
+          allowVotes: counts.allow_votes,
+          denyVotes: counts.deny_votes,
+          currentUserVote: userVotesMap[poll.id] || null,
+          canVote: participant.status === 'going'
+        };
+      });
 
     res.json(transformedPolls);
 
