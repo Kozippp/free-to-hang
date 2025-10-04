@@ -144,7 +144,7 @@ export default function HangScreen() {
 
     // Add all the updated friends
     updatedFriends.forEach(friend => {
-      addSelectedFriend(friend.id);
+      selectFriend(friend.id);
     });
   };
 
