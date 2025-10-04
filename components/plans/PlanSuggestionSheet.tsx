@@ -527,8 +527,9 @@ const styles = StyleSheet.create({
   friendsList: {
     flexDirection: 'column',
     gap: 8,
-    minHeight: 600, // Much larger minimum height for plenty of space
-    maxHeight: 800, // Increased maximum height when full
+    flex: 1, // Allow it to expand to fill available space
+    minHeight: 600, // Large minimum height for plenty of space
+    maxHeight: 1200, // Increased maximum height when full
   },
   friendItem: {
     flexDirection: 'row',
