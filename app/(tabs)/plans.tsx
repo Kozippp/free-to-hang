@@ -327,15 +327,11 @@ export default function PlansScreen() {
   
   return (
     <>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           title: "Plans",
-          headerTitleStyle: {
-            fontWeight: '700',
-            fontSize: 20,
-            color: Colors.light.text,
-          },
-        }} 
+          headerShown: false,
+        }}
       />
       
       <SafeAreaView style={styles.container}>
