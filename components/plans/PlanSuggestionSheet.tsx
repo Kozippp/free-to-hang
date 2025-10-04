@@ -303,7 +303,10 @@ export default function PlanSuggestionSheet({
                           </Text>
                           <TouchableOpacity
                             style={styles.addMoreButton}
-                            onPress={() => setShowAddMoreFriendsModal(true)}
+                            onPress={() => {
+                              console.log('🔵 Add More button pressed');
+                              setShowAddMoreFriendsModal(true);
+                            }}
                           >
                             <Plus size={16} color={Colors.light.primary} />
                             <Text style={styles.addMoreButtonText}>Add More</Text>
