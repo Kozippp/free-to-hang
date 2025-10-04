@@ -121,7 +121,7 @@ export default function PlanSuggestionSheet({
       }).start();
     }
   }, [visible, slideAnim, prefilledTitle, prefilledDescription]);
-  
+
   const resetStates = () => {
     setTimeout(() => {
       setPlanTitle('');
