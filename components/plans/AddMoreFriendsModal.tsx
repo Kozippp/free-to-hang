@@ -125,6 +125,8 @@ export default function AddMoreFriendsModal({
     <Modal
       visible={visible}
       transparent={true}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
       animationType="slide"
       onRequestClose={handleClose}
     >
