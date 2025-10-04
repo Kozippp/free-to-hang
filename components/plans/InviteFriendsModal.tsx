@@ -15,15 +15,12 @@ import Colors from '@/constants/colors';
 import { Plan } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
 import useFriendsStore from '@/store/friendsStore';
-import { InvitationPoll } from '@/lib/plans-service';
-
 interface InviteFriendsModalProps {
   visible: boolean;
   onClose: () => void;
   onInvite: (friendIds: string[]) => void;
   onCreateInvitationPoll: (friendIds: string[], friendNames: string[]) => void;
   plan: Plan;
-  invitationPolls?: InvitationPoll[];
 }
 
 interface FriendUser {
@@ -38,8 +35,7 @@ export default function InviteFriendsModal({
   onClose,
   onInvite,
   onCreateInvitationPoll,
-  plan,
-  invitationPolls = []
+  plan
 }: InviteFriendsModalProps) {
   const { user } = useAuth();
   const { friends, isLoadingFriends, loadFriends } = useFriendsStore();
@@ -49,11 +45,6 @@ export default function InviteFriendsModal({
   // Get IDs of users already in the plan
   const existingUserIds = plan.participants.map(p => p.id);
 
-  // Get IDs of users with active invitation polls
-  const activeInvitationUserIds = invitationPolls
-    .filter(poll => !poll.isExpired)
-    .map(poll => poll.invitedUser.id);
-
   // Map friends data to FriendUser format for display
   const allFriends: FriendUser[] = friends.map(friend => ({
     id: friend.friend_id,
@@ -62,10 +53,9 @@ export default function InviteFriendsModal({
     avatar: friend.friend_avatar_url
   }));
 
-  // Filter out users already in the plan and users with active invitation polls
-  const unavailableUserIds = [...existingUserIds, ...activeInvitationUserIds];
+  // Filter out users already in the plan
   const availableFriends = allFriends.filter(friend =>
-    !unavailableUserIds.includes(friend.id)
+    !existingUserIds.includes(friend.id)
   );
 
   // Filter friends based on search query
@@ -132,7 +122,7 @@ export default function InviteFriendsModal({
           {/* Description - moved closer to header */}
           <View style={styles.descriptionContainer}>
             <Text style={styles.descriptionText}>
-              Invite people to the hang, a vote will be cast and majority decides.
+              Select friends to invite to this plan. They'll receive an invitation to join.
             </Text>
           </View>
           
@@ -206,7 +196,7 @@ export default function InviteFriendsModal({
               onPress={() => {
                 Alert.alert(
                   'Invite by Link',
-                  'This feature will be available soon! When ready, people will be able to join through a link and the voting will start once they create an account.',
+                  'This feature will be available soon! People will be able to join through a link once they create an account.',
                   [{ text: 'OK' }]
                 );
               }}
@@ -233,7 +223,7 @@ export default function InviteFriendsModal({
               disabled={selectedFriends.length === 0}
             >
               <Text style={styles.inviteButtonText}>
-                Start Vote ({selectedFriends.length})
+                Invite {selectedFriends.length > 0 ? `(${selectedFriends.length})` : ''}
               </Text>
             </TouchableOpacity>
           </View>
