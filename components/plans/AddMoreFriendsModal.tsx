@@ -42,22 +42,44 @@ export default function AddMoreFriendsModal({
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Debug logging
+  console.log('AddMoreFriendsModal props:', {
+    visible,
+    availableFriendsCount: availableFriends.length,
+    alreadyInvitedCount: alreadyInvited.length,
+    availableFriends: availableFriends.map(f => ({ id: f.id, name: f.name, status: f.status })),
+    alreadyInvited: alreadyInvited.map(f => ({ id: f.id, name: f.name }))
+  });
+
   // Filter out friends who are already invited
   const alreadyInvitedIds = new Set(alreadyInvited.map(f => f.id));
   const uninvitedFriends = availableFriends.filter(f => !alreadyInvitedIds.has(f.id));
 
+  // TEMP: Show all available friends for debugging
+  const displayFriends = availableFriends; // Change to uninvitedFriends to restore normal behavior
+
+  // Debug: log what we're filtering
+  console.log('AddMoreFriendsModal filtering:', {
+    availableFriendsIds: availableFriends.map(f => f.id),
+    alreadyInvitedIds: Array.from(alreadyInvitedIds),
+    uninvitedFriendsIds: uninvitedFriends.map(f => f.id),
+    displayFriendsCount: displayFriends.length
+  });
+
+  console.log('Filtered uninvitedFriends:', uninvitedFriends.length, uninvitedFriends.map(f => ({ id: f.id, name: f.name })));
+
   const filteredFriends = useMemo(() => {
     if (!searchQuery.trim()) {
-      return uninvitedFriends;
+      return displayFriends;
     }
 
     const query = searchQuery.trim().toLowerCase();
-    return uninvitedFriends.filter(friend => {
+    return displayFriends.filter(friend => {
       const matchesName = friend.name.toLowerCase().includes(query);
       const matchesUsername = friend.username?.toLowerCase().includes(query);
       return matchesName || matchesUsername;
     });
-  }, [uninvitedFriends, searchQuery]);
+  }, [displayFriends, searchQuery]);
 
   // Clear selections when modal closes
   useEffect(() => {
@@ -128,22 +150,32 @@ export default function AddMoreFriendsModal({
             />
           </View>
 
-          {uninvitedFriends.length === 0 ? (
+          {displayFriends.length === 0 ? (
             <View style={[styles.friendsList, styles.centerContent]}>
               <Text style={styles.emptyText}>
                 All your friends are already part of this plan.
               </Text>
+              {/* Debug info */}
+              <Text style={[styles.emptyText, { fontSize: 12, marginTop: 10 }]}>
+                Debug: availableFriends: {availableFriends.length}, alreadyInvited: {alreadyInvited.length}
+              </Text>
+              <Text style={[styles.emptyText, { fontSize: 12 }]}>
+                Available: {availableFriends.map(f => f.name).join(', ')}
+              </Text>
+              <Text style={[styles.emptyText, { fontSize: 12 }]}>
+                Invited: {alreadyInvited.map(f => f.name).join(', ')}
+              </Text>
             </View>
           ) : (
             <ScrollView
-              style={styles.friendsList}
+              style={[styles.friendsList, { flex: 1 }]} // Allow it to expand
               contentContainerStyle={[
                 styles.friendsListContent,
-                filteredFriends.length === 0 ? styles.centerContent : null,
+                displayFriends.length === 0 ? styles.centerContent : null,
               ]}
               showsVerticalScrollIndicator={false}
             >
-              {filteredFriends.map((friend) => {
+              {displayFriends.map((friend) => {
                 const isSelected = selectedFriendIds.includes(friend.id);
                 const isAvailable = friend.status === 'available';
 
@@ -303,7 +335,8 @@ const styles = StyleSheet.create({
   },
   friendsList: {
     flex: 1,
-    maxHeight: 340,
+    minHeight: 100, // Minimum height when empty
+    maxHeight: 500, // Maximum height when full
   },
   friendsListContent: {
     paddingHorizontal: 20,
