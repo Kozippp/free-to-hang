@@ -127,7 +127,10 @@ export default function InviteFriendsModal({
             />
           </View>
           
-          <ScrollView style={styles.friendsList} contentContainerStyle={styles.friendsListContent}>
+          <ScrollView style={styles.friendsList} contentContainerStyle={[
+            styles.friendsListContent,
+            (filteredFriends.length === 0 && !isLoadingFriends) ? styles.centerEmpty : null
+          ]}>
             {isLoadingFriends ? (
               <View style={styles.loadingContainer}>
                 <Text style={styles.loadingText}>Loading friends...</Text>
@@ -181,7 +184,7 @@ export default function InviteFriendsModal({
               onPress={() => {
                 Alert.alert(
                   'Invite by Link',
-                  'This feature will be available soon! People will be able to join through a link once they create an account.',
+                  'This feature will be available soon!',
                   [{ text: 'OK' }]
                 );
               }}
@@ -276,6 +279,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 8,
     minHeight: 220,
+  },
+  centerEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   friendItem: {
     flexDirection: 'row',
