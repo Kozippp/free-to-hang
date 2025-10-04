@@ -1,33 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Modal,
   TouchableOpacity,
-  Image,
-  ScrollView,
-  TextInput,
   Alert
 } from 'react-native';
-import { Check, Search, UserPlus, Link } from 'lucide-react-native';
+import { Link } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { Plan } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
-import useFriendsStore from '@/store/friendsStore';
 interface InviteFriendsModalProps {
   visible: boolean;
   onClose: () => void;
   onInvite: (friendIds: string[]) => void;
   onCreateInvitationPoll: (friendIds: string[], friendNames: string[]) => void;
-  plan: Plan;
-}
-
-interface FriendUser {
-  id: string;
-  name: string;
-  username?: string;
-  avatar: string;
+  plan: any;
 }
 
 export default function InviteFriendsModal({
@@ -38,69 +26,14 @@ export default function InviteFriendsModal({
   plan
 }: InviteFriendsModalProps) {
   const { user } = useAuth();
-  const { friends, isLoadingFriends, loadFriends } = useFriendsStore();
-  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
 
-  // Get IDs of users already in the plan
-  const existingUserIds = plan.participants.map(p => p.id);
-
-  // Map friends data to FriendUser format for display
-  const allFriends: FriendUser[] = friends.map(friend => ({
-    id: friend.friend_id,
-    name: friend.friend_name,
-    username: friend.friend_username,
-    avatar: friend.friend_avatar_url
-  }));
-
-  // Filter out users already in the plan
-  const availableFriends = allFriends.filter(friend =>
-    !existingUserIds.includes(friend.id)
-  );
-
-  // Filter friends based on search query
-  const filteredFriends = availableFriends.filter(friend =>
-    friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (friend.username && friend.username.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  // Clear selections when modal opens/closes
-  useEffect(() => {
-    if (!visible) {
-      setSelectedFriends([]);
-      setSearchQuery('');
-    }
-  }, [visible]);
-
-  // Load friends data when modal opens
-  useEffect(() => {
-    if (visible) {
-      loadFriends();
-    }
-  }, [visible, loadFriends]);
-  
-  const toggleFriendSelection = (friendId: string) => {
-    if (selectedFriends.includes(friendId)) {
-      setSelectedFriends(selectedFriends.filter(id => id !== friendId));
-    } else {
-      setSelectedFriends([...selectedFriends, friendId]);
-    }
-  };
-  
   const handleInvite = () => {
-    const selectedFriendNames = selectedFriends.map(id => 
-      availableFriends.find(f => f.id === id)?.name || ''
-    ).filter(Boolean);
-    
-    onCreateInvitationPoll(selectedFriends, selectedFriendNames);
-    setSelectedFriends([]);
-    setSearchQuery('');
+    // Create invitation poll without selecting specific friends
+    onCreateInvitationPoll([], []);
   };
-  
+
   const handleClose = () => {
     onClose();
-    setSelectedFriends([]);
-    setSearchQuery('');
   };
   
   return (
@@ -117,65 +50,6 @@ export default function InviteFriendsModal({
           </View>
           
           
-          <View style={styles.searchContainer}>
-            <Search size={20} color={Colors.light.secondaryText} style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search friends"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-          
-          <ScrollView style={styles.friendsList} contentContainerStyle={[
-            styles.friendsListContent,
-            (filteredFriends.length === 0 && !isLoadingFriends) ? styles.centerEmpty : null
-          ]}>
-            {isLoadingFriends ? (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Loading friends...</Text>
-              </View>
-            ) : (
-              <>
-                {filteredFriends.map((friend) => (
-                  <TouchableOpacity
-                    key={friend.id}
-                    style={[
-                      styles.friendItem,
-                      selectedFriends.includes(friend.id) && styles.selectedFriendItem
-                    ]}
-                    onPress={() => toggleFriendSelection(friend.id)}
-                  >
-                    <Image source={{ uri: friend.avatar }} style={styles.friendAvatar} />
-                    <View style={styles.friendInfo}>
-                      <Text style={styles.friendName}>{friend.name}</Text>
-                      {friend.username && (
-                        <Text style={styles.friendStatus}>
-                          @{friend.username}
-                        </Text>
-                      )}
-                    </View>
-
-                    {selectedFriends.includes(friend.id) ? (
-                      <View style={styles.checkmark}>
-                        <Check size={16} color="white" />
-                      </View>
-                    ) : (
-                      <View style={styles.addButton}>
-                        <UserPlus size={16} color={Colors.light.primary} />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-
-                {filteredFriends.length === 0 && !isLoadingFriends && (
-                  <Text style={styles.noResultsText}>
-                    No friends found
-                  </Text>
-                )}
-              </>
-            )}
-          </ScrollView>
           
           {/* Invite by link section */}
           <View style={styles.inviteLinkSection}>
@@ -201,17 +75,13 @@ export default function InviteFriendsModal({
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
-              style={[
-                styles.inviteButton,
-                selectedFriends.length === 0 && styles.disabledButton
-              ]}
+              style={styles.inviteButton}
               onPress={handleInvite}
-              disabled={selectedFriends.length === 0}
             >
               <Text style={styles.inviteButtonText}>
-                Invite {selectedFriends.length > 0 ? `(${selectedFriends.length})` : ''}
+                Create Invitation
               </Text>
             </TouchableOpacity>
           </View>
@@ -255,91 +125,6 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.buttonBackground,
-    margin: 16,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  friendsList: {
-    maxHeight: 520,
-    minHeight: 260,
-  },
-  friendsListContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    minHeight: 220,
-  },
-  centerEmpty: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  friendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  selectedFriendItem: {
-    backgroundColor: `${Colors.light.primary}10`,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 0,
-    marginBottom: 1,
-  },
-  friendAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
-  },
-  friendInfo: {
-    flex: 1,
-  },
-  friendName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  friendStatus: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-  },
-  checkmark: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: `${Colors.light.primary}15`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  noResultsText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    padding: 20,
-  },
   modalFooter: {
     flexDirection: 'row',
     padding: 16,
@@ -371,26 +156,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'white',
   },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  descriptionContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  descriptionText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-  },
   inviteLinkSection: {
     padding: 16,
-  },
-  inviteLinkText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.secondaryText,
-    marginBottom: 12,
   },
   inviteLinkButton: {
     flexDirection: 'row',
@@ -405,13 +172,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.light.primary,
     marginLeft: 8,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
   },
 });
