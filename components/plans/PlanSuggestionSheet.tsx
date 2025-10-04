@@ -508,7 +508,6 @@ export default function PlanSuggestionSheet({
             <View style={styles.addFriendsOverlay}>
               <TouchableWithoutFeedback>
                 <View style={styles.addFriendsModalContainer}>
-                  {console.log('🎭 Modal content rendering')}
                   <View style={styles.addFriendsHeader}>
                     <Text style={styles.addFriendsTitle}>Add More Friends</Text>
                     <TouchableOpacity
