@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Modal,
   TouchableOpacity,
-  ScrollView,
   Image,
-  FlatList,
-  Platform,
+  TextInput,
+  ScrollView,
+  Alert,
 } from 'react-native';
-import { X, Check } from 'lucide-react-native';
+import { X, Check, Search, UserPlus, Link } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface Friend {
@@ -40,15 +40,30 @@ export default function AddMoreFriendsModal({
   onAddFriends,
 }: AddMoreFriendsModalProps) {
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Filter out friends who are already invited
   const alreadyInvitedIds = new Set(alreadyInvited.map(f => f.id));
   const uninvitedFriends = availableFriends.filter(f => !alreadyInvitedIds.has(f.id));
 
+  const filteredFriends = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return uninvitedFriends;
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    return uninvitedFriends.filter(friend => {
+      const matchesName = friend.name.toLowerCase().includes(query);
+      const matchesUsername = friend.username?.toLowerCase().includes(query);
+      return matchesName || matchesUsername;
+    });
+  }, [uninvitedFriends, searchQuery]);
+
   // Clear selections when modal closes
   useEffect(() => {
     if (!visible) {
       setSelectedFriendIds([]);
+      setSearchQuery('');
     }
   }, [visible]);
 
@@ -72,49 +87,8 @@ export default function AddMoreFriendsModal({
 
   const handleClose = () => {
     setSelectedFriendIds([]);
+    setSearchQuery('');
     onClose();
-  };
-
-  const renderFriendItem = ({ item }: { item: Friend }) => {
-    const isSelected = selectedFriendIds.includes(item.id);
-    const isAvailable = item.status === 'available';
-
-    return (
-      <TouchableOpacity
-        style={styles.friendItem}
-        onPress={() => toggleFriend(item.id)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.friendInfo}>
-          <View style={styles.friendAvatarContainer}>
-            <Image
-              source={{ uri: item.avatar }}
-              style={styles.friendAvatar}
-            />
-            <View
-              style={[
-                styles.statusIndicator,
-                isAvailable ? styles.statusAvailable : styles.statusOffline,
-              ]}
-            />
-          </View>
-          <View style={styles.friendDetails}>
-            <Text style={styles.friendName}>{item.name}</Text>
-            {item.username && (
-              <Text style={styles.friendHandle}>@{item.username}</Text>
-            )}
-          </View>
-        </View>
-        <View
-          style={[
-            styles.checkbox,
-            isSelected && styles.checkboxSelected,
-          ]}
-        >
-          {isSelected && <Check size={16} color="white" />}
-        </View>
-      </TouchableOpacity>
-    );
   };
 
   if (!visible) {
@@ -125,57 +99,138 @@ export default function AddMoreFriendsModal({
     <Modal
       visible={visible}
       transparent={true}
-      presentationStyle="overFullScreen"
-      statusBarTranslucent
       animationType="slide"
       onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Add More Friends</Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <X size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add More Friends</Text>
+          </View>
+
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <X size={22} color={Colors.light.secondaryText} />
+          </TouchableOpacity>
+
+          <View style={styles.subtitleContainer}>
+            <Text style={styles.subtitle}>Select friends to add to this plan</Text>
+          </View>
+
+          <View style={styles.searchContainer}>
+            <Search size={18} color={Colors.light.secondaryText} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search friends"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor={Colors.light.secondaryText}
+              autoCorrect={false}
+            />
           </View>
 
           {uninvitedFriends.length === 0 ? (
-            <View style={styles.emptyState}>
+            <View style={[styles.friendsList, styles.centerContent]}>
               <Text style={styles.emptyText}>
-                All your friends are already invited!
+                All your friends are already part of this plan.
               </Text>
             </View>
           ) : (
-            <>
-              <Text style={styles.subtitle}>
-                Select friends to invite to this plan
-              </Text>
+            <ScrollView
+              style={styles.friendsList}
+              contentContainerStyle={[
+                styles.friendsListContent,
+                filteredFriends.length === 0 ? styles.centerContent : null,
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
+              {filteredFriends.map((friend) => {
+                const isSelected = selectedFriendIds.includes(friend.id);
+                const isAvailable = friend.status === 'available';
 
-              <FlatList
-                data={uninvitedFriends}
-                renderItem={renderFriendItem}
-                keyExtractor={(item) => item.id}
-                style={styles.friendsList}
-                contentContainerStyle={styles.friendsListContent}
-                showsVerticalScrollIndicator={true}
-              />
+                return (
+                  <TouchableOpacity
+                    key={friend.id}
+                    style={[styles.friendItem, isSelected && styles.selectedFriendItem]}
+                    onPress={() => toggleFriend(friend.id)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.friendInfo}>
+                      <View style={styles.friendAvatarContainer}>
+                        <Image
+                          source={{ uri: friend.avatar }}
+                          style={styles.friendAvatar}
+                        />
+                        <View
+                          style={[
+                            styles.statusIndicator,
+                            isAvailable ? styles.statusAvailable : styles.statusOffline,
+                          ]}
+                        />
+                      </View>
+                      <View style={styles.friendDetails}>
+                        <Text style={styles.friendName}>{friend.name}</Text>
+                        {friend.username && (
+                          <Text style={styles.friendHandle}>@{friend.username}</Text>
+                        )}
+                      </View>
+                    </View>
 
-              <View style={styles.footer}>
-                <TouchableOpacity
-                  style={[
-                    styles.addButton,
-                    selectedFriendIds.length === 0 && styles.addButtonDisabled,
-                  ]}
-                  onPress={handleAddFriends}
-                  disabled={selectedFriendIds.length === 0}
-                >
-                  <Text style={styles.addButtonText}>
-                    Add {selectedFriendIds.length > 0 ? `(${selectedFriendIds.length})` : ''}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </>
+                    {isSelected ? (
+                      <View style={styles.checkmark}>
+                        <Check size={16} color="white" />
+                      </View>
+                    ) : (
+                      <View style={styles.addIconWrapper}>
+                        <UserPlus size={16} color={Colors.light.primary} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+
+              {filteredFriends.length === 0 && (
+                <Text style={styles.emptyText}>No friends found</Text>
+              )}
+            </ScrollView>
           )}
+
+          <View style={styles.inviteLinkSection}>
+            <TouchableOpacity
+              style={styles.inviteLinkButton}
+              onPress={() => {
+                Alert.alert(
+                  'Invite by Link',
+                  'This feature will be available soon!',
+                  [{ text: 'OK' }]
+                );
+              }}
+            >
+              <Link size={16} color={Colors.light.primary} />
+              <Text style={styles.inviteLinkButtonText}>Invite friends outside the app</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleClose}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.addButton,
+                selectedFriendIds.length === 0 && styles.disabledButton,
+              ]}
+              onPress={handleAddFriends}
+              disabled={selectedFriendIds.length === 0}
+            >
+              <Text style={styles.addButtonText}>
+                Add {selectedFriendIds.length > 0 ? `(${selectedFriendIds.length})` : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -185,68 +240,88 @@ export default function AddMoreFriendsModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
   modalContainer: {
-    width: '100%',
+    width: '90%',
     maxWidth: 400,
-    maxHeight: '80%',
     backgroundColor: 'white',
     borderRadius: 16,
+    maxHeight: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.light.text,
   },
   closeButton: {
-    padding: 4,
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 6,
+    zIndex: 2,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    paddingTop: 18,
+    paddingBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  subtitleContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
   subtitle: {
     fontSize: 14,
     color: Colors.light.secondaryText,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.buttonBackground,
+    marginHorizontal: 20,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: Colors.light.text,
   },
   friendsList: {
     flex: 1,
+    maxHeight: 340,
   },
   friendsListContent: {
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: Colors.light.buttonBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  selectedFriendItem: {
+    backgroundColor: `${Colors.light.primary}10`,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 0,
+    marginBottom: 4,
   },
   friendInfo: {
     flexDirection: 'row',
@@ -258,17 +333,17 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   friendAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   statusIndicator: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 2,
     right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     borderWidth: 2,
     borderColor: 'white',
   },
@@ -283,55 +358,91 @@ const styles = StyleSheet.create({
   },
   friendName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: Colors.light.text,
-    marginBottom: 2,
   },
   friendHandle: {
     fontSize: 14,
     color: Colors.light.secondaryText,
+    marginTop: 2,
   },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.light.border,
-    backgroundColor: 'white',
+  checkmark: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  checkboxSelected: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-  },
-  addButton: {
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 14,
-    borderRadius: 10,
+  addIconWrapper: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: `${Colors.light.primary}15`,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  addButtonDisabled: {
-    opacity: 0.5,
+  inviteLinkSection: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  inviteLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 10,
+  },
+  inviteLinkButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.light.primary,
+    marginLeft: 8,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: Colors.light.buttonBackground,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.light.secondaryText,
+  },
+  addButton: {
+    flex: 1.4,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: Colors.light.primary,
   },
   addButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
+  disabledButton: {
+    opacity: 0.5,
+  },
+  centerContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.light.secondaryText,
     textAlign: 'center',
   },
