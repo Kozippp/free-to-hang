@@ -180,11 +180,7 @@ export default function HangScreen() {
       <Stack.Screen
         options={{
           title: 'Hang',
-          headerTitleStyle: {
-            fontWeight: '700',
-            fontSize: 20,
-            color: Colors.light.text,
-          },
+          headerShown: false,
         }}
       />
       <SafeAreaView style={styles.container}>

@@ -736,20 +736,11 @@ export default function ProfileScreen() {
 
   return (
     <>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           title: "Profile",
-          headerTitleStyle: {
-            fontWeight: '700',
-            fontSize: 20,
-            color: Colors.light.text,
-          },
-          headerRight: () => (
-            <TouchableOpacity onPress={() => setShowSettings(true)}>
-              <Settings size={24} color={Colors.light.primary} />
-            </TouchableOpacity>
-          ),
-        }} 
+          headerShown: false,
+        }}
       />
       
       <SafeAreaView style={styles.container}>
@@ -765,6 +756,13 @@ export default function ProfileScreen() {
             />
           }
         >
+          {/* Settings Button */}
+          <View style={styles.settingsContainer}>
+            <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.settingsButton}>
+              <Settings size={24} color={Colors.light.primary} />
+            </TouchableOpacity>
+          </View>
+
           {/* Profile Preview Section */}
           <TouchableOpacity 
             style={styles.profilePreview}
@@ -1190,6 +1188,15 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
+  },
+  settingsContainer: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: Colors.light.background,
+  },
+  settingsButton: {
+    padding: 8,
   },
   profilePreview: {
     flexDirection: 'row',
