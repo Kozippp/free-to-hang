@@ -17,9 +17,7 @@ import {
   PanResponder,
 } from 'react-native';
 import Colors from '@/constants/colors';
-import { X, Plus, Users, Bell, UserPlus } from 'lucide-react-native';
-import PingOfflineModal from '@/components/PingOfflineModal';
-import { offlineFriends } from '@/constants/mockData';
+import { X } from 'lucide-react-native';
 import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
 import { useRouter } from 'expo-router';
@@ -61,11 +59,6 @@ export default function PlanSuggestionSheet({
   
   const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
   const [description, setDescription] = useState(prefilledDescription || '');
-  const [showInvitePanel, setShowInvitePanel] = useState(false);
-  const [additionalFriends, setAdditionalFriends] = useState<string[]>([]);
-  const [pingedFriends, setPingedFriends] = useState<string[]>([]);
-  const [showPingModal, setShowPingModal] = useState(false);
-  const [removedFriends, setRemovedFriends] = useState<string[]>([]);
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
@@ -128,10 +121,6 @@ export default function PlanSuggestionSheet({
     setTimeout(() => {
       setPlanTitle('');
       setDescription('');
-      setShowInvitePanel(false);
-      setAdditionalFriends([]);
-      setPingedFriends([]);
-      setRemovedFriends([]);
     }, 0);
   };
   
@@ -150,9 +139,7 @@ export default function PlanSuggestionSheet({
         date: 'Today, 7:00 PM', // This would be set by the user in a real app
         location: 'To be determined', // This would be set by the user in a real app
         maxParticipants: null,
-        invitedFriends: getAllFriends()
-          .filter(friend => friend.id !== 'current')
-          .map(friend => friend.id)
+        invitedFriends: selectedFriends.map(friend => friend.id)
       };
       
       // Create the plan via API
@@ -194,90 +181,8 @@ export default function PlanSuggestionSheet({
     });
   };
   
-  const toggleAdditionalFriend = (friendId: string) => {
-    if (additionalFriends.includes(friendId)) {
-      setAdditionalFriends(additionalFriends.filter(id => id !== friendId));
-    } else {
-      const newSelected = [...additionalFriends, friendId];
-      setAdditionalFriends(newSelected);
-    }
-  };
-  
-  const handlePingFriend = (friendId: string) => {
-    if (!pingedFriends.includes(friendId)) {
-      setPingedFriends([...pingedFriends, friendId]);
-    }
-  };
-  
   const dismissKeyboard = () => {
     Keyboard.dismiss();
-  };
-  
-  const toggleInvitePanel = () => {
-    setShowInvitePanel(!showInvitePanel);
-  };
-  
-  const removeFriend = (friendId: string) => {
-    // Handle removing a friend from any list they might be in
-    if (additionalFriends.includes(friendId)) {
-      setAdditionalFriends(additionalFriends.filter(id => id !== friendId));
-    } else if (pingedFriends.includes(friendId)) {
-      setPingedFriends(pingedFriends.filter(id => id !== friendId));
-    } else {
-      // For initially selected friends, add to removed list
-      setRemovedFriends([...removedFriends, friendId]);
-    }
-  };
-  
-  // Get all friends for display (selected + additional + pinged, minus removed)
-  const getAllFriends = () => {
-    // Start with initially selected friends that haven't been removed
-    const allFriends = selectedFriends
-      .filter(friend => !removedFriends.includes(friend.id));
-    
-    // Add current user with (you) label
-    const currentUser = {
-      ...user,
-      id: 'current',
-      name: `${user.name} (you)`,
-      status: 'available' as const
-    };
-    
-    // Add user at the beginning of the list
-    allFriends.unshift(currentUser);
-    
-    // Add additional friends from available online friends
-    additionalFriends.forEach(id => {
-      const friend = availableFriends.find(f => f.id === id);
-      if (friend && !allFriends.some(f => f.id === id)) {
-        allFriends.push(friend);
-      }
-    });
-    
-    // Add pinged offline friends
-    pingedFriends.forEach(id => {
-      const friend = offlineFriends.find(f => f.id === id);
-      if (friend && !allFriends.some(f => f.id === id)) {
-        allFriends.push({
-          ...friend,
-          status: 'pinged' as const
-        });
-      }
-    });
-    
-    return allFriends;
-  };
-
-  // Get available friends that haven't been selected yet
-  const getAvailableFriendsToAdd = () => {
-    // Get all currently selected friend IDs (including additional but excluding removed)
-    const allSelectedIds = [
-      ...additionalFriends,
-      ...selectedFriends.filter(f => !removedFriends.includes(f.id)).map(f => f.id)
-    ];
-    
-    // Return available friends not in the selected list
-    return availableFriends.filter(friend => !allSelectedIds.includes(friend.id));
   };
   
   if (!visible) return null;
@@ -358,104 +263,6 @@ export default function PlanSuggestionSheet({
                     textAlignVertical="top"
                   />
                   
-                  <Text style={styles.label}>People</Text>
-                  
-                  {/* Vertical list of invited people */}
-                  <View style={styles.peopleList}>
-                    {getAllFriends().map((friend) => (
-                      <View key={friend.id} style={styles.personRow}>
-                        <View style={styles.personInfo}>
-                          <View style={styles.avatarWrapper}>
-                            <Image source={{ uri: friend.avatar }} style={styles.avatar} />
-                            <View style={[
-                              styles.statusDot,
-                              friend.status === 'available' && styles.onlineDot,
-                              friend.status === 'offline' && styles.offlineDot,
-                              friend.status === 'pinged' && styles.pingedDot,
-                            ]} />
-                          </View>
-                          <Text style={styles.personName}>{friend.name}</Text>
-                        </View>
-                        
-                        {/* Show remove button for all except current user */}
-                        {friend.id !== 'current' && (
-                          <TouchableOpacity 
-                            style={styles.removeButton}
-                            onPress={() => removeFriend(friend.id)}
-                          >
-                            <X size={16} color={Colors.light.secondaryText} />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                  
-                  {/* Add more people button */}
-                  <TouchableOpacity 
-                    style={styles.addMoreButton}
-                    onPress={toggleInvitePanel}
-                  >
-                    <UserPlus size={18} color={Colors.light.primary} style={styles.addMoreIcon} />
-                    <Text style={styles.addMoreText}>Add more people</Text>
-                  </TouchableOpacity>
-                  
-                  {showInvitePanel && (
-                    <View style={styles.invitePanel}>
-                      <TouchableOpacity 
-                        style={styles.invitePanelHeader}
-                        onPress={toggleInvitePanel}
-                      >
-                        <Users size={20} color={Colors.light.secondaryText} />
-                        <Text style={styles.invitePanelTitle}>Invite Friends</Text>
-                      </TouchableOpacity>
-                      
-                      {getAvailableFriendsToAdd().length > 0 ? (
-                        <>
-                          <Text style={styles.inviteSectionTitle}>Friends available now</Text>
-                          <ScrollView 
-                            style={styles.availableFriendsScrollView}
-                            nestedScrollEnabled={true}
-                            showsVerticalScrollIndicator={true}
-                          >
-                            <View style={styles.availableFriendsContainer}>
-                              {getAvailableFriendsToAdd().map((friend) => (
-                                <TouchableOpacity 
-                                  key={friend.id}
-                                  style={styles.availableFriendItem}
-                                  onPress={() => toggleAdditionalFriend(friend.id)}
-                                >
-                                  <View style={styles.availableFriendAvatarContainer}>
-                                    <Image source={{ uri: friend.avatar }} style={styles.availableFriendAvatar} />
-                                    <View style={[styles.availableFriendStatusDot, styles.onlineDot]} />
-                                  </View>
-                                  <View style={styles.availableFriendInfo}>
-                                    <Text style={styles.availableFriendName}>{friend.name}</Text>
-                                    <Text style={styles.availableFriendActivity}>{friend.activity}</Text>
-                                  </View>
-                                  <View style={styles.addFriendButton}>
-                                    <Plus size={16} color={Colors.light.primary} />
-                                  </View>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          </ScrollView>
-                        </>
-                      ) : (
-                        <Text style={styles.noMoreFriendsText}>
-                          All your available friends have been invited
-                        </Text>
-                      )}
-                      
-                      <TouchableOpacity 
-                        style={styles.inviteOption}
-                        onPress={() => setShowPingModal(true)}
-                      >
-                        <Bell size={18} color={Colors.light.primary} style={styles.inviteOptionIcon} />
-                        <Text style={styles.inviteOptionText}>Ping offline friends</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  
                   {/* Submit button */}
                   <View style={styles.submitButtonContainer}>
                     <TouchableOpacity 
@@ -481,13 +288,6 @@ export default function PlanSuggestionSheet({
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>
-      
-      <PingOfflineModal
-        visible={showPingModal}
-        onClose={() => setShowPingModal(false)}
-        onPingFriend={handlePingFriend}
-        pingedFriends={pingedFriends}
-      />
     </Modal>
   );
 }
@@ -589,180 +389,6 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 100,
     textAlignVertical: 'top',
-  },
-  // Styles for vertical people list
-  peopleList: {
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 10,
-    backgroundColor: Colors.light.buttonBackground,
-  },
-  personRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  personInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  statusDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: Colors.light.buttonBackground,
-  },
-  onlineDot: {
-    backgroundColor: Colors.light.onlineGreen,
-  },
-  offlineDot: {
-    backgroundColor: Colors.light.offlineGray,
-  },
-  pingedDot: {
-    backgroundColor: '#FFC107', // Amber color for pinged status
-  },
-  personName: {
-    fontSize: 14,
-    color: Colors.light.text,
-  },
-  removeButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.light.buttonBackground,
-  },
-  // Add more people button
-  addMoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    marginBottom: 20,
-    backgroundColor: `${Colors.light.primary}10`,
-    borderRadius: 10,
-  },
-  addMoreIcon: {
-    marginRight: 8,
-  },
-  addMoreText: {
-    fontSize: 16,
-    color: Colors.light.primary,
-    fontWeight: '500',
-  },
-  invitePanel: {
-    backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  invitePanelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingVertical: 4,
-  },
-  invitePanelTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginLeft: 8,
-  },
-  inviteSectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
-    marginBottom: 8,
-  },
-  availableFriendsScrollView: {
-    // Remove maxHeight to allow full scrolling
-  },
-  availableFriendsContainer: {
-    marginBottom: 16,
-  },
-  availableFriendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: 8,
-  },
-  availableFriendAvatarContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  availableFriendAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  availableFriendStatusDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: Colors.light.buttonBackground,
-  },
-  availableFriendInfo: {
-    flex: 1,
-  },
-  availableFriendName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.text,
-  },
-  availableFriendActivity: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-  },
-  addFriendButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: `${Colors.light.primary}15`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  noMoreFriendsText: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
-    textAlign: 'center',
-    marginBottom: 16,
-    fontStyle: 'italic',
-  },
-  inviteOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-  },
-  inviteOptionIcon: {
-    marginRight: 12,
-  },
-  inviteOptionText: {
-    fontSize: 16,
-    color: Colors.light.primary,
   },
   submitButtonContainer: {
     marginTop: 10,
