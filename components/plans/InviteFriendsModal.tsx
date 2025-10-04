@@ -10,7 +10,7 @@ import {
   TextInput,
   Alert
 } from 'react-native';
-import { X, Check, Search, UserPlus, Link, Mail } from 'lucide-react-native';
+import { Check, Search, UserPlus, Link } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
@@ -114,17 +114,8 @@ export default function InviteFriendsModal({
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Invite Friends</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-              <X size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
           </View>
           
-          {/* Description - moved closer to header */}
-          <View style={styles.descriptionContainer}>
-            <Text style={styles.descriptionText}>
-              Select friends to invite to this plan. They'll receive an invitation to join.
-            </Text>
-          </View>
           
           <View style={styles.searchContainer}>
             <Search size={20} color={Colors.light.secondaryText} style={styles.searchIcon} />
@@ -176,10 +167,7 @@ export default function InviteFriendsModal({
 
                 {filteredFriends.length === 0 && !isLoadingFriends && (
                   <Text style={styles.noResultsText}>
-                    {allFriends.length === 0
-                      ? "You don't have any friends yet"
-                      : `No friends found matching "${searchQuery}"`
-                    }
+                    No friends found
                   </Text>
                 )}
               </>
@@ -188,9 +176,6 @@ export default function InviteFriendsModal({
           
           {/* Invite by link section */}
           <View style={styles.inviteLinkSection}>
-            <Text style={styles.inviteLinkText}>
-              Invite people outside the app
-            </Text>
             <TouchableOpacity 
               style={styles.inviteLinkButton}
               onPress={() => {
@@ -202,7 +187,7 @@ export default function InviteFriendsModal({
               }}
             >
               <Link size={16} color={Colors.light.primary} />
-              <Text style={styles.inviteLinkButtonText}>Send invite link</Text>
+              <Text style={styles.inviteLinkButtonText}>Invite friends outside the app</Text>
             </TouchableOpacity>
           </View>
           
@@ -245,7 +230,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     backgroundColor: 'white',
     borderRadius: 16,
-    maxHeight: '80%',
+    maxHeight: '85%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -254,7 +239,7 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
     paddingBottom: 0,
