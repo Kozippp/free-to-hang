@@ -262,7 +262,29 @@ export default function PlanSuggestionSheet({
                     numberOfLines={Platform.OS === 'ios' ? 0 : 4}
                     textAlignVertical="top"
                   />
-                  
+
+                  {/* Selected Friends Section */}
+                  {selectedFriends.length > 0 && (
+                    <View style={styles.invitedFriendsContainer}>
+                      <Text style={styles.invitedFriendsLabel}>
+                        Inviting ({selectedFriends.length})
+                      </Text>
+                      <View style={styles.friendsList}>
+                        {selectedFriends.map((friend, index) => (
+                          <View key={friend.id} style={styles.friendItem}>
+                            <Image
+                              source={{ uri: friend.avatar }}
+                              style={styles.friendAvatar}
+                            />
+                            <Text style={styles.friendName}>
+                              {friend.name}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
                   {/* Submit button */}
                   <View style={styles.submitButtonContainer}>
                     <TouchableOpacity 
@@ -413,5 +435,41 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 60, // Extra padding at the bottom for better scrolling
+  },
+  invitedFriendsContainer: {
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  invitedFriendsLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 12,
+  },
+  friendsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  friendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.buttonBackground,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  friendAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  friendName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.text,
   },
 });
