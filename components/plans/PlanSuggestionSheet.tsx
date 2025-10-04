@@ -70,11 +70,15 @@ export default function PlanSuggestionSheet({
   // Setup pan responder for swipe-to-close
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to pan gestures at the very top of the sheet (handle area)
+        return gestureState.y0 < 60; // Only activate near the handle
+      },
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to downward swipes
+        // Only respond to downward swipes in the handle area
         return gestureState.dy > 10 && 
-               Math.abs(gestureState.dx) < Math.abs(gestureState.dy);
+               Math.abs(gestureState.dx) < Math.abs(gestureState.dy) &&
+               gestureState.y0 < 60; // Only activate near the handle
       },
       onPanResponderMove: (_, gestureState) => {
         if (gestureState.dy > 0) {
@@ -198,36 +202,38 @@ export default function PlanSuggestionSheet({
         animationType="none"
         onRequestClose={handleClose}
       >
-        <TouchableWithoutFeedback onPress={handleClose}>
-          <View style={styles.overlay}>
-            <TouchableWithoutFeedback>
-              <Animated.View
-                style={[
-                  styles.sheetContainer,
-                  { transform: [{ translateY }] },
-                  isAnonymous ? styles.anonymousSheet : null,
-                ]}
+        <View style={styles.overlay}>
+          <TouchableWithoutFeedback onPress={handleClose}>
+            <View style={styles.backdrop} />
+          </TouchableWithoutFeedback>
+          
+          <Animated.View
+            style={[
+              styles.sheetContainer,
+              { transform: [{ translateY }] },
+              isAnonymous ? styles.anonymousSheet : null,
+            ]}
+          >
+            <View style={styles.handle} {...panResponder.panHandlers} />
+
+            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+              <X size={24} color={Colors.light.secondaryText} />
+            </TouchableOpacity>
+
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={{ flex: 1 }}
+              keyboardVerticalOffset={100}
+            >
+              <ScrollView
+                ref={scrollViewRef}
+                style={styles.content}
+                contentContainerStyle={styles.contentContainer}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled={true}
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={Platform.OS === 'web'}
               >
-                <View style={styles.handle} {...panResponder.panHandlers} />
-
-                <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-                  <X size={24} color={Colors.light.secondaryText} />
-                </TouchableOpacity>
-
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                  style={{ flex: 1 }}
-                  keyboardVerticalOffset={100}
-                >
-                  <ScrollView
-                    ref={scrollViewRef}
-                    style={styles.content}
-                    contentContainerStyle={styles.contentContainer}
-                    keyboardShouldPersistTaps="handled"
-                    nestedScrollEnabled={true}
-                    scrollEventThrottle={16}
-                    showsVerticalScrollIndicator={true}
-                  >
                     <Text style={[
                       styles.title,
                       isAnonymous ? styles.anonymousTitle : null
@@ -331,9 +337,7 @@ export default function PlanSuggestionSheet({
                   </ScrollView>
                 </KeyboardAvoidingView>
               </Animated.View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+            </View>
       </Modal>
 
     </>
@@ -343,8 +347,11 @@ export default function PlanSuggestionSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Light white overlay instead of black
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Light white overlay instead of black
   },
   sheetContainer: {
     backgroundColor: 'white',
