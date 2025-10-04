@@ -94,7 +94,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     // TODO: Implement contacts permission with expo-contacts
     Alert.alert(
       'Contacts Access',
-      'This feature will be available soon. We\'ll help you find friends from your contacts.',
+      'This feature will be available soon.',
       [{ text: 'OK' }]
     );
     setShowContactsModal(false);

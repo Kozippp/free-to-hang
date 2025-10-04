@@ -19,6 +19,7 @@ import {
 import Colors from '@/constants/colors';
 import { X, Plus, Users, Bell, UserPlus } from 'lucide-react-native';
 import PingOfflineModal from '@/components/PingOfflineModal';
+import PlanSuggestionParticipants from './PlanSuggestionParticipants';
 import { offlineFriends } from '@/constants/mockData';
 import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
@@ -358,37 +359,11 @@ export default function PlanSuggestionSheet({
                     textAlignVertical="top"
                   />
                   
-                  <Text style={styles.label}>People</Text>
-                  
-                  {/* Vertical list of invited people */}
-                  <View style={styles.peopleList}>
-                    {getAllFriends().map((friend) => (
-                      <View key={friend.id} style={styles.personRow}>
-                        <View style={styles.personInfo}>
-                          <View style={styles.avatarWrapper}>
-                            <Image source={{ uri: friend.avatar }} style={styles.avatar} />
-                            <View style={[
-                              styles.statusDot,
-                              friend.status === 'available' && styles.onlineDot,
-                              friend.status === 'offline' && styles.offlineDot,
-                              friend.status === 'pinged' && styles.pingedDot,
-                            ]} />
-                          </View>
-                          <Text style={styles.personName}>{friend.name}</Text>
-                        </View>
-                        
-                        {/* Show remove button for all except current user */}
-                        {friend.id !== 'current' && (
-                          <TouchableOpacity 
-                            style={styles.removeButton}
-                            onPress={() => removeFriend(friend.id)}
-                          >
-                            <X size={16} color={Colors.light.secondaryText} />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    ))}
-                  </View>
+                  <PlanSuggestionParticipants
+                    friends={getAllFriends()}
+                    onRemoveFriend={removeFriend}
+                    currentUserId="current"
+                  />
                   
                   {/* Add more people button */}
                   <TouchableOpacity 
@@ -590,65 +565,6 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
   },
-  // Styles for vertical people list
-  peopleList: {
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 10,
-    backgroundColor: Colors.light.buttonBackground,
-  },
-  personRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  personInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  statusDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: Colors.light.buttonBackground,
-  },
-  onlineDot: {
-    backgroundColor: Colors.light.onlineGreen,
-  },
-  offlineDot: {
-    backgroundColor: Colors.light.offlineGray,
-  },
-  pingedDot: {
-    backgroundColor: '#FFC107', // Amber color for pinged status
-  },
-  personName: {
-    fontSize: 14,
-    color: Colors.light.text,
-  },
-  removeButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.light.buttonBackground,
-  },
   // Add more people button
   addMoreButton: {
     flexDirection: 'row',
@@ -722,6 +638,9 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     borderWidth: 1.5,
     borderColor: Colors.light.buttonBackground,
+  },
+  onlineDot: {
+    backgroundColor: Colors.light.onlineGreen,
   },
   availableFriendInfo: {
     flex: 1,
