@@ -319,7 +319,10 @@ export default function PlanSuggestionSheet({
                         </Text>
                         <View style={styles.friendsList}>
                           {selectedFriends.map((friend, index) => (
-                            <View key={friend.id} style={styles.friendItem}>
+                            <View key={friend.id} style={[
+                              styles.friendItem,
+                              index === selectedFriends.length - 1 && styles.friendItemLast
+                            ]}>
                               <View style={styles.friendAvatarContainer}>
                                 <Image
                                   source={{ uri: friend.avatar }}
@@ -606,6 +609,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
+  },
+  friendItemLast: {
+    borderBottomWidth: 0,
   },
   friendAvatarContainer: {
     position: 'relative',
