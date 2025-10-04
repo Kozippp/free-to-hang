@@ -137,7 +137,7 @@ export default function AddMoreFriendsModal({
             </View>
           ) : (
             <ScrollView
-              style={[styles.friendsList, { flex: 1 }]} // Allow it to expand
+              style={styles.friendsList}
               contentContainerStyle={[
                 styles.friendsListContent,
                 filteredFriends.length === 0 ? styles.centerContent : null,
@@ -250,13 +250,12 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     backgroundColor: 'white',
     borderRadius: 16,
-    maxHeight: '90%',
+    maxHeight: '85%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 8,
-    overflow: 'hidden',
   },
   closeButton: {
     position: 'absolute',
@@ -303,9 +302,8 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
   },
   friendsList: {
-    flex: 1,
-    minHeight: 100, // Minimum height when empty
-    maxHeight: 500, // Maximum height when full
+    maxHeight: 520,
+    minHeight: 260,
   },
   friendsListContent: {
     paddingHorizontal: 20,
