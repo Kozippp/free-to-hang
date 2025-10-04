@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -41,18 +41,16 @@ export default function AddMoreFriendsModal({
 }: AddMoreFriendsModalProps) {
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
 
-  // Debug logging
-  console.log('🟢 AddMoreFriendsModal render:', {
-    visible,
-    availableFriends: availableFriends.length,
-    alreadyInvited: alreadyInvited.length,
-  });
-
   // Filter out friends who are already invited
   const alreadyInvitedIds = new Set(alreadyInvited.map(f => f.id));
   const uninvitedFriends = availableFriends.filter(f => !alreadyInvitedIds.has(f.id));
 
-  console.log('🟡 Uninvited friends:', uninvitedFriends.length);
+  // Clear selections when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setSelectedFriendIds([]);
+    }
+  }, [visible]);
 
   const toggleFriend = (friendId: string) => {
     setSelectedFriendIds(prev => {
@@ -125,13 +123,10 @@ export default function AddMoreFriendsModal({
 
   return (
     <Modal
-      transparent={true}
       visible={visible}
+      transparent={true}
       animationType="slide"
       onRequestClose={handleClose}
-      statusBarTranslucent={true}
-      presentationStyle="overFullScreen"
-      hardwareAccelerated={true}
     >
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
@@ -192,7 +187,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    zIndex: 9999,
   },
   modalContainer: {
     width: '100%',
@@ -201,7 +195,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 16,
     overflow: 'hidden',
-    zIndex: 10000,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -210,7 +203,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
       },
       android: {
-        elevation: 16,
+        elevation: 8,
       },
     }),
   },
