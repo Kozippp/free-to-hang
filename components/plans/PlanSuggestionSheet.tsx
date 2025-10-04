@@ -15,9 +15,10 @@ import {
   Platform,
   KeyboardAvoidingView,
   PanResponder,
+  FlatList,
 } from 'react-native';
 import Colors from '@/constants/colors';
-import { X } from 'lucide-react-native';
+import { X, Plus, Check } from 'lucide-react-native';
 import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
 import { useRouter } from 'expo-router';
@@ -39,6 +40,7 @@ interface PlanSuggestionSheetProps {
   availableFriends: Friend[];
   isAnonymous: boolean;
   onPlanSubmitted: () => void;
+  onFriendsUpdated?: (friends: Friend[]) => void;
   prefilledTitle?: string;
   prefilledDescription?: string;
 }
@@ -50,6 +52,7 @@ export default function PlanSuggestionSheet({
   availableFriends,
   isAnonymous,
   onPlanSubmitted,
+  onFriendsUpdated,
   prefilledTitle,
   prefilledDescription,
 }: PlanSuggestionSheetProps) {
@@ -59,7 +62,9 @@ export default function PlanSuggestionSheet({
   
   const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
   const [description, setDescription] = useState(prefilledDescription || '');
-  
+  const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
+  const [modalSelectedFriends, setModalSelectedFriends] = useState<string[]>([]);
+
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
   const scrollViewRef = useRef<ScrollView>(null);
@@ -184,7 +189,48 @@ export default function PlanSuggestionSheet({
   const dismissKeyboard = () => {
     Keyboard.dismiss();
   };
-  
+
+  const handleOpenAddFriendsModal = () => {
+    // Get available friends that aren't already selected
+    const availableFriendsIds = availableFriends
+      .filter(friend => !selectedFriends.some(selected => selected.id === friend.id))
+      .map(friend => friend.id);
+    setModalSelectedFriends(availableFriendsIds);
+    setShowAddFriendsModal(true);
+  };
+
+  const handleAddFriendsConfirm = () => {
+    // Add selected friends from modal to the main selected friends list
+    const friendsToAdd = availableFriends.filter(friend =>
+      modalSelectedFriends.includes(friend.id)
+    );
+
+    // Create updated friends list
+    const updatedFriends = [...selectedFriends, ...friendsToAdd];
+
+    // Notify parent component of the update
+    if (onFriendsUpdated) {
+      onFriendsUpdated(updatedFriends);
+    }
+
+    setShowAddFriendsModal(false);
+    setModalSelectedFriends([]);
+  };
+
+  const toggleModalFriendSelection = (friendId: string) => {
+    if (modalSelectedFriends.includes(friendId)) {
+      setModalSelectedFriends(modalSelectedFriends.filter(id => id !== friendId));
+    } else {
+      setModalSelectedFriends([...modalSelectedFriends, friendId]);
+    }
+  };
+
+  const getAvailableFriendsForModal = () => {
+    return availableFriends.filter(friend =>
+      !selectedFriends.some(selected => selected.id === friend.id)
+    );
+  };
+
   if (!visible) return null;
   
   return (
@@ -281,6 +327,12 @@ export default function PlanSuggestionSheet({
                             </Text>
                           </View>
                         ))}
+                        <TouchableOpacity
+                          style={styles.addFriendButton}
+                          onPress={handleOpenAddFriendsModal}
+                        >
+                          <Plus size={20} color={Colors.light.primary} />
+                        </TouchableOpacity>
                       </View>
                     </View>
                   )}
@@ -311,6 +363,220 @@ export default function PlanSuggestionSheet({
         </View>
       </TouchableWithoutFeedback>
     </Modal>
+  );
+
+  return (
+    <>
+      <Modal
+        transparent={true}
+        visible={visible}
+        animationType="none"
+        onRequestClose={handleClose}
+      >
+        <TouchableWithoutFeedback onPress={handleClose}>
+          <View style={styles.overlay}>
+            <TouchableWithoutFeedback>
+              <Animated.View
+                style={[
+                  styles.sheetContainer,
+                  { transform: [{ translateY }] },
+                  isAnonymous ? styles.anonymousSheet : null,
+                ]}
+              >
+                <View style={styles.handle} {...panResponder.panHandlers} />
+
+                <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+                  <X size={24} color={Colors.light.secondaryText} />
+                </TouchableOpacity>
+
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                  style={{ flex: 1 }}
+                  keyboardVerticalOffset={100}
+                >
+                  <ScrollView
+                    ref={scrollViewRef}
+                    style={styles.content}
+                    contentContainerStyle={styles.contentContainer}
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled={true}
+                    scrollEventThrottle={16}
+                    showsVerticalScrollIndicator={true}
+                  >
+                    <Text style={[
+                      styles.title,
+                      isAnonymous ? styles.anonymousTitle : null
+                    ]}>
+                      {isAnonymous ? 'Anonymous Plan' : 'Create Plan'}
+                    </Text>
+
+                    {isAnonymous && (
+                      <View style={styles.anonymousInfo}>
+                        <Text style={styles.anonymousInfoText}>
+                          Your friends won't know who suggested this plan
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.labelContainer}>
+                      <Text style={styles.label}>What's the plan?</Text>
+                      <Text style={styles.requiredAsterisk}>*</Text>
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      value={planTitle}
+                      onChangeText={setPlanTitle}
+                      placeholder="Movie night? Chill in the park?"
+                      placeholderTextColor={Colors.light.secondaryText}
+                    />
+
+                    <Text style={styles.label}>Description (optional)</Text>
+                    <TextInput
+                      style={[styles.input, styles.textArea]}
+                      value={description}
+                      onChangeText={setDescription}
+                      placeholder="Add more details about your plan..."
+                      placeholderTextColor={Colors.light.secondaryText}
+                      multiline
+                      numberOfLines={Platform.OS === 'ios' ? 0 : 4}
+                      textAlignVertical="top"
+                    />
+
+                    {/* Selected Friends Section */}
+                    {selectedFriends.length > 0 && (
+                      <View style={styles.invitedFriendsContainer}>
+                        <Text style={styles.invitedFriendsLabel}>
+                          Inviting ({selectedFriends.length})
+                        </Text>
+                        <View style={styles.friendsList}>
+                          {selectedFriends.map((friend, index) => (
+                            <View key={friend.id} style={styles.friendItem}>
+                              <Image
+                                source={{ uri: friend.avatar }}
+                                style={styles.friendAvatar}
+                              />
+                              <Text style={styles.friendName}>
+                                {friend.name}
+                              </Text>
+                            </View>
+                          ))}
+                          <TouchableOpacity
+                            style={styles.addFriendButton}
+                            onPress={handleOpenAddFriendsModal}
+                          >
+                            <View style={styles.addFriendIconContainer}>
+                              <Plus size={20} color={Colors.light.primary} />
+                            </View>
+                            <Text style={styles.addFriendText}>Add</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Submit button */}
+                    <View style={styles.submitButtonContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.submitButton,
+                          isAnonymous ? styles.anonymousButton : null,
+                          !planTitle ? styles.disabledButton : null
+                        ]}
+                        onPress={handleSubmit}
+                        disabled={!planTitle}
+                      >
+                        <Text style={styles.submitButtonText}>
+                          {isAnonymous ? 'Suggest Anonymously' : 'Suggest Plan'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Add extra padding at the bottom for better scrolling */}
+                    <View style={styles.bottomPadding} />
+                  </ScrollView>
+                </KeyboardAvoidingView>
+              </Animated.View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Add Friends Modal */}
+      <Modal
+        transparent={true}
+        visible={showAddFriendsModal}
+        animationType="slide"
+        onRequestClose={() => setShowAddFriendsModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowAddFriendsModal(false)}>
+          <View style={styles.addFriendsOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.addFriendsModalContainer}>
+                <View style={styles.addFriendsHeader}>
+                  <Text style={styles.addFriendsTitle}>Add More Friends</Text>
+                  <TouchableOpacity
+                    style={styles.addFriendsCloseButton}
+                    onPress={() => setShowAddFriendsModal(false)}
+                  >
+                    <X size={24} color={Colors.light.secondaryText} />
+                  </TouchableOpacity>
+                </View>
+
+                <FlatList
+                  data={getAvailableFriendsForModal()}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item: friend }) => {
+                    const isSelected = modalSelectedFriends.includes(friend.id);
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.addFriendItem,
+                          isSelected && styles.addFriendItemSelected
+                        ]}
+                        onPress={() => toggleModalFriendSelection(friend.id)}
+                      >
+                        <Image source={{ uri: friend.avatar }} style={styles.addFriendAvatar} />
+                        <View style={styles.addFriendInfo}>
+                          <Text style={styles.addFriendName}>{friend.name}</Text>
+                        </View>
+                        {isSelected && (
+                          <View style={styles.addFriendCheck}>
+                            <Check size={20} color={Colors.light.primary} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  }}
+                  style={styles.addFriendsList}
+                  showsVerticalScrollIndicator={false}
+                />
+
+                <View style={styles.addFriendsFooter}>
+                  <TouchableOpacity
+                    style={styles.addFriendsCancelButton}
+                    onPress={() => setShowAddFriendsModal(false)}
+                  >
+                    <Text style={styles.addFriendsCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.addFriendsConfirmButton,
+                      modalSelectedFriends.length === 0 && styles.disabledButton
+                    ]}
+                    onPress={handleAddFriendsConfirm}
+                    disabled={modalSelectedFriends.length === 0}
+                  >
+                    <Text style={styles.addFriendsConfirmText}>
+                      Add {modalSelectedFriends.length > 0 ? `(${modalSelectedFriends.length})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    </>
   );
 }
 
@@ -471,5 +737,136 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: Colors.light.text,
+  },
+  addFriendButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.buttonBackground,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    borderStyle: 'dashed',
+  },
+  addFriendIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: `${Colors.light.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  addFriendText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.light.primary,
+  },
+  addFriendsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  addFriendsModalContainer: {
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  addFriendsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  addFriendsTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  addFriendsCloseButton: {
+    padding: 4,
+  },
+  addFriendsList: {
+    maxHeight: 300,
+    marginBottom: 20,
+  },
+  addFriendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: Colors.light.buttonBackground,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  addFriendItemSelected: {
+    borderColor: Colors.light.primary,
+    backgroundColor: `${Colors.light.primary}10`,
+  },
+  addFriendAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  addFriendInfo: {
+    flex: 1,
+  },
+  addFriendName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.light.text,
+  },
+  addFriendCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: `${Colors.light.primary}20`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addFriendsFooter: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  addFriendsCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: Colors.light.buttonBackground,
+    alignItems: 'center',
+  },
+  addFriendsCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+  },
+  addFriendsConfirmButton: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+    alignItems: 'center',
+  },
+  addFriendsConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
   },
 });
