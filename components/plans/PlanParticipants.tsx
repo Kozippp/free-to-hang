@@ -3,16 +3,11 @@ import { StyleSheet, View, Text, TouchableOpacity, Image, FlatList, Alert } from
 import { UserPlus, X, Check, Clock, Eye } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Participant } from '@/store/plansStore';
-import { InvitationPoll } from '@/lib/plans-service';
-import InvitationVotingPoll from './InvitationVotingPoll';
-
 interface PlanParticipantsProps {
   acceptedParticipants: Participant[];
   maybeParticipants: Participant[];
   pendingParticipants: Participant[];
-  invitationPolls: InvitationPoll[];
   onInvite: () => void;
-  onInvitationVote: (pollId: string, vote: 'allow' | 'deny') => void;
   canInvite: boolean;
   isInYesGang: boolean;
 }
@@ -21,9 +16,7 @@ export default function PlanParticipants({
   acceptedParticipants,
   maybeParticipants,
   pendingParticipants,
-  invitationPolls,
   onInvite,
-  onInvitationVote,
   canInvite,
   isInYesGang
 }: PlanParticipantsProps) {
@@ -91,77 +84,17 @@ export default function PlanParticipants({
         )}
       </View>
 
-      {/* Invitations Section - Exact same as before */}
-      {invitationPolls.length > 0 ? (
-        <View style={styles.invitationsSection}>
-          <View style={styles.headerRow}>
-            <UserPlus size={20} color={Colors.light.text} style={styles.headerIcon} />
-            <Text style={styles.sectionTitle}>Invitations</Text>
-          </View>
-          
-          <Text style={[styles.invitationDescription, { marginTop: -8 }]}>
-            Cast your vote to choose whether to invite these people to the hang.
+      {/* Simple invite button */}
+      {isInYesGang && (
+        <TouchableOpacity 
+          style={styles.simpleInviteButton}
+          onPress={onInvite}
+        >
+          <UserPlus size={16} color={Colors.light.primary} />
+          <Text style={styles.simpleInviteButtonText}>
+            Invite more people
           </Text>
-          
-          {/* Active invitation votes - using exact same component as before */}
-          {invitationPolls.map((poll) => {
-            const invitedUsers = poll.invitedUsers?.map(userId => {
-              // Mock data for invited users - in real app this would come from user store
-              return {
-                id: userId,
-                name: `User ${userId}`,
-                avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`
-              };
-            }) || [];
-
-            return (
-              <InvitationVotingPoll
-                key={poll.id}
-                poll={poll}
-                onVote={(pollId, vote) => {
-                  if (isInYesGang) {
-                    onInvitationVote(pollId, vote);
-                  }
-                }}
-                canVote={isInYesGang}
-                onExpired={() => {
-                  // Parent will re-render with fewer polls when higher level state is refreshed
-                }}
-              />
-            );
-          })}
-          
-          {/* Invite more people button at bottom */}
-          <TouchableOpacity 
-            style={[
-              styles.inviteMoreButton,
-              !isInYesGang && styles.disabledCreateButton
-            ]}
-            onPress={onInvite}
-            disabled={!isInYesGang}
-          >
-            <UserPlus size={16} color={isInYesGang ? Colors.light.primary : Colors.light.secondaryText} />
-            <Text style={[
-              styles.inviteMoreButtonText,
-              !isInYesGang && styles.disabledCreateButtonText
-            ]}>
-              Invite more people
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        /* Simple invite button when no active votes */
-        isInYesGang && (
-          <TouchableOpacity 
-            style={styles.simpleInviteButton}
-            onPress={onInvite}
-          >
-            <UserPlus size={16} color={Colors.light.primary} />
-            <Text style={styles.simpleInviteButtonText}>
-              Invite more people
-            </Text>
-          </TouchableOpacity>
-        )
+        </TouchableOpacity>
       )}
     </View>
   );

@@ -44,7 +44,7 @@ import usePlansStore from '@/store/plansStore';
 import useChatStore from '@/store/chatStore';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { plansService, InvitationPoll } from '@/lib/plans-service';
+import { plansService } from '@/lib/plans-service';
 import { supabase } from '@/lib/supabase';
 
 interface PlanDetailViewProps {
@@ -64,10 +64,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     removePollOption, 
     addPollOption, 
     deletePoll,
-    createInvitationPollWithAutoVote, 
     invitations,
     activePlans,
-    processExpiredInvitationPolls,
     loadPlans
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
@@ -109,9 +107,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
 
-  // Invitation polls state
-  const [invitationPolls, setInvitationPolls] = useState<InvitationPoll[]>([]);
-  const [loadingInvitationPolls, setLoadingInvitationPolls] = useState(false);
   
   // Decline animation states
   const [isClosing, setIsClosing] = useState(false);
@@ -149,71 +144,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     //   markPlanAsSeen(plan.id).catch(console.error);
     // }
   }, [plan.id, currentUserStatus]);
-
-  // Load invitation polls when plan changes or when plan data updates (for realtime)
-  React.useEffect(() => {
-    const loadInvitationPolls = async () => {
-      try {
-        setLoadingInvitationPolls(true);
-        const polls = await plansService.getInvitationPolls(latestPlan.id);
-        setInvitationPolls(polls);
-      } catch (error) {
-        console.error('Error loading invitation polls:', error);
-      } finally {
-        setLoadingInvitationPolls(false);
-      }
-    };
-
-    loadInvitationPolls();
-  }, [latestPlan.id, latestPlan.lastUpdatedAt]); // Also reload when plan data changes (realtime updates)
-
-  // Helper to refresh invitation polls (used after vote or expiry)
-  const refreshInvitationPolls = React.useCallback(async () => {
-    try {
-      const polls = await plansService.getInvitationPolls(latestPlan.id);
-      setInvitationPolls(polls);
-    } catch (error) {
-      console.error('Error refreshing invitation polls:', error);
-    }
-  }, [latestPlan.id]);
-
-  // Process expired invitation polls periodically
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      processExpiredInvitationPolls();
-    }, 5000); // Check every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [processExpiredInvitationPolls]);
-
-  // Real-time subscription for invitation polls
-  React.useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel(`invitation_polls_${plan.id}_${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'invitation_polls',
-          filter: `plan_id=eq.${plan.id}`
-        },
-        (payload: any) => {
-          console.log('📊 Invitation poll real-time update:', payload);
-          // Refresh invitation polls when any change occurs
-          refreshInvitationPolls();
-        }
-      )
-      .subscribe((status: string) => {
-        console.log('📡 Invitation polls subscription status:', status);
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [plan.id, user?.id, refreshInvitationPolls]);
 
   // Track real-time updates for animation
   React.useEffect(() => {
@@ -423,59 +353,41 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     setShowInviteModal(true);
   };
 
-  const handleInvitationVote = async (pollId: string, vote: 'allow' | 'deny') => {
+  const handleInviteUsers = async (friendIds: string[], friendNames: string[]) => {
     try {
-      console.log('🗳️ Voting on invitation poll:', pollId, 'vote:', vote);
-      await plansService.voteOnInvitationPoll(latestPlan.id, pollId, vote);
-      console.log('✅ Vote submitted successfully');
+      console.log('👥 Inviting users directly:', { friendIds, friendNames });
 
-      // Reload invitation polls to update UI
-      const updatedPolls = await plansService.getInvitationPolls(latestPlan.id);
-      setInvitationPolls(updatedPolls);
-    } catch (error) {
-      console.error('❌ Error voting on invitation poll:', error);
+      // Directly invite users (no voting)
+      await plansService.inviteUsers(latestPlan.id, friendIds);
 
-      let errorMessage = 'Failed to submit vote. Please try again.';
-      if (error instanceof Error) {
-        if (error.message.includes('Authentication')) {
-          errorMessage = 'Your session has expired. Please sign out and sign back in.';
-        } else if (error.message.includes('expired')) {
-          errorMessage = 'This poll has expired.';
-        }
-      }
-
-      Alert.alert('Error Voting', errorMessage, [{ text: 'OK', style: 'default' }]);
-    }
-  };
-
-  const handleCreateInvitationPoll = async (friendIds: string[], friendNames: string[]) => {
-    try {
-      console.log('📊 Creating invitation polls via new API:', { friendIds, friendNames });
-
-      // Use the new invitation polls API
-      await plansService.createInvitationPolls(latestPlan.id, friendIds);
-
-      console.log('✅ Invitation polls created successfully via new API');
+      console.log('✅ Users invited successfully');
+      
+      Alert.alert(
+        'Friends Invited!',
+        `${friendIds.length} friend${friendIds.length > 1 ? 's have' : ' has'} been invited to the plan.`,
+        [{ text: 'OK' }]
+      );
+      
       setShowInviteModal(false);
 
       // Real-time subscription will handle updating the store
     } catch (error) {
-      console.error('❌ Error creating invitation polls:', error);
+      console.error('❌ Error inviting users:', error);
 
-      let errorMessage = 'Failed to create invitation polls. Please try again.';
+      let errorMessage = 'Failed to invite users. Please try again.';
 
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           errorMessage = 'Your session has expired. Please sign out and sign back in.';
         } else if (error.message.includes('403')) {
-          errorMessage = 'Only going participants can create invitation polls.';
+          errorMessage = 'Only going participants can invite others.';
         } else if (error.message.includes('400')) {
-          errorMessage = 'Some selected users are already in the plan or have active polls.';
+          errorMessage = 'Some selected users are already in the plan.';
         }
       }
 
       Alert.alert(
-        'Error Creating Polls',
+        'Error Inviting Users',
         errorMessage,
         [{ text: 'OK', style: 'default' }]
       );
@@ -960,13 +872,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             acceptedParticipants={acceptedParticipants}
             maybeParticipants={maybeParticipants}
             pendingParticipants={pendingParticipants}
-            invitationPolls={invitationPolls || []}
             onInvite={handleInviteFriends}
-            onInvitationVote={async (pollId, vote) => {
-              await handleInvitationVote(pollId, vote);
-              // After successful vote, refresh list to remove finished ones
-              refreshInvitationPolls();
-            }}
             canInvite={isInYesGang}
             isInYesGang={isInYesGang}
           />
@@ -1035,9 +941,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           // Legacy callback - not used anymore
           setShowInviteModal(false);
         }}
-        onCreateInvitationPoll={handleCreateInvitationPoll}
+        onCreateInvitationPoll={handleInviteUsers}
         plan={latestPlan}
-        invitationPolls={invitationPolls}
       />
       
       {/* Response Confirmation Modal */}

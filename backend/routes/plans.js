@@ -1747,25 +1747,21 @@ router.post('/:id/attendance', requireAuth, async (req, res) => {
   }
 });
 
-// ===== INVITATION POLLS ENDPOINTS =====
+// ===== INVITE USERS ENDPOINT =====
 
-// POST /plans/:id/invitation-polls - Create invitation polls for multiple users
-router.post('/:id/invitation-polls', requireAuth, async (req, res) => {
+// POST /plans/:id/invite - Directly invite users to plan (no voting)
+router.post('/:id/invite', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { invitedUserIds } = req.body; // Array of user IDs to invite
+    const { userIds } = req.body; // Array of user IDs to invite
     const userId = req.user.id;
 
     // Validate input
-    if (!Array.isArray(invitedUserIds) || invitedUserIds.length === 0) {
-      return res.status(400).json({ error: 'invitedUserIds must be a non-empty array' });
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'userIds must be a non-empty array' });
     }
 
-    if (invitedUserIds.length > 10) {
-      return res.status(400).json({ error: 'Cannot create more than 10 invitation polls at once' });
-    }
-
-    // Check if user can create invitation polls (must be "going" participant)
+    // Check if user can invite (must be "going" participant)
     const { data: participant, error: participantError } = await supabase
       .from('plan_participants')
       .select('status')
@@ -1774,388 +1770,56 @@ router.post('/:id/invitation-polls', requireAuth, async (req, res) => {
       .single();
 
     if (participantError || !participant || participant.status !== 'going') {
-      return res.status(403).json({ error: 'Only going participants can create invitation polls' });
+      return res.status(403).json({ error: 'Only going participants can invite others' });
     }
 
-    // Check if invited users are not already in the plan
-    const { data: existingParticipants, error: existingError } = await supabase
+    // Filter out users already in the plan
+    const { data: existingParticipants } = await supabase
       .from('plan_participants')
       .select('user_id')
       .eq('plan_id', id)
-      .in('user_id', invitedUserIds);
-
-    if (existingError) {
-      console.error('Error checking existing participants:', existingError);
-      return res.status(500).json({ error: 'Failed to validate participants' });
-    }
+      .in('user_id', userIds);
 
     const existingUserIds = existingParticipants?.map(p => p.user_id) || [];
-    const validUserIds = invitedUserIds.filter(id => !existingUserIds.includes(id));
+    const newUserIds = userIds.filter(uid => !existingUserIds.includes(uid));
 
-    if (validUserIds.length === 0) {
+    if (newUserIds.length === 0) {
       return res.status(400).json({ error: 'All selected users are already in the plan' });
     }
 
-    // Check for existing active invitation polls for these users
-    const { data: existingPolls, error: pollsError } = await supabase
-      .from('invitation_polls')
-      .select('invited_user_id')
-      .eq('plan_id', id)
-      .eq('status', 'active')
-      .in('invited_user_id', validUserIds);
-
-    if (pollsError) {
-      console.error('Error checking existing polls:', pollsError);
-      return res.status(500).json({ error: 'Failed to check existing polls' });
-    }
-
-    const existingPollUserIds = existingPolls?.map(p => p.invited_user_id) || [];
-    const finalUserIds = validUserIds.filter(id => !existingPollUserIds.includes(id));
-
-    if (finalUserIds.length === 0) {
-      return res.status(400).json({ error: 'All selected users already have active invitation polls' });
-    }
-
-    // Create invitation polls for each user
-    const pollsToCreate = finalUserIds.map(invitedUserId => ({
+    // Add new participants as pending
+    const participantsToAdd = newUserIds.map(newUserId => ({
       plan_id: id,
-      invited_user_id: invitedUserId,
-      created_by: userId,
-      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes from now
-      status: 'active'
+      user_id: newUserId,
+      status: 'pending',
+      created_at: new Date().toISOString()
     }));
 
-    const { data: createdPolls, error: createError } = await supabase
-      .from('invitation_polls')
-      .insert(pollsToCreate)
-      .select();
-
-    if (createError) {
-      console.error('Error creating invitation polls:', createError);
-      return res.status(500).json({ error: 'Failed to create invitation polls' });
-    }
-
-    // Notify about new invitation polls
-    for (const poll of createdPolls) {
-      await notifyPlanUpdate(id, 'invitation_poll_created', userId, {
-        poll_id: poll.id,
-        invited_user_id: poll.invited_user_id
-      });
-    }
-
-    console.log(`✅ Created ${createdPolls.length} invitation polls for plan ${id}`);
-
-    // Return updated plan with new polls
-    const fullPlan = await getPlanWithDetails(id, userId);
-    res.status(201).json(fullPlan);
-
-  } catch (error) {
-    console.error('Error in POST /plans/:id/invitation-polls:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /plans/:id/invitation-polls - Get invitation polls for a plan
-router.get('/:id/invitation-polls', requireAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    // Check if user has access to this plan
-    const { data: participant, error: participantError } = await supabase
+    const { error: insertError } = await supabase
       .from('plan_participants')
-      .select('status')
-      .eq('plan_id', id)
-      .eq('user_id', userId)
-      .single();
+      .insert(participantsToAdd);
 
-    if (participantError || !participant) {
-      return res.status(403).json({ error: 'Access denied to plan' });
+    if (insertError) {
+      console.error('Error adding participants:', insertError);
+      return res.status(500).json({ error: 'Failed to invite users' });
     }
 
-    // Get invitation polls with basic info and calculated vote counts
-    const { data: polls, error: pollsError } = await supabase
-      .from('invitation_polls')
-      .select(`
-        *,
-        invited_user:invited_user_id(name, username, avatar_url),
-        created_by_user:created_by(name, username, avatar_url)
-      `)
-      .eq('plan_id', id)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
-
-    if (pollsError) {
-      console.error('Error fetching invitation polls:', pollsError);
-      return res.status(500).json({ error: 'Failed to fetch invitation polls' });
-    }
-
-    // Calculate vote counts for each poll
-    const pollIds = polls.map(p => p.id);
-    let voteCounts = {};
-    if (pollIds.length > 0) {
-      const { data: votes, error: votesError } = await supabase
-        .from('invitation_poll_votes')
-        .select('poll_id, vote')
-        .in('poll_id', pollIds);
-
-      if (!votesError && votes) {
-        // Initialize vote counts
-        pollIds.forEach(id => {
-          voteCounts[id] = { allow_votes: 0, deny_votes: 0 };
-        });
-
-        // Count votes
-        votes.forEach(vote => {
-          if (vote.vote === 'allow') {
-            voteCounts[vote.poll_id].allow_votes++;
-          } else if (vote.vote === 'deny') {
-            voteCounts[vote.poll_id].deny_votes++;
-          }
-        });
-      }
-    }
-
-    // Get user votes for these polls
-    const { data: userVotes, error: userVotesError } = await supabase
-      .from('invitation_poll_votes')
-      .select('poll_id, vote')
-      .in('poll_id', pollIds)
-      .eq('user_id', userId);
-
-    if (userVotesError) {
-      console.error('Error fetching user votes:', userVotesError);
-      return res.status(500).json({ error: 'Failed to fetch user votes' });
-    }
-
-    // Create vote lookup map
-    const userVotesMap = {};
-    userVotes.forEach(vote => {
-      userVotesMap[vote.poll_id] = vote.vote;
-    });
-
-    // Transform data to match frontend format AND filter out those already expired client-side
-    const transformedPolls = polls
-      .filter(poll => new Date(poll.expires_at) > new Date())
-      .map(poll => {
-        const counts = voteCounts[poll.id] || { allow_votes: 0, deny_votes: 0 };
-        return {
-          id: poll.id,
-          invitedUser: {
-            id: poll.invited_user_id,
-            name: poll.invited_user.name,
-            avatar: poll.invited_user.avatar_url
-          },
-          createdBy: {
-            id: poll.created_by,
-            name: poll.created_by_user.name,
-            avatar: poll.created_by_user.avatar_url
-          },
-          timeLeft: Math.max(0, Math.floor((new Date(poll.expires_at).getTime() - Date.now()) / 1000)),
-          isExpired: new Date(poll.expires_at) <= new Date(),
-          expiresAt: poll.expires_at,
-          allowVotes: counts.allow_votes,
-          denyVotes: counts.deny_votes,
-          currentUserVote: userVotesMap[poll.id] || null,
-          canVote: participant.status === 'going'
-        };
+    // Notify about new participants
+    for (const newUserId of newUserIds) {
+      await notifyPlanUpdate(id, 'participant_invited', userId, {
+        invited_user_id: newUserId,
+        invited_by: userId
       });
-
-    res.json(transformedPolls);
-
-  } catch (error) {
-    console.error('Error in GET /plans/:id/invitation-polls:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// POST /plans/:id/invitation-polls/:pollId/vote - Vote on invitation poll
-router.post('/:id/invitation-polls/:pollId/vote', requireAuth, async (req, res) => {
-  try {
-    const { id, pollId } = req.params;
-    const { vote } = req.body; // 'allow' or 'deny'
-    const userId = req.user.id;
-
-    // Validate vote
-    if (!['allow', 'deny'].includes(vote)) {
-      return res.status(400).json({ error: 'Vote must be either "allow" or "deny"' });
     }
 
-    // Check if user can vote (must be "going" participant)
-    const { data: participant, error: participantError } = await supabase
-      .from('plan_participants')
-      .select('status')
-      .eq('plan_id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (participantError || !participant || participant.status !== 'going') {
-      return res.status(403).json({ error: 'Only going participants can vote on invitation polls' });
-    }
-
-    // Check if poll exists and is active
-    const { data: poll, error: pollError } = await supabase
-      .from('invitation_polls')
-      .select('*')
-      .eq('id', pollId)
-      .eq('plan_id', id)
-      .eq('status', 'active')
-      .single();
-
-    if (pollError || !poll) {
-      return res.status(404).json({ error: 'Invitation poll not found or not active' });
-    }
-
-    // Check if poll has expired
-    if (new Date(poll.expires_at) <= new Date()) {
-      return res.status(400).json({ error: 'Invitation poll has expired' });
-    }
-
-    // Insert or update vote
-    const { error: voteError } = await supabase
-      .from('invitation_poll_votes')
-      .upsert({
-        poll_id: pollId,
-        plan_id: id, // Added plan_id for performance
-        user_id: userId,
-        vote: vote
-      }, {
-        onConflict: 'poll_id,user_id'
-      });
-
-    if (voteError) {
-      console.error('Error voting on invitation poll:', voteError);
-      return res.status(500).json({ error: 'Failed to submit vote' });
-    }
-
-    // Notify about the vote
-    await notifyPlanUpdate(id, 'invitation_poll_voted', userId, {
-      poll_id: pollId,
-      vote: vote
-    });
-
-    console.log(`✅ Vote submitted: ${vote} on poll ${pollId} by user ${userId}`);
+    console.log(`✅ Invited ${newUserIds.length} users to plan ${id}`);
 
     // Return updated plan
     const fullPlan = await getPlanWithDetails(id, userId);
     res.json(fullPlan);
 
   } catch (error) {
-    console.error('Error in POST /plans/:id/invitation-polls/:pollId/vote:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /plans/:id/invitation-polls/:pollId - Get specific invitation poll details
-router.get('/:id/invitation-polls/:pollId', requireAuth, async (req, res) => {
-  try {
-    const { id, pollId } = req.params;
-    const userId = req.user.id;
-
-    // Check if user has access to this plan
-    const { data: participant, error: participantError } = await supabase
-      .from('plan_participants')
-      .select('status')
-      .eq('plan_id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (participantError || !participant) {
-      return res.status(403).json({ error: 'Access denied to plan' });
-    }
-
-    // Get poll details from invitation_polls table with joined data
-    const { data: poll, error: pollError } = await supabase
-      .from('invitation_polls')
-      .select(`
-        *,
-        invited_user:invited_user_id(name, username, avatar_url),
-        created_by_user:created_by(name, username, avatar_url),
-        plan:plan_id(title)
-      `)
-      .eq('id', pollId)
-      .eq('plan_id', id)
-      .single();
-
-    if (pollError || !poll) {
-      return res.status(404).json({ error: 'Invitation poll not found' });
-    }
-
-    // Get all votes for this poll with user data
-    const { data: votes, error: votesError } = await supabase
-      .from('invitation_poll_votes')
-      .select(`
-        id,
-        vote,
-        created_at,
-        user_id,
-        users!inner(name, username, avatar_url)
-      `)
-      .eq('poll_id', pollId);
-
-    if (votesError) {
-      console.error('Error fetching poll votes:', votesError);
-      return res.status(500).json({ error: 'Failed to fetch poll votes' });
-    }
-
-    // Get current user's vote
-    const currentUserVote = votes.find(v => v.user_id === userId)?.vote || null;
-
-    // Calculate vote counts
-    let allowVotes = 0;
-    let denyVotes = 0;
-    votes.forEach(vote => {
-      if (vote.vote === 'allow') {
-        allowVotes++;
-      } else if (vote.vote === 'deny') {
-        denyVotes++;
-      }
-    });
-
-    // Transform votes
-    const transformedVotes = votes.map(vote => ({
-      id: vote.id,
-      vote: vote.vote,
-      createdAt: vote.created_at,
-      user: {
-        id: vote.user_id,
-        name: vote.users.name,
-        username: vote.users.username,
-        avatar: vote.users.avatar_url
-      }
-    }));
-
-    // Return poll details
-    const pollDetails = {
-      id: poll.id,
-      invitedUser: {
-        id: poll.invited_user_id,
-        name: poll.invited_user.name,
-        avatar: poll.invited_user.avatar_url
-      },
-      createdBy: {
-        id: poll.created_by,
-        name: poll.created_by_user.name,
-        avatar: poll.created_by_user.avatar_url
-      },
-      planTitle: poll.plan.title,
-      createdAt: poll.created_at,
-      expiresAt: poll.expires_at,
-      status: poll.status,
-      timeLeft: Math.max(0, Math.floor((new Date(poll.expires_at).getTime() - Date.now()) / 1000)),
-      isExpired: new Date(poll.expires_at) <= new Date(),
-      allowVotes: allowVotes,
-      denyVotes: denyVotes,
-      totalVotes: allowVotes + denyVotes,
-      currentUserVote: currentUserVote,
-      canVote: participant.status === 'going',
-      votes: transformedVotes
-    };
-
-    res.json(pollDetails);
-
-  } catch (error) {
-    console.error('Error in GET /plans/:id/invitation-polls/:pollId:', error);
+    console.error('Error in POST /plans/:id/invite:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

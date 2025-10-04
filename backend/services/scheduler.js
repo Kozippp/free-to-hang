@@ -29,9 +29,6 @@ class PlanScheduler {
     // Schedule auto-completion every 5 minutes (instead of every minute for performance)
     this.scheduleAutoCompletion();
 
-    // Schedule invitation poll processing every minute
-    this.scheduleInvitationPollProcessing();
-
     // Schedule conditional status reevaluation every 2 minutes
     this.scheduleConditionalReevaluation();
 
@@ -94,30 +91,6 @@ class PlanScheduler {
     this.tasks.push(task);
   }
 
-  // Process expired invitation polls
-  scheduleInvitationPollProcessing() {
-    const task = cron.schedule('* * * * *', async () => {
-      try {
-        console.log('🎯 Checking for expired invitation polls...');
-
-        // Process expired invitation polls using the new function
-        const { data, error } = await supabase.rpc('process_expired_invitation_polls');
-
-        if (error) {
-          console.error('❌ Error processing expired invitation polls:', error);
-        } else {
-          console.log('✅ Processed expired invitation polls');
-        }
-      } catch (error) {
-        console.error('❌ Invitation poll processing task failed:', error);
-      }
-    }, {
-      scheduled: false
-    });
-
-    task.start();
-    this.tasks.push(task);
-  }
 
   // Reevaluate conditional statuses (Node implementation, no DB RPC)
   scheduleConditionalReevaluation() {
@@ -179,18 +152,6 @@ class PlanScheduler {
     return true;
   }
 
-  async triggerInvitationProcessing() {
-    console.log('🔧 Manually triggering invitation poll processing...');
-    const { data, error } = await supabase.rpc('process_expired_invitation_polls');
-
-    if (error) {
-      console.error('❌ Manual invitation poll processing failed:', error);
-      return false;
-    }
-
-    console.log('✅ Manual invitation poll processing completed');
-    return true;
-  }
 }
 
 // Export singleton instance
