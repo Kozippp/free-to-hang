@@ -294,43 +294,41 @@ export default function PlanSuggestionSheet({
       animationType="none"
       onRequestClose={handleClose}
     >
-      <TouchableWithoutFeedback onPress={handleClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback
-            onPress={() => {}} // Prevent closing when pressing on the sheet
+      <View style={styles.overlay}>
+        <TouchableWithoutFeedback onPress={handleClose}>
+          <View style={styles.backdrop} />
+        </TouchableWithoutFeedback>
+        
+        <Animated.View
+          style={[
+            styles.sheetContainer,
+            { transform: [{ translateY }] },
+            isAnonymous ? styles.anonymousSheet : null,
+          ]}
+        >
+          <View style={styles.handle} {...panResponder.panHandlers} />
+          
+          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+            <X size={24} color={Colors.light.secondaryText} />
+          </TouchableOpacity>
+          
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={100}
           >
-            <Animated.View
-              style={[
-                styles.sheetContainer,
-                { transform: [{ translateY }] },
-                isAnonymous ? styles.anonymousSheet : null,
-              ]}
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.content}
+              contentContainerStyle={styles.contentContainer}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              scrollEventThrottle={16}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+              alwaysBounceVertical={true}
+              scrollEnabled={true}
             >
-              <View style={styles.handle} {...panResponder.panHandlers} />
-              
-              <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-                <X size={24} color={Colors.light.secondaryText} />
-              </TouchableOpacity>
-              
-              <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
-                keyboardVerticalOffset={100}
-              >
-                <ScrollView
-                  ref={scrollViewRef}
-                  style={styles.content}
-                  contentContainerStyle={styles.contentContainer}
-                  keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode="on-drag"
-                  scrollEventThrottle={16}
-                  showsVerticalScrollIndicator={true}
-                  bounces={true}
-                  alwaysBounceVertical={true}
-                  scrollEnabled={true}
-                  onStartShouldSetResponderCapture={() => true}
-                  onMoveShouldSetResponderCapture={() => true}
-                >
                   <Text style={[
                     styles.title,
                     isAnonymous ? styles.anonymousTitle : null
@@ -432,8 +430,6 @@ export default function PlanSuggestionSheet({
                             scrollEventThrottle={16}
                             bounces={false}
                             scrollEnabled={true}
-                            onStartShouldSetResponderCapture={() => true}
-                            onMoveShouldSetResponderCapture={() => true}
                           >
                             {getAvailableFriendsToAdd().map((friend) => (
                               <TouchableOpacity 
@@ -494,9 +490,7 @@ export default function PlanSuggestionSheet({
                 </ScrollView>
               </KeyboardAvoidingView>
             </Animated.View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+          </View>
       
       <PingOfflineModal
         visible={showPingModal}
@@ -511,8 +505,11 @@ export default function PlanSuggestionSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   sheetContainer: {
     backgroundColor: Colors.light.background,
