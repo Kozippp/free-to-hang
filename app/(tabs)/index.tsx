@@ -45,6 +45,7 @@ import InviteShareModal from '@/components/InviteShareModal';
 import PlanSuggestionSheet from '@/components/plans/PlanSuggestionSheet';
 import FriendCard from '@/components/FriendCard';
 import AddFriendsModal from '@/components/friends/AddFriendsModal';
+import AddMoreFriendsModal from '@/components/plans/AddMoreFriendsModal';
 import useHangStore from '@/store/hangStore';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -75,6 +76,7 @@ export default function HangScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
+  const [showAddMoreFriendsModal, setShowAddMoreFriendsModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
   // Load user data when component mounts or auth user changes
@@ -146,6 +148,14 @@ export default function HangScreen() {
     updatedFriends.forEach(friend => {
       selectFriend(friend.id);
     });
+  };
+
+  const handleAddMoreFriends = (friendIds: string[]) => {
+    // Add the selected friends to the existing selection
+    friendIds.forEach(id => {
+      selectFriend(id);
+    });
+    setShowAddMoreFriendsModal(false);
   };
 
   const onRefresh = async () => {
@@ -331,11 +341,22 @@ export default function HangScreen() {
         )}
         onPlanSubmitted={handlePlanSubmitted}
         onFriendsUpdated={handleFriendsUpdated}
+        onOpenAddMoreFriends={() => setShowAddMoreFriendsModal(true)}
       />
       
       <AddFriendsModal
         visible={showAddFriendsModal}
         onClose={() => setShowAddFriendsModal(false)}
+      />
+
+      <AddMoreFriendsModal
+        visible={showAddMoreFriendsModal}
+        onClose={() => setShowAddMoreFriendsModal(false)}
+        availableFriends={friends.filter(friend =>
+          !safeSelectedFriends.includes(friend.id)
+        )}
+        alreadyInvited={selectedFriendsData as any}
+        onAddFriends={handleAddMoreFriends}
       />
     </>
   );

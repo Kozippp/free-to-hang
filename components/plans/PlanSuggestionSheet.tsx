@@ -22,7 +22,6 @@ import { X, Plus, Check } from 'lucide-react-native';
 import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
 import { useRouter } from 'expo-router';
-import AddMoreFriendsModal from './AddMoreFriendsModal';
 
 interface Friend {
   id: string;
@@ -43,6 +42,7 @@ interface PlanSuggestionSheetProps {
   isAnonymous: boolean;
   onPlanSubmitted: () => void;
   onFriendsUpdated?: (friends: Friend[]) => void;
+  onOpenAddMoreFriends?: () => void;
   prefilledTitle?: string;
   prefilledDescription?: string;
 }
@@ -55,6 +55,7 @@ export default function PlanSuggestionSheet({
   isAnonymous,
   onPlanSubmitted,
   onFriendsUpdated,
+  onOpenAddMoreFriends,
   prefilledTitle,
   prefilledDescription,
 }: PlanSuggestionSheetProps) {
@@ -64,7 +65,6 @@ export default function PlanSuggestionSheet({
   
   const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
   const [description, setDescription] = useState(prefilledDescription || '');
-  const [showAddMoreFriendsModal, setShowAddMoreFriendsModal] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
@@ -195,34 +195,15 @@ export default function PlanSuggestionSheet({
     Keyboard.dismiss();
   };
 
-  const handleAddMoreFriends = (friendIds: string[]) => {
-    // Get Friend objects from availableFriends based on their IDs
-    const friendsToAdd = availableFriends.filter(f => friendIds.includes(f.id));
-    
-    // Combine with existing selected friends (no duplicates)
-    const combinedFriends = [...selectedFriends];
-    friendsToAdd.forEach(friend => {
-      if (!combinedFriends.find(f => f.id === friend.id)) {
-        combinedFriends.push(friend);
-      }
-    });
-    
-    // Update via parent callback
-    if (onFriendsUpdated) {
-      onFriendsUpdated(combinedFriends);
-    }
-  };
-
   if (!visible) return null;
 
   return (
-    <>
-      <Modal
-        transparent={true}
-        visible={visible}
-        animationType="none"
-        onRequestClose={handleClose}
-      >
+    <Modal
+      transparent={true}
+      visible={visible}
+      animationType="none"
+      onRequestClose={handleClose}
+    >
         <View style={styles.overlay}>
           <TouchableWithoutFeedback onPress={handleClose}>
             <View style={styles.backdrop} />
@@ -305,7 +286,9 @@ export default function PlanSuggestionSheet({
                             style={styles.addMoreButton}
                             onPress={() => {
                               console.log('🔵 Add More button pressed');
-                              setShowAddMoreFriendsModal(true);
+                              if (onOpenAddMoreFriends) {
+                                onOpenAddMoreFriends();
+                              }
                             }}
                           >
                             <Plus size={16} color={Colors.light.primary} />
@@ -371,16 +354,7 @@ export default function PlanSuggestionSheet({
                 </KeyboardAvoidingView>
               </Animated.View>
             </View>
-      </Modal>
-
-      <AddMoreFriendsModal
-        visible={showAddMoreFriendsModal}
-        onClose={() => setShowAddMoreFriendsModal(false)}
-        availableFriends={availableFriends}
-        alreadyInvited={selectedFriends}
-        onAddFriends={handleAddMoreFriends}
-      />
-    </>
+    </Modal>
   );
 }
 
@@ -391,7 +365,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Light white overlay instead of black
+    backgroundColor: 'rgba(255, 255, 255, 0.5)', // Reduced opacity to see through
   },
   sheetContainer: {
     backgroundColor: 'white',

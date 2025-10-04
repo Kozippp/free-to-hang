@@ -127,10 +127,11 @@ export default function AddMoreFriendsModal({
     <Modal
       transparent={true}
       visible={visible}
-      animationType="fade"
+      animationType="slide"
       onRequestClose={handleClose}
       statusBarTranslucent={true}
       presentationStyle="overFullScreen"
+      hardwareAccelerated={true}
     >
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
