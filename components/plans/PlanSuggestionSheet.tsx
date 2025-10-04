@@ -273,12 +273,7 @@ export default function PlanSuggestionSheet({
                         <Text style={styles.invitedFriendsLabel}>
                           Inviting ({selectedFriends.length})
                         </Text>
-                        <ScrollView
-                          style={styles.friendsList}
-                          contentContainerStyle={styles.friendsListContent}
-                          showsVerticalScrollIndicator={true}
-                          nestedScrollEnabled={true}
-                        >
+                        <View style={styles.friendsList}>
                           {selectedFriends.map((friend, index) => (
                             <View key={friend.id} style={[
                               styles.friendItem,
@@ -310,7 +305,7 @@ export default function PlanSuggestionSheet({
                               </TouchableOpacity>
                             </View>
                           ))}
-                        </ScrollView>
+                        </View>
                       </View>
                     )}
 
@@ -478,10 +473,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   friendsList: {
-    maxHeight: 200, // Limit height so it doesn't take all space
-  },
-  friendsListContent: {
-    paddingVertical: 4,
+    flexDirection: 'column',
+    gap: 8,
   },
   friendItem: {
     flexDirection: 'row',
