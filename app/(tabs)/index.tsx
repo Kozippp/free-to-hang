@@ -340,6 +340,15 @@ export default function HangScreen() {
         onFriendsUpdated={handleFriendsUpdated}
         onAddMoreFriends={handleAddMoreFriends}
       />
+
+      {/* Debug info */}
+      {__DEV__ && (
+        <Text style={{ position: 'absolute', top: 50, left: 10, backgroundColor: 'red', color: 'white', padding: 5 }}>
+          Friends: {friends.length}, Selected: {safeSelectedFriends.length}, Available for add: {friends.filter(friend =>
+            !safeSelectedFriends.includes(friend.id) && friend.status === 'available'
+          ).length}
+        </Text>
+      )}
       
       <AddFriendsModal
         visible={showAddFriendsModal}
