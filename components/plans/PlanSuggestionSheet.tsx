@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   submitButtonContainer: {
-    marginTop: 10,
+    marginTop: 0,
     marginBottom: 20,
   },
   submitButton: {
@@ -498,7 +498,6 @@ const styles = StyleSheet.create({
   invitedFriendsContainer: {
     marginTop: 10,
     marginBottom: 20,
-    flex: 1, // Allow the container to expand
   },
   invitedFriendsHeader: {
     flexDirection: 'row',
@@ -529,7 +528,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: 8,
     flex: 1, // Allow it to expand to fill available space
-    minHeight: 600, // Large minimum height for plenty of space
+    minHeight: 200, // Large minimum height for plenty of space
     maxHeight: 1200, // Increased maximum height when full
   },
   friendItem: {
