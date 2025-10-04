@@ -314,11 +314,7 @@ export default function HangScreen() {
       <PlanSuggestionSheet
         visible={showPlanSheet}
         onClose={handleClosePlanSheet}
-        selectedFriends={selectedFriendsData as any}
         isAnonymous={isAnonymousPlan}
-        availableFriends={friends.filter(friend => 
-          !safeSelectedFriends.includes(friend.id) && friend.status === 'available'
-        )}
         onPlanSubmitted={handlePlanSubmitted}
       />
       

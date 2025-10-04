@@ -8,6 +8,7 @@ import { generateDefaultAvatar, SILHOUETTE_AVATAR_URL } from '@/constants/defaul
 interface Friend {
   id: string;
   name: string;
+  username?: string;
   avatar: string;
   status: 'available' | 'offline' | 'pinged';
   activity?: string;
