@@ -573,8 +573,6 @@ export default function PlanSuggestionSheet({
           </View>
         </TouchableWithoutFeedback>
         </View>
-        </TouchableWithoutFeedback>
-      </View>
       )}
     </>
   );
