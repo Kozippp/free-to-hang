@@ -70,12 +70,15 @@ export default function PlanSuggestionSheet({
   // Setup pan responder for swipe-to-close
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to pan gestures at the very top of the sheet (handle area)
+        return gestureState.y0 < 60; // Only activate near the handle
+      },
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to downward swipes in the top area
-        return gestureState.dy > 10 && 
-               Math.abs(gestureState.dx) < Math.abs(gestureState.dy) && 
-               gestureState.y0 < 100; // Only activate in top area
+        // Only respond to downward swipes in the handle area
+        return gestureState.dy > 10 &&
+               Math.abs(gestureState.dx) < Math.abs(gestureState.dy) &&
+               gestureState.y0 < 60; // Only activate near the handle
       },
       onPanResponderMove: (_, gestureState) => {
         if (gestureState.dy > 0) {
@@ -293,7 +296,9 @@ export default function PlanSuggestionSheet({
     >
       <TouchableWithoutFeedback onPress={handleClose}>
         <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
+          <TouchableWithoutFeedback
+            onPress={() => {}} // Prevent closing when pressing on the sheet
+          >
             <Animated.View
               style={[
                 styles.sheetContainer,
@@ -322,6 +327,9 @@ export default function PlanSuggestionSheet({
                   showsVerticalScrollIndicator={true}
                   bounces={true}
                   alwaysBounceVertical={true}
+                  scrollEnabled={true}
+                  onStartShouldSetResponderCapture={() => true}
+                  onMoveShouldSetResponderCapture={() => true}
                 >
                   <Text style={[
                     styles.title,
@@ -416,13 +424,16 @@ export default function PlanSuggestionSheet({
                       {getAvailableFriendsToAdd().length > 0 ? (
                         <>
                           <Text style={styles.inviteSectionTitle}>Friends available now</Text>
-                          <ScrollView 
+                          <ScrollView
                             style={styles.availableFriendsScrollView}
                             contentContainerStyle={styles.availableFriendsContainer}
                             nestedScrollEnabled={true}
                             showsVerticalScrollIndicator={true}
                             scrollEventThrottle={16}
                             bounces={false}
+                            scrollEnabled={true}
+                            onStartShouldSetResponderCapture={() => true}
+                            onMoveShouldSetResponderCapture={() => true}
                           >
                             {getAvailableFriendsToAdd().map((friend) => (
                               <TouchableOpacity 
