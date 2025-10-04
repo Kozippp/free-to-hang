@@ -498,6 +498,7 @@ const styles = StyleSheet.create({
   invitedFriendsContainer: {
     marginTop: 10,
     marginBottom: 20,
+    flex: 1, // Allow the container to expand
   },
   invitedFriendsHeader: {
     flexDirection: 'row',
