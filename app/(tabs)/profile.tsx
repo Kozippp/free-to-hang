@@ -756,22 +756,15 @@ export default function ProfileScreen() {
             />
           }
         >
-          {/* Settings Button */}
-          <View style={styles.settingsContainer}>
-            <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.settingsButton}>
-              <Settings size={24} color={Colors.light.primary} />
-            </TouchableOpacity>
-          </View>
-
           {/* Profile Preview Section */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.profilePreview}
             onPress={() => setShowEditProfile(true)}
             activeOpacity={0.7}
           >
-            <Image 
-              source={{ uri: editAvatar || userProfile.avatar }} 
-              style={styles.profilePreviewImage} 
+            <Image
+              source={{ uri: editAvatar || userProfile.avatar }}
+              style={styles.profilePreviewImage}
               key={editAvatar || userProfile.avatar}
             />
             <View style={styles.profilePreviewInfo}>
@@ -779,7 +772,9 @@ export default function ProfileScreen() {
               <Text style={styles.profilePreviewUsername}>@{editUsername}</Text>
               <Text style={styles.profilePreviewBio} numberOfLines={2}>{editBio || "Add a bio to tell friends about yourself"}</Text>
             </View>
-            <Edit3 size={20} color={Colors.light.primary} />
+            <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.settingsIcon}>
+              <Settings size={20} color={Colors.light.primary} />
+            </TouchableOpacity>
           </TouchableOpacity>
           
           {/* Friends Section */}
@@ -1189,14 +1184,8 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
-  settingsContainer: {
-    alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: Colors.light.background,
-  },
-  settingsButton: {
-    padding: 8,
+  settingsIcon: {
+    padding: 4,
   },
   profilePreview: {
     flexDirection: 'row',
