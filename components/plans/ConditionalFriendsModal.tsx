@@ -114,10 +114,6 @@ export default function ConditionalFriendsModal({
                 { opacity: fadeAnim }
               ]}
             >
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <X size={24} color={Colors.light.secondaryText} />
-              </TouchableOpacity>
-              
               <View style={styles.header}>
                 <Users size={24} color={Colors.light.primary} />
                 <Text style={styles.title}>Conditional Attendance</Text>
@@ -212,12 +208,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 1,
   },
   header: {
     flexDirection: 'row',
