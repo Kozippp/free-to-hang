@@ -311,68 +311,8 @@ export default function PlanSuggestionSheet({
                       textAlignVertical="top"
                     />
 
-                    {/* Friends Section */}
-                    {showAddFriendsModal ? (
-                      // Add Friends Mode
-                      <View style={styles.invitedFriendsContainer}>
-                        <View style={styles.addFriendsHeader}>
-                          <Text style={styles.invitedFriendsLabel}>Add Friends</Text>
-                          <TouchableOpacity
-                            style={styles.cancelAddFriendsButton}
-                            onPress={() => {
-                              setShowAddFriendsModal(false);
-                              setModalSelectedFriends([]);
-                            }}
-                          >
-                            <X size={20} color={Colors.light.secondaryText} />
-                          </TouchableOpacity>
-                        </View>
-
-                        <FlatList
-                          data={getAvailableFriendsForModal()}
-                          keyExtractor={(item) => item.id}
-                          renderItem={({ item: friend }) => {
-                            const isSelected = modalSelectedFriends.includes(friend.id);
-                            return (
-                              <TouchableOpacity
-                                style={[
-                                  styles.addFriendSelectionItem,
-                                  isSelected && styles.addFriendSelectionItemSelected
-                                ]}
-                                onPress={() => toggleModalFriendSelection(friend.id)}
-                              >
-                                <Image source={{ uri: friend.avatar }} style={styles.addFriendSelectionAvatar} />
-                                <View style={styles.addFriendSelectionInfo}>
-                                  <Text style={styles.addFriendSelectionName}>{friend.name}</Text>
-                                </View>
-                                {isSelected && (
-                                  <View style={styles.addFriendSelectionCheck}>
-                                    <Check size={20} color={Colors.light.primary} />
-                                  </View>
-                                )}
-                              </TouchableOpacity>
-                            );
-                          }}
-                          style={styles.addFriendsSelectionList}
-                          showsVerticalScrollIndicator={false}
-                          scrollEnabled={false}
-                        />
-
-                        <TouchableOpacity
-                          style={[
-                            styles.confirmAddFriendsButton,
-                            modalSelectedFriends.length === 0 && styles.disabledButton
-                          ]}
-                          onPress={handleAddFriendsConfirm}
-                          disabled={modalSelectedFriends.length === 0}
-                        >
-                          <Text style={styles.confirmAddFriendsText}>
-                            Add Friends {modalSelectedFriends.length > 0 ? `(${modalSelectedFriends.length})` : ''}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : selectedFriends.length > 0 ? (
-                      // Normal Inviting Mode
+                    {/* Selected Friends Section */}
+                    {selectedFriends.length > 0 && (
                       <View style={styles.invitedFriendsContainer}>
                         <Text style={styles.invitedFriendsLabel}>
                           Inviting ({selectedFriends.length})
@@ -400,7 +340,7 @@ export default function PlanSuggestionSheet({
                           </TouchableOpacity>
                         </View>
                       </View>
-                    ) : null}
+                    )}
 
                     {/* Submit button */}
                     <View style={styles.submitButtonContainer}>
@@ -429,6 +369,79 @@ export default function PlanSuggestionSheet({
         </TouchableWithoutFeedback>
       </Modal>
 
+      {/* Add Friends Modal */}
+      {showAddFriendsModal && (
+        <View style={styles.addFriendsModalAbsolute}>
+          <TouchableWithoutFeedback onPress={() => setShowAddFriendsModal(false)}>
+            <View style={styles.addFriendsOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.addFriendsModalContainer}>
+                  <View style={styles.addFriendsHeader}>
+                    <Text style={styles.addFriendsTitle}>Add More Friends</Text>
+                    <TouchableOpacity
+                      style={styles.addFriendsCloseButton}
+                      onPress={() => setShowAddFriendsModal(false)}
+                    >
+                      <X size={24} color={Colors.light.secondaryText} />
+                    </TouchableOpacity>
+                  </View>
+
+                <FlatList
+                  data={getAvailableFriendsForModal()}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item: friend }) => {
+                    const isSelected = modalSelectedFriends.includes(friend.id);
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.addFriendItem,
+                          isSelected && styles.addFriendItemSelected
+                        ]}
+                        onPress={() => toggleModalFriendSelection(friend.id)}
+                      >
+                        <Image source={{ uri: friend.avatar }} style={styles.addFriendAvatar} />
+                        <View style={styles.addFriendInfo}>
+                          <Text style={styles.addFriendName}>{friend.name}</Text>
+                        </View>
+                        {isSelected && (
+                          <View style={styles.addFriendCheck}>
+                            <Check size={20} color={Colors.light.primary} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  }}
+                  style={styles.addFriendsList}
+                  showsVerticalScrollIndicator={false}
+                />
+
+                <View style={styles.addFriendsFooter}>
+                  <TouchableOpacity
+                    style={styles.addFriendsCancelButton}
+                    onPress={() => setShowAddFriendsModal(false)}
+                  >
+                    <Text style={styles.addFriendsCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.addFriendsConfirmButton,
+                      modalSelectedFriends.length === 0 && styles.disabledButton
+                    ]}
+                    onPress={handleAddFriendsConfirm}
+                    disabled={modalSelectedFriends.length === 0}
+                  >
+                    <Text style={styles.addFriendsConfirmText}>
+                      Add {modalSelectedFriends.length > 0 ? `(${modalSelectedFriends.length})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+        </View>
+      )}
     </>
   );
 }
@@ -616,20 +629,57 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.light.primary,
   },
+  addFriendsModalAbsolute: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2000,
+  },
+  addFriendsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  addFriendsModalContainer: {
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2000,
+    zIndex: 2001,
+  },
   addFriendsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  cancelAddFriendsButton: {
+  addFriendsTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  addFriendsCloseButton: {
     padding: 4,
   },
-  addFriendsSelectionList: {
-    maxHeight: 200,
-    marginBottom: 16,
+  addFriendsList: {
+    maxHeight: 300,
+    marginBottom: 20,
   },
-  addFriendSelectionItem: {
+  addFriendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
@@ -640,25 +690,25 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  addFriendSelectionItemSelected: {
+  addFriendItemSelected: {
     borderColor: Colors.light.primary,
     backgroundColor: `${Colors.light.primary}10`,
   },
-  addFriendSelectionAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  addFriendAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     marginRight: 12,
   },
-  addFriendSelectionInfo: {
+  addFriendInfo: {
     flex: 1,
   },
-  addFriendSelectionName: {
+  addFriendName: {
     fontSize: 16,
     fontWeight: '500',
     color: Colors.light.text,
   },
-  addFriendSelectionCheck: {
+  addFriendCheck: {
     width: 24,
     height: 24,
     borderRadius: 12,
@@ -666,13 +716,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  confirmAddFriendsButton: {
+  addFriendsFooter: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  addFriendsCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: Colors.light.buttonBackground,
+    alignItems: 'center',
+  },
+  addFriendsCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+  },
+  addFriendsConfirmButton: {
+    flex: 2,
     paddingVertical: 14,
     borderRadius: 10,
     backgroundColor: Colors.light.primary,
     alignItems: 'center',
   },
-  confirmAddFriendsText: {
+  addFriendsConfirmText: {
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
