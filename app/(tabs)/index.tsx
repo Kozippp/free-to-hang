@@ -177,13 +177,17 @@ export default function HangScreen() {
   
   return (
     <>
-      <Stack.Screen options={{ title: 'Hang', headerShown: false }} />
+      <Stack.Screen
+        options={{
+          title: 'Hang',
+          headerTitleStyle: {
+            fontWeight: '700',
+            fontSize: 20,
+            color: Colors.light.text,
+          },
+        }}
+      />
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Hang</Text>
-        </View>
-
         <ScrollView 
           style={styles.scrollView} 
           showsVerticalScrollIndicator={false}
@@ -337,19 +341,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  header: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: Colors.light.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.light.text,
   },
   offlineContainer: {
     flex: 1,

@@ -742,7 +742,7 @@ export default function ProfileScreen() {
           headerTitleStyle: {
             fontWeight: '700',
             fontSize: 20,
-            color: Colors.light.primary,
+            color: Colors.light.text,
           },
           headerRight: () => (
             <TouchableOpacity onPress={() => setShowSettings(true)}>
