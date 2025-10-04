@@ -320,13 +320,30 @@ export default function PlanSuggestionSheet({
                         <View style={styles.friendsList}>
                           {selectedFriends.map((friend, index) => (
                             <View key={friend.id} style={styles.friendItem}>
-                              <Image
-                                source={{ uri: friend.avatar }}
-                                style={styles.friendAvatar}
-                              />
+                              <View style={styles.friendAvatarContainer}>
+                                <Image
+                                  source={{ uri: friend.avatar }}
+                                  style={styles.friendAvatar}
+                                />
+                                <View style={[
+                                  styles.statusIndicator,
+                                  friend.status === 'available' ? styles.statusAvailable : styles.statusOffline
+                                ]} />
+                              </View>
                               <Text style={styles.friendName}>
                                 {friend.name}
                               </Text>
+                              <TouchableOpacity
+                                style={styles.removeButton}
+                                onPress={() => {
+                                  const updatedFriends = selectedFriends.filter(f => f.id !== friend.id);
+                                  if (onFriendsUpdated) {
+                                    onFriendsUpdated(updatedFriends);
+                                  }
+                                }}
+                              >
+                                <X size={16} color={Colors.light.secondaryText} />
+                              </TouchableOpacity>
                             </View>
                           ))}
                           <TouchableOpacity
@@ -579,30 +596,52 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   friendsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
     gap: 8,
   },
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.buttonBackground,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: Colors.light.border,
   },
+  friendAvatarContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
   friendAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    marginRight: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  statusAvailable: {
+    backgroundColor: '#4CAF50', // Green for available/free to hang
+  },
+  statusOffline: {
+    backgroundColor: Colors.light.secondaryText, // Gray for offline/not available
   },
   friendName: {
-    fontSize: 14,
+    flex: 1,
+    fontSize: 16,
     fontWeight: '500',
     color: Colors.light.text,
+  },
+  removeButton: {
+    padding: 4,
   },
   addFriendButton: {
     flexDirection: 'row',
