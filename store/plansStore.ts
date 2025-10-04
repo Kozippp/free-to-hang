@@ -255,8 +255,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
         completedPlans.push(plan);
       } else if (userStatus === 'going' || userStatus === 'maybe' || userStatus === 'conditional') {
         activePlans.push(plan);
-      } else {
+      } else if (userStatus === 'pending') {
+        // Only pending items should appear under invitations
         invitations.push(plan);
+      } else {
+        // Declined (and any other non-supported status) should not appear in lists
       }
     });
 
@@ -429,43 +432,45 @@ const usePlansStore = create<PlansState>((set, get) => ({
       
       // Update local state based on response
       set((state) => {
-        // Find the plan in either invitations or activePlans
-        const invitation = state.invitations.find(p => p.id === planId);
-        const activePlan = state.activePlans.find(p => p.id === planId);
-        
-        // If the plan is already in activePlans, just update it there
-        if (activePlan) {
-          return {
-            invitations: state.invitations,
-            activePlans: state.activePlans.map(p => p.id === planId ? transformedPlan : p),
-            completedPlans: state.completedPlans
-          };
-        }
-        
-        // If response is 'going', 'maybe', or 'conditional', move to activePlans
-        if (response === 'going' || response === 'maybe' || response === 'conditional') {
-          return {
-            invitations: state.invitations.filter(p => p.id !== planId),
-            activePlans: [...state.activePlans, transformedPlan],
-            completedPlans: state.completedPlans
-          };
-        }
-        
-        // If response is 'declined', remove from invitations
+        const planExistsInActive = state.activePlans.some(p => p.id === planId);
+
+        // Keep master plans map in sync for correctness
+        const updatedPlansMap = {
+          ...state.plans,
+          [planId]: transformedPlan
+        } as any;
+
+        // If user declined, remove the plan from both invitations and active lists
         if (response === 'declined') {
           return {
+            plans: updatedPlansMap,
             invitations: state.invitations.filter(p => p.id !== planId),
-            activePlans: state.activePlans,
+            activePlans: state.activePlans.filter(p => p.id !== planId),
             completedPlans: state.completedPlans
-          };
+          } as any;
         }
-        
-        // If response is 'pending', keep in invitations but update the status
+
+        // If response is 'going' | 'maybe' | 'conditional' → ensure in activePlans, remove from invitations
+        if (response === 'going' || response === 'maybe' || response === 'conditional') {
+          return {
+            plans: updatedPlansMap,
+            invitations: state.invitations.filter(p => p.id !== planId),
+            activePlans: planExistsInActive
+              ? state.activePlans.map(p => (p.id === planId ? transformedPlan : p))
+              : [...state.activePlans, transformedPlan],
+            completedPlans: state.completedPlans
+          } as any;
+        }
+
+        // Pending → keep under invitations, update there; also update in active if exists (edge case)
         return {
-          invitations: state.invitations.map(p => p.id === planId ? transformedPlan : p),
-          activePlans: state.activePlans,
+          plans: updatedPlansMap,
+          invitations: state.invitations.some(p => p.id === planId)
+            ? state.invitations.map(p => (p.id === planId ? transformedPlan : p))
+            : [...state.invitations, transformedPlan],
+          activePlans: state.activePlans.map(p => (p.id === planId ? transformedPlan : p)),
           completedPlans: state.completedPlans
-        };
+        } as any;
       });
       
     } catch (error) {
