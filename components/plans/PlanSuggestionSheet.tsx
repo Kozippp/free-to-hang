@@ -22,6 +22,7 @@ import { X, Plus, Check } from 'lucide-react-native';
 import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
 import { useRouter } from 'expo-router';
+import AddMoreFriendsModal from './AddMoreFriendsModal';
 
 interface Friend {
   id: string;
@@ -42,7 +43,7 @@ interface PlanSuggestionSheetProps {
   isAnonymous: boolean;
   onPlanSubmitted: () => void;
   onFriendsUpdated?: (friends: Friend[]) => void;
-  onOpenAddMoreFriends?: () => void;
+  onAddMoreFriends?: (friendIds: string[]) => void;
   prefilledTitle?: string;
   prefilledDescription?: string;
 }
@@ -55,7 +56,7 @@ export default function PlanSuggestionSheet({
   isAnonymous,
   onPlanSubmitted,
   onFriendsUpdated,
-  onOpenAddMoreFriends,
+  onAddMoreFriends,
   prefilledTitle,
   prefilledDescription,
 }: PlanSuggestionSheetProps) {
@@ -65,6 +66,7 @@ export default function PlanSuggestionSheet({
   
   const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
   const [description, setDescription] = useState(prefilledDescription || '');
+  const [showAddMoreModal, setShowAddMoreModal] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
@@ -282,17 +284,15 @@ export default function PlanSuggestionSheet({
                           <Text style={styles.invitedFriendsLabel}>
                             Inviting ({selectedFriends.length})
                           </Text>
-                          <TouchableOpacity
-                            style={styles.addMoreButton}
-                            onPress={() => {
-                              if (onOpenAddMoreFriends) {
-                                onOpenAddMoreFriends();
-                              }
-                            }}
-                          >
-                            <Plus size={16} color={Colors.light.primary} />
-                            <Text style={styles.addMoreButtonText}>Add More</Text>
-                          </TouchableOpacity>
+                          {onAddMoreFriends && (
+                            <TouchableOpacity
+                              style={styles.addMoreButton}
+                              onPress={() => setShowAddMoreModal(true)}
+                            >
+                              <Plus size={16} color={Colors.light.primary} />
+                              <Text style={styles.addMoreButtonText}>Add More</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                         <View style={styles.friendsList}>
                           {selectedFriends.map((friend, index) => (
@@ -353,6 +353,19 @@ export default function PlanSuggestionSheet({
                 </KeyboardAvoidingView>
               </Animated.View>
             </View>
+
+            {onAddMoreFriends && (
+              <AddMoreFriendsModal
+                visible={showAddMoreModal}
+                onClose={() => setShowAddMoreModal(false)}
+                availableFriends={availableFriends}
+                alreadyInvited={selectedFriends}
+                onAddFriends={(friendIds) => {
+                  onAddMoreFriends(friendIds);
+                  setShowAddMoreModal(false);
+                }}
+              />
+            )}
     </Modal>
   );
 }
