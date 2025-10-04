@@ -413,12 +413,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: Colors.light.buttonBackground,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.light.secondaryText,
+    color: Colors.light.text,
   },
   addButton: {
     flex: 1.4,
