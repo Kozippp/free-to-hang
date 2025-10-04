@@ -122,6 +122,11 @@ export default function PlanSuggestionSheet({
     }
   }, [visible, slideAnim, prefilledTitle, prefilledDescription]);
 
+  // Debug modal state
+  useEffect(() => {
+    console.log('🎭 Add friends modal state changed:', showAddFriendsModal);
+  }, [showAddFriendsModal]);
+
   const resetStates = () => {
     setTimeout(() => {
       setPlanTitle('');
@@ -191,12 +196,24 @@ export default function PlanSuggestionSheet({
   };
 
   const handleOpenAddFriendsModal = () => {
+    console.log('🔘 Plus button pressed!');
+    console.log('Available friends:', availableFriends?.length || 0);
+    console.log('Selected friends:', selectedFriends?.length || 0);
+    console.log('Available friends data:', availableFriends);
+    console.log('Selected friends data:', selectedFriends);
+
     // Get available friends that aren't already selected
     const availableFriendsIds = availableFriends
       .filter(friend => !selectedFriends.some(selected => selected.id === friend.id))
       .map(friend => friend.id);
+
+    console.log('Filtered available friends IDs:', availableFriendsIds);
+    console.log('Setting modal selected friends to:', availableFriendsIds);
+
     setModalSelectedFriends(availableFriendsIds);
     setShowAddFriendsModal(true);
+
+    console.log('Modal should be visible now');
   };
 
   const handleAddFriendsConfirm = () => {
@@ -462,7 +479,10 @@ export default function PlanSuggestionSheet({
                           ))}
                           <TouchableOpacity
                             style={styles.addFriendButton}
-                            onPress={handleOpenAddFriendsModal}
+                            onPress={() => {
+                              console.log('➕ Add friend button pressed');
+                              handleOpenAddFriendsModal();
+                            }}
                           >
                             <View style={styles.addFriendIconContainer}>
                               <Plus size={20} color={Colors.light.primary} />
