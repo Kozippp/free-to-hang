@@ -109,11 +109,6 @@ export default function AddMoreFriendsModal({
             <Text style={styles.modalTitle}>Add More Friends</Text>
           </View>
 
-          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <X size={22} color={Colors.light.secondaryText} />
-          </TouchableOpacity>
-
-
           <View style={styles.searchContainer}>
             <Search size={18} color={Colors.light.secondaryText} style={styles.searchIcon} />
             <TextInput
@@ -254,17 +249,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  closeButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    padding: 6,
-    zIndex: 2,
-  },
   modalHeader: {
     alignItems: 'center',
     paddingTop: 18,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   modalTitle: {
     fontSize: 18,
