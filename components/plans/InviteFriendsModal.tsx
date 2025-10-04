@@ -127,7 +127,7 @@ export default function InviteFriendsModal({
             />
           </View>
           
-          <ScrollView style={styles.friendsList}>
+          <ScrollView style={styles.friendsList} contentContainerStyle={styles.friendsListContent}>
             {isLoadingFriends ? (
               <View style={styles.loadingContainer}>
                 <Text style={styles.loadingText}>Loading friends...</Text>
@@ -269,8 +269,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   friendsList: {
-    maxHeight: 600,
+    maxHeight: 520,
+    minHeight: 260,
+  },
+  friendsListContent: {
     paddingHorizontal: 16,
+    paddingBottom: 8,
+    minHeight: 220,
   },
   friendItem: {
     flexDirection: 'row',
