@@ -285,7 +285,6 @@ export default function PlanSuggestionSheet({
                           <TouchableOpacity
                             style={styles.addMoreButton}
                             onPress={() => {
-                              console.log('🔵 Add More button pressed');
                               if (onOpenAddMoreFriends) {
                                 onOpenAddMoreFriends();
                               }
@@ -365,7 +364,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)', // Reduced opacity to see through
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Light white overlay
   },
   sheetContainer: {
     backgroundColor: 'white',
