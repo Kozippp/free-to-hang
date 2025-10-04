@@ -521,12 +521,13 @@ export default function PlanSuggestionSheet({
       </Modal>
 
       {/* Add Friends Modal */}
-      <Modal
-        transparent={true}
-        visible={showAddFriendsModal}
-        animationType="slide"
-        onRequestClose={() => setShowAddFriendsModal(false)}
-      >
+      {showAddFriendsModal && (
+        <Modal
+          transparent={true}
+          visible={showAddFriendsModal}
+          animationType="slide"
+          onRequestClose={() => setShowAddFriendsModal(false)}
+        >
         <TouchableWithoutFeedback onPress={() => setShowAddFriendsModal(false)}>
           <View style={styles.addFriendsOverlay}>
             <TouchableWithoutFeedback>
@@ -596,6 +597,7 @@ export default function PlanSuggestionSheet({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+      )}
     </>
   );
 }
@@ -785,10 +787,11 @@ const styles = StyleSheet.create({
   },
   addFriendsOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    zIndex: 1000,
   },
   addFriendsModalContainer: {
     width: '90%',
@@ -804,7 +807,8 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 5,
+    elevation: 1000,
+    zIndex: 1001,
   },
   addFriendsHeader: {
     flexDirection: 'row',
