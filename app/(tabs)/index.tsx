@@ -138,6 +138,16 @@ export default function HangScreen() {
     // The new success flow is now handled in the plans tab
   };
 
+  const handleFriendsUpdated = (updatedFriends: any[]) => {
+    // Clear current selected friends
+    clearSelectedFriends();
+
+    // Add all the updated friends
+    updatedFriends.forEach(friend => {
+      addSelectedFriend(friend.id);
+    });
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     if (authUser) {
@@ -316,10 +326,11 @@ export default function HangScreen() {
         onClose={handleClosePlanSheet}
         selectedFriends={selectedFriendsData as any}
         isAnonymous={isAnonymousPlan}
-        availableFriends={friends.filter(friend => 
+        availableFriends={friends.filter(friend =>
           !safeSelectedFriends.includes(friend.id) && friend.status === 'available'
         )}
         onPlanSubmitted={handlePlanSubmitted}
+        onFriendsUpdated={handleFriendsUpdated}
       />
       
       <AddFriendsModal
