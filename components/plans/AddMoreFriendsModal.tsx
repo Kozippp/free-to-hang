@@ -113,9 +113,6 @@ export default function AddMoreFriendsModal({
             <X size={22} color={Colors.light.secondaryText} />
           </TouchableOpacity>
 
-          <View style={styles.subtitleContainer}>
-            <Text style={styles.subtitle}>Select friends to add to this plan</Text>
-          </View>
 
           <View style={styles.searchContainer}>
             <Search size={18} color={Colors.light.secondaryText} style={styles.searchIcon} />
@@ -273,15 +270,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-  },
-  subtitleContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 10,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.light.secondaryText,
   },
   searchContainer: {
     flexDirection: 'row',
