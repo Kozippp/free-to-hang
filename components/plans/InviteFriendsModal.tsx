@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     backgroundColor: 'white',
     borderRadius: 16,
-    maxHeight: '85%',
+    maxHeight: '90%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   friendsList: {
-    maxHeight: 400,
+    maxHeight: 600,
     paddingHorizontal: 16,
   },
   friendItem: {
