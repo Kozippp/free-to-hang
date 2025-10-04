@@ -22,10 +22,12 @@ import { X, Plus, Check } from 'lucide-react-native';
 import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
 import { useRouter } from 'expo-router';
+import AddMoreFriendsModal from './AddMoreFriendsModal';
 
 interface Friend {
   id: string;
   name: string;
+  username?: string;
   avatar: string;
   status: 'available' | 'offline' | 'pinged';
   activity?: string;
@@ -62,6 +64,7 @@ export default function PlanSuggestionSheet({
   
   const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
   const [description, setDescription] = useState(prefilledDescription || '');
+  const [showAddMoreFriendsModal, setShowAddMoreFriendsModal] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
@@ -192,6 +195,24 @@ export default function PlanSuggestionSheet({
     Keyboard.dismiss();
   };
 
+  const handleAddMoreFriends = (friendIds: string[]) => {
+    // Get Friend objects from availableFriends based on their IDs
+    const friendsToAdd = availableFriends.filter(f => friendIds.includes(f.id));
+    
+    // Combine with existing selected friends (no duplicates)
+    const combinedFriends = [...selectedFriends];
+    friendsToAdd.forEach(friend => {
+      if (!combinedFriends.find(f => f.id === friend.id)) {
+        combinedFriends.push(friend);
+      }
+    });
+    
+    // Update via parent callback
+    if (onFriendsUpdated) {
+      onFriendsUpdated(combinedFriends);
+    }
+  };
+
   if (!visible) return null;
 
   return (
@@ -276,9 +297,18 @@ export default function PlanSuggestionSheet({
                     {/* Selected Friends Section */}
                     {selectedFriends.length > 0 && (
                       <View style={styles.invitedFriendsContainer}>
-                        <Text style={styles.invitedFriendsLabel}>
-                          Inviting ({selectedFriends.length})
-                        </Text>
+                        <View style={styles.invitedFriendsHeader}>
+                          <Text style={styles.invitedFriendsLabel}>
+                            Inviting ({selectedFriends.length})
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.addMoreButton}
+                            onPress={() => setShowAddMoreFriendsModal(true)}
+                          >
+                            <Plus size={16} color={Colors.light.primary} />
+                            <Text style={styles.addMoreButtonText}>Add More</Text>
+                          </TouchableOpacity>
+                        </View>
                         <View style={styles.friendsList}>
                           {selectedFriends.map((friend, index) => (
                             <View key={friend.id} style={[
@@ -340,6 +370,13 @@ export default function PlanSuggestionSheet({
             </View>
       </Modal>
 
+      <AddMoreFriendsModal
+        visible={showAddMoreFriendsModal}
+        onClose={() => setShowAddMoreFriendsModal(false)}
+        availableFriends={availableFriends}
+        alreadyInvited={selectedFriends}
+        onAddFriends={handleAddMoreFriends}
+      />
     </>
   );
 }
@@ -473,11 +510,30 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 20,
   },
+  invitedFriendsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   invitedFriendsLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 12,
+  },
+  addMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: `${Colors.light.primary}15`,
+    gap: 4,
+  },
+  addMoreButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.primary,
   },
   friendsList: {
     flexDirection: 'column',
