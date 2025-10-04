@@ -503,25 +503,21 @@ export default function PlanSuggestionSheet({
 
       {/* Add Friends Modal */}
       {showAddFriendsModal && (
-        <Modal
-          transparent={true}
-          visible={showAddFriendsModal}
-          animationType="slide"
-          onRequestClose={() => setShowAddFriendsModal(false)}
-        >
-        <TouchableWithoutFeedback onPress={() => setShowAddFriendsModal(false)}>
-          <View style={styles.addFriendsOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.addFriendsModalContainer}>
-                <View style={styles.addFriendsHeader}>
-                  <Text style={styles.addFriendsTitle}>Add More Friends</Text>
-                  <TouchableOpacity
-                    style={styles.addFriendsCloseButton}
-                    onPress={() => setShowAddFriendsModal(false)}
-                  >
-                    <X size={24} color={Colors.light.secondaryText} />
-                  </TouchableOpacity>
-                </View>
+        <View style={styles.addFriendsModalAbsolute}>
+          <TouchableWithoutFeedback onPress={() => setShowAddFriendsModal(false)}>
+            <View style={styles.addFriendsOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.addFriendsModalContainer}>
+                  {console.log('🎭 Modal content rendering')}
+                  <View style={styles.addFriendsHeader}>
+                    <Text style={styles.addFriendsTitle}>Add More Friends</Text>
+                    <TouchableOpacity
+                      style={styles.addFriendsCloseButton}
+                      onPress={() => setShowAddFriendsModal(false)}
+                    >
+                      <X size={24} color={Colors.light.secondaryText} />
+                    </TouchableOpacity>
+                  </View>
 
                 <FlatList
                   data={getAvailableFriendsForModal()}
@@ -577,7 +573,9 @@ export default function PlanSuggestionSheet({
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
-      </Modal>
+        </View>
+        </TouchableWithoutFeedback>
+      </View>
       )}
     </>
   );
@@ -766,13 +764,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.light.primary,
   },
+  addFriendsModalAbsolute: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2000,
+  },
   addFriendsOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    zIndex: 1000,
   },
   addFriendsModalContainer: {
     width: '90%',
@@ -788,8 +793,8 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 1000,
-    zIndex: 1001,
+    elevation: 2000,
+    zIndex: 2001,
   },
   addFriendsHeader: {
     flexDirection: 'row',
