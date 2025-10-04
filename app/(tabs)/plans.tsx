@@ -370,58 +370,50 @@ export default function PlansScreen() {
             )}
             
             {activeTab === 'Plan' && (
-              <View style={styles.tabContent}>
-                {activePlans.length === 0 ? renderEmptyState() : (
-                  <FlatList
-                    data={getSortedPlans(activePlans)}
-                    renderItem={renderPlanItem}
-                    keyExtractor={(item) => `activePlans-${item.id}`}
-                    contentContainerStyle={styles.listContent}
-                    ListEmptyComponent={renderEmptyState}
-                    refreshControl={
-                      <RefreshControl
-                        refreshing={isRefreshing || isLoading}
-                        onRefresh={handleRefresh}
-                        colors={[Colors.light.primary]}
-                        tintColor={Colors.light.primary}
-                      />
-                    }
+              <FlatList
+                data={getSortedPlans(activePlans)}
+                renderItem={renderPlanItem}
+                keyExtractor={(item) => `activePlans-${item.id}`}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={renderEmptyState}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshing || isLoading}
+                    onRefresh={handleRefresh}
+                    colors={[Colors.light.primary]}
+                    tintColor={Colors.light.primary}
                   />
-                )}
-              </View>
+                }
+              />
             )}
             
             {activeTab === 'Completed' && (
-              <View style={styles.tabContent}>
-                {completedPlans.length === 0 ? renderEmptyState() : (
-                  <FlatList
-                    data={completedPlans}
-                    renderItem={({ item }) => (
-                      <CompletedPlanCard 
-                        plan={item} 
-                        onPress={handlePlanPress}
-                        userAttended={item.attendanceRecord?.['current']}
-                      />
-                    )}
-                    keyExtractor={(item) => `completedPlans-${item.id}`}
-                    contentContainerStyle={styles.listContent}
-                    ListEmptyComponent={renderEmptyState}
-                    ListFooterComponent={() => (
-                      completedPlans.length > 0 ? (
-                        <View style={styles.finalSeparator} />
-                      ) : null
-                    )}
-                    refreshControl={
-                      <RefreshControl
-                        refreshing={isRefreshing || isLoading}
-                        onRefresh={handleRefresh}
-                        colors={[Colors.light.primary]}
-                        tintColor={Colors.light.primary}
-                      />
-                    }
+              <FlatList
+                data={completedPlans}
+                renderItem={({ item }) => (
+                  <CompletedPlanCard
+                    plan={item}
+                    onPress={handlePlanPress}
+                    userAttended={item.attendanceRecord?.['current']}
                   />
                 )}
-              </View>
+                keyExtractor={(item) => `completedPlans-${item.id}`}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={renderEmptyState}
+                ListFooterComponent={() => (
+                  completedPlans.length > 0 ? (
+                    <View style={styles.finalSeparator} />
+                  ) : null
+                )}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshing || isLoading}
+                    onRefresh={handleRefresh}
+                    colors={[Colors.light.primary]}
+                    tintColor={Colors.light.primary}
+                  />
+                }
+              />
             )}
           </Animated.View>
         </PanGestureHandler>
