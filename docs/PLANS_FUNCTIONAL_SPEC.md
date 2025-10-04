@@ -142,21 +142,27 @@ Kahe populaarseima lukustamise algoritm (kehtib When/Where küsitlustele)
 - Kuni 4 valikut.
 - Õigused: küsimust ja valikuid võib muuta ainult `going`.
 
-### 5.3 Invitation poll
-- Eesmärk: teha grupihääletus, kas kutsuda konkreetne inimene plaani.
-- Taimer: 10 minutit alates polli loomisest.
-- Hääletus: Jah / Ei.
-- Otsus: kui 10 minuti lõpus on „Jah” häälteenamus, lisatakse valitud kasutaja plaani osalejaks staatusega `pending`.
-- Reaalajas sündmused: polli loomine, hääletused, taimeri lõpp, kasutaja lisamine plaani.
+### 5.3 User Invitation (Direct Invite - No Voting)
+- Eesmärk: lihtne ja kiire võimalus kutsuda uusi inimesi plaani.
+- Õigus: ainult `going` staatusega osalejad saavad teisi kutsuda.
+- Protsess: 
+  1. Going osaleja valib sõprade listi hulgast inimesi, keda kutsuda
+  2. Süsteem filtreerib automaatselt välja juba plaaniga seotud inimesed
+  3. Kutsutud kasutajad lisatakse KOHE plaani osalejaks staatusega `pending`
+  4. Kutsutud kasutajad näevad plaani "Plans → Invitations" tabis
+  5. Realtime update teavitab kõiki osalejaid uutest kutsetutest
 
-Avatud detailidhääletanutest”
-- Häälteenamuse definitsioon: „rohkem kui 50% antud häältest”; viigi korral „Ei”.
-- Hääleõigus: kas ainult `going`
-- Mis juhtub, kui sihtkasutaja on juba plaanis - keelata invitation poll selle kasutaja kohta (seda kasutajat pole seal isegi näha nende seas keda kutsuda)
+Eelised võrreldes hääletus-süsteemiga:
+- Lihtne ja kasutajasõbralik - ei mingit ootamist ega hääletamist
+- Kiire - kutse jõustub kohe
+- Vähem keerukat loogikat - vähem bugivõimalusi
+- Parem UX - kasutajad ei pea ootama või muretsema demokraatia pärast
 
 Acceptance Criteria
-- Polli taimer töötab usaldusväärselt serveri-autoriteediga.
-- Enamuse korral lisatakse kasutaja plaani `pending` staatuses, ning sellele kasutajale tuleb plaan plans->invintations tabi
+- Ainult `going` osalejad saavad kutsuda
+- Juba plaaniga seotud kasutajaid ei saa uuesti kutsuda (filtreeritakse välja UI-s)
+- Kutsutud kasutajad ilmuvad KOHE "pending" staatuses
+- Realtime uuendus toimib < 3s latentsusega
 
 ---
 
@@ -283,7 +289,7 @@ Serveri/DB autoriteet
 - Who-can-vote:
 VASTUS:
   - When/Where ja Custom: ainult `going`
-  - Invitation poll: ainult `going` 
+  - User Invitation: ainult `going` (ei ole hääletus, lihtsalt kutsumine) 
 
 - Tie-breaker reeglid viigi korral (When/Where, Custom):
   - VASTUS: deterministlik ja läbipaistev reegel „kõige varem lisatud valik võidab viigi”
