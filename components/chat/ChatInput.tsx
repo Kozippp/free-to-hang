@@ -161,7 +161,6 @@ export default function ChatInput({
     return (
       <View style={styles.replyPreviewContainer}>
         <View style={styles.replyPreviewContent}>
-          <View style={styles.replyPreviewIndicator} />
           <View style={styles.replyPreviewText}>
             <Text style={styles.replyPreviewTitle}>
               Replying to {isReplyToSelf ? 'yourself' : replyingTo.userName}
@@ -304,20 +303,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  replyPreviewIndicator: {
-    width: 3,
-    height: 32,
-    backgroundColor: Colors.light.primary,
-    borderRadius: 2,
-    marginRight: 12,
-  },
   replyPreviewText: {
     flex: 1,
   },
   replyPreviewTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.light.primary,
+    color: '#000000',
     marginBottom: 2,
   },
   replyPreviewMessage: {
