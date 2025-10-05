@@ -8,7 +8,7 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Debug logging for Railway
+// Debug logging for Railway (updated for read receipts deployment)
 console.log('🔍 Environment variables:');
 console.log('PORT:', process.env.PORT);
 console.log('NODE_ENV:', process.env.NODE_ENV);
