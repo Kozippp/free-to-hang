@@ -458,6 +458,12 @@ const useChatStore = create<ChatState>((set, get) => ({
 
       if (!lastMessage) return;
 
+      // Skip if message is a temporary ID (not yet saved to backend)
+      if (lastMessage.id.startsWith('temp-')) {
+        console.log('⏳ Skipping read receipt for temporary message');
+        return;
+      }
+
       const token = await getAuthToken();
       if (!token) {
         console.error('No auth token available');
@@ -465,11 +471,12 @@ const useChatStore = create<ChatState>((set, get) => ({
       }
 
       // Optimistic update - update locally first for instant UI feedback
+      const existingReceipt = get().readReceipts[planId]?.[userId];
       const optimisticReceipt: ReadReceipt = {
         userId: userId,
         lastReadMessageId: lastMessage.id,
         lastReadAt: new Date().toISOString(),
-        user: get().readReceipts[planId]?.[userId]?.user || { id: userId, name: '', avatar_url: '' }
+        user: existingReceipt?.user || { id: userId, name: '', avatar_url: '' }
       };
 
       get().updateReadReceipt(planId, userId, optimisticReceipt);
@@ -490,6 +497,8 @@ const useChatStore = create<ChatState>((set, get) => ({
       );
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to mark messages as read:', errorData);
         throw new Error('Failed to mark messages as read');
       }
 
