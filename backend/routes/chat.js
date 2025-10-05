@@ -630,11 +630,21 @@ router.post('/:planId/read', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to update read receipt', details: error.message });
     }
     
-    console.log(`✅ Read receipt updated`);
+    // Fetch user details to include in response
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, name, avatar_url')
+      .eq('id', userId)
+      .single();
+    
+    console.log(`✅ Read receipt updated for ${user?.name || userId}`);
     
     res.json({
       success: true,
-      data: receipt
+      data: {
+        ...receipt,
+        user: user
+      }
     });
     
   } catch (error) {
