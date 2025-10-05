@@ -905,12 +905,15 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     marginRight: 8,
-    marginTop: 2,
+    alignSelf: 'flex-end',
+    marginBottom: 6,
   },
   avatarPlaceholder: {
     width: 28,
     height: 28,
     marginRight: 8,
+    alignSelf: 'flex-end',
+    marginBottom: 6,
   },
   messageWrapper: {
     maxWidth: MESSAGE_MAX_WIDTH,
