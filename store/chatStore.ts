@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { supabase } from '@/lib/supabase';
+import { API_CONFIG } from '@/constants/config';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 export interface ChatMessage {
   id: string;
@@ -37,511 +39,652 @@ export interface ChatMessage {
   };
 }
 
-export interface ChatState {
+interface ChatState {
   messages: { [planId: string]: ChatMessage[] };
   // Reply state
   replyingTo: { [planId: string]: ChatMessage | null };
+  // Loading states
+  loading: { [planId: string]: boolean };
+  // Real-time subscriptions
+  subscriptions: { [planId: string]: RealtimeChannel };
+  // Sync state
+  isSyncing: { [planId: string]: boolean };
   
   // Actions
-  sendMessage: (planId: string, message: Omit<ChatMessage, 'id' | 'timestamp' | 'reactions' | 'isRead' | 'edited'>) => void;
-  addReaction: (planId: string, messageId: string, userId: string, emoji: string) => void;
-  removeReaction: (planId: string, messageId: string, userId: string) => void;
-  voteInPoll: (planId: string, messageId: string, optionId: string, userId: string) => void;
-  markMessagesAsRead: (planId: string, userId: string) => void;
+  fetchMessages: (planId: string) => Promise<void>;
+  sendMessage: (planId: string, message: Omit<ChatMessage, 'id' | 'timestamp' | 'reactions' | 'isRead' | 'edited'>) => Promise<void>;
+  addReaction: (planId: string, messageId: string, userId: string, emoji: string) => Promise<void>;
+  removeReaction: (planId: string, messageId: string, userId: string) => Promise<void>;
+  markMessagesAsRead: (planId: string, userId: string) => Promise<void>;
   getUnreadCount: (planId: string, userId: string) => number;
-  deleteMessage: (planId: string, messageId: string) => void;
-  editMessage: (planId: string, messageId: string, newContent: string) => void;
+  deleteMessage: (planId: string, messageId: string) => Promise<void>;
+  editMessage: (planId: string, messageId: string, newContent: string) => Promise<void>;
   // Reply actions
   setReplyingTo: (planId: string, message: ChatMessage | null) => void;
   getReplyingTo: (planId: string) => ChatMessage | null;
+  // Real-time subscription
+  subscribeToChat: (planId: string) => void;
+  unsubscribeFromChat: (planId: string) => void;
+  // Helper actions
+  addMessageToStore: (planId: string, message: ChatMessage) => void;
+  updateMessageInStore: (planId: string, messageId: string, updates: Partial<ChatMessage>) => void;
 }
 
-// Demo messages for testing
-const demoMessages: { [planId: string]: ChatMessage[] } = {
-  'plan-1': [
-    // Older messages
-    {
-      id: 'demo-1',
-      planId: 'plan-1',
-      userId: 'friend-1',
-      userName: 'Alex Johnson',
-      userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Hey everyone! Looking forward to tonight 🎉',
-      reactions: { 'current': '👍', 'friend-2': '❤️' },
-      timestamp: Date.now() - 3600000, // 1 hour ago
-      isRead: true,
-    },
-    {
-      id: 'demo-2', 
-      planId: 'plan-1',
-      userId: 'current',
-      userName: 'You',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Same here! Should we meet at 7 PM?',
-      reactions: {},
-      timestamp: Date.now() - 3500000,
-      isRead: true,
-    },
-    {
-      id: 'demo-3',
-      planId: 'plan-1', 
-      userId: 'friend-2',
-      userName: 'Emma Wilson',
-      userAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Perfect! I\'ll bring some snacks 🍿',
-      reactions: { 'current': '😋' },
-      timestamp: Date.now() - 3400000,
-      isRead: true,
-    },
-    {
-      id: 'demo-4',
-      planId: 'plan-1',
-      userId: 'friend-1', 
-      userName: 'Alex Johnson',
-      userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      type: 'image',
-      content: 'Found this great spot! 📍',
-      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=200&h=200&fit=crop',
-      reactions: { 'current': '😮', 'friend-2': '👍' },
-      timestamp: Date.now() - 3000000,
-      isRead: true,
-    },
-    {
-      id: 'demo-5',
-      planId: 'plan-1',
-      userId: 'current',
-      userName: 'You', 
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Wow that looks amazing! 😍',
-      reactions: {},
-      timestamp: Date.now() - 2900000,
-      isRead: true,
-    },
-    {
-      id: 'demo-6',
-      planId: 'plan-1',
-      userId: 'friend-3',
-      userName: 'Michael Chen',
-      userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Sorry guys, running a bit late! Should be there by 7:15',
-      reactions: {},
-      timestamp: Date.now() - 600000, // 10 minutes ago
-      isRead: true,
-    },
-    {
-      id: 'demo-7',
-      planId: 'plan-1',
-      userId: 'friend-2',
-      userName: 'Emma Wilson', 
-      userAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-      type: 'voice',
-      content: 'Voice message',
-      voiceUrl: 'voice://demo-voice',
-      voiceDuration: 8,
-      waveformData: [0.2, 0.3, 0.5, 0.8, 0.6, 0.4, 0.7, 0.9, 0.5, 0.3, 0.6, 0.8, 0.4, 0.5, 0.7, 0.3, 0.8, 0.6, 0.4, 0.7, 0.5, 0.9, 0.3, 0.6, 0.8, 0.4, 0.7, 0.5, 0.6, 0.3, 0.4, 0.5, 0.7, 0.2, 0.8, 0.6, 0.3, 0.9, 0.4, 0.5],
-      reactions: {},
-      timestamp: Date.now() - 300000, // 5 minutes ago
-      isRead: false,
-    },
-    {
-      id: 'demo-8',
-      planId: 'plan-1',
-      userId: 'current',
-      userName: 'You',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'No worries Michael! See you there 👋',
-      reactions: { 'friend-3': '👍' },
-      timestamp: Date.now() - 240000, // 4 minutes ago
-      isRead: true,
-    },
-    {
-      id: 'demo-9',
-      planId: 'plan-1',
-      userId: 'friend-1',
-      userName: 'Alex Johnson',
-      userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Just arrived! Emma where are you sitting?',
-      reactions: {},
-      timestamp: Date.now() - 120000, // 2 minutes ago
-      isRead: false,
-    },
-    {
-      id: 'demo-10',
-      planId: 'plan-1',
-      userId: 'friend-2',
-      userName: 'Emma Wilson',
-      userAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Table by the window! Look for the girl with popcorn 🍿😄',
-      reactions: { 'friend-1': '😂' },
-      timestamp: Date.now() - 60000, // 1 minute ago
-      isRead: false,
-    },
-    {
-      id: 'demo-11',
-      planId: 'plan-1',
-      userId: 'current',
-      userName: 'You',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Heading there now! Be there in 5 🚗',
-      reactions: {},
-      timestamp: Date.now() - 30000, // 30 seconds ago  
-      isRead: false,
-    }
-  ],
-  // New plan "sõnumid" for testing chat
-  '3': [
-    {
-      id: 'chat-3-1',
-      planId: '3',
-      userId: 'user1',
-      userName: 'Alex Johnson',
-      userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Tere kõik! Kuidas läheb? 👋',
-      reactions: { 'current': '👍' },
-      timestamp: Date.now() - 3600000, // 1 hour ago
-      isRead: true,
-    },
-    {
-      id: 'chat-3-2',
-      planId: '3',
-      userId: 'current',
-      userName: 'You',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Tere Alex! Väga hästi, tänan! 😊',
-      reactions: {},
-      timestamp: Date.now() - 3500000,
-      isRead: true,
-    },
-    {
-      id: 'chat-3-3',
-      planId: '3',
-      userId: 'user2',
-      userName: 'Emma Wilson',
-      userAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Testima chat reaktsioone! ❤️',
-      reactions: { 'current': '😂', 'user1': '❤️' },
-      timestamp: Date.now() - 3000000,
-      isRead: true,
-    },
-    {
-      id: 'chat-3-4',
-      planId: '3',
-      userId: 'user3',
-      userName: 'Michael Chen',
-      userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-      type: 'image',
-      content: 'Vaadake seda pilti! 📸',
-      imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200&h=200&fit=crop',
-      reactions: { 'current': '😍', 'user2': '👍' },
-      timestamp: Date.now() - 2500000,
-      isRead: true,
-    },
-    {
-      id: 'chat-3-5',
-      planId: '3',
-      userId: 'current',
-      userName: 'You',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Vapustav pilt Michael! Kus see on? 🤔',
-      reactions: { 'user3': '👍' },
-      timestamp: Date.now() - 2000000,
-      isRead: true,
-    },
-    {
-      id: 'chat-3-6',
-      planId: '3',
-      userId: 'user2',
-      userName: 'Emma Wilson',
-      userAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-      type: 'voice',
-      content: 'Voice message',
-      voiceUrl: 'voice://demo-voice-estonian',
-      voiceDuration: 12,
-      waveformData: [0.1, 0.3, 0.4, 0.7, 0.5, 0.6, 0.2, 0.8, 0.4, 0.5, 0.7, 0.3, 0.9, 0.6, 0.4, 0.5, 0.8, 0.2, 0.7, 0.4, 0.6, 0.3, 0.9, 0.5, 0.7, 0.4, 0.6, 0.3, 0.8, 0.5, 0.4, 0.6, 0.7, 0.2, 0.9, 0.5, 0.3, 0.7, 0.6, 0.4, 0.8, 0.3, 0.5, 0.6, 0.4, 0.7, 0.5, 0.8, 0.3, 0.6],
-      reactions: {},
-      timestamp: Date.now() - 600000, // 10 minutes ago
-      isRead: false,
-    },
-    {
-      id: 'chat-3-7',
-      planId: '3',
-      userId: 'user1',
-      userName: 'Alex Johnson',
-      userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Kas keegi tuleb täna õhtul välja? 🌃',
-      reactions: {},
-      timestamp: Date.now() - 300000, // 5 minutes ago
-      isRead: false,
-    },
-    {
-      id: 'chat-3-8',
-      planId: '3',
-      userId: 'current',
-      userName: 'You',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Mina tulen kindlasti! 🙋‍♂️',
-      reactions: { 'user1': '🎉' },
-      timestamp: Date.now() - 120000, // 2 minutes ago
-      isRead: false,
-    },
-    {
-      id: 'chat-3-9',
-      planId: '3',
-      userId: 'user3',
-      userName: 'Michael Chen',
-      userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Ma ka! Mis aeg? ⏰',
-      reactions: {},
-      timestamp: Date.now() - 60000, // 1 minute ago
-      isRead: false,
-    },
-    {
-      id: 'chat-3-10',
-      planId: '3',
-      userId: 'user2',
-      userName: 'Emma Wilson',
-      userAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Võib-olla 19:00? 🤷‍♀️',
-      reactions: { 'current': '👍', 'user3': '✅' },
-      timestamp: Date.now() - 30000, // 30 seconds ago
-      isRead: false,
-    },
-    // Add some reply examples
-    {
-      id: 'chat-3-11',
-      planId: '3',
-      userId: 'current',
-      userName: 'You',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Tõesti hea idee! 💡',
-      replyTo: {
-        messageId: 'chat-3-10',
-        userId: 'user2',
-        userName: 'Emma Wilson',
-        content: 'Võib-olla 19:00? 🤷‍♀️',
-        type: 'text',
-      },
-      reactions: {},
-      timestamp: Date.now() - 20000, // 20 seconds ago
-      isRead: false,
-    },
-    {
-      id: 'chat-3-12',
-      planId: '3',
-      userId: 'user1',
-      userName: 'Alex Johnson',
-      userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Ma olen nõus! 🙋‍♂️',
-      replyTo: {
-        messageId: 'chat-3-11',
-        userId: 'current',
-        userName: 'You',
-        content: 'Tõesti hea idee! 💡',
-        type: 'text',
-      },
-      reactions: { 'current': '❤️' },
-      timestamp: Date.now() - 10000, // 10 seconds ago
-      isRead: false,
-    }
-  ],
-  // You can add more plan IDs here for testing different conversations
-  'plan-2': [
-    {
-      id: 'demo-2-1',
-      planId: 'plan-2',
-      userId: 'friend-4',
-      userName: 'Sarah Kim',
-      userAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'Who\'s free for lunch tomorrow?',
-      reactions: {},
-      timestamp: Date.now() - 1800000, // 30 minutes ago
-      isRead: true,
-    },
-    {
-      id: 'demo-2-2',
-      planId: 'plan-2',
-      userId: 'current',
-      userName: 'You',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      type: 'text',
-      content: 'I am! What did you have in mind?',
-      reactions: {},
-      timestamp: Date.now() - 1700000,
-      isRead: true,
-    }
-  ]
+// Helper function to transform backend message to ChatMessage
+const transformMessage = (dbMessage: any): ChatMessage => {
+  return {
+    id: dbMessage.id,
+    planId: dbMessage.plan_id,
+    userId: dbMessage.user_id,
+    userName: dbMessage.user?.name || 'Unknown User',
+    userAvatar: dbMessage.user?.avatar_url || '',
+    type: dbMessage.type,
+    content: dbMessage.content || '',
+    imageUrl: dbMessage.image_url,
+    voiceUrl: dbMessage.voice_url,
+    voiceDuration: dbMessage.voice_duration,
+    reactions: dbMessage.reactions || {},
+    timestamp: new Date(dbMessage.created_at).getTime(),
+    isRead: false, // Will be determined by read receipts
+    edited: dbMessage.edited || false,
+    replyTo: dbMessage.reply_to ? {
+      messageId: dbMessage.reply_to.id,
+      userId: dbMessage.reply_to.user?.id,
+      userName: dbMessage.reply_to.user?.name,
+      content: dbMessage.reply_to.content,
+      type: dbMessage.reply_to.type
+    } : undefined
+  };
 };
 
-const useChatStore = create<ChatState>()(
-  persist(
-    (set, get) => ({
-      messages: demoMessages,
-      replyingTo: {},
-      
-      sendMessage: (planId, messageData) => {
-        const state = get();
-        const replyingToMessage = state.replyingTo[planId];
-        
-        const newMessage: ChatMessage = {
-          ...messageData,
-          id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          timestamp: Date.now(),
-          reactions: {},
-          isRead: false,
-          // Add reply data if replying
-          replyTo: replyingToMessage ? {
-            messageId: replyingToMessage.id,
-            userId: replyingToMessage.userId,
-            userName: replyingToMessage.userName,
-            content: replyingToMessage.content,
-            type: replyingToMessage.type,
-          } : undefined,
-        };
-        
-        set(state => ({
-          messages: {
-            ...state.messages,
-            [planId]: [...(state.messages[planId] || []), newMessage]
-          },
-          // Clear reply state after sending
-          replyingTo: {
-            ...state.replyingTo,
-            [planId]: null
-          }
-        }));
-      },
-      
-      addReaction: (planId, messageId, userId, emoji) => {
-        set(state => ({
-          messages: {
-            ...state.messages,
-            [planId]: state.messages[planId]?.map(msg =>
-              msg.id === messageId
-                ? { ...msg, reactions: { ...msg.reactions, [userId]: emoji } }
-                : msg
-            ) || []
-          }
-        }));
-      },
-      
-      removeReaction: (planId, messageId, userId) => {
-        set(state => ({
-          messages: {
-            ...state.messages,
-            [planId]: state.messages[planId]?.map(msg => {
-              if (msg.id === messageId) {
-                const { [userId]: removed, ...remainingReactions } = msg.reactions;
-                return { ...msg, reactions: remainingReactions };
-              }
-              return msg;
-            }) || []
-          }
-        }));
-      },
-      
-      voteInPoll: (planId, messageId, optionId, userId) => {
-        set(state => ({
-          messages: {
-            ...state.messages,
-            [planId]: state.messages[planId]?.map(msg => {
-              if (msg.id === messageId && msg.pollData) {
-                return {
-                  ...msg,
-                  pollData: {
-                    ...msg.pollData,
-                    options: msg.pollData.options.map(option => {
-                      // Remove user's vote from all options first
-                      const votesWithoutUser = option.votes.filter(id => id !== userId);
-                      // Add vote to selected option
-                      return {
-                        ...option,
-                        votes: option.id === optionId 
-                          ? [...votesWithoutUser, userId]
-                          : votesWithoutUser
-                      };
-                    })
-                  }
-                };
-              }
-              return msg;
-            }) || []
-          }
-        }));
-      },
-      
-      markMessagesAsRead: (planId, userId) => {
-        set(state => ({
-          messages: {
-            ...state.messages,
-            [planId]: state.messages[planId]?.map(msg =>
-              msg.userId !== userId ? { ...msg, isRead: true } : msg
-            ) || []
-          }
-        }));
-      },
-      
-      getUnreadCount: (planId, userId) => {
-        const messages = get().messages[planId] || [];
-        return messages.filter(msg => msg.userId !== userId && !msg.isRead).length;
-      },
-      
-      deleteMessage: (planId, messageId) => {
-        set(state => ({
-          messages: {
-            ...state.messages,
-            [planId]: state.messages[planId]?.filter(msg => msg.id !== messageId) || []
-          }
-        }));
-      },
-      
-      editMessage: (planId, messageId, newContent) => {
-        set(state => ({
-          messages: {
-            ...state.messages,
-            [planId]: state.messages[planId]?.map(msg =>
-              msg.id === messageId ? { ...msg, content: newContent, edited: true } : msg
-            ) || []
-          }
-        }));
-      },
-      
-      setReplyingTo: (planId, message) => {
-        set(state => ({
-          replyingTo: {
-            ...state.replyingTo,
-            [planId]: message
-          }
-        }));
-      },
-      
-      getReplyingTo: (planId) => {
-        return get().replyingTo[planId] || null;
-      },
-    }),
-    {
-      name: 'chat-storage',
-    }
-  )
-);
+// Helper function to get auth token
+const getAuthToken = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token;
+};
 
-export default useChatStore; 
+const useChatStore = create<ChatState>((set, get) => ({
+  messages: {},
+  replyingTo: {},
+  loading: {},
+  subscriptions: {},
+  isSyncing: {},
+  
+  // ============================================
+  // FETCH MESSAGES
+  // ============================================
+  fetchMessages: async (planId: string) => {
+    try {
+      set(state => ({
+        loading: { ...state.loading, [planId]: true }
+      }));
+      
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available');
+        return;
+      }
+      
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}/chat/${planId}/messages`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages');
+      }
+      
+      const result = await response.json();
+      const messages = result.data.map(transformMessage);
+      
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: messages
+        },
+        loading: { ...state.loading, [planId]: false }
+      }));
+      
+      console.log(`✅ Fetched ${messages.length} messages for plan ${planId}`);
+      
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      set(state => ({
+        loading: { ...state.loading, [planId]: false }
+      }));
+    }
+  },
+  
+  // ============================================
+  // SEND MESSAGE
+  // ============================================
+  sendMessage: async (planId: string, messageData) => {
+    try {
+      const state = get();
+      const replyingToMessage = state.replyingTo[planId];
+      
+      // Create temporary message for optimistic update
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const tempMessage: ChatMessage = {
+        ...messageData,
+        id: tempId,
+        timestamp: Date.now(),
+        reactions: {},
+        isRead: false,
+        replyTo: replyingToMessage ? {
+          messageId: replyingToMessage.id,
+          userId: replyingToMessage.userId,
+          userName: replyingToMessage.userName,
+          content: replyingToMessage.content,
+          type: replyingToMessage.type,
+        } : undefined,
+      };
+      
+      // Optimistic update
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: [...(state.messages[planId] || []), tempMessage]
+        }
+      }));
+      
+      // Send to backend
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available');
+        // Remove temp message
+        set(state => ({
+          messages: {
+            ...state.messages,
+            [planId]: state.messages[planId].filter(m => m.id !== tempId)
+          }
+        }));
+        return;
+      }
+      
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}/chat/${planId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            type: messageData.type,
+            content: messageData.content,
+            imageUrl: messageData.imageUrl,
+            voiceUrl: messageData.voiceUrl,
+            voiceDuration: messageData.voiceDuration,
+            replyToMessageId: replyingToMessage?.id
+          })
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+      
+      const result = await response.json();
+      const realMessage = transformMessage(result.data);
+      
+      // Replace temp message with real one
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: state.messages[planId].map(m => 
+            m.id === tempId ? realMessage : m
+          )
+        },
+        // Clear reply state
+        replyingTo: {
+          ...state.replyingTo,
+          [planId]: null
+        }
+      }));
+      
+      console.log(`✅ Message sent: ${realMessage.id}`);
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Optionally remove failed message or mark it
+    }
+  },
+  
+  // ============================================
+  // ADD REACTION
+  // ============================================
+  addReaction: async (planId: string, messageId: string, userId: string, emoji: string) => {
+    try {
+      // Optimistic update
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: state.messages[planId]?.map(msg =>
+            msg.id === messageId
+              ? { ...msg, reactions: { ...msg.reactions, [userId]: emoji } }
+              : msg
+          ) || []
+        }
+      }));
+      
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available');
+        return;
+      }
+      
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}/chat/messages/${messageId}/reactions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ emoji })
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to add reaction');
+      }
+      
+      const result = await response.json();
+      
+      // Update with server response
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: state.messages[planId]?.map(msg =>
+            msg.id === messageId
+              ? { ...msg, reactions: result.data.allReactions }
+              : msg
+          ) || []
+        }
+      }));
+      
+      console.log(`✅ Reaction added to message ${messageId}`);
+      
+    } catch (error) {
+      console.error('Error adding reaction:', error);
+      // Revert optimistic update on error
+      get().fetchMessages(planId);
+    }
+  },
+  
+  // ============================================
+  // REMOVE REACTION
+  // ============================================
+  removeReaction: async (planId: string, messageId: string, userId: string) => {
+    try {
+      // Optimistic update
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: state.messages[planId]?.map(msg => {
+            if (msg.id === messageId) {
+              const { [userId]: removed, ...remainingReactions } = msg.reactions;
+              return { ...msg, reactions: remainingReactions };
+            }
+            return msg;
+          }) || []
+        }
+      }));
+      
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available');
+        return;
+      }
+      
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}/chat/messages/${messageId}/reactions`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to remove reaction');
+      }
+      
+      console.log(`✅ Reaction removed from message ${messageId}`);
+      
+    } catch (error) {
+      console.error('Error removing reaction:', error);
+      // Revert optimistic update on error
+      get().fetchMessages(planId);
+    }
+  },
+  
+  // ============================================
+  // MARK MESSAGES AS READ
+  // ============================================
+  markMessagesAsRead: async (planId: string, userId: string) => {
+    try {
+      const messages = get().messages[planId] || [];
+      const lastMessage = messages[messages.length - 1];
+      
+      if (!lastMessage) return;
+      
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available');
+        return;
+      }
+      
+      await fetch(
+        `${API_CONFIG.BASE_URL}/chat/${planId}/read`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            lastReadMessageId: lastMessage.id
+          })
+        }
+      );
+      
+      // Mark messages as read locally
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: state.messages[planId]?.map(msg =>
+            msg.userId !== userId ? { ...msg, isRead: true } : msg
+          ) || []
+        }
+      }));
+      
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  },
+  
+  // ============================================
+  // GET UNREAD COUNT
+  // ============================================
+  getUnreadCount: (planId: string, userId: string) => {
+    const messages = get().messages[planId] || [];
+    return messages.filter(msg => msg.userId !== userId && !msg.isRead).length;
+  },
+  
+  // ============================================
+  // DELETE MESSAGE
+  // ============================================
+  deleteMessage: async (planId: string, messageId: string) => {
+    try {
+      // Optimistic update
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: state.messages[planId]?.filter(msg => msg.id !== messageId) || []
+        }
+      }));
+      
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available');
+        return;
+      }
+      
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}/chat/messages/${messageId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete message');
+      }
+      
+      console.log(`✅ Message deleted: ${messageId}`);
+      
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      // Revert optimistic update on error
+      get().fetchMessages(planId);
+    }
+  },
+  
+  // ============================================
+  // EDIT MESSAGE
+  // ============================================
+  editMessage: async (planId: string, messageId: string, newContent: string) => {
+    try {
+      // Optimistic update
+      set(state => ({
+        messages: {
+          ...state.messages,
+          [planId]: state.messages[planId]?.map(msg =>
+            msg.id === messageId ? { ...msg, content: newContent, edited: true } : msg
+          ) || []
+        }
+      }));
+      
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available');
+        return;
+      }
+      
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}/chat/messages/${messageId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ content: newContent })
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to edit message');
+      }
+      
+      console.log(`✅ Message edited: ${messageId}`);
+      
+    } catch (error) {
+      console.error('Error editing message:', error);
+      // Revert optimistic update on error
+      get().fetchMessages(planId);
+    }
+  },
+  
+  // ============================================
+  // REPLY ACTIONS
+  // ============================================
+  setReplyingTo: (planId: string, message: ChatMessage | null) => {
+    set(state => ({
+      replyingTo: {
+        ...state.replyingTo,
+        [planId]: message
+      }
+    }));
+  },
+  
+  getReplyingTo: (planId: string) => {
+    return get().replyingTo[planId] || null;
+  },
+  
+  // ============================================
+  // REAL-TIME SUBSCRIPTION
+  // ============================================
+  subscribeToChat: (planId: string) => {
+    const state = get();
+    
+    // Don't subscribe twice
+    if (state.subscriptions[planId]) {
+      console.log(`Already subscribed to chat ${planId}`);
+      return;
+    }
+    
+    console.log(`📡 Subscribing to chat ${planId}`);
+    
+    const channel = supabase
+      .channel(`chat:${planId}`)
+      // Listen for new messages
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `plan_id=eq.${planId}`
+        },
+        async (payload) => {
+          console.log('📨 New message received:', payload);
+          
+          // Fetch full message with user details
+          const { data } = await supabase
+            .from('chat_messages')
+            .select(`
+              *,
+              user:users(id, name, username, avatar_url),
+              reply_to:chat_messages!reply_to_message_id(
+                id, 
+                content, 
+                type, 
+                user:users!chat_messages_user_id_fkey(id, name)
+              )
+            `)
+            .eq('id', payload.new.id)
+            .single();
+          
+          if (data) {
+            const message = transformMessage(data);
+            get().addMessageToStore(planId, message);
+          }
+        }
+      )
+      // Listen for message updates (edits)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `plan_id=eq.${planId}`
+        },
+        (payload) => {
+          console.log('✏️ Message updated:', payload);
+          
+          get().updateMessageInStore(planId, payload.new.id, {
+            content: payload.new.content,
+            edited: payload.new.edited
+          });
+        }
+      )
+      // Listen for reactions
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chat_reactions'
+        },
+        async (payload) => {
+          console.log('👍 Reaction changed:', payload);
+          
+          // Refetch all reactions for this message
+          const messageId = payload.new?.message_id || payload.old?.message_id;
+          if (!messageId) return;
+          
+          const { data: reactions } = await supabase
+            .from('chat_reactions')
+            .select('user_id, emoji')
+            .eq('message_id', messageId);
+          
+          const reactionsMap: { [key: string]: string } = {};
+          reactions?.forEach(r => {
+            reactionsMap[r.user_id] = r.emoji;
+          });
+          
+          get().updateMessageInStore(planId, messageId, {
+            reactions: reactionsMap
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log(`📡 Chat subscription status for ${planId}:`, status);
+      });
+    
+    // Store subscription
+    set(state => ({
+      subscriptions: {
+        ...state.subscriptions,
+        [planId]: channel
+      }
+    }));
+  },
+  
+  // ============================================
+  // UNSUBSCRIBE FROM CHAT
+  // ============================================
+  unsubscribeFromChat: (planId: string) => {
+    const state = get();
+    const channel = state.subscriptions[planId];
+    
+    if (channel) {
+      console.log(`📡 Unsubscribing from chat ${planId}`);
+      supabase.removeChannel(channel);
+      
+      set(state => {
+        const { [planId]: removed, ...remainingSubscriptions } = state.subscriptions;
+        return { subscriptions: remainingSubscriptions };
+      });
+    }
+  },
+  
+  // ============================================
+  // HELPER ACTIONS
+  // ============================================
+  addMessageToStore: (planId: string, message: ChatMessage) => {
+    set(state => {
+      const existingMessages = state.messages[planId] || [];
+      
+      // Check if message already exists
+      if (existingMessages.some(m => m.id === message.id)) {
+        return state;
+      }
+      
+      return {
+        messages: {
+          ...state.messages,
+          [planId]: [...existingMessages, message]
+        }
+      };
+    });
+  },
+  
+  updateMessageInStore: (planId: string, messageId: string, updates: Partial<ChatMessage>) => {
+    set(state => ({
+      messages: {
+        ...state.messages,
+        [planId]: state.messages[planId]?.map(msg =>
+          msg.id === messageId ? { ...msg, ...updates } : msg
+        ) || []
+      }
+    }));
+  }
+}));
+
+export default useChatStore;
