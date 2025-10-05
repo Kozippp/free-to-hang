@@ -146,8 +146,7 @@ export default function ChatMessage({
     const readUsers: ReadReceipt[] = [];
 
     Object.values(planReadReceipts).forEach((receipt: ReadReceipt) => {
-      // Don't show current user's read status
-      if (receipt.userId === currentUserId) return;
+      // Show read status for all users including current user
 
       // A user has read this message if their lastReadMessageId matches this message
       // or if their lastReadAt is at or after the message timestamp
