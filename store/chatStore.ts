@@ -68,6 +68,7 @@ interface ChatState {
   // Helper actions
   addMessageToStore: (planId: string, message: ChatMessage) => void;
   updateMessageInStore: (planId: string, messageId: string, updates: Partial<ChatMessage>) => void;
+  removeMessageFromStore: (planId: string, messageId: string) => void;
 }
 
 // Helper function to transform backend message to ChatMessage
@@ -609,7 +610,7 @@ const useChatStore = create<ChatState>((set, get) => ({
           }
         }
       )
-      // Listen for message updates (edits)
+      // Listen for message updates (edits and deletes)
       .on(
         'postgres_changes',
         {
@@ -621,10 +622,17 @@ const useChatStore = create<ChatState>((set, get) => ({
         (payload) => {
           console.log('✏️ Message updated:', payload);
           
-          get().updateMessageInStore(planId, payload.new.id, {
-            content: payload.new.content,
-            edited: payload.new.edited
-          });
+          // If message was deleted (unsend), remove it from store
+          if (payload.new.deleted === true) {
+            console.log('🗑️ Message deleted, removing from store:', payload.new.id);
+            get().removeMessageFromStore(planId, payload.new.id);
+          } else {
+            // Otherwise update the message content
+            get().updateMessageInStore(planId, payload.new.id, {
+              content: payload.new.content,
+              edited: payload.new.edited
+            });
+          }
         }
       )
       // Listen for reactions
@@ -716,6 +724,15 @@ const useChatStore = create<ChatState>((set, get) => ({
         [planId]: state.messages[planId]?.map(msg =>
           msg.id === messageId ? { ...msg, ...updates } : msg
         ) || []
+      }
+    }));
+  },
+  
+  removeMessageFromStore: (planId: string, messageId: string) => {
+    set(state => ({
+      messages: {
+        ...state.messages,
+        [planId]: state.messages[planId]?.filter(msg => msg.id !== messageId) || []
       }
     }));
   }
