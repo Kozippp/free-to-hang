@@ -137,6 +137,9 @@ export default function ChatMessage({
   // Gesture handler ref
   const panGestureRef = useRef(null);
 
+  // Track initial touch position for center-only swipe detection
+  const [touchStartX, setTouchStartX] = useState(0);
+
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', {
@@ -206,9 +209,20 @@ export default function ChatMessage({
   };
 
   const handleSwipeGesture = (event: any) => {
-    const { translationX, state } = event.nativeEvent;
+    const { translationX, state, x } = event.nativeEvent;
 
-    if (state === State.END) {
+    // Check if touch started in center area (not edges)
+    const isTouchFromCenter = () => {
+      if (messageLayout.width === 0) return true; // Fallback if layout not measured yet
+      const centerStart = messageLayout.width * 0.25; // 25% from left edge
+      const centerEnd = messageLayout.width * 0.75;   // 75% from left edge
+      return touchStartX >= centerStart && touchStartX <= centerEnd;
+    };
+
+    if (state === State.BEGAN) {
+      // Store initial touch position
+      setTouchStartX(x);
+    } else if (state === State.END) {
       // Check if swipe distance is enough to trigger reply
       // For own messages, we want left swipe (negative translationX)
       // For other messages, we want right swipe (positive translationX)
@@ -216,7 +230,7 @@ export default function ChatMessage({
         ? translationX < -80  // Left swipe for own messages
         : translationX > 80;  // Right swipe for other messages
 
-      if (isSwipeTowardsReply) {
+      if (isSwipeTowardsReply && isTouchFromCenter()) {
         // Trigger reply
         handleReply();
 
@@ -260,27 +274,29 @@ export default function ChatMessage({
         ]).start();
       }
     } else if (state === State.ACTIVE) {
-      // Update swipe animation during gesture
-      let clampedTranslation = 0;
+      // Only animate swipe if touch started from center
+      if (isTouchFromCenter()) {
+        let clampedTranslation = 0;
 
-      if (isOwnMessage) {
-        // For own messages, left swipe (negative values)
-        clampedTranslation = Math.max(translationX, -120); // Clamp to max left swipe
-      } else {
-        // For other messages, right swipe (positive values)
-        clampedTranslation = Math.min(translationX, 120); // Clamp to max right swipe
+        if (isOwnMessage) {
+          // For own messages, left swipe (negative values)
+          clampedTranslation = Math.max(translationX, -120); // Clamp to max left swipe
+        } else {
+          // For other messages, right swipe (positive values)
+          clampedTranslation = Math.min(translationX, 120); // Clamp to max right swipe
+        }
+
+        swipeTranslateX.setValue(clampedTranslation);
+
+        // Calculate opacity based on swipe distance (absolute value)
+        const swipeDistance = Math.abs(clampedTranslation);
+        const opacity = Math.min(swipeDistance / 80, 1);
+        swipeOpacity.setValue(opacity);
+
+        // Scale the reply icon
+        const scale = 0.8 + (opacity * 0.2);
+        replyIconScale.setValue(scale);
       }
-
-      swipeTranslateX.setValue(clampedTranslation);
-
-      // Calculate opacity based on swipe distance (absolute value)
-      const swipeDistance = Math.abs(clampedTranslation);
-      const opacity = Math.min(swipeDistance / 80, 1);
-      swipeOpacity.setValue(opacity);
-
-      // Scale the reply icon
-      const scale = 0.8 + (opacity * 0.2);
-      replyIconScale.setValue(scale);
     }
   };
 
@@ -663,7 +679,7 @@ export default function ChatMessage({
                 ref={panGestureRef}
                 onGestureEvent={handleSwipeGesture}
                 onHandlerStateChange={handleSwipeGesture}
-                activeOffsetX={[-20, 20]} // Require more horizontal movement to activate swipe (center only)
+                activeOffsetX={[-10, 10]} // Allow swipe activation, position check happens in handler
                 failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
               >
                 <Animated.View
@@ -708,7 +724,7 @@ export default function ChatMessage({
                 ref={panGestureRef}
                 onGestureEvent={handleSwipeGesture}
                 onHandlerStateChange={handleSwipeGesture}
-                activeOffsetX={[-20, 20]} // Require more horizontal movement to activate swipe (center only)
+                activeOffsetX={[-10, 10]} // Allow swipe activation, position check happens in handler
                 failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
               >
                 <Animated.View
