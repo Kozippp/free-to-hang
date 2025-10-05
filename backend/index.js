@@ -218,6 +218,7 @@ try {
   const plansRoutes = require('./routes/plans');
   const pollsRoutes = require('./routes/polls');
   const storageRoutes = require('./routes/storage');
+  const chatRoutes = require('./routes/chat');
 
   // API routes
   app.use('/api/user', userRoutes);
@@ -225,6 +226,7 @@ try {
   app.use('/api/plans', plansRoutes);
   app.use('/api/polls', pollsRoutes);
   app.use('/api/storage', storageRoutes);
+  app.use('/api/chat', chatRoutes);
 
   console.log('✅ Routes loaded successfully');
 } catch (error) {

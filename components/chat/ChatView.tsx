@@ -26,18 +26,43 @@ interface ChatViewProps {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ChatView({ plan, currentUserId = 'current', disableKeyboardAvoidance = false }: ChatViewProps) {
-  const { messages, markMessagesAsRead } = useChatStore();
+  const { 
+    messages, 
+    markMessagesAsRead, 
+    fetchMessages, 
+    subscribeToChat, 
+    unsubscribeFromChat,
+    loading 
+  } = useChatStore();
   const flatListRef = useRef<FlatList>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const highlightAnim = useRef(new Animated.Value(1)).current;
   
   const planMessages = messages[plan.id] || [];
+  const isLoading = loading[plan.id] || false;
   
   // Get current user from plan participants
   const currentUser = plan.participants.find(p => p.id === currentUserId);
   const currentUserName = currentUser?.name || 'You';
   const currentUserAvatar = currentUser?.avatar || '';
+
+  // Fetch messages and subscribe to real-time updates
+  useEffect(() => {
+    console.log(`🔄 Loading chat for plan ${plan.id}`);
+    
+    // Fetch initial messages
+    fetchMessages(plan.id);
+    
+    // Subscribe to real-time updates
+    subscribeToChat(plan.id);
+    
+    // Cleanup: unsubscribe when component unmounts
+    return () => {
+      console.log(`🔌 Unsubscribing from chat ${plan.id}`);
+      unsubscribeFromChat(plan.id);
+    };
+  }, [plan.id, fetchMessages, subscribeToChat, unsubscribeFromChat]);
 
   useEffect(() => {
     // Mark messages as read when chat is opened
