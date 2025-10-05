@@ -301,7 +301,7 @@ export default function ChatMessage({
     
     const getFirstName = (fullName: string) => fullName.split(' ')[0];
     const senderFirstName = getFirstName(isOwnMessage ? 'You' : message.userName);
-    const replyToFirstName = isReplyToSelf ? 'yourself' : getFirstName(userName);
+    const replyToFirstName = isReplyToSelf ? 'You' : getFirstName(userName);
     
     const getContentPreview = () => {
       switch (type) {
