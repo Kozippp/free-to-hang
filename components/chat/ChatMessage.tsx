@@ -466,7 +466,7 @@ export default function ChatMessage({
       <View style={styles.readStatusContainer}>
         {readUsers.map((receipt, index) => (
           <Image
-            key={`read-${receipt.userId}`}
+            key={`read-${message.id}-${receipt.userId}`}
             source={{ uri: receipt.user.avatar_url || 'https://via.placeholder.com/20x20' }}
             style={[
               styles.readStatusAvatar,
