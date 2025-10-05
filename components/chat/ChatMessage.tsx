@@ -36,6 +36,7 @@ interface ChatMessageProps {
   isLastInGroup?: boolean;
   scrollToMessage?: (messageId: string) => void;
   previousMessage?: ChatMessageType;
+  isLastMessage?: boolean; // New prop to indicate this is the last message in chat
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -107,7 +108,8 @@ export default function ChatMessage({
   isFirstInGroup = true,
   isLastInGroup = true,
   scrollToMessage,
-  previousMessage
+  previousMessage,
+  isLastMessage = false
 }: ChatMessageProps) {
   const { addReaction, removeReaction, deleteMessage, editMessage, setReplyingTo, readReceipts } = useChatStore();
   const [showActions, setShowActions] = useState(false);
@@ -135,8 +137,11 @@ export default function ChatMessage({
     });
   };
 
-  // Get users who have read this message
+  // Get users who have read the chat (shown only on last message)
   const getReadUsers = (): ReadReceipt[] => {
+    // Only show read receipts on the last message
+    if (!isLastMessage) return [];
+
     const planReadReceipts = readReceipts[planId] || {};
     const readUsers: ReadReceipt[] = [];
 
@@ -144,20 +149,14 @@ export default function ChatMessage({
       // Don't show current user's read status
       if (receipt.userId === currentUserId) return;
 
-      // Check if this user has read this message
-      // A user has read this message if their lastReadAt is after the message timestamp
-      const messageTime = new Date(message.timestamp).getTime();
-      const lastReadTime = new Date(receipt.lastReadAt).getTime();
-
-      if (lastReadTime >= messageTime) {
-        readUsers.push(receipt);
-      }
+      // Show all users who have read receipts for this plan
+      // They will be shown under the last message
+      readUsers.push(receipt);
     });
 
-    // Sort by read time (most recent first) and limit to 3 users max
+    // Sort by read time (most recent first)
     return readUsers
-      .sort((a, b) => new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime())
-      .slice(0, 3);
+      .sort((a, b) => new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime());
   };
 
   const openImageViewer = () => {
@@ -460,9 +459,7 @@ export default function ChatMessage({
   };
 
   const renderReadStatus = () => {
-    // Only show read status for own messages and when there are read receipts
-    if (!isOwnMessage) return null;
-
+    // Show read status only on the last message
     const readUsers = getReadUsers();
     if (readUsers.length === 0) return null;
 
@@ -474,7 +471,7 @@ export default function ChatMessage({
             source={{ uri: receipt.user.avatar_url || 'https://via.placeholder.com/20x20' }}
             style={[
               styles.readStatusAvatar,
-              { marginLeft: index > 0 ? -8 : 0 } // Overlap avatars slightly
+              { marginLeft: index > 0 ? 4 : 0 } // Space avatars apart instead of overlapping
             ]}
           />
         ))}
