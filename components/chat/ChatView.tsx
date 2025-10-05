@@ -165,21 +165,50 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     // Check if this is the last message in the entire chat
     const isLastMessage = index === planMessages.length - 1;
     
-    // Check if we should show avatar (first message from user or after someone else)
-    const showAvatar = !isOwnMessage && (
-      !previousMessage || 
-      previousMessage.userId !== item.userId ||
-      showDateSeparator
-    );
+    // SEGMENT-BASED AVATAR LOGIC (Variant 1)
+    // A segment starts when:
+    // 1. User changes
+    // 2. More than 2 minutes have passed since previous message
+    // 3. Current message is a reply (has replyTo)
+    
+    const isSegmentStart = () => {
+      if (!previousMessage) return true;
+      if (previousMessage.userId !== item.userId) return true;
+      if (showDateSeparator) return true;
+      
+      // Check if more than 2 minutes have passed
+      const timeDiff = item.timestamp - previousMessage.timestamp;
+      const twoMinutes = 2 * 60 * 1000;
+      if (timeDiff > twoMinutes) return true;
+      
+      // Check if current message is a reply (starts new segment)
+      if (item.replyTo) return true;
+      
+      return false;
+    };
+    
+    const isSegmentEnd = () => {
+      if (!nextMessage) return true;
+      if (nextMessage.userId !== item.userId) return true;
+      if (shouldShowDateSeparator(nextMessage, item)) return true;
+      
+      // Check if more than 2 minutes until next message
+      const timeDiff = nextMessage.timestamp - item.timestamp;
+      const twoMinutes = 2 * 60 * 1000;
+      if (timeDiff > twoMinutes) return true;
+      
+      // Check if next message is a reply (ends current segment)
+      if (nextMessage.replyTo) return true;
+      
+      return false;
+    };
+    
+    // Show avatar ONLY on the last message of a segment for non-own messages
+    const showAvatar = !isOwnMessage && isSegmentEnd();
     
     // Determine if this is first/last in group for better bubble styling
-    const isFirstInGroup = !previousMessage || 
-      previousMessage.userId !== item.userId || 
-      showDateSeparator;
-    
-    const isLastInGroup = !nextMessage || 
-      nextMessage.userId !== item.userId ||
-      shouldShowDateSeparator(nextMessage, item);
+    const isFirstInGroup = isSegmentStart();
+    const isLastInGroup = isSegmentEnd();
     
     return (
       <View>
