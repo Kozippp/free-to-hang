@@ -39,8 +39,21 @@ export interface ChatMessage {
   };
 }
 
+export interface ReadReceipt {
+  userId: string;
+  lastReadMessageId: string | null;
+  lastReadAt: string;
+  user: {
+    id: string;
+    name: string;
+    avatar_url: string;
+  };
+}
+
 interface ChatState {
   messages: { [planId: string]: ChatMessage[] };
+  // Read receipts state
+  readReceipts: { [planId: string]: { [userId: string]: ReadReceipt } };
   // Reply state
   replyingTo: { [planId: string]: ChatMessage | null };
   // Loading states
@@ -49,9 +62,10 @@ interface ChatState {
   subscriptions: { [planId: string]: RealtimeChannel };
   // Sync state
   isSyncing: { [planId: string]: boolean };
-  
+
   // Actions
   fetchMessages: (planId: string) => Promise<void>;
+  fetchReadReceipts: (planId: string) => Promise<void>;
   sendMessage: (planId: string, message: Omit<ChatMessage, 'id' | 'timestamp' | 'reactions' | 'isRead' | 'edited'>) => Promise<void>;
   addReaction: (planId: string, messageId: string, userId: string, emoji: string) => Promise<void>;
   removeReaction: (planId: string, messageId: string, userId: string) => Promise<void>;
@@ -69,6 +83,7 @@ interface ChatState {
   addMessageToStore: (planId: string, message: ChatMessage) => void;
   updateMessageInStore: (planId: string, messageId: string, updates: Partial<ChatMessage>) => void;
   removeMessageFromStore: (planId: string, messageId: string) => void;
+  updateReadReceipt: (planId: string, userId: string, receipt: ReadReceipt) => void;
 }
 
 // Helper function to transform backend message to ChatMessage
@@ -119,6 +134,7 @@ const getAuthToken = async () => {
 
 const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
+  readReceipts: {},
       replyingTo: {},
   loading: {},
   subscriptions: {},
@@ -132,13 +148,13 @@ const useChatStore = create<ChatState>((set, get) => ({
       set(state => ({
         loading: { ...state.loading, [planId]: true }
       }));
-      
+
       const token = await getAuthToken();
       if (!token) {
         console.error('No auth token available');
         return;
       }
-      
+
       const response = await fetch(
         `${API_CONFIG.BASE_URL}/chat/${planId}/messages`,
         {
@@ -148,14 +164,14 @@ const useChatStore = create<ChatState>((set, get) => ({
           }
         }
       );
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch messages');
       }
-      
+
       const result = await response.json();
       const messages = result.data.map(transformMessage);
-      
+
       set(state => ({
         messages: {
           ...state.messages,
@@ -163,14 +179,56 @@ const useChatStore = create<ChatState>((set, get) => ({
         },
         loading: { ...state.loading, [planId]: false }
       }));
-      
+
       console.log(`✅ Fetched ${messages.length} messages for plan ${planId}`);
-      
+
     } catch (error) {
       console.error('Error fetching messages:', error);
       set(state => ({
         loading: { ...state.loading, [planId]: false }
       }));
+    }
+  },
+
+  // ============================================
+  // FETCH READ RECEIPTS
+  // ============================================
+  fetchReadReceipts: async (planId: string) => {
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('No auth token available');
+        return;
+      }
+
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}/chat/${planId}/read-receipts`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch read receipts');
+      }
+
+      const result = await response.json();
+      const receipts = result.data;
+
+      set(state => ({
+        readReceipts: {
+          ...state.readReceipts,
+          [planId]: receipts
+        }
+      }));
+
+      console.log(`✅ Fetched ${Object.keys(receipts).length} read receipts for plan ${planId}`);
+
+    } catch (error) {
+      console.error('Error fetching read receipts:', error);
     }
   },
   
@@ -388,16 +446,16 @@ const useChatStore = create<ChatState>((set, get) => ({
     try {
       const messages = get().messages[planId] || [];
       const lastMessage = messages[messages.length - 1];
-      
+
       if (!lastMessage) return;
-      
+
       const token = await getAuthToken();
       if (!token) {
         console.error('No auth token available');
         return;
       }
-      
-      await fetch(
+
+      const response = await fetch(
         `${API_CONFIG.BASE_URL}/chat/${planId}/read`,
         {
           method: 'POST',
@@ -410,21 +468,29 @@ const useChatStore = create<ChatState>((set, get) => ({
           })
         }
       );
-      
-      // Mark messages as read locally
-        set(state => ({
-          messages: {
-            ...state.messages,
-            [planId]: state.messages[planId]?.map(msg =>
-              msg.userId !== userId ? { ...msg, isRead: true } : msg
-            ) || []
-          }
-        }));
-      
+
+      if (!response.ok) {
+        throw new Error('Failed to mark messages as read');
+      }
+
+      const result = await response.json();
+
+      // Update read receipt locally
+      const receipt: ReadReceipt = {
+        userId: userId,
+        lastReadMessageId: lastMessage.id,
+        lastReadAt: new Date().toISOString(),
+        user: result.data.user || { id: userId, name: '', avatar_url: '' }
+      };
+
+      get().updateReadReceipt(planId, userId, receipt);
+
+      console.log(`✅ Marked messages as read for user ${userId} in plan ${planId}`);
+
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
-      },
+  },
       
   // ============================================
   // GET UNREAD COUNT
@@ -645,24 +711,40 @@ const useChatStore = create<ChatState>((set, get) => ({
         },
         async (payload) => {
           console.log('👍 Reaction changed:', payload);
-          
+
           // Refetch all reactions for this message
           const messageId = payload.new?.message_id || payload.old?.message_id;
-          if (!messageId) return;
-          
+          if (!messageId || typeof messageId !== 'string') return;
+
           const { data: reactions } = await supabase
             .from('chat_reactions')
             .select('user_id, emoji')
             .eq('message_id', messageId);
-          
+
           const reactionsMap: { [key: string]: string } = {};
           reactions?.forEach(r => {
             reactionsMap[r.user_id] = r.emoji;
           });
-          
+
           get().updateMessageInStore(planId, messageId, {
             reactions: reactionsMap
           });
+        }
+      )
+      // Listen for read receipts
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chat_read_receipts',
+          filter: `plan_id=eq.${planId}`
+        },
+        async (payload) => {
+          console.log('📖 Read receipt changed:', payload);
+
+          // Refetch read receipts for this plan
+          get().fetchReadReceipts(planId);
         }
       )
       .subscribe((status) => {
@@ -733,6 +815,18 @@ const useChatStore = create<ChatState>((set, get) => ({
       messages: {
         ...state.messages,
         [planId]: state.messages[planId]?.filter(msg => msg.id !== messageId) || []
+      }
+    }));
+  },
+
+  updateReadReceipt: (planId: string, userId: string, receipt: ReadReceipt) => {
+    set(state => ({
+      readReceipts: {
+        ...state.readReceipts,
+        [planId]: {
+          ...state.readReceipts[planId],
+          [userId]: receipt
+        }
       }
     }));
   }

@@ -23,7 +23,7 @@ import {
   X
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { ChatMessage as ChatMessageType } from '@/store/chatStore';
+import { ChatMessage as ChatMessageType, ReadReceipt } from '@/store/chatStore';
 import useChatStore from '@/store/chatStore';
 
 interface ChatMessageProps {
@@ -98,9 +98,9 @@ const formatTimeSeparator = (timestamp: number): string => {
   });
 };
 
-export default function ChatMessage({ 
-  message, 
-  planId, 
+export default function ChatMessage({
+  message,
+  planId,
   currentUserId, 
   isOwnMessage,
   showAvatar = true,
@@ -109,30 +109,55 @@ export default function ChatMessage({
   scrollToMessage,
   previousMessage
 }: ChatMessageProps) {
-  const { addReaction, removeReaction, deleteMessage, editMessage, setReplyingTo } = useChatStore();
+  const { addReaction, removeReaction, deleteMessage, editMessage, setReplyingTo, readReceipts } = useChatStore();
   const [showActions, setShowActions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content);
   const [isUnsending, setIsUnsending] = useState(false);
   const [messageLayout, setMessageLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [showImageViewer, setShowImageViewer] = useState(false);
-  
+
   // Animation for unsending and long press
   const unsendAnim = useRef(new Animated.Value(1)).current;
   const messageScale = useRef(new Animated.Value(1)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
-  
+
   // Image viewer animations
   const imageViewerOpacity = useRef(new Animated.Value(0)).current;
   const imageViewerScale = useRef(new Animated.Value(0.5)).current;
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
       minute: '2-digit',
-      hour12: false 
+      hour12: false
     });
+  };
+
+  // Get users who have read this message
+  const getReadUsers = (): ReadReceipt[] => {
+    const planReadReceipts = readReceipts[planId] || {};
+    const readUsers: ReadReceipt[] = [];
+
+    Object.values(planReadReceipts).forEach((receipt: ReadReceipt) => {
+      // Don't show current user's read status
+      if (receipt.userId === currentUserId) return;
+
+      // Check if this user has read this message
+      // A user has read this message if their lastReadAt is after the message timestamp
+      const messageTime = new Date(message.timestamp).getTime();
+      const lastReadTime = new Date(receipt.lastReadAt).getTime();
+
+      if (lastReadTime >= messageTime) {
+        readUsers.push(receipt);
+      }
+    });
+
+    // Sort by read time (most recent first) and limit to 3 users max
+    return readUsers
+      .sort((a, b) => new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime())
+      .slice(0, 3);
   };
 
   const openImageViewer = () => {
@@ -417,8 +442,8 @@ export default function ChatMessage({
       ]}>
         <View style={styles.reactionsGroup}>
           {Object.entries(reactionCounts).map(([emoji, count], index) => (
-            <TouchableOpacity 
-              key={`reaction-${index}-${emoji}`} 
+            <TouchableOpacity
+              key={`reaction-${index}-${emoji}`}
               style={[
                 styles.reactionItem,
                 message.reactions[currentUserId] === emoji && styles.myReactionItem
@@ -430,6 +455,29 @@ export default function ChatMessage({
             </TouchableOpacity>
           ))}
         </View>
+      </View>
+    );
+  };
+
+  const renderReadStatus = () => {
+    // Only show read status for own messages and when there are read receipts
+    if (!isOwnMessage) return null;
+
+    const readUsers = getReadUsers();
+    if (readUsers.length === 0) return null;
+
+    return (
+      <View style={styles.readStatusContainer}>
+        {readUsers.map((receipt, index) => (
+          <Image
+            key={`read-${receipt.userId}`}
+            source={{ uri: receipt.user.avatar_url || 'https://via.placeholder.com/20x20' }}
+            style={[
+              styles.readStatusAvatar,
+              { marginLeft: index > 0 ? -8 : 0 } // Overlap avatars slightly
+            ]}
+          />
+        ))}
       </View>
     );
   };
@@ -527,9 +575,11 @@ export default function ChatMessage({
               {renderMessageContent()}
             </TouchableOpacity>
           )}
-          
+
           {renderReactions()}
-          
+
+          {renderReadStatus()}
+
           {/* Image Viewer Modal */}
           {showImageViewer && (
             <Modal
@@ -1112,5 +1162,25 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     maxWidth: 200,
     maxHeight: 200,
+  },
+  readStatusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 2,
+    marginRight: 12,
+    marginBottom: 4,
+  },
+  readStatusAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
   },
 }); 
