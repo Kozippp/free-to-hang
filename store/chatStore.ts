@@ -72,12 +72,31 @@ interface ChatState {
 
 // Helper function to transform backend message to ChatMessage
 const transformMessage = (dbMessage: any): ChatMessage => {
+  // Handle user data (could be object or array)
+  const user = Array.isArray(dbMessage.user) ? dbMessage.user[0] : dbMessage.user;
+  
+  // Handle reply_to data (could be object or array)
+  let replyTo = undefined;
+  if (dbMessage.reply_to) {
+    const replyMsg = Array.isArray(dbMessage.reply_to) ? dbMessage.reply_to[0] : dbMessage.reply_to;
+    if (replyMsg) {
+      const replyUser = Array.isArray(replyMsg.user) ? replyMsg.user[0] : replyMsg.user;
+      replyTo = {
+        messageId: replyMsg.id,
+        userId: replyUser?.id || '',
+        userName: replyUser?.name || 'Unknown User',
+        content: replyMsg.content || '',
+        type: replyMsg.type || 'text'
+      };
+    }
+  }
+  
   return {
     id: dbMessage.id,
     planId: dbMessage.plan_id,
     userId: dbMessage.user_id,
-    userName: dbMessage.user?.name || 'Unknown User',
-    userAvatar: dbMessage.user?.avatar_url || '',
+    userName: user?.name || 'Unknown User',
+    userAvatar: user?.avatar_url || '',
     type: dbMessage.type,
     content: dbMessage.content || '',
     imageUrl: dbMessage.image_url,
@@ -87,13 +106,7 @@ const transformMessage = (dbMessage: any): ChatMessage => {
     timestamp: new Date(dbMessage.created_at).getTime(),
     isRead: false, // Will be determined by read receipts
     edited: dbMessage.edited || false,
-    replyTo: dbMessage.reply_to ? {
-      messageId: dbMessage.reply_to.id,
-      userId: dbMessage.reply_to.user?.id,
-      userName: dbMessage.reply_to.user?.name,
-      content: dbMessage.reply_to.content,
-      type: dbMessage.reply_to.type
-    } : undefined
+    replyTo
   };
 };
 
@@ -105,7 +118,7 @@ const getAuthToken = async () => {
 
 const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
-  replyingTo: {},
+      replyingTo: {},
   loading: {},
   subscriptions: {},
   isSyncing: {},
@@ -165,26 +178,26 @@ const useChatStore = create<ChatState>((set, get) => ({
   // ============================================
   sendMessage: async (planId: string, messageData) => {
     try {
-      const state = get();
-      const replyingToMessage = state.replyingTo[planId];
-      
+        const state = get();
+        const replyingToMessage = state.replyingTo[planId];
+        
       // Create temporary message for optimistic update
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const tempMessage: ChatMessage = {
-        ...messageData,
+          ...messageData,
         id: tempId,
-        timestamp: Date.now(),
-        reactions: {},
-        isRead: false,
-        replyTo: replyingToMessage ? {
-          messageId: replyingToMessage.id,
-          userId: replyingToMessage.userId,
-          userName: replyingToMessage.userName,
-          content: replyingToMessage.content,
-          type: replyingToMessage.type,
-        } : undefined,
-      };
-      
+          timestamp: Date.now(),
+          reactions: {},
+          isRead: false,
+          replyTo: replyingToMessage ? {
+            messageId: replyingToMessage.id,
+            userId: replyingToMessage.userId,
+            userName: replyingToMessage.userName,
+            content: replyingToMessage.content,
+            type: replyingToMessage.type,
+          } : undefined,
+        };
+        
       // Optimistic update
       set(state => ({
         messages: {
@@ -242,11 +255,11 @@ const useChatStore = create<ChatState>((set, get) => ({
           )
         },
         // Clear reply state
-        replyingTo: {
-          ...state.replyingTo,
-          [planId]: null
-        }
-      }));
+          replyingTo: {
+            ...state.replyingTo,
+            [planId]: null
+          }
+        }));
       
       console.log(`✅ Message sent: ${realMessage.id}`);
       
@@ -262,16 +275,16 @@ const useChatStore = create<ChatState>((set, get) => ({
   addReaction: async (planId: string, messageId: string, userId: string, emoji: string) => {
     try {
       // Optimistic update
-      set(state => ({
-        messages: {
-          ...state.messages,
-          [planId]: state.messages[planId]?.map(msg =>
-            msg.id === messageId
-              ? { ...msg, reactions: { ...msg.reactions, [userId]: emoji } }
-              : msg
-          ) || []
-        }
-      }));
+        set(state => ({
+          messages: {
+            ...state.messages,
+            [planId]: state.messages[planId]?.map(msg =>
+              msg.id === messageId
+                ? { ...msg, reactions: { ...msg.reactions, [userId]: emoji } }
+                : msg
+            ) || []
+          }
+        }));
       
       const token = await getAuthToken();
       if (!token) {
@@ -324,18 +337,18 @@ const useChatStore = create<ChatState>((set, get) => ({
   removeReaction: async (planId: string, messageId: string, userId: string) => {
     try {
       // Optimistic update
-      set(state => ({
-        messages: {
-          ...state.messages,
-          [planId]: state.messages[planId]?.map(msg => {
-            if (msg.id === messageId) {
-              const { [userId]: removed, ...remainingReactions } = msg.reactions;
-              return { ...msg, reactions: remainingReactions };
-            }
-            return msg;
-          }) || []
-        }
-      }));
+        set(state => ({
+          messages: {
+            ...state.messages,
+            [planId]: state.messages[planId]?.map(msg => {
+              if (msg.id === messageId) {
+                const { [userId]: removed, ...remainingReactions } = msg.reactions;
+                return { ...msg, reactions: remainingReactions };
+              }
+              return msg;
+            }) || []
+          }
+        }));
       
       const token = await getAuthToken();
       if (!token) {
@@ -398,40 +411,40 @@ const useChatStore = create<ChatState>((set, get) => ({
       );
       
       // Mark messages as read locally
-      set(state => ({
-        messages: {
-          ...state.messages,
-          [planId]: state.messages[planId]?.map(msg =>
-            msg.userId !== userId ? { ...msg, isRead: true } : msg
-          ) || []
-        }
-      }));
+        set(state => ({
+          messages: {
+            ...state.messages,
+            [planId]: state.messages[planId]?.map(msg =>
+              msg.userId !== userId ? { ...msg, isRead: true } : msg
+            ) || []
+          }
+        }));
       
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
-  },
-  
+      },
+      
   // ============================================
   // GET UNREAD COUNT
   // ============================================
   getUnreadCount: (planId: string, userId: string) => {
-    const messages = get().messages[planId] || [];
-    return messages.filter(msg => msg.userId !== userId && !msg.isRead).length;
-  },
-  
+        const messages = get().messages[planId] || [];
+        return messages.filter(msg => msg.userId !== userId && !msg.isRead).length;
+      },
+      
   // ============================================
   // DELETE MESSAGE
   // ============================================
   deleteMessage: async (planId: string, messageId: string) => {
     try {
       // Optimistic update
-      set(state => ({
-        messages: {
-          ...state.messages,
-          [planId]: state.messages[planId]?.filter(msg => msg.id !== messageId) || []
-        }
-      }));
+        set(state => ({
+          messages: {
+            ...state.messages,
+            [planId]: state.messages[planId]?.filter(msg => msg.id !== messageId) || []
+          }
+        }));
       
       const token = await getAuthToken();
       if (!token) {
@@ -469,14 +482,14 @@ const useChatStore = create<ChatState>((set, get) => ({
   editMessage: async (planId: string, messageId: string, newContent: string) => {
     try {
       // Optimistic update
-      set(state => ({
-        messages: {
-          ...state.messages,
-          [planId]: state.messages[planId]?.map(msg =>
-            msg.id === messageId ? { ...msg, content: newContent, edited: true } : msg
-          ) || []
-        }
-      }));
+        set(state => ({
+          messages: {
+            ...state.messages,
+            [planId]: state.messages[planId]?.map(msg =>
+              msg.id === messageId ? { ...msg, content: newContent, edited: true } : msg
+            ) || []
+          }
+        }));
       
       const token = await getAuthToken();
       if (!token) {
@@ -513,17 +526,17 @@ const useChatStore = create<ChatState>((set, get) => ({
   // REPLY ACTIONS
   // ============================================
   setReplyingTo: (planId: string, message: ChatMessage | null) => {
-    set(state => ({
-      replyingTo: {
-        ...state.replyingTo,
-        [planId]: message
-      }
-    }));
-  },
-  
+        set(state => ({
+          replyingTo: {
+            ...state.replyingTo,
+            [planId]: message
+          }
+        }));
+      },
+      
   getReplyingTo: (planId: string) => {
-    return get().replyingTo[planId] || null;
-  },
+        return get().replyingTo[planId] || null;
+      },
   
   // ============================================
   // REAL-TIME SUBSCRIPTION
@@ -553,25 +566,46 @@ const useChatStore = create<ChatState>((set, get) => ({
         async (payload) => {
           console.log('📨 New message received:', payload);
           
-          // Fetch full message with user details
-          const { data } = await supabase
-            .from('chat_messages')
-            .select(`
-              *,
-              user:users(id, name, username, avatar_url),
-              reply_to:chat_messages!reply_to_message_id(
-                id, 
-                content, 
-                type, 
-                user:users!chat_messages_user_id_fkey(id, name)
-              )
-            `)
-            .eq('id', payload.new.id)
-            .single();
-          
-          if (data) {
-            const message = transformMessage(data);
-            get().addMessageToStore(planId, message);
+          try {
+            // Fetch full message with user details
+            const { data, error } = await supabase
+              .from('chat_messages')
+              .select(`
+                *,
+                user:users(id, name, username, avatar_url)
+              `)
+              .eq('id', payload.new.id)
+              .single();
+            
+            if (error) {
+              console.error('Error fetching message:', error);
+              return;
+            }
+            
+            if (data) {
+              // If there's a reply_to, fetch it separately
+              if (data.reply_to_message_id) {
+                const { data: replyData } = await supabase
+                  .from('chat_messages')
+                  .select(`
+                    id, 
+                    content, 
+                    type,
+                    user:users(id, name)
+                  `)
+                  .eq('id', data.reply_to_message_id)
+                  .single();
+                
+                if (replyData) {
+                  data.reply_to = replyData;
+                }
+              }
+              
+              const message = transformMessage(data);
+              get().addMessageToStore(planId, message);
+            }
+          } catch (error) {
+            console.error('Error processing new message:', error);
           }
         }
       )
@@ -687,4 +721,4 @@ const useChatStore = create<ChatState>((set, get) => ({
   }
 }));
 
-export default useChatStore;
+export default useChatStore; 
