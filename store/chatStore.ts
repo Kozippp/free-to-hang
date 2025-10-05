@@ -69,7 +69,7 @@ interface ChatState {
   sendMessage: (planId: string, message: Omit<ChatMessage, 'id' | 'timestamp' | 'reactions' | 'isRead' | 'edited'>) => Promise<void>;
   addReaction: (planId: string, messageId: string, userId: string, emoji: string) => Promise<void>;
   removeReaction: (planId: string, messageId: string, userId: string) => Promise<void>;
-  markMessagesAsRead: (planId: string, userId: string) => Promise<void>;
+  markMessagesAsRead: (planId: string, userId: string, messageId?: string) => Promise<void>;
   getUnreadCount: (planId: string, userId: string) => number;
   deleteMessage: (planId: string, messageId: string) => Promise<void>;
   editMessage: (planId: string, messageId: string, newContent: string) => Promise<void>;
@@ -329,7 +329,7 @@ const useChatStore = create<ChatState>((set, get) => ({
           }
         }));
 
-      // Update sender's read receipt to include their own message
+      // Update sender's read receipt to include their own message (both locally and on server)
       const senderReceipt: ReadReceipt = {
         userId: realMessage.userId,
         lastReadMessageId: realMessage.id,
@@ -341,6 +341,23 @@ const useChatStore = create<ChatState>((set, get) => ({
         }
       };
       get().updateReadReceipt(planId, realMessage.userId, senderReceipt);
+
+      // Send read receipt to server (fire and forget)
+      const readToken = await getAuthToken();
+      if (readToken) {
+        fetch(`${API_CONFIG.BASE_URL}/chat/${planId}/read`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${readToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            lastReadMessageId: realMessage.id
+          })
+        }).catch(error => {
+          console.error('Failed to update sender read receipt on server:', error);
+        });
+      }
 
       console.log(`✅ Message sent: ${realMessage.id}`);
       
@@ -464,15 +481,23 @@ const useChatStore = create<ChatState>((set, get) => ({
   // ============================================
   // MARK MESSAGES AS READ
   // ============================================
-  markMessagesAsRead: async (planId: string, userId: string) => {
+  markMessagesAsRead: async (planId: string, userId: string, messageId?: string) => {
     try {
       const messages = get().messages[planId] || [];
-      const lastMessage = messages[messages.length - 1];
+      let targetMessage;
 
-      if (!lastMessage) return;
+      if (messageId) {
+        // Use specific message ID
+        targetMessage = messages.find(m => m.id === messageId);
+      } else {
+        // Use last message
+        targetMessage = messages[messages.length - 1];
+      }
+
+      if (!targetMessage) return;
 
       // Skip if message is a temporary ID (not yet saved to backend)
-      if (lastMessage.id.startsWith('temp-')) {
+      if (targetMessage.id.startsWith('temp-')) {
         console.log('⏳ Skipping read receipt for temporary message');
         return;
       }
@@ -487,14 +512,14 @@ const useChatStore = create<ChatState>((set, get) => ({
       const existingReceipt = get().readReceipts[planId]?.[userId];
       const optimisticReceipt: ReadReceipt = {
         userId: userId,
-        lastReadMessageId: lastMessage.id,
+        lastReadMessageId: targetMessage.id,
         lastReadAt: new Date().toISOString(),
         user: existingReceipt?.user || { id: userId, name: '', avatar_url: '' }
       };
 
       get().updateReadReceipt(planId, userId, optimisticReceipt);
       console.log(`⚡ Optimistically updated read receipt for ${userId}`);
-      console.log(`✅ Production read: Message ${lastMessage.id} by user ${userId}`);
+      console.log(`✅ Production read: Message ${targetMessage.id} by user ${userId}`);
 
       const response = await fetch(
         `${API_CONFIG.BASE_URL}/chat/${planId}/read`,
@@ -505,7 +530,7 @@ const useChatStore = create<ChatState>((set, get) => ({
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            lastReadMessageId: lastMessage.id
+            lastReadMessageId: targetMessage.id
           })
         }
       );
@@ -521,7 +546,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       // Update with server response (including user details)
       const receipt: ReadReceipt = {
         userId: userId,
-        lastReadMessageId: lastMessage.id,
+        lastReadMessageId: targetMessage.id,
         lastReadAt: new Date().toISOString(),
         user: result.data.user || optimisticReceipt.user
       };
