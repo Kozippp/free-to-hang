@@ -149,13 +149,12 @@ export default function ChatMessage({
       // Don't show current user's read status
       if (receipt.userId === currentUserId) return;
 
-      // Check if this user has actually read this message (the last one)
-      // A user has read this message if their lastReadAt is at or after the message timestamp
-      const messageTime = new Date(message.timestamp).getTime();
-      const lastReadTime = new Date(receipt.lastReadAt).getTime();
+      // A user has read this message if their lastReadMessageId matches this message
+      // or if their lastReadAt is at or after the message timestamp
+      const hasReadThisMessage = receipt.lastReadMessageId === message.id ||
+        (receipt.lastReadMessageId && new Date(receipt.lastReadAt).getTime() >= new Date(message.timestamp).getTime());
 
-      // Only show users who have read this specific message (the last one)
-      if (lastReadTime >= messageTime) {
+      if (hasReadThisMessage) {
         readUsers.push(receipt);
       }
     });

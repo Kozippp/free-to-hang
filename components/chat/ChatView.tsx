@@ -95,11 +95,12 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   }, [plan.id, currentUserId, isAuthenticated, fetchMessages, fetchReadReceipts, subscribeToChat, unsubscribeFromChat]);
 
   useEffect(() => {
-    // Mark messages as read when chat is opened
-    if (isAuthenticated) {
+    // Mark messages as read when chat is opened and when messages are loaded
+    if (isAuthenticated && planMessages.length > 0) {
+      console.log(`📖 Marking messages as read for plan ${plan.id}, user ${currentUserId}`);
       markMessagesAsRead(plan.id, currentUserId);
     }
-  }, [plan.id, currentUserId, isAuthenticated, markMessagesAsRead]);
+  }, [plan.id, currentUserId, isAuthenticated, markMessagesAsRead, planMessages.length]);
 
   useEffect(() => {
     // Auto scroll to bottom when new messages arrive AND mark as read
