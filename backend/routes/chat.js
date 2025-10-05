@@ -594,7 +594,7 @@ router.post('/:planId/read', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to access this chat' });
     }
     
-    // Verify message exists
+    // Verify message exists (only if provided)
     if (lastReadMessageId) {
       const { data: message, error: msgError } = await supabase
         .from('chat_messages')
@@ -603,10 +603,10 @@ router.post('/:planId/read', requireAuth, async (req, res) => {
         .single();
       
       if (msgError || !message) {
-        return res.status(400).json({ error: 'Message not found' });
-      }
-      
-      if (message.plan_id !== planId) {
+        console.warn(`⚠️ Message ${lastReadMessageId} not found, but continuing with read receipt update`);
+        // Don't fail - message might be temporary or just created
+        // We'll still update the read receipt with timestamp
+      } else if (message.plan_id !== planId) {
         return res.status(400).json({ error: 'Message does not belong to this plan' });
       }
     }
