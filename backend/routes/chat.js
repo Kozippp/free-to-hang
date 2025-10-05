@@ -81,8 +81,7 @@ const getMessageWithDetails = async (messageId) => {
       .from('chat_messages')
       .select(`
         *,
-        user:users(id, name, username, avatar_url),
-        reply_to:chat_messages(id, content, type, user:users(id, name))
+        user:users(id, name, username, avatar_url)
       `)
       .eq('id', messageId)
       .single();
@@ -90,6 +89,24 @@ const getMessageWithDetails = async (messageId) => {
     if (msgError) {
       console.error('Error fetching message:', msgError);
       return null;
+    }
+    
+    // If there's a reply_to, fetch it separately
+    if (message.reply_to_message_id) {
+      const { data: replyData } = await supabase
+        .from('chat_messages')
+        .select(`
+          id, 
+          content, 
+          type,
+          user:users(id, name)
+        `)
+        .eq('id', message.reply_to_message_id)
+        .single();
+      
+      if (replyData) {
+        message.reply_to = replyData;
+      }
     }
     
     // Get reactions
@@ -144,13 +161,7 @@ router.get('/:planId/messages', requireAuth, async (req, res) => {
       .from('chat_messages')
       .select(`
         *,
-        user:users(id, name, username, avatar_url),
-        reply_to:chat_messages!reply_to_message_id(
-          id, 
-          content, 
-          type, 
-          user:users!chat_messages_user_id_fkey(id, name)
-        )
+        user:users(id, name, username, avatar_url)
       `)
       .eq('plan_id', planId)
       .eq('deleted', false)
@@ -195,11 +206,36 @@ router.get('/:planId/messages', requireAuth, async (req, res) => {
       });
     }
     
-    // Add reactions to messages and reverse order (oldest first for frontend)
+    // Fetch reply_to messages if any
+    const replyToIds = messages
+      .map(m => m.reply_to_message_id)
+      .filter(id => id !== null);
+    
+    const replyToMap = {};
+    if (replyToIds.length > 0) {
+      const { data: replyMessages } = await supabase
+        .from('chat_messages')
+        .select(`
+          id, 
+          content, 
+          type,
+          user:users(id, name)
+        `)
+        .in('id', replyToIds);
+      
+      if (replyMessages) {
+        replyMessages.forEach(msg => {
+          replyToMap[msg.id] = msg;
+        });
+      }
+    }
+    
+    // Add reactions and reply_to to messages and reverse order (oldest first for frontend)
     const messagesWithReactions = messages
       .map(msg => ({
         ...msg,
-        reactions: reactionsByMessage[msg.id] || {}
+        reactions: reactionsByMessage[msg.id] || {},
+        reply_to: msg.reply_to_message_id ? replyToMap[msg.reply_to_message_id] : undefined
       }))
       .reverse();
     
