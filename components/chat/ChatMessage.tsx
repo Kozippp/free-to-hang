@@ -1178,7 +1178,7 @@ const styles = StyleSheet.create({
   },
   replyIndicatorText: {
     fontSize: 11,
-    color: Colors.light.secondaryText,
+    color: '#000000',
     marginBottom: 4,
     backgroundColor: 'transparent',
     flexShrink: 0,
@@ -1188,8 +1188,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.light.primary,
     maxWidth: '100%',
     minWidth: '50%',
   },
