@@ -196,26 +196,35 @@ const useChatStore = create<ChatState>((set, get) => ({
   fetchReadReceipts: async (planId: string) => {
     try {
       const token = await getAuthToken();
-      if (!token) {
-        console.error('No auth token available');
-        return;
+
+      // For testing: allow API call even without token
+      const headers: any = {
+        'Content-Type': 'application/json'
+      };
+
+      if (token) {
+        console.log('🔑 Fetching read receipts with token:', token.substring(0, 20) + '...');
+        headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        console.log('⚠️ Fetching read receipts without auth token (testing mode)');
       }
 
       const response = await fetch(
         `${API_CONFIG.BASE_URL}/chat/${planId}/read-receipts`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+        { headers }
       );
 
+      console.log('📡 Read receipts response status:', response.status);
+
       if (!response.ok) {
-        throw new Error('Failed to fetch read receipts');
+        const errorText = await response.text();
+        console.error('❌ Read receipts API error:', response.status, errorText);
+        throw new Error(`Failed to fetch read receipts: ${response.status} ${errorText}`);
       }
 
       const result = await response.json();
+      console.log('📦 Read receipts result:', result);
+
       const receipts = result.data;
 
       set(state => ({

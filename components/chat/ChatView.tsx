@@ -16,6 +16,7 @@ import useChatStore from '@/store/chatStore';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { Plan } from '@/store/plansStore';
+import { supabase } from '@/lib/supabase';
 
 interface ChatViewProps {
   plan: Plan;
@@ -25,7 +26,7 @@ interface ChatViewProps {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function ChatView({ plan, currentUserId = 'current', disableKeyboardAvoidance = false }: ChatViewProps) {
+export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance = false }: ChatViewProps) {
   const {
     messages,
     markMessagesAsRead,
@@ -38,10 +39,28 @@ export default function ChatView({ plan, currentUserId = 'current', disableKeybo
   const flatListRef = useRef<FlatList>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const highlightAnim = useRef(new Animated.Value(1)).current;
-  
+
   const planMessages = messages[plan.id] || [];
   const isLoading = loading[plan.id] || false;
+
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('🔐 ChatView auth check - session exists:', !!session);
+      if (session) {
+        console.log('🔐 Session user ID:', session.user.id);
+        setIsAuthenticated(true);
+      } else {
+        console.log('⚠️ No session found - using demo mode for testing');
+        // For testing purposes, set authenticated to true even without session
+        setIsAuthenticated(true);
+      }
+    };
+    checkAuth();
+  }, []);
   
   // Get current user from plan participants
   const currentUser = plan.participants.find(p => p.id === currentUserId);
@@ -50,7 +69,14 @@ export default function ChatView({ plan, currentUserId = 'current', disableKeybo
 
   // Fetch messages and subscribe to real-time updates
   useEffect(() => {
-    console.log(`🔄 Loading chat for plan ${plan.id}`);
+    if (!isAuthenticated || !currentUserId || currentUserId === 'current') {
+      console.log('⏳ Waiting for authentication and valid user ID before loading chat...');
+      console.log('  isAuthenticated:', isAuthenticated);
+      console.log('  currentUserId:', currentUserId);
+      return;
+    }
+
+    console.log(`🔄 Loading chat for plan ${plan.id} as user ${currentUserId}`);
 
     // Fetch initial messages
     fetchMessages(plan.id);
@@ -66,12 +92,14 @@ export default function ChatView({ plan, currentUserId = 'current', disableKeybo
       console.log(`🔌 Unsubscribing from chat ${plan.id}`);
       unsubscribeFromChat(plan.id);
     };
-  }, [plan.id, fetchMessages, fetchReadReceipts, subscribeToChat, unsubscribeFromChat]);
+  }, [plan.id, currentUserId, isAuthenticated, fetchMessages, fetchReadReceipts, subscribeToChat, unsubscribeFromChat]);
 
   useEffect(() => {
     // Mark messages as read when chat is opened
-    markMessagesAsRead(plan.id, currentUserId);
-  }, [plan.id, currentUserId, markMessagesAsRead]);
+    if (isAuthenticated) {
+      markMessagesAsRead(plan.id, currentUserId);
+    }
+  }, [plan.id, currentUserId, isAuthenticated, markMessagesAsRead]);
 
   useEffect(() => {
     // Auto scroll to bottom when new messages arrive

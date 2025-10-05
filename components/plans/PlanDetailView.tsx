@@ -74,6 +74,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   // Early return if user is not authenticated
   if (!user) {
+    console.log('🔒 PlanDetailView: No user authenticated, returning null');
     return null;
   }
   
@@ -893,14 +894,15 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       )}
       
       {activeTab === 'Chat' && (
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           style={styles.chatContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
         >
-          <ChatView 
-            plan={latestPlan} 
-            currentUserId={user.id} 
+          {console.log('💬 Rendering ChatView for user:', user.id)}
+          <ChatView
+            plan={latestPlan}
+            currentUserId={user.id}
             disableKeyboardAvoidance={true}
           />
         </KeyboardAvoidingView>
