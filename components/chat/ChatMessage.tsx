@@ -15,6 +15,7 @@ import {
   Platform
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { 
   Reply,
   Edit3,
@@ -128,6 +129,14 @@ export default function ChatMessage({
   const imageViewerOpacity = useRef(new Animated.Value(0)).current;
   const imageViewerScale = useRef(new Animated.Value(0.5)).current;
 
+  // Swipe to reply animations
+  const swipeTranslateX = useRef(new Animated.Value(0)).current;
+  const swipeOpacity = useRef(new Animated.Value(0)).current;
+  const replyIconScale = useRef(new Animated.Value(0.8)).current;
+
+  // Gesture handler ref
+  const panGestureRef = useRef(null);
+
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', {
@@ -196,9 +205,72 @@ export default function ChatMessage({
     });
   };
 
+  const handleSwipeGesture = (event: any) => {
+    const { translationX, state } = event.nativeEvent;
+
+    if (state === State.END) {
+      // Check if swipe distance is enough to trigger reply
+      if (translationX > 80) {
+        // Trigger reply
+        handleReply();
+
+        // Add haptic feedback
+        Vibration.vibrate(50);
+
+        // Reset animation
+        Animated.parallel([
+          Animated.spring(swipeTranslateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 200,
+            friction: 8
+          }),
+          Animated.timing(swipeOpacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true
+          }),
+          Animated.spring(replyIconScale, {
+            toValue: 0.8,
+            useNativeDriver: true,
+            tension: 200,
+            friction: 8
+          })
+        ]).start();
+      } else {
+        // Reset to original position
+        Animated.parallel([
+          Animated.spring(swipeTranslateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 200,
+            friction: 8
+          }),
+          Animated.timing(swipeOpacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true
+          })
+        ]).start();
+      }
+    } else if (state === State.ACTIVE) {
+      // Update swipe animation during gesture
+      const clampedTranslation = Math.min(translationX, 120);
+      swipeTranslateX.setValue(clampedTranslation);
+
+      // Calculate opacity based on swipe distance
+      const opacity = Math.min(clampedTranslation / 80, 1);
+      swipeOpacity.setValue(opacity);
+
+      // Scale the reply icon
+      const scale = 0.8 + (opacity * 0.2);
+      replyIconScale.setValue(scale);
+    }
+  };
+
   const handleLongPress = () => {
     Vibration.vibrate(50);
-    
+
     Animated.parallel([
       Animated.spring(messageScale, {
         toValue: 1.05,
@@ -212,7 +284,7 @@ export default function ChatMessage({
         useNativeDriver: true
       })
     ]).start();
-    
+
     setShowActions(true);
   };
 
@@ -553,23 +625,93 @@ export default function ChatMessage({
           {renderReplyPreview()}
           
           {message.type === 'image' ? (
-            <TouchableWithoutFeedback onLongPress={handleLongPress}>
-              <View 
-                style={styles.imageMessageWrapper}
-                onLayout={onMessageLayout}
+            <View style={styles.swipeContainer}>
+              {/* Reply Icon Background */}
+              <Animated.View
+                style={[
+                  styles.replyIconContainer,
+                  {
+                    opacity: swipeOpacity,
+                    transform: [{ scale: replyIconScale }]
+                  }
+                ]}
               >
-                {renderMessageContent()}
-              </View>
-            </TouchableWithoutFeedback>
+                <View style={styles.replyIconBackground}>
+                  <Reply size={20} color="white" />
+                </View>
+              </Animated.View>
+
+              {/* Swipeable Image Message */}
+              <PanGestureHandler
+                ref={panGestureRef}
+                onGestureEvent={handleSwipeGesture}
+                onHandlerStateChange={handleSwipeGesture}
+                activeOffsetX={[-10, 10]} // Only allow right swipe
+                failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
+              >
+                <Animated.View
+                  style={[
+                    styles.swipeableMessage,
+                    {
+                      transform: [{ translateX: swipeTranslateX }]
+                    }
+                  ]}
+                >
+                  <TouchableWithoutFeedback onLongPress={handleLongPress}>
+                    <View
+                      style={styles.imageMessageWrapper}
+                      onLayout={onMessageLayout}
+                    >
+                      {renderMessageContent()}
+                    </View>
+                  </TouchableWithoutFeedback>
+                </Animated.View>
+              </PanGestureHandler>
+            </View>
           ) : (
-            <TouchableOpacity
-              style={getBubbleStyle()}
-              onLongPress={handleLongPress}
-              activeOpacity={0.8}
-              onLayout={onMessageLayout}
-            >
-              {renderMessageContent()}
-            </TouchableOpacity>
+            <View style={styles.swipeContainer}>
+              {/* Reply Icon Background */}
+              <Animated.View
+                style={[
+                  styles.replyIconContainer,
+                  {
+                    opacity: swipeOpacity,
+                    transform: [{ scale: replyIconScale }]
+                  }
+                ]}
+              >
+                <View style={styles.replyIconBackground}>
+                  <Reply size={20} color="white" />
+                </View>
+              </Animated.View>
+
+              {/* Swipeable Message */}
+              <PanGestureHandler
+                ref={panGestureRef}
+                onGestureEvent={handleSwipeGesture}
+                onHandlerStateChange={handleSwipeGesture}
+                activeOffsetX={[-10, 10]} // Only allow right swipe
+                failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
+              >
+                <Animated.View
+                  style={[
+                    styles.swipeableMessage,
+                    {
+                      transform: [{ translateX: swipeTranslateX }]
+                    }
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={getBubbleStyle()}
+                    onLongPress={handleLongPress}
+                    activeOpacity={0.8}
+                    onLayout={onMessageLayout}
+                  >
+                    {renderMessageContent()}
+                  </TouchableOpacity>
+                </Animated.View>
+              </PanGestureHandler>
+            </View>
           )}
 
           {renderReactions()}
@@ -1179,5 +1321,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 1,
     elevation: 2,
+  },
+  swipeContainer: {
+    position: 'relative',
+    maxWidth: MESSAGE_MAX_WIDTH,
+  },
+  swipeableMessage: {
+    maxWidth: MESSAGE_MAX_WIDTH,
+  },
+  replyIconContainer: {
+    position: 'absolute',
+    left: -50,
+    top: '50%',
+    marginTop: -20,
+    zIndex: -1,
+  },
+  replyIconBackground: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 }); 
