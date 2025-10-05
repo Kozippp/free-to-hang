@@ -153,6 +153,9 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     const showDateSeparator = shouldShowDateSeparator(item, previousMessage);
     const isHighlighted = highlightedMessageId === item.id;
     
+    // Check if this is the last message in the entire chat
+    const isLastMessage = index === planMessages.length - 1;
+    
     // Check if we should show avatar (first message from user or after someone else)
     const showAvatar = !isOwnMessage && (
       !previousMessage || 
@@ -195,6 +198,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
             isFirstInGroup={isFirstInGroup}
             isLastInGroup={isLastInGroup}
             scrollToMessage={scrollToMessage}
+            isLastMessage={isLastMessage}
           />
         </Animated.View>
       </View>
