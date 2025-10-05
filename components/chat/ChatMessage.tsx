@@ -131,8 +131,6 @@ export default function ChatMessage({
 
   // Swipe to reply animations
   const swipeTranslateX = useRef(new Animated.Value(0)).current;
-  const swipeOpacity = useRef(new Animated.Value(0)).current;
-  const replyIconScale = useRef(new Animated.Value(0.8)).current;
 
   // Gesture handler ref
   const panGestureRef = useRef(null);
@@ -238,40 +236,20 @@ export default function ChatMessage({
         Vibration.vibrate(50);
 
         // Reset animation
-        Animated.parallel([
-          Animated.spring(swipeTranslateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 200,
-            friction: 8
-          }),
-          Animated.timing(swipeOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true
-          }),
-          Animated.spring(replyIconScale, {
-            toValue: 0.8,
-            useNativeDriver: true,
-            tension: 200,
-            friction: 8
-          })
-        ]).start();
+        Animated.spring(swipeTranslateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 200,
+          friction: 8
+        }).start();
       } else {
         // Reset to original position
-        Animated.parallel([
-          Animated.spring(swipeTranslateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 200,
-            friction: 8
-          }),
-          Animated.timing(swipeOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true
-          })
-        ]).start();
+        Animated.spring(swipeTranslateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 200,
+          friction: 8
+        }).start();
       }
     } else if (state === State.ACTIVE) {
       // Only animate swipe if touch started from center
@@ -287,15 +265,6 @@ export default function ChatMessage({
         }
 
         swipeTranslateX.setValue(clampedTranslation);
-
-        // Calculate opacity based on swipe distance (absolute value)
-        const swipeDistance = Math.abs(clampedTranslation);
-        const opacity = Math.min(swipeDistance / 80, 1);
-        swipeOpacity.setValue(opacity);
-
-        // Scale the reply icon
-        const scale = 0.8 + (opacity * 0.2);
-        replyIconScale.setValue(scale);
       }
     }
   };
@@ -658,22 +627,6 @@ export default function ChatMessage({
           
           {message.type === 'image' ? (
             <View style={styles.swipeContainer}>
-              {/* Reply Icon Background */}
-              <Animated.View
-                style={[
-                  styles.replyIconContainer,
-                  isOwnMessage ? styles.replyIconContainerOwn : styles.replyIconContainerOther,
-                  {
-                    opacity: swipeOpacity,
-                    transform: [{ scale: replyIconScale }]
-                  }
-                ]}
-              >
-                <View style={styles.replyIconBackground}>
-                  <Reply size={20} color="white" />
-                </View>
-              </Animated.View>
-
               {/* Swipeable Image Message */}
               <PanGestureHandler
                 ref={panGestureRef}
@@ -703,22 +656,6 @@ export default function ChatMessage({
             </View>
           ) : (
             <View style={styles.swipeContainer}>
-              {/* Reply Icon Background */}
-              <Animated.View
-                style={[
-                  styles.replyIconContainer,
-                  isOwnMessage ? styles.replyIconContainerOwn : styles.replyIconContainerOther,
-                  {
-                    opacity: swipeOpacity,
-                    transform: [{ scale: replyIconScale }]
-                  }
-                ]}
-              >
-                <View style={styles.replyIconBackground}>
-                  <Reply size={20} color="white" />
-                </View>
-              </Animated.View>
-
               {/* Swipeable Message */}
               <PanGestureHandler
                 ref={panGestureRef}
@@ -1362,30 +1299,5 @@ const styles = StyleSheet.create({
   },
   swipeableMessage: {
     maxWidth: MESSAGE_MAX_WIDTH,
-  },
-  replyIconContainer: {
-    position: 'absolute',
-    top: '50%',
-    marginTop: -20,
-    zIndex: -1,
-  },
-  replyIconContainerOwn: {
-    right: -50,
-  },
-  replyIconContainerOther: {
-    left: -50,
-  },
-  replyIconBackground: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
 }); 
