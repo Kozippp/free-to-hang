@@ -663,7 +663,7 @@ export default function ChatMessage({
                 ref={panGestureRef}
                 onGestureEvent={handleSwipeGesture}
                 onHandlerStateChange={handleSwipeGesture}
-                activeOffsetX={[-5, 5]} // Allow both left and right swipes
+                activeOffsetX={[-20, 20]} // Require more horizontal movement to activate swipe (center only)
                 failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
               >
                 <Animated.View
@@ -708,7 +708,7 @@ export default function ChatMessage({
                 ref={panGestureRef}
                 onGestureEvent={handleSwipeGesture}
                 onHandlerStateChange={handleSwipeGesture}
-                activeOffsetX={[-5, 5]} // Allow both left and right swipes
+                activeOffsetX={[-20, 20]} // Require more horizontal movement to activate swipe (center only)
                 failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
               >
                 <Animated.View
