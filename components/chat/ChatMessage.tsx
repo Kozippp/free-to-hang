@@ -600,284 +600,292 @@ export default function ChatMessage({
         </View>
       )}
       
-      <Animated.View 
-        style={[
-          styles.messageContainer,
-          isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer,
-        ]}
-      >
-        {!isOwnMessage && showAvatar && (
-          <Image 
-            source={{ uri: message.userAvatar }} 
-            style={styles.avatar}
-          />
-        )}
-        
-        {!isOwnMessage && !showAvatar && <View style={styles.avatarPlaceholder} />}
-        
-        <View style={[
-          styles.messageWrapper,
-          isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
-        ]}>
-          {!isOwnMessage && isFirstInGroup && !message.replyTo && (
-            <Text style={styles.userName}>{message.userName}</Text>
+      <View style={styles.messageRow}>
+        <Animated.View 
+          style={[
+            styles.messageContainer,
+            isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer,
+          ]}
+        >
+          {!isOwnMessage && showAvatar && (
+            <Image 
+              source={{ uri: message.userAvatar }} 
+              style={styles.avatar}
+            />
           )}
           
-          {renderReplyPreview()}
+          {!isOwnMessage && !showAvatar && <View style={styles.avatarPlaceholder} />}
           
-          {message.type === 'image' ? (
-            <View style={styles.swipeContainer}>
-              {/* Swipeable Image Message */}
-              <PanGestureHandler
-                ref={panGestureRef}
-                onGestureEvent={handleSwipeGesture}
-                onHandlerStateChange={handleSwipeGesture}
-                activeOffsetX={isOwnMessage ? [-10, 1000] : [-1000, 10]} // Only allow swipe towards center
-                failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
-              >
-                <Animated.View
-                  style={[
-                    styles.swipeableMessage,
-                    {
-                      transform: [{ translateX: swipeTranslateX }]
-                    }
-                  ]}
+          <View style={[
+            styles.messageWrapper,
+            isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
+          ]}>
+            {!isOwnMessage && isFirstInGroup && !message.replyTo && (
+              <Text style={styles.userName}>{message.userName}</Text>
+            )}
+            
+            {renderReplyPreview()}
+            
+            {message.type === 'image' ? (
+              <View style={styles.swipeContainer}>
+                {/* Swipeable Image Message */}
+                <PanGestureHandler
+                  ref={panGestureRef}
+                  onGestureEvent={handleSwipeGesture}
+                  onHandlerStateChange={handleSwipeGesture}
+                  activeOffsetX={isOwnMessage ? [-10, 1000] : [-1000, 10]} // Only allow swipe towards center
+                  failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
                 >
-                  <TouchableWithoutFeedback onLongPress={handleLongPress}>
-                    <View
-                      style={styles.imageMessageWrapper}
+                  <Animated.View
+                    style={[
+                      styles.swipeableMessage,
+                      {
+                        transform: [{ translateX: swipeTranslateX }]
+                      }
+                    ]}
+                  >
+                    <TouchableWithoutFeedback onLongPress={handleLongPress}>
+                      <View
+                        style={styles.imageMessageWrapper}
+                        onLayout={onMessageLayout}
+                      >
+                        {renderMessageContent()}
+                      </View>
+                    </TouchableWithoutFeedback>
+                  </Animated.View>
+                </PanGestureHandler>
+              </View>
+            ) : (
+              <View style={styles.swipeContainer}>
+                {/* Swipeable Message */}
+                <PanGestureHandler
+                  ref={panGestureRef}
+                  onGestureEvent={handleSwipeGesture}
+                  onHandlerStateChange={handleSwipeGesture}
+                  activeOffsetX={isOwnMessage ? [-10, 1000] : [-1000, 10]} // Only allow swipe towards center
+                  failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
+                >
+                  <Animated.View
+                    style={[
+                      styles.swipeableMessage,
+                      {
+                        transform: [{ translateX: swipeTranslateX }]
+                      }
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={getBubbleStyle()}
+                      onLongPress={handleLongPress}
+                      activeOpacity={0.8}
                       onLayout={onMessageLayout}
                     >
                       {renderMessageContent()}
-                    </View>
-                  </TouchableWithoutFeedback>
-                </Animated.View>
-              </PanGestureHandler>
-            </View>
-          ) : (
-            <View style={styles.swipeContainer}>
-              {/* Swipeable Message */}
-              <PanGestureHandler
-                ref={panGestureRef}
-                onGestureEvent={handleSwipeGesture}
-                onHandlerStateChange={handleSwipeGesture}
-                activeOffsetX={isOwnMessage ? [-10, 1000] : [-1000, 10]} // Only allow swipe towards center
-                failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
-              >
-                <Animated.View
-                  style={[
-                    styles.swipeableMessage,
-                    {
-                      transform: [{ translateX: swipeTranslateX }]
-                    }
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={getBubbleStyle()}
-                    onLongPress={handleLongPress}
-                    activeOpacity={0.8}
-                    onLayout={onMessageLayout}
-                  >
-                    {renderMessageContent()}
-                  </TouchableOpacity>
-                </Animated.View>
-              </PanGestureHandler>
-            </View>
-          )}
-
+                    </TouchableOpacity>
+                  </Animated.View>
+                </PanGestureHandler>
+              </View>
+            )}
+          </View>
+        </Animated.View>
+        
+        {/* Reactions - outside of avatar alignment container */}
+        <View style={[
+          styles.reactionsWrapper,
+          isOwnMessage ? styles.ownReactionsWrapper : styles.otherReactionsWrapper
+        ]}>
           {renderReactions()}
-
-          {/* Image Viewer Modal */}
-          {showImageViewer && (
-            <Modal
-              visible={showImageViewer}
-              transparent={true}
-              animationType="none"
-              onRequestClose={closeImageViewer}
-            >
-              <Animated.View 
-                style={[
-                  styles.imageViewerOverlay,
-                  { opacity: imageViewerOpacity }
-                ]}
-              >
-                <BlurView intensity={80} style={StyleSheet.absoluteFill} />
-                
-                <TouchableOpacity 
-                  style={styles.imageViewerClose}
-                  onPress={closeImageViewer}
-                >
-                  <View style={styles.closeButtonBackground}>
-                    <X size={20} color="white" />
-                  </View>
-                </TouchableOpacity>
-                
-                <Animated.View
-                  style={[
-                    styles.imageViewerContainer,
-                    {
-                      transform: [{ scale: imageViewerScale }]
-                    }
-                  ]}
-                >
-                  <Image 
-                    source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
-                    style={styles.fullScreenImage}
-                    resizeMode="contain"
-                  />
-                </Animated.View>
-                
-                <TouchableWithoutFeedback onPress={closeImageViewer}>
-                  <View style={StyleSheet.absoluteFill} />
-                </TouchableWithoutFeedback>
-              </Animated.View>
-            </Modal>
-          )}
         </View>
+      </View>
 
-        {/* Message Actions Modal */}
+      {/* Image Viewer Modal */}
+      {showImageViewer && (
         <Modal
-          visible={showActions}
-          transparent
+          visible={showImageViewer}
+          transparent={true}
           animationType="none"
-          onRequestClose={closeModal}
+          onRequestClose={closeImageViewer}
         >
-          <View style={styles.modalOverlay}>
-            <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          <Animated.View 
+            style={[
+              styles.imageViewerOverlay,
+              { opacity: imageViewerOpacity }
+            ]}
+          >
+            <BlurView intensity={80} style={StyleSheet.absoluteFill} />
             
             <TouchableOpacity 
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={closeModal}
-            />
-            
-            {/* Highlighted Message */}
-            <Animated.View 
-              style={[
-                styles.highlightedMessageWrapper,
-                {
-                  left: isOwnMessage 
-                    ? SCREEN_WIDTH - messageLayout.width - 16
-                    : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)),
-                  top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2),
-                  width: messageLayout.width,
-                  height: messageLayout.height,
-                  transform: [{ scale: messageScale }],
-                  opacity: modalOpacity,
-                }
-              ]}
+              style={styles.imageViewerClose}
+              onPress={closeImageViewer}
             >
-              {message.type === 'image' ? (
-                <View>
-                  {renderMessageContent()}
-                </View>
-              ) : (
-                <View style={getBubbleStyle()}>
-                  {renderMessageContent()}
-                </View>
-              )}
-            </Animated.View>
-            
-            {/* Timestamp */}
-            <Animated.View 
-              style={[
-                styles.highlightedTimestamp,
-                {
-                  left: isOwnMessage 
-                    ? SCREEN_WIDTH - messageLayout.width - 16 - 60
-                    : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)) + messageLayout.width + 8,
-                  top: Dimensions.get('window').height * 0.3 - 10,
-                  opacity: modalOpacity,
-                }
-              ]}
-            >
-              <Text style={styles.highlightedTimestampText}>
-                {formatTime(message.timestamp)}
-              </Text>
-            </Animated.View>
-            
-            {/* Emoji Menu */}
-            <Animated.View 
-              style={[
-                styles.emojiMenu,
-                {
-                  left: isOwnMessage
-                    ? SCREEN_WIDTH - 280 - 16
-                    : Math.max(16, Math.min(SCREEN_WIDTH - 280 - 16, messageLayout.x + (messageLayout.width / 2) - 140)),
-                  top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2) - 60,
-                  opacity: modalOpacity,
-                }
-              ]}
-            >
-              <View style={[styles.emojiRow, isOwnMessage && styles.ownEmojiRow]}>
-                {QUICK_REACTIONS.map((emoji, index) => (
-                  <TouchableOpacity
-                    key={`emoji-${index}-${emoji}`}
-                    style={[
-                      styles.emojiButton,
-                      message.reactions[currentUserId] === emoji && styles.selectedEmojiButton
-                    ]}
-                    onPress={() => handleReaction(emoji)}
-                  >
-                    <Text style={styles.emojiText}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.closeButtonBackground}>
+                <X size={20} color="white" />
               </View>
-            </Animated.View>
+            </TouchableOpacity>
             
-            {/* Action Menu */}
-            <Animated.View 
+            <Animated.View
               style={[
-                styles.actionMenu,
+                styles.imageViewerContainer,
                 {
-                  left: isOwnMessage
-                    ? SCREEN_WIDTH - 180 - 16
-                    : Math.max(16, Math.min(SCREEN_WIDTH - 180 - 16, messageLayout.x + (messageLayout.width / 2) - 90)),
-                  top: Dimensions.get('window').height * 0.3 + (messageLayout.height / 2) + 20,
-                  opacity: modalOpacity,
+                  transform: [{ scale: imageViewerScale }]
                 }
               ]}
             >
-              {isOwnMessage ? (
-                <>
-                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleUnsend}>
-                    <Trash2 size={24} color={Colors.light.secondary} />
-                    <Text style={[styles.actionMenuText, styles.unsendMenuText]}>Unsend</Text>
-                  </TouchableOpacity>
-                  
-                  <View style={styles.actionMenuSeparator} />
-                  
-                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleCopy}>
-                    <Copy size={24} color={Colors.light.text} />
-                    <Text style={styles.actionMenuText}>Copy</Text>
-                  </TouchableOpacity>
-                  
-                  <View style={styles.actionMenuSeparator} />
-                  
-                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
-                    <Reply size={24} color={Colors.light.text} />
-                    <Text style={styles.actionMenuText}>Reply</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
-                    <Reply size={24} color={Colors.light.text} />
-                    <Text style={styles.actionMenuText}>Reply</Text>
-                  </TouchableOpacity>
-                  
-                  <View style={styles.actionMenuSeparator} />
-                  
-                  <TouchableOpacity style={styles.actionMenuItem} onPress={handleCopy}>
-                    <Copy size={24} color={Colors.light.text} />
-                    <Text style={styles.actionMenuText}>Copy</Text>
-                  </TouchableOpacity>
-                </>
-              )}
+              <Image 
+                source={{ uri: message.imageUrl || 'https://via.placeholder.com/200' }} 
+                style={styles.fullScreenImage}
+                resizeMode="contain"
+              />
             </Animated.View>
-          </View>
+            
+            <TouchableWithoutFeedback onPress={closeImageViewer}>
+              <View style={StyleSheet.absoluteFill} />
+            </TouchableWithoutFeedback>
+          </Animated.View>
         </Modal>
-      </Animated.View>
+      )}
+
+      {/* Message Actions Modal */}
+      <Modal
+        visible={showActions}
+        transparent
+        animationType="none"
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={closeModal}
+          />
+          
+          {/* Highlighted Message */}
+          <Animated.View 
+            style={[
+              styles.highlightedMessageWrapper,
+              {
+                left: isOwnMessage 
+                  ? SCREEN_WIDTH - messageLayout.width - 16
+                  : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)),
+                top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2),
+                width: messageLayout.width,
+                height: messageLayout.height,
+                transform: [{ scale: messageScale }],
+                opacity: modalOpacity,
+              }
+            ]}
+          >
+            {message.type === 'image' ? (
+              <View>
+                {renderMessageContent()}
+              </View>
+            ) : (
+              <View style={getBubbleStyle()}>
+                {renderMessageContent()}
+              </View>
+            )}
+          </Animated.View>
+          
+          {/* Timestamp */}
+          <Animated.View 
+            style={[
+              styles.highlightedTimestamp,
+              {
+                left: isOwnMessage 
+                  ? SCREEN_WIDTH - messageLayout.width - 16 - 60
+                  : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)) + messageLayout.width + 8,
+                top: Dimensions.get('window').height * 0.3 - 10,
+                opacity: modalOpacity,
+              }
+            ]}
+          >
+            <Text style={styles.highlightedTimestampText}>
+              {formatTime(message.timestamp)}
+            </Text>
+          </Animated.View>
+          
+          {/* Emoji Menu */}
+          <Animated.View 
+            style={[
+              styles.emojiMenu,
+              {
+                left: isOwnMessage
+                  ? SCREEN_WIDTH - 280 - 16
+                  : Math.max(16, Math.min(SCREEN_WIDTH - 280 - 16, messageLayout.x + (messageLayout.width / 2) - 140)),
+                top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2) - 60,
+                opacity: modalOpacity,
+              }
+            ]}
+          >
+            <View style={[styles.emojiRow, isOwnMessage && styles.ownEmojiRow]}>
+              {QUICK_REACTIONS.map((emoji, index) => (
+                <TouchableOpacity
+                  key={`emoji-${index}-${emoji}`}
+                  style={[
+                    styles.emojiButton,
+                    message.reactions[currentUserId] === emoji && styles.selectedEmojiButton
+                  ]}
+                  onPress={() => handleReaction(emoji)}
+                >
+                  <Text style={styles.emojiText}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+          
+          {/* Action Menu */}
+          <Animated.View 
+            style={[
+              styles.actionMenu,
+              {
+                left: isOwnMessage
+                  ? SCREEN_WIDTH - 180 - 16
+                  : Math.max(16, Math.min(SCREEN_WIDTH - 180 - 16, messageLayout.x + (messageLayout.width / 2) - 90)),
+                top: Dimensions.get('window').height * 0.3 + (messageLayout.height / 2) + 20,
+                opacity: modalOpacity,
+              }
+            ]}
+          >
+            {isOwnMessage ? (
+              <>
+                <TouchableOpacity style={styles.actionMenuItem} onPress={handleUnsend}>
+                  <Trash2 size={24} color={Colors.light.secondary} />
+                  <Text style={[styles.actionMenuText, styles.unsendMenuText]}>Unsend</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.actionMenuSeparator} />
+                
+                <TouchableOpacity style={styles.actionMenuItem} onPress={handleCopy}>
+                  <Copy size={24} color={Colors.light.text} />
+                  <Text style={styles.actionMenuText}>Copy</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.actionMenuSeparator} />
+                
+                <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
+                  <Reply size={24} color={Colors.light.text} />
+                  <Text style={styles.actionMenuText}>Reply</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.actionMenuItem} onPress={handleReply}>
+                  <Reply size={24} color={Colors.light.text} />
+                  <Text style={styles.actionMenuText}>Reply</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.actionMenuSeparator} />
+                
+                <TouchableOpacity style={styles.actionMenuItem} onPress={handleCopy}>
+                  <Copy size={24} color={Colors.light.text} />
+                  <Text style={styles.actionMenuText}>Copy</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </Animated.View>
+        </View>
+      </Modal>
       
       {/* Read Status - shown below message on its own row */}
       {renderReadStatus()}
@@ -1300,5 +1308,18 @@ const styles = StyleSheet.create({
   },
   swipeableMessage: {
     maxWidth: MESSAGE_MAX_WIDTH,
+  },
+  messageRow: {
+    width: '100%',
+  },
+  reactionsWrapper: {
+    paddingHorizontal: 16,
+  },
+  ownReactionsWrapper: {
+    alignItems: 'flex-end',
+  },
+  otherReactionsWrapper: {
+    alignItems: 'flex-start',
+    paddingLeft: 52, // 16px padding + 28px avatar + 8px margin
   },
 }); 
