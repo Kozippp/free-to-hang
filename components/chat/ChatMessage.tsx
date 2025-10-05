@@ -470,7 +470,7 @@ export default function ChatMessage({
             source={{ uri: receipt.user.avatar_url || 'https://via.placeholder.com/20x20' }}
             style={[
               styles.readStatusAvatar,
-              { marginLeft: index > 0 ? 4 : 0 } // Space avatars apart instead of overlapping
+              { marginLeft: index > 0 ? 2 : 0 } // Closer spacing between avatars
             ]}
           />
         ))}
@@ -1169,9 +1169,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   readStatusAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 1.5,
     borderColor: 'white',
     shadowColor: '#000',
