@@ -137,21 +137,16 @@ export default function ChatMessage({
     });
   };
 
-  // Get users who have read the chat (shown only on last message)
+  // Get users who have read up to this specific message
   const getReadUsers = (): ReadReceipt[] => {
-    // Only show read receipts on the last message
-    if (!isLastMessage) return [];
-
     const planReadReceipts = readReceipts[planId] || {};
     const readUsers: ReadReceipt[] = [];
 
     Object.values(planReadReceipts).forEach((receipt: ReadReceipt) => {
       // Show read status for all users including current user
 
-      // A user has read this message if their lastReadMessageId matches this message
-      // or if their lastReadAt is at or after the message timestamp
-      const hasReadThisMessage = receipt.lastReadMessageId === message.id ||
-        (receipt.lastReadMessageId && new Date(receipt.lastReadAt).getTime() >= new Date(message.timestamp).getTime());
+      // A user has read up to this message if their lastReadMessageId matches this message
+      const hasReadThisMessage = receipt.lastReadMessageId === message.id;
 
       if (hasReadThisMessage) {
         readUsers.push(receipt);
@@ -463,7 +458,7 @@ export default function ChatMessage({
   };
 
   const renderReadStatus = () => {
-    // Show read status only on the last message
+    // Show read status for users who have read up to this message
     const readUsers = getReadUsers();
     if (readUsers.length === 0) return null;
 
