@@ -464,6 +464,17 @@ const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
 
+      // Optimistic update - update locally first for instant UI feedback
+      const optimisticReceipt: ReadReceipt = {
+        userId: userId,
+        lastReadMessageId: lastMessage.id,
+        lastReadAt: new Date().toISOString(),
+        user: get().readReceipts[planId]?.[userId]?.user || { id: userId, name: '', avatar_url: '' }
+      };
+
+      get().updateReadReceipt(planId, userId, optimisticReceipt);
+      console.log(`⚡ Optimistically updated read receipt for ${userId}`);
+
       const response = await fetch(
         `${API_CONFIG.BASE_URL}/chat/${planId}/read`,
         {
@@ -484,17 +495,17 @@ const useChatStore = create<ChatState>((set, get) => ({
 
       const result = await response.json();
 
-      // Update read receipt locally
+      // Update with server response (including user details)
       const receipt: ReadReceipt = {
         userId: userId,
         lastReadMessageId: lastMessage.id,
         lastReadAt: new Date().toISOString(),
-        user: result.data.user || { id: userId, name: '', avatar_url: '' }
+        user: result.data.user || optimisticReceipt.user
       };
 
       get().updateReadReceipt(planId, userId, receipt);
 
-      console.log(`✅ Marked messages as read for user ${userId} in plan ${planId}`);
+      console.log(`✅ Confirmed read receipt for user ${userId} in plan ${planId}`);
 
     } catch (error) {
       console.error('Error marking messages as read:', error);
@@ -740,20 +751,67 @@ const useChatStore = create<ChatState>((set, get) => ({
           });
         }
       )
-      // Listen for read receipts
+      // Listen for read receipts - optimized for real-time updates
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'chat_read_receipts',
           filter: `plan_id=eq.${planId}`
         },
         async (payload) => {
-          console.log('📖 Read receipt changed:', payload);
+          console.log('📖 New read receipt:', payload);
 
-          // Refetch read receipts for this plan
-          get().fetchReadReceipts(planId);
+          // Fetch user details for the new receipt
+          const { data: userData } = await supabase
+            .from('users')
+            .select('id, name, avatar_url')
+            .eq('id', payload.new.user_id)
+            .single();
+
+          if (userData) {
+            const receipt: ReadReceipt = {
+              userId: payload.new.user_id,
+              lastReadMessageId: payload.new.last_read_message_id,
+              lastReadAt: payload.new.last_read_at,
+              user: userData
+            };
+
+            get().updateReadReceipt(planId, payload.new.user_id, receipt);
+            console.log(`⚡ Real-time read receipt updated for ${userData.name}`);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_read_receipts',
+          filter: `plan_id=eq.${planId}`
+        },
+        async (payload) => {
+          console.log('📖 Updated read receipt:', payload);
+
+          // Fetch user details for the updated receipt
+          const { data: userData } = await supabase
+            .from('users')
+            .select('id, name, avatar_url')
+            .eq('id', payload.new.user_id)
+            .single();
+
+          if (userData) {
+            const receipt: ReadReceipt = {
+              userId: payload.new.user_id,
+              lastReadMessageId: payload.new.last_read_message_id,
+              lastReadAt: payload.new.last_read_at,
+              user: userData
+            };
+
+            get().updateReadReceipt(planId, payload.new.user_id, receipt);
+            console.log(`⚡ Real-time read receipt updated for ${userData.name}`);
+          }
         }
       )
       .subscribe((status) => {

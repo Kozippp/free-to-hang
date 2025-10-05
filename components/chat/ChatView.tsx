@@ -102,13 +102,21 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   }, [plan.id, currentUserId, isAuthenticated, markMessagesAsRead]);
 
   useEffect(() => {
-    // Auto scroll to bottom when new messages arrive
+    // Auto scroll to bottom when new messages arrive AND mark as read
     if (planMessages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
+      
+      // Mark messages as read whenever new messages arrive
+      // This ensures read receipts are updated in real-time
+      if (isAuthenticated) {
+        setTimeout(() => {
+          markMessagesAsRead(plan.id, currentUserId);
+        }, 150); // Small delay to ensure message is rendered
+      }
     }
-  }, [planMessages.length]);
+  }, [planMessages.length, isAuthenticated, plan.id, currentUserId, markMessagesAsRead]);
 
   // Check if we should show date separator
   const shouldShowDateSeparator = (currentMessage: any, previousMessage: any) => {
