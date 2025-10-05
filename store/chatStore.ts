@@ -481,6 +481,7 @@ const useChatStore = create<ChatState>((set, get) => ({
 
       get().updateReadReceipt(planId, userId, optimisticReceipt);
       console.log(`⚡ Optimistically updated read receipt for ${userId}`);
+      console.log(`✅ Production read: Message ${lastMessage.id} by user ${userId}`);
 
       const response = await fetch(
         `${API_CONFIG.BASE_URL}/chat/${planId}/read`,

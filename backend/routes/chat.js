@@ -587,7 +587,9 @@ router.post('/:planId/read', requireAuth, async (req, res) => {
     const userId = req.user.id;
     
     console.log(`📖 Marking messages as read for plan ${planId}`);
-    
+    console.log(`👤 User ID: ${userId}`);
+    console.log(`💬 Last read message ID: ${lastReadMessageId}`);
+
     // Verify user is participant
     const isParticipant = await verifyPlanParticipant(userId, planId);
     if (!isParticipant) {
@@ -638,7 +640,8 @@ router.post('/:planId/read', requireAuth, async (req, res) => {
       .single();
     
     console.log(`✅ Read receipt updated for ${user?.name || userId}`);
-    
+    console.log(`📊 Read receipt data:`, receipt);
+
     res.json({
       success: true,
       data: {
