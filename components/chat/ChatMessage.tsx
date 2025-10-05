@@ -210,7 +210,13 @@ export default function ChatMessage({
 
     if (state === State.END) {
       // Check if swipe distance is enough to trigger reply
-      if (translationX > 80) {
+      // For own messages, we want left swipe (negative translationX)
+      // For other messages, we want right swipe (positive translationX)
+      const isSwipeTowardsReply = isOwnMessage
+        ? translationX < -80  // Left swipe for own messages
+        : translationX > 80;  // Right swipe for other messages
+
+      if (isSwipeTowardsReply) {
         // Trigger reply
         handleReply();
 
@@ -255,11 +261,21 @@ export default function ChatMessage({
       }
     } else if (state === State.ACTIVE) {
       // Update swipe animation during gesture
-      const clampedTranslation = Math.min(translationX, 120);
+      let clampedTranslation = 0;
+
+      if (isOwnMessage) {
+        // For own messages, left swipe (negative values)
+        clampedTranslation = Math.max(translationX, -120); // Clamp to max left swipe
+      } else {
+        // For other messages, right swipe (positive values)
+        clampedTranslation = Math.min(translationX, 120); // Clamp to max right swipe
+      }
+
       swipeTranslateX.setValue(clampedTranslation);
 
-      // Calculate opacity based on swipe distance
-      const opacity = Math.min(clampedTranslation / 80, 1);
+      // Calculate opacity based on swipe distance (absolute value)
+      const swipeDistance = Math.abs(clampedTranslation);
+      const opacity = Math.min(swipeDistance / 80, 1);
       swipeOpacity.setValue(opacity);
 
       // Scale the reply icon
@@ -630,6 +646,7 @@ export default function ChatMessage({
               <Animated.View
                 style={[
                   styles.replyIconContainer,
+                  isOwnMessage ? styles.replyIconContainerOwn : styles.replyIconContainerOther,
                   {
                     opacity: swipeOpacity,
                     transform: [{ scale: replyIconScale }]
@@ -646,7 +663,7 @@ export default function ChatMessage({
                 ref={panGestureRef}
                 onGestureEvent={handleSwipeGesture}
                 onHandlerStateChange={handleSwipeGesture}
-                activeOffsetX={[-10, 10]} // Only allow right swipe
+                activeOffsetX={[-5, 5]} // Allow both left and right swipes
                 failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
               >
                 <Animated.View
@@ -674,6 +691,7 @@ export default function ChatMessage({
               <Animated.View
                 style={[
                   styles.replyIconContainer,
+                  isOwnMessage ? styles.replyIconContainerOwn : styles.replyIconContainerOther,
                   {
                     opacity: swipeOpacity,
                     transform: [{ scale: replyIconScale }]
@@ -690,7 +708,7 @@ export default function ChatMessage({
                 ref={panGestureRef}
                 onGestureEvent={handleSwipeGesture}
                 onHandlerStateChange={handleSwipeGesture}
-                activeOffsetX={[-10, 10]} // Only allow right swipe
+                activeOffsetX={[-5, 5]} // Allow both left and right swipes
                 failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
               >
                 <Animated.View
@@ -1331,10 +1349,15 @@ const styles = StyleSheet.create({
   },
   replyIconContainer: {
     position: 'absolute',
-    left: -50,
     top: '50%',
     marginTop: -20,
     zIndex: -1,
+  },
+  replyIconContainerOwn: {
+    right: -50,
+  },
+  replyIconContainerOther: {
+    left: -50,
   },
   replyIconBackground: {
     width: 40,
