@@ -303,6 +303,20 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON chat_reactions TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON chat_read_receipts TO authenticated;
 
 -- ============================================
+-- REALTIME CONFIGURATION
+-- ============================================
+
+-- Enable REPLICA IDENTITY for real-time updates
+ALTER TABLE chat_messages REPLICA IDENTITY FULL;
+ALTER TABLE chat_reactions REPLICA IDENTITY FULL;
+ALTER TABLE chat_read_receipts REPLICA IDENTITY FULL;
+
+-- Add tables to Supabase Realtime publication
+ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE chat_reactions;
+ALTER PUBLICATION supabase_realtime ADD TABLE chat_read_receipts;
+
+-- ============================================
 -- COMPLETION MESSAGE
 -- ============================================
 
