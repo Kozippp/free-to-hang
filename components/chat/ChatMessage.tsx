@@ -145,14 +145,36 @@ export default function ChatMessage({
     const planReadReceipts = readReceipts[planId] || {};
     const readUsers: ReadReceipt[] = [];
 
+    console.log('🔍 Checking read receipts for last message:', {
+      messageId: message.id,
+      messageTimestamp: message.timestamp,
+      messageTime: new Date(message.timestamp).toISOString(),
+      receiptsCount: Object.keys(planReadReceipts).length
+    });
+
     Object.values(planReadReceipts).forEach((receipt: ReadReceipt) => {
       // Don't show current user's read status
       if (receipt.userId === currentUserId) return;
 
-      // Show all users who have read receipts for this plan
-      // They will be shown under the last message
-      readUsers.push(receipt);
+      // Check if this user has actually read this message (the last one)
+      // A user has read this message if their lastReadAt is at or after the message timestamp
+      const messageTime = new Date(message.timestamp).getTime();
+      const lastReadTime = new Date(receipt.lastReadAt).getTime();
+
+      console.log(`  👤 ${receipt.user.name}:`, {
+        lastReadAt: receipt.lastReadAt,
+        lastReadTime,
+        messageTime,
+        hasRead: lastReadTime >= messageTime
+      });
+
+      // Only show users who have read this specific message (the last one)
+      if (lastReadTime >= messageTime) {
+        readUsers.push(receipt);
+      }
     });
+
+    console.log('✅ Users who have read:', readUsers.map(u => u.user.name));
 
     // Sort by read time (most recent first)
     return readUsers
