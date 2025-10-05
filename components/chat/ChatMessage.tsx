@@ -119,6 +119,9 @@ export default function ChatMessage({
   const [isUnsending, setIsUnsending] = useState(false);
   const [messageLayout, setMessageLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [showImageViewer, setShowImageViewer] = useState(false);
+  
+  // Store ref to message container to measure position
+  const messageRef = useRef<View>(null);
 
   // Animation for unsending and long press
   const unsendAnim = useRef(new Animated.Value(1)).current;
@@ -271,6 +274,13 @@ export default function ChatMessage({
 
   const handleLongPress = () => {
     Vibration.vibrate(50);
+
+    // Measure actual position on screen
+    if (messageRef.current) {
+      messageRef.current.measureInWindow((x, y, width, height) => {
+        setMessageLayout({ x, y, width, height });
+      });
+    }
 
     Animated.parallel([
       Animated.spring(messageScale, {
@@ -646,6 +656,7 @@ export default function ChatMessage({
                   >
                     <TouchableWithoutFeedback onLongPress={handleLongPress}>
                       <View
+                        ref={messageRef}
                         style={styles.imageMessageWrapper}
                         onLayout={onMessageLayout}
                       >
@@ -666,6 +677,7 @@ export default function ChatMessage({
                   failOffsetY={[-10, 10]} // Prevent vertical swipes from interfering
                 >
                   <Animated.View
+                    ref={messageRef}
                     style={[
                       styles.swipeableMessage,
                       {
@@ -765,10 +777,8 @@ export default function ChatMessage({
             style={[
               styles.highlightedMessageWrapper,
               {
-                left: isOwnMessage 
-                  ? SCREEN_WIDTH - messageLayout.width - 16
-                  : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)),
-                top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2),
+                left: messageLayout.x,
+                top: messageLayout.y,
                 width: messageLayout.width,
                 height: messageLayout.height,
                 transform: [{ scale: messageScale }],
@@ -793,9 +803,9 @@ export default function ChatMessage({
               styles.highlightedTimestamp,
               {
                 left: isOwnMessage 
-                  ? SCREEN_WIDTH - messageLayout.width - 16 - 60
-                  : Math.max(16, Math.min(SCREEN_WIDTH - messageLayout.width - 16, messageLayout.x)) + messageLayout.width + 8,
-                top: Dimensions.get('window').height * 0.3 - 10,
+                  ? messageLayout.x - 60
+                  : messageLayout.x + messageLayout.width + 8,
+                top: messageLayout.y + (messageLayout.height / 2) - 10,
                 opacity: modalOpacity,
               }
             ]}
@@ -810,10 +820,8 @@ export default function ChatMessage({
             style={[
               styles.emojiMenu,
               {
-                left: isOwnMessage
-                  ? SCREEN_WIDTH - 280 - 16
-                  : Math.max(16, Math.min(SCREEN_WIDTH - 280 - 16, messageLayout.x + (messageLayout.width / 2) - 140)),
-                top: Dimensions.get('window').height * 0.3 - (messageLayout.height / 2) - 60,
+                left: Math.max(16, Math.min(SCREEN_WIDTH - 280, messageLayout.x + (messageLayout.width / 2) - 140)),
+                top: messageLayout.y - 60,
                 opacity: modalOpacity,
               }
             ]}
@@ -839,10 +847,8 @@ export default function ChatMessage({
             style={[
               styles.actionMenu,
               {
-                left: isOwnMessage
-                  ? SCREEN_WIDTH - 180 - 16
-                  : Math.max(16, Math.min(SCREEN_WIDTH - 180 - 16, messageLayout.x + (messageLayout.width / 2) - 90)),
-                top: Dimensions.get('window').height * 0.3 + (messageLayout.height / 2) + 20,
+                left: Math.max(16, Math.min(SCREEN_WIDTH - 180, messageLayout.x + (messageLayout.width / 2) - 90)),
+                top: messageLayout.y + messageLayout.height + 20,
                 opacity: modalOpacity,
               }
             ]}
