@@ -619,7 +619,7 @@ export default function ChatMessage({
           styles.messageWrapper,
           isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
         ]}>
-          {!isOwnMessage && isFirstInGroup && (
+          {!isOwnMessage && isFirstInGroup && !message.replyTo && (
             <Text style={styles.userName}>{message.userName}</Text>
           )}
           
