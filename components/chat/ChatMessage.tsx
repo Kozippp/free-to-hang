@@ -830,12 +830,21 @@ export default function ChatMessage({
             ]}
           >
             {message.type === 'image' ? (
-              <View>
-                {renderMessageContent()}
+              <View style={styles.highlightedImageContainer}>
+                <Image 
+                  source={{ uri: message.imageUrl }} 
+                  style={[styles.messageImage, { width: messageLayout.width, height: messageLayout.height }]}
+                  resizeMode="cover"
+                />
               </View>
             ) : (
               <View style={getBubbleStyle()}>
-                {renderMessageContent()}
+                <Text style={[
+                  styles.messageText,
+                  isOwnMessage ? styles.ownMessageText : styles.otherMessageText
+                ]}>
+                  {message.content}
+                </Text>
               </View>
             )}
           </Animated.View>
@@ -1370,5 +1379,10 @@ const styles = StyleSheet.create({
   otherReactionsWrapper: {
     alignItems: 'flex-start',
     paddingLeft: 52, // 16px padding + 28px avatar + 8px margin
+  },
+  highlightedImageContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
   },
 }); 
