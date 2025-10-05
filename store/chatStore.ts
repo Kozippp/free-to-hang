@@ -318,7 +318,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       set(state => ({
         messages: {
           ...state.messages,
-          [planId]: state.messages[planId].map(m => 
+          [planId]: state.messages[planId].map(m =>
             m.id === tempId ? realMessage : m
           )
         },
@@ -328,7 +328,20 @@ const useChatStore = create<ChatState>((set, get) => ({
             [planId]: null
           }
         }));
-      
+
+      // Update sender's read receipt to include their own message
+      const senderReceipt: ReadReceipt = {
+        userId: realMessage.userId,
+        lastReadMessageId: realMessage.id,
+        lastReadAt: new Date().toISOString(),
+        user: {
+          id: realMessage.userId,
+          name: realMessage.userName,
+          avatar_url: realMessage.userAvatar
+        }
+      };
+      get().updateReadReceipt(planId, realMessage.userId, senderReceipt);
+
       console.log(`✅ Message sent: ${realMessage.id}`);
       
     } catch (error) {
