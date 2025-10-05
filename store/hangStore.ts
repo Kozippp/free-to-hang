@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar, SILHOUETTE_AVATAR_URL } from '@/constants/defaultImages';
+import { formatFriendLastAvailable } from '@/utils/time';
 
 interface Friend {
   id: string;
@@ -13,6 +14,7 @@ interface Friend {
   activity?: string;
   lastActive?: string;
   lastSeen?: string;
+  lastAvailable?: string;
   statusChangedAt?: string;
   responseStatus?: 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen';
 }
@@ -57,26 +59,6 @@ const getDefaultAvatar = (name?: string, userId?: string) => {
     return generateDefaultAvatar(name, userId);
   }
   return SILHOUETTE_AVATAR_URL;
-};
-
-// Helper function to format time ago
-const formatTimeAgo = (timestamp: string): string => {
-  const now = new Date();
-  const time = new Date(timestamp);
-  const diffInSeconds = Math.floor((now.getTime() - time.getTime()) / 1000);
-  
-  if (diffInSeconds < 60) {
-    return 'just now';
-  } else if (diffInSeconds < 3600) {
-    const minutes = Math.floor(diffInSeconds / 60);
-    return `${minutes}m ago`;
-  } else if (diffInSeconds < 86400) {
-    const hours = Math.floor(diffInSeconds / 3600);
-    return `${hours}h ago`;
-  } else {
-    const days = Math.floor(diffInSeconds / 86400);
-    return `${days}d ago`;
-  }
 };
 
 // Add at the top of the file after imports
@@ -334,14 +316,24 @@ const useHangStore = create<HangState>()(
               
               if (friendData && !seenIds.has(friendData.id)) {
                 seenIds.add(friendData.id);
+                const friendStatus = friendData.status === 'available' ? 'available' : 'offline';
+                const lastAvailable = formatFriendLastAvailable({
+                  status: friendStatus,
+                  statusChangedAt: friendData.status_changed_at,
+                  lastSeen: friendData.last_seen_at,
+                  lastActive: friendData.last_seen_at
+                });
+
                 allFriendData.push({
                   id: friendData.id,
                   name: friendData.name,
                   username: friendData.username,
                   avatar: friendData.avatar_url || getDefaultAvatar(friendData.name, friendData.id),
-                  status: friendData.status === 'available' ? 'available' : 'offline',
+                  status: friendStatus,
                   activity: friendData.current_activity || '',
-                  lastActive: friendData.last_seen_at ? formatTimeAgo(friendData.last_seen_at) : 'Recently',
+                  lastAvailable,
+                  lastActive: lastAvailable,
+                  lastSeen: friendData.last_seen_at,
                   statusChangedAt: friendData.status_changed_at
                 });
               }
@@ -352,15 +344,14 @@ const useHangStore = create<HangState>()(
           const availableFriends = allFriendData.filter(f => f.status === 'available');
           const offlineFriends = allFriendData.filter(f => f.status === 'offline');
 
-          // Only log if there are changes to avoid console spam
           const currentState = get();
-          const hasChanges = 
+          const hasChanges =
             currentState.friends.length !== availableFriends.length ||
             currentState.offlineFriends.length !== offlineFriends.length;
 
-          set({ 
+          set({
             friends: availableFriends,
-            offlineFriends: offlineFriends 
+            offlineFriends
           });
 
           // Only log when there are actual changes to reduce console spam

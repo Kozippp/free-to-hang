@@ -44,7 +44,6 @@ import {
   Friend, 
   UserProfile, 
   AppSettings, 
-  profileFriends, 
   mockUserProfile, 
   mockBlockedUsers, 
   defaultSettings 
@@ -57,6 +56,7 @@ import UserProfileModal from '@/components/UserProfileModal';
 import useFriendsStore from '@/store/friendsStore';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { uploadImage, deleteImage } from '@/lib/storage';
+import { formatFriendLastAvailable } from '@/utils/time';
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
@@ -139,17 +139,38 @@ export default function ProfileScreen() {
 
   // Use friends from friendsStore (real-time updates with instant cache bypass)
   useEffect(() => {
+    const friendsFromHangStore: Friend[] = [...friends, ...offlineFriends].map(friend => ({
+      id: friend.id,
+      name: friend.name,
+      avatar: friend.avatar,
+      status: friend.status,
+      lastAvailable: formatFriendLastAvailable({
+        status: friend.status,
+        statusChangedAt: friend.statusChangedAt,
+        lastSeen: friend.lastSeen,
+        lastActive: friend.lastActive
+      }),
+      shareAvailability: 'week',
+      isBlocked: false
+    }));
+
+    if (friendsFromHangStore.length > 0) {
+      setAllFriends(friendsFromHangStore);
+      return;
+    }
+
     const friendsFromStore = storeFriends.map(friend => ({
       id: friend.friend_id,
       name: friend.friend_name,
       avatar: friend.friend_avatar_url || generateDefaultAvatar(friend.friend_name, friend.friend_id),
-      status: 'offline' as const, // Friends are just relationships, status tracking is separate
-      lastAvailable: 'Recently',
-      shareAvailability: 'week' as const, // Default value
+      status: 'offline' as const,
+      lastAvailable: 'recently',
+      shareAvailability: 'week',
       isBlocked: false
     }));
+
     setAllFriends(friendsFromStore);
-  }, [storeFriends]);
+  }, [friends, offlineFriends, storeFriends]);
   
   // Modal states
   const [showSettings, setShowSettings] = useState(false);
@@ -572,8 +593,25 @@ export default function ProfileScreen() {
     return preferences[friendId] || 'Enjoys various activities and meeting new people';
   };
 
-  const sortedFriends = allFriends.sort((a, b) => {
-    const statusOrder = { 'available': 0, 'online': 1, 'offline': 2 };
+  const getStatusLabel = (status: Friend['status'], lastAvailable?: string) => {
+    if (status === 'available') {
+      return 'Free to hang';
+    }
+
+    if (!lastAvailable || lastAvailable === 'now') {
+      return 'Last available recently';
+    }
+
+    return `Last available ${lastAvailable}`;
+  };
+
+  const sortedFriends = [...allFriends].sort((a, b) => {
+    const statusOrder: Record<Friend['status'], number> = {
+      available: 0,
+      online: 1,
+      offline: 2
+    };
+
     return statusOrder[a.status] - statusOrder[b.status];
   });
 
@@ -591,7 +629,7 @@ export default function ProfileScreen() {
         <View style={styles.friendDetails}>
           <Text style={styles.friendName}>{item.name}</Text>
           <Text style={styles.friendLastSeen}>
-            {item.status === 'available' ? 'Free to hang' : `Last available ${item.lastAvailable}`}
+            {getStatusLabel(item.status, item.lastAvailable)}
           </Text>
         </View>
       </View>
