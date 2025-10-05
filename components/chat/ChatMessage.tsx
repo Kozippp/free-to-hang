@@ -278,7 +278,50 @@ export default function ChatMessage({
     // Measure actual position on screen
     if (messageRef.current) {
       messageRef.current.measureInWindow((x, y, width, height) => {
-        setMessageLayout({ x, y, width, height });
+        const screenHeight = Dimensions.get('window').height;
+        const screenWidth = Dimensions.get('window').width;
+        
+        // Calculate optimal positions
+        const EMOJI_MENU_HEIGHT = 60;
+        const ACTION_MENU_HEIGHT = 140; // Approximate height
+        const TOP_PADDING = 60; // Safe area at top
+        const BOTTOM_PADDING = 40; // Safe area at bottom
+        
+        // Calculate if we need to adjust vertical position
+        let adjustedY = y;
+        let adjustedX = x;
+        
+        // Check if emoji menu would go off top of screen
+        const emojiMenuTop = y - EMOJI_MENU_HEIGHT;
+        if (emojiMenuTop < TOP_PADDING) {
+          // Move message down so emoji menu fits
+          adjustedY = TOP_PADDING + EMOJI_MENU_HEIGHT;
+        }
+        
+        // Check if action menu would go off bottom of screen
+        const actionMenuBottom = y + height + ACTION_MENU_HEIGHT;
+        if (actionMenuBottom > screenHeight - BOTTOM_PADDING) {
+          // Move message up so action menu fits
+          adjustedY = screenHeight - BOTTOM_PADDING - ACTION_MENU_HEIGHT - height;
+        }
+        
+        // Ensure message itself stays on screen
+        if (adjustedY < TOP_PADDING) {
+          adjustedY = TOP_PADDING;
+        }
+        if (adjustedY + height > screenHeight - BOTTOM_PADDING) {
+          adjustedY = screenHeight - BOTTOM_PADDING - height;
+        }
+        
+        // Horizontal adjustments
+        if (adjustedX < 16) {
+          adjustedX = 16;
+        }
+        if (adjustedX + width > screenWidth - 16) {
+          adjustedX = screenWidth - 16 - width;
+        }
+        
+        setMessageLayout({ x: adjustedX, y: adjustedY, width, height });
       });
     }
 
