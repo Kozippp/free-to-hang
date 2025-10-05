@@ -643,20 +643,76 @@ router.post('/:planId/read', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/chat/:planId/unread-count - Get unread message count
-router.get('/:planId/unread-count', requireAuth, async (req, res) => {
+// GET /api/chat/:planId/read-receipts - Get read receipts for all users in plan
+router.get('/:planId/read-receipts', requireAuth, async (req, res) => {
   try {
     const { planId } = req.params;
     const userId = req.user.id;
-    
-    console.log(`🔢 Getting unread count for plan ${planId}`);
-    
+
+    console.log(`📖 Getting read receipts for plan ${planId}`);
+
     // Verify user is participant
     const isParticipant = await verifyPlanParticipant(userId, planId);
     if (!isParticipant) {
       return res.status(403).json({ error: 'Not authorized to access this chat' });
     }
-    
+
+    // Get all read receipts for the plan with user details
+    const { data: receipts, error } = await supabase
+      .from('chat_read_receipts')
+      .select(`
+        user_id,
+        last_read_message_id,
+        last_read_at,
+        user:users(id, name, avatar_url)
+      `)
+      .eq('plan_id', planId);
+
+    if (error) {
+      console.error('Error fetching read receipts:', error);
+      return res.status(500).json({ error: 'Failed to fetch read receipts', details: error.message });
+    }
+
+    // Format the response
+    const formattedReceipts = {};
+    if (receipts) {
+      receipts.forEach(receipt => {
+        formattedReceipts[receipt.user_id] = {
+          userId: receipt.user_id,
+          lastReadMessageId: receipt.last_read_message_id,
+          lastReadAt: receipt.last_read_at,
+          user: Array.isArray(receipt.user) ? receipt.user[0] : receipt.user
+        };
+      });
+    }
+
+    console.log(`✅ Fetched ${Object.keys(formattedReceipts).length} read receipts`);
+
+    res.json({
+      success: true,
+      data: formattedReceipts
+    });
+
+  } catch (error) {
+    console.error('Error in read receipts:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+// GET /api/chat/:planId/unread-count - Get unread message count
+router.get('/:planId/unread-count', requireAuth, async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🔢 Getting unread count for plan ${planId}`);
+
+    // Verify user is participant
+    const isParticipant = await verifyPlanParticipant(userId, planId);
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'Not authorized to access this chat' });
+    }
+
     // Get user's last read receipt
     const { data: receipt } = await supabase
       .from('chat_read_receipts')
@@ -664,7 +720,7 @@ router.get('/:planId/unread-count', requireAuth, async (req, res) => {
       .eq('plan_id', planId)
       .eq('user_id', userId)
       .single();
-    
+
     // Count unread messages
     let query = supabase
       .from('chat_messages')
@@ -672,27 +728,27 @@ router.get('/:planId/unread-count', requireAuth, async (req, res) => {
       .eq('plan_id', planId)
       .eq('deleted', false)
       .neq('user_id', userId); // Don't count own messages
-    
+
     if (receipt && receipt.last_read_at) {
       query = query.gt('created_at', receipt.last_read_at);
     }
-    
+
     const { count, error } = await query;
-    
+
     if (error) {
       console.error('Error counting unread messages:', error);
       return res.status(500).json({ error: 'Failed to count unread messages', details: error.message });
     }
-    
+
     console.log(`✅ Unread count: ${count}`);
-    
+
     res.json({
       success: true,
       data: {
         unreadCount: count || 0
       }
     });
-    
+
   } catch (error) {
     console.error('Error in unread count:', error);
     res.status(500).json({ error: 'Internal server error', details: error.message });

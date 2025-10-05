@@ -26,13 +26,14 @@ interface ChatViewProps {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ChatView({ plan, currentUserId = 'current', disableKeyboardAvoidance = false }: ChatViewProps) {
-  const { 
-    messages, 
-    markMessagesAsRead, 
-    fetchMessages, 
-    subscribeToChat, 
+  const {
+    messages,
+    markMessagesAsRead,
+    fetchMessages,
+    fetchReadReceipts,
+    subscribeToChat,
     unsubscribeFromChat,
-    loading 
+    loading
   } = useChatStore();
   const flatListRef = useRef<FlatList>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -50,19 +51,22 @@ export default function ChatView({ plan, currentUserId = 'current', disableKeybo
   // Fetch messages and subscribe to real-time updates
   useEffect(() => {
     console.log(`🔄 Loading chat for plan ${plan.id}`);
-    
+
     // Fetch initial messages
     fetchMessages(plan.id);
-    
+
+    // Fetch read receipts
+    fetchReadReceipts(plan.id);
+
     // Subscribe to real-time updates
     subscribeToChat(plan.id);
-    
+
     // Cleanup: unsubscribe when component unmounts
     return () => {
       console.log(`🔌 Unsubscribing from chat ${plan.id}`);
       unsubscribeFromChat(plan.id);
     };
-  }, [plan.id, fetchMessages, subscribeToChat, unsubscribeFromChat]);
+  }, [plan.id, fetchMessages, fetchReadReceipts, subscribeToChat, unsubscribeFromChat]);
 
   useEffect(() => {
     // Mark messages as read when chat is opened
