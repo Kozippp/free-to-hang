@@ -543,37 +543,39 @@ export default function ChatMessage({
         
         {!isOwnMessage && !showAvatar && <View style={styles.avatarPlaceholder} />}
         
-        <View style={[
-          styles.messageWrapper,
-          isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
-        ]}>
-          {!isOwnMessage && isFirstInGroup && (
-            <Text style={styles.userName}>{message.userName}</Text>
-          )}
-          
-          {renderReplyPreview()}
-          
-          {message.type === 'image' ? (
-            <TouchableWithoutFeedback onLongPress={handleLongPress}>
-              <View 
-                style={styles.imageMessageWrapper}
+        <View style={{ flex: 1 }}>
+          <View style={[
+            styles.messageWrapper,
+            isOwnMessage ? styles.ownMessageWrapper : styles.otherMessageWrapper
+          ]}>
+            {!isOwnMessage && isFirstInGroup && (
+              <Text style={styles.userName}>{message.userName}</Text>
+            )}
+            
+            {renderReplyPreview()}
+            
+            {message.type === 'image' ? (
+              <TouchableWithoutFeedback onLongPress={handleLongPress}>
+                <View 
+                  style={styles.imageMessageWrapper}
+                  onLayout={onMessageLayout}
+                >
+                  {renderMessageContent()}
+                </View>
+              </TouchableWithoutFeedback>
+            ) : (
+              <TouchableOpacity
+                style={getBubbleStyle()}
+                onLongPress={handleLongPress}
+                activeOpacity={0.8}
                 onLayout={onMessageLayout}
               >
                 {renderMessageContent()}
-              </View>
-            </TouchableWithoutFeedback>
-          ) : (
-            <TouchableOpacity
-              style={getBubbleStyle()}
-              onLongPress={handleLongPress}
-              activeOpacity={0.8}
-              onLayout={onMessageLayout}
-            >
-              {renderMessageContent()}
-            </TouchableOpacity>
-          )}
+              </TouchableOpacity>
+            )}
 
-          {renderReactions()}
+            {renderReactions()}
+          </View>
 
           {renderReadStatus()}
 
