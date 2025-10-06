@@ -12,9 +12,9 @@ import {
   Alert,
   KeyboardAvoidingView,
   Modal,
-  PanResponder,
   Dimensions
 } from 'react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { 
   Check, 
   Clock, 
@@ -126,8 +126,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   // Swipe gesture state
   const { width } = Dimensions.get('window');
-  const swipeAnim = useRef(new Animated.Value(0)).current;
-  const [isSwipeClosing, setIsSwipeClosing] = useState(false);
+  const translateX = useRef(new Animated.Value(0)).current;
   
   // Group participants by status
   const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
@@ -145,78 +144,60 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Animation for highlighting new plan
   const highlightAnim = useRef(new Animated.Value(0)).current;
   
-  // Pan responder for swipe gestures
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to horizontal swipes
-        const isHorizontal = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
-        const isSignificant = Math.abs(gestureState.dx) > 10;
-        return isHorizontal && isSignificant && !isSwipeClosing;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (activeTab === 'Control Panel') {
-          // In Control Panel: swipe right goes to Chat, swipe left closes
-          if (gestureState.dx < 0) {
-            // Swiping left (closing gesture)
-            const newValue = Math.max(gestureState.dx, -width);
-            swipeAnim.setValue(newValue);
-          } else if (gestureState.dx > 0) {
-            // Swiping right (to Chat) - just track for threshold
-            swipeAnim.setValue(0);
-          }
-        } else if (activeTab === 'Chat') {
-          // In Chat: swipe left goes back to Control Panel
-          if (gestureState.dx > 0) {
-            // Swiping right (back to Control Panel)
-            swipeAnim.setValue(0);
-          }
+  // Gesture handlers for swipe navigation
+  const onGestureEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX } }],
+    { useNativeDriver: true }
+  );
+
+  const onHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationX: tx, velocityX } = event.nativeEvent;
+      
+      if (activeTab === 'Control Panel') {
+        // Control Panel: swipe left to right exits, swipe right to left goes to Chat
+        if (tx > 100 || velocityX > 500) {
+          // Swipe left to right (or fast velocity) - exit/close
+          Animated.timing(translateX, {
+            toValue: width,
+            duration: 250,
+            useNativeDriver: true,
+          }).start(() => {
+            onClose();
+          });
+        } else if (tx < -100 || velocityX < -500) {
+          // Swipe right to left (or fast velocity) - go to Chat
+          translateX.setValue(0);
+          setActiveTab('Chat');
+        } else {
+          // Not far enough - reset
+          Animated.spring(translateX, {
+            toValue: 0,
+            velocity: velocityX,
+            tension: 68,
+            friction: 12,
+            useNativeDriver: true,
+          }).start();
         }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const swipeThreshold = width * 0.3;
-        
-        if (activeTab === 'Control Panel') {
-          if (gestureState.dx < -swipeThreshold) {
-            // Swipe left far enough - close modal
-            setIsSwipeClosing(true);
-            Animated.timing(swipeAnim, {
-              toValue: -width,
-              duration: 250,
-              useNativeDriver: true,
-            }).start(() => {
-              onClose();
-            });
-          } else if (gestureState.dx > swipeThreshold) {
-            // Swipe right far enough - go to Chat
-            setActiveTab('Chat');
-            swipeAnim.setValue(0);
-          } else {
-            // Not far enough - spring back
-            Animated.spring(swipeAnim, {
-              toValue: 0,
-              useNativeDriver: true,
-              friction: 8,
-            }).start();
-          }
-        } else if (activeTab === 'Chat') {
-          if (gestureState.dx > swipeThreshold) {
-            // Swipe right far enough - go back to Control Panel
-            setActiveTab('Control Panel');
-            swipeAnim.setValue(0);
-          } else {
-            // Not far enough - spring back
-            Animated.spring(swipeAnim, {
-              toValue: 0,
-              useNativeDriver: true,
-              friction: 8,
-            }).start();
-          }
+      } else if (activeTab === 'Chat') {
+        // Chat: swipe right to left goes back to Control Panel
+        if (tx < -100 || velocityX < -500) {
+          // Swipe right to left (or fast velocity) - back to Control Panel
+          translateX.setValue(0);
+          setActiveTab('Control Panel');
+        } else {
+          // Not far enough - reset
+          Animated.spring(translateX, {
+            toValue: 0,
+            velocity: velocityX,
+            tension: 68,
+            friction: 12,
+            useNativeDriver: true,
+          }).start();
         }
-      },
-    })
-  ).current;
+      }
+    }
+  };
   
   // Mark plan as seen when first opened (if user is pending)
   React.useEffect(() => {
@@ -765,21 +746,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Manual completion voting removed; plans auto-complete after 24h
 
   return (
-    <Animated.View 
-      style={[
-        styles.container, 
-        { 
-          backgroundColor: highlightBackground,
-          transform: [
-            { scale: declineAnimation },
-            { translateY: slideAnimation },
-            { translateX: swipeAnim }
-          ],
-          opacity: fadeAnimation
-        }
-      ]}
-      {...panResponder.panHandlers}
-    >
+    <View style={styles.container}>
       {/* Decline overlay effect */}
       {isClosing && (
         <Animated.View style={[
@@ -800,12 +767,30 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         unreadCount={unreadCount}
       />
       
-      {activeTab === 'Control Panel' && (
-        <ScrollView 
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={Platform.OS === 'web'}
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onHandlerStateChange}
+      >
+        <Animated.View 
+          style={[
+            styles.contentWrapper,
+            { 
+              backgroundColor: highlightBackground,
+              transform: [
+                { scale: declineAnimation },
+                { translateY: slideAnimation },
+                { translateX: translateX }
+              ],
+              opacity: fadeAnimation
+            }
+          ]}
         >
+          {activeTab === 'Control Panel' && (
+            <ScrollView 
+              style={styles.content}
+              contentContainerStyle={styles.contentContainer}
+              showsVerticalScrollIndicator={Platform.OS === 'web'}
+            >
           {/* Description Section - Title moved to modal header */}
           <PlanTitle 
             title={title}
@@ -978,19 +963,21 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         </ScrollView>
       )}
       
-      {activeTab === 'Chat' && (
-        <KeyboardAvoidingView
-          style={styles.chatContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-        >
-          <ChatView
-            plan={latestPlan}
-            currentUserId={user.id}
-            disableKeyboardAvoidance={true}
-          />
-        </KeyboardAvoidingView>
-      )}
+          {activeTab === 'Chat' && (
+            <KeyboardAvoidingView
+              style={styles.chatContainer}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+            >
+              <ChatView
+                plan={latestPlan}
+                currentUserId={user.id}
+                disableKeyboardAvoidance={true}
+              />
+            </KeyboardAvoidingView>
+          )}
+        </Animated.View>
+      </PanGestureHandler>
       
       {/* Poll Creator Modal */}
       <PollCreator
@@ -1053,7 +1040,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           </View>
         </View>
       </Modal>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -1061,6 +1048,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  contentWrapper: {
+    flex: 1,
   },
   content: {
     flex: 1,
