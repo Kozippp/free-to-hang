@@ -157,10 +157,10 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           // Allow natural swipe in both directions
           return;
         } 
-        // Chat: only allow right to left swipe (back to Control Panel)
+        // Chat: only allow left to right swipe (back to Control Panel)
         else if (activeTab === 'Chat') {
-          // Block left to right swipes in Chat (prevents glitching)
-          if (tx > 0) {
+          // Block right to left swipes in Chat (prevents glitching)
+          if (tx < 0) {
             translateX.setValue(0);
           }
         }
@@ -198,9 +198,9 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           }).start();
         }
       } else if (activeTab === 'Chat') {
-        // Chat: ONLY swipe right to left goes back to Control Panel
-        if (tx < -100 || velocityX < -500) {
-          // Swipe right to left (or fast velocity) - back to Control Panel
+        // Chat: ONLY swipe left to right goes back to Control Panel
+        if (tx > 100 || velocityX > 500) {
+          // Swipe left to right (or fast velocity) - back to Control Panel
           translateX.setValue(0);
           setActiveTab('Control Panel');
         } else {
