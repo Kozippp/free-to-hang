@@ -173,7 +173,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const onHandlerStateChange = (event: any) => {
     if (event.nativeEvent.state === State.END) {
       const { translationX: tx, velocityX } = event.nativeEvent;
-      
+
       if (activeTab === 'Control Panel') {
         // Control Panel: swipe left to right exits, swipe right to left goes to Chat
         if (tx > 100 || velocityX > 500) {
@@ -187,8 +187,21 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           });
         } else if (tx < -100 || velocityX < -500) {
           // Swipe right to left (or fast velocity) - go to Chat
-          translateX.setValue(0);
-          setActiveTab('Chat');
+          // Animate smoothly to create swipe effect, then change tab
+          Animated.timing(translateX, {
+            toValue: -width * 0.3, // Animate to 30% of screen width
+            duration: 150,
+            useNativeDriver: true,
+          }).start(() => {
+            // Change tab after partial animation
+            setActiveTab('Chat');
+            // Animate the remaining distance smoothly
+            Animated.timing(translateX, {
+              toValue: 0,
+              duration: 150,
+              useNativeDriver: true,
+            }).start();
+          });
         } else {
           // Not far enough - reset
           Animated.spring(translateX, {
@@ -203,8 +216,21 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         // Chat: ONLY swipe left to right goes back to Control Panel
         if (tx > 100 || velocityX > 500) {
           // Swipe left to right (or fast velocity) - back to Control Panel
-          translateX.setValue(0);
-          setActiveTab('Control Panel');
+          // Animate smoothly to create swipe effect, then change tab
+          Animated.timing(translateX, {
+            toValue: width * 0.3, // Animate to 30% of screen width
+            duration: 150,
+            useNativeDriver: true,
+          }).start(() => {
+            // Change tab after partial animation
+            setActiveTab('Control Panel');
+            // Animate the remaining distance smoothly
+            Animated.timing(translateX, {
+              toValue: 0,
+              duration: 150,
+              useNativeDriver: true,
+            }).start();
+          });
         } else {
           // Not far enough or wrong direction - reset
           Animated.spring(translateX, {
@@ -220,8 +246,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
   
   // Reset translateX when tab changes to prevent visual glitches
+  // For non-swipe transitions (like tapping tab buttons)
   React.useEffect(() => {
-    translateX.setValue(0);
+    const timeout = setTimeout(() => {
+      translateX.setValue(0);
+    }, 350); // Delay to allow swipe animations to complete (300ms) plus buffer
+
+    return () => clearTimeout(timeout);
   }, [activeTab]);
   
   // Mark plan as seen when first opened (if user is pending)
@@ -796,7 +827,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
         activeOffsetX={[-10, 10]}
-        failOffsetX={activeTab === 'Chat' ? [-10000, -10] : undefined}
+        failOffsetX={activeTab === 'Chat' ? [-10, 10000] : undefined}
       >
         <Animated.View 
           style={[
