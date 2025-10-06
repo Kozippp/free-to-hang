@@ -899,7 +899,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
         >
-          {console.log('💬 Rendering ChatView for user:', user.id)}
           <ChatView
             plan={latestPlan}
             currentUserId={user.id}
