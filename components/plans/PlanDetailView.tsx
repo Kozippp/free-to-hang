@@ -159,8 +159,10 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
         } 
         // Chat: only allow left to right swipe (back to Control Panel)
         else if (activeTab === 'Chat') {
-          // Block right to left swipes in Chat (prevents glitching)
+          // Only allow positive translation (left to right)
+          // Block any right to left movement
           if (tx < 0) {
+            event.nativeEvent.translationX = 0;
             translateX.setValue(0);
           }
         }
@@ -793,6 +795,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
+        activeOffsetX={activeTab === 'Chat' ? [10, 10000] : [-10000, 10000]}
       >
         <Animated.View 
           style={[
