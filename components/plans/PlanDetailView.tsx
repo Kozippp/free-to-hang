@@ -795,7 +795,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
-        activeOffsetX={activeTab === 'Chat' ? [10, 10000] : [-10000, 10000]}
+        activeOffsetX={[-10, 10]}
+        failOffsetX={activeTab === 'Chat' ? [-10000, -10] : undefined}
       >
         <Animated.View 
           style={[
