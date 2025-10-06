@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity } from 'react-native';
 import Colors from '@/constants/colors';
 
-interface PlanTitleProps {
+export interface PlanTitleProps {
   title: string;
   description: string;
   isEditingTitle: boolean;
@@ -14,6 +14,7 @@ interface PlanTitleProps {
   onChangeTitle: (text: string) => void;
   onChangeDescription: (text: string) => void;
   canEdit: boolean;
+  hideTitle?: boolean;
 }
 
 export default function PlanTitle({ 
@@ -27,31 +28,36 @@ export default function PlanTitle({
   onSaveDescription,
   onChangeTitle,
   onChangeDescription,
-  canEdit
+  canEdit,
+  hideTitle = false
 }: PlanTitleProps) {
   return (
     <View style={styles.section}>
-      {/* Title */}
-      {isEditingTitle ? (
-        <View style={styles.editContainer}>
-          <TextInput
-            style={styles.titleInput}
-            value={title}
-            onChangeText={onChangeTitle}
-            placeholder="Enter plan title"
-            autoFocus
-            onBlur={onSaveTitle}
-            onSubmitEditing={onSaveTitle}
-          />
-        </View>
-      ) : (
-        <TouchableOpacity 
-          style={styles.titleContainer}
-          onPress={canEdit ? onEditTitle : undefined}
-          activeOpacity={canEdit ? 0.7 : 1}
-        >
-          <Text style={styles.title}>{title}</Text>
-        </TouchableOpacity>
+      {/* Title - only show if not hidden */}
+      {!hideTitle && (
+        <>
+          {isEditingTitle ? (
+            <View style={styles.editContainer}>
+              <TextInput
+                style={styles.titleInput}
+                value={title}
+                onChangeText={onChangeTitle}
+                placeholder="Enter plan title"
+                autoFocus
+                onBlur={onSaveTitle}
+                onSubmitEditing={onSaveTitle}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.titleContainer}
+              onPress={canEdit ? onEditTitle : undefined}
+              activeOpacity={canEdit ? 0.7 : 1}
+            >
+              <Text style={styles.title}>{title}</Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
 
       {/* Description */}

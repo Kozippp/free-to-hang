@@ -12,7 +12,7 @@ import {
   Platform,
   SafeAreaView
 } from 'react-native';
-import { X } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan, ParticipantStatus } from '@/store/plansStore';
 import PlanDetailView from './PlanDetailView';
@@ -35,66 +35,26 @@ export default function PlanDetailModal({
   isCompleted,
   onAttendanceUpdate
 }: PlanDetailModalProps) {
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const { height } = Dimensions.get('window');
-  
-  // Setup pan responder for swipe-to-close
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Respond to downward swipes anywhere in the header area
-        return gestureState.dy > 10 && 
-               Math.abs(gestureState.dx) < Math.abs(gestureState.dy) && 
-               gestureState.y0 < 100;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          // Only allow downward movement
-          slideAnim.setValue(1 - (gestureState.dy / height));
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 100) {
-          // If swiped down far enough, close the modal
-          handleClose();
-        } else {
-          // Otherwise, snap back to open position
-          Animated.spring(slideAnim, {
-            toValue: 1,
-            useNativeDriver: true,
-            friction: 8,
-          }).start();
-        }
-      },
-    })
-  ).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   
   React.useEffect(() => {
     if (visible) {
-      // Ensure the modal opens fully
-      slideAnim.setValue(0);
-      Animated.timing(slideAnim, {
+      Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 200,
         useNativeDriver: true,
       }).start();
     } else {
-      Animated.timing(slideAnim, {
+      Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
       }).start();
     }
-  }, [visible]); // Removed slideAnim to prevent infinite loops
-  
-  const translateY = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [height, 0],
-  });
+  }, [visible]);
   
   const handleClose = () => {
-    Animated.timing(slideAnim, {
+    Animated.timing(fadeAnim, {
       toValue: 0,
       duration: 200,
       useNativeDriver: true,
@@ -107,85 +67,76 @@ export default function PlanDetailModal({
   
   return (
     <Modal
-      transparent={true}
       visible={visible}
-      animationType="none"
+      animationType="slide"
+      presentationStyle="fullScreen"
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
-        <TouchableWithoutFeedback onPress={handleClose}>
-          <View style={styles.backdrop} />
-        </TouchableWithoutFeedback>
+      <SafeAreaView style={styles.fullScreenContainer}>
+        {/* Header with back button and title */}
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={handleClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <ChevronLeft size={28} color={Colors.light.text} strokeWidth={2} />
+          </TouchableOpacity>
+          
+          <View style={styles.titleContainer}>
+            <Text 
+              style={styles.headerTitle} 
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {plan.title}
+            </Text>
+          </View>
+        </View>
         
-        <Animated.View
-          style={[
-            styles.modalContainer,
-            { transform: [{ translateY }] }
-          ]}
-        >
-          <SafeAreaView style={styles.safeArea}>
-            <View style={styles.handleContainer} {...panResponder.panHandlers}>
-              <View style={styles.handle} />
-            </View>
-            
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-              <X size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
-            
-            {isCompleted ? (
-              <CompletedPlanDetailView 
-                plan={plan} 
-                onClose={handleClose} 
-                onAttendanceUpdate={onAttendanceUpdate} 
-              />
-            ) : (
-              <PlanDetailView 
-                plan={plan} 
-                onClose={handleClose} 
-                onRespond={onRespond} 
-              />
-            )}
-          </SafeAreaView>
-        </Animated.View>
-      </View>
+        {/* Content */}
+        {isCompleted ? (
+          <CompletedPlanDetailView 
+            plan={plan} 
+            onClose={handleClose} 
+            onAttendanceUpdate={onAttendanceUpdate} 
+          />
+        ) : (
+          <PlanDetailView 
+            plan={plan} 
+            onClose={handleClose} 
+            onRespond={onRespond} 
+          />
+        )}
+      </SafeAreaView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  fullScreenContainer: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  },
-  modalContainer: {
     backgroundColor: Colors.light.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: '90%', // Increased to 90% of screen height
-    minHeight: '70%', // Minimum height to ensure it opens properly on all devices
   },
-  safeArea: {
-    flex: 1,
-  },
-  handleContainer: {
-    height: 30,
-    justifyContent: 'center',
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
   },
-  handle: {
-    width: 40,
-    height: 5,
-    backgroundColor: Colors.light.border,
-    borderRadius: 3,
+  backButton: {
+    marginRight: 12,
   },
-  closeButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 10,
+  titleContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.light.text,
   },
 });
