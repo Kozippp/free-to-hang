@@ -11,7 +11,9 @@ import {
   Platform,
   Alert,
   KeyboardAvoidingView,
-  Modal
+  Modal,
+  PanResponder,
+  Dimensions
 } from 'react-native';
 import { 
   Check, 
@@ -122,6 +124,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Check if user is going
   const isInYesGang = currentUserStatus === 'going';
   
+  // Swipe gesture state
+  const { width } = Dimensions.get('window');
+  const swipeAnim = useRef(new Animated.Value(0)).current;
+  const [isSwipeClosing, setIsSwipeClosing] = useState(false);
+  
   // Group participants by status
   const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
   const maybeParticipants = latestPlan.participants.filter(p =>
@@ -137,6 +144,79 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   // Animation for highlighting new plan
   const highlightAnim = useRef(new Animated.Value(0)).current;
+  
+  // Pan responder for swipe gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to horizontal swipes
+        const isHorizontal = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const isSignificant = Math.abs(gestureState.dx) > 10;
+        return isHorizontal && isSignificant && !isSwipeClosing;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (activeTab === 'Control Panel') {
+          // In Control Panel: swipe right goes to Chat, swipe left closes
+          if (gestureState.dx < 0) {
+            // Swiping left (closing gesture)
+            const newValue = Math.max(gestureState.dx, -width);
+            swipeAnim.setValue(newValue);
+          } else if (gestureState.dx > 0) {
+            // Swiping right (to Chat) - just track for threshold
+            swipeAnim.setValue(0);
+          }
+        } else if (activeTab === 'Chat') {
+          // In Chat: swipe left goes back to Control Panel
+          if (gestureState.dx > 0) {
+            // Swiping right (back to Control Panel)
+            swipeAnim.setValue(0);
+          }
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const swipeThreshold = width * 0.3;
+        
+        if (activeTab === 'Control Panel') {
+          if (gestureState.dx < -swipeThreshold) {
+            // Swipe left far enough - close modal
+            setIsSwipeClosing(true);
+            Animated.timing(swipeAnim, {
+              toValue: -width,
+              duration: 250,
+              useNativeDriver: true,
+            }).start(() => {
+              onClose();
+            });
+          } else if (gestureState.dx > swipeThreshold) {
+            // Swipe right far enough - go to Chat
+            setActiveTab('Chat');
+            swipeAnim.setValue(0);
+          } else {
+            // Not far enough - spring back
+            Animated.spring(swipeAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              friction: 8,
+            }).start();
+          }
+        } else if (activeTab === 'Chat') {
+          if (gestureState.dx > swipeThreshold) {
+            // Swipe right far enough - go back to Control Panel
+            setActiveTab('Control Panel');
+            swipeAnim.setValue(0);
+          } else {
+            // Not far enough - spring back
+            Animated.spring(swipeAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              friction: 8,
+            }).start();
+          }
+        }
+      },
+    })
+  ).current;
   
   // Mark plan as seen when first opened (if user is pending)
   React.useEffect(() => {
@@ -685,17 +765,21 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Manual completion voting removed; plans auto-complete after 24h
 
   return (
-    <Animated.View style={[
-      styles.container, 
-      { 
-        backgroundColor: highlightBackground,
-        transform: [
-          { scale: declineAnimation },
-          { translateY: slideAnimation }
-        ],
-        opacity: fadeAnimation
-      }
-    ]}>
+    <Animated.View 
+      style={[
+        styles.container, 
+        { 
+          backgroundColor: highlightBackground,
+          transform: [
+            { scale: declineAnimation },
+            { translateY: slideAnimation },
+            { translateX: swipeAnim }
+          ],
+          opacity: fadeAnimation
+        }
+      ]}
+      {...panResponder.panHandlers}
+    >
       {/* Decline overlay effect */}
       {isClosing && (
         <Animated.View style={[
