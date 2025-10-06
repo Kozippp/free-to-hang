@@ -147,7 +147,25 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Gesture handlers for swipe navigation
   const onGestureEvent = Animated.event(
     [{ nativeEvent: { translationX: translateX } }],
-    { useNativeDriver: true }
+    { 
+      useNativeDriver: true,
+      listener: (event: any) => {
+        const tx = event.nativeEvent.translationX;
+        
+        // Control Panel: allow both directions (left to exit, right to chat)
+        if (activeTab === 'Control Panel') {
+          // Allow natural swipe in both directions
+          return;
+        } 
+        // Chat: only allow right to left swipe (back to Control Panel)
+        else if (activeTab === 'Chat') {
+          // Block left to right swipes in Chat (prevents glitching)
+          if (tx > 0) {
+            translateX.setValue(0);
+          }
+        }
+      }
+    }
   );
 
   const onHandlerStateChange = (event: any) => {
@@ -180,13 +198,13 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           }).start();
         }
       } else if (activeTab === 'Chat') {
-        // Chat: swipe right to left goes back to Control Panel
+        // Chat: ONLY swipe right to left goes back to Control Panel
         if (tx < -100 || velocityX < -500) {
           // Swipe right to left (or fast velocity) - back to Control Panel
           translateX.setValue(0);
           setActiveTab('Control Panel');
         } else {
-          // Not far enough - reset
+          // Not far enough or wrong direction - reset
           Animated.spring(translateX, {
             toValue: 0,
             velocity: velocityX,
@@ -198,6 +216,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
       }
     }
   };
+  
+  // Reset translateX when tab changes to prevent visual glitches
+  React.useEffect(() => {
+    translateX.setValue(0);
+  }, [activeTab]);
   
   // Mark plan as seen when first opened (if user is pending)
   React.useEffect(() => {
@@ -1047,10 +1070,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: Colors.light.background,
   },
   contentWrapper: {
     flex: 1,
+    backgroundColor: Colors.light.background,
   },
   content: {
     flex: 1,
