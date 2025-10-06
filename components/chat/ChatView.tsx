@@ -40,6 +40,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [previousMessageCount, setPreviousMessageCount] = useState(0);
   const highlightAnim = useRef(new Animated.Value(1)).current;
 
   const planMessages = messages[plan.id] || [];
@@ -103,21 +104,25 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   }, [plan.id, currentUserId, isAuthenticated, markMessagesAsRead, planMessages.length]);
 
   useEffect(() => {
-    // Always scroll to bottom immediately without animation
-    if (planMessages.length > 0) {
+    // Handle message count changes
+    if (planMessages.length > previousMessageCount && previousMessageCount > 0) {
+      // New messages were added (not initial load) - scroll to bottom instantly
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: false });
-      }, 100);
-
-      // Mark messages as read whenever new messages arrive
-      // This ensures read receipts are updated in real-time
-      if (isAuthenticated) {
-        setTimeout(() => {
-          markMessagesAsRead(plan.id, currentUserId);
-        }, 150); // Small delay to ensure message is rendered
-      }
+      }, 50);
     }
-  }, [planMessages.length, isAuthenticated, plan.id, currentUserId, markMessagesAsRead]);
+
+    // Update previous count
+    setPreviousMessageCount(planMessages.length);
+
+    // Mark messages as read whenever new messages arrive
+    // This ensures read receipts are updated in real-time
+    if (planMessages.length > 0 && isAuthenticated) {
+      setTimeout(() => {
+        markMessagesAsRead(plan.id, currentUserId);
+      }, 100); // Small delay to ensure message is rendered
+    }
+  }, [planMessages.length, previousMessageCount, isAuthenticated, plan.id, currentUserId, markMessagesAsRead]);
 
   // Check if we should show date separator
   const shouldShowDateSeparator = (currentMessage: any, previousMessage: any) => {
@@ -299,24 +304,13 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         style={styles.messagesList}
         contentContainerStyle={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => {
-          if (planMessages.length > 0) {
-            // Always scroll to bottom without animation
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
-        onLayout={() => {
-          if (planMessages.length > 0) {
-            // Initial layout: scroll without animation
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         removeClippedSubviews={Platform.OS === 'android'}
         maxToRenderPerBatch={10}
         windowSize={10}
         initialNumToRender={20}
+        initialScrollIndex={Math.max(0, planMessages.length - 1)}
         inverted={false}
         onScrollToIndexFailed={(info) => {
           // Fallback: try to scroll after a short delay
