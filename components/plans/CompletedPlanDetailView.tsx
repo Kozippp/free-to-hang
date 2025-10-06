@@ -282,10 +282,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
               </Text>
             </View>
             
-            {/* Plan Title */}
-            <Text style={styles.planTitle}>{latestPlan.title}</Text>
-            
-            {/* Plan Description */}
+            {/* Plan Description - Title moved to modal header */}
             {latestPlan.description && (
               <Text style={styles.planDescription}>{latestPlan.description}</Text>
             )}

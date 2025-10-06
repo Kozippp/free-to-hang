@@ -722,7 +722,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={Platform.OS === 'web'}
         >
-          {/* Combined Title and Description Section */}
+          {/* Description Section - Title moved to modal header */}
           <PlanTitle 
             title={title}
             description={description}
@@ -735,6 +735,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             onChangeTitle={setTitle}
             onChangeDescription={setDescription}
             canEdit={isInYesGang}
+            hideTitle={true}
           />
           
           {/* Combined Voting Section */}
