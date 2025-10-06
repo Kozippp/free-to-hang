@@ -40,7 +40,6 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const highlightAnim = useRef(new Animated.Value(1)).current;
 
   const planMessages = messages[plan.id] || [];
@@ -79,9 +78,6 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
 
     console.log(`🔄 Loading chat for plan ${plan.id} as user ${currentUserId}`);
 
-    // Reset initial load state when opening a new chat
-    setIsInitialLoad(true);
-
     // Fetch initial messages
     fetchMessages(plan.id);
 
@@ -107,20 +103,11 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   }, [plan.id, currentUserId, isAuthenticated, markMessagesAsRead, planMessages.length]);
 
   useEffect(() => {
-    // Handle message updates: auto scroll for new messages, no animation for initial load
+    // Always scroll to bottom immediately without animation
     if (planMessages.length > 0) {
-      if (isInitialLoad) {
-        // Initial load: scroll to bottom without animation
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-          setIsInitialLoad(false); // Mark initial load as complete
-        }, 100);
-      } else {
-        // New messages: scroll to bottom with animation
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
 
       // Mark messages as read whenever new messages arrive
       // This ensures read receipts are updated in real-time
@@ -130,7 +117,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         }, 150); // Small delay to ensure message is rendered
       }
     }
-  }, [planMessages.length, isAuthenticated, plan.id, currentUserId, markMessagesAsRead, isInitialLoad]);
+  }, [planMessages.length, isAuthenticated, plan.id, currentUserId, markMessagesAsRead]);
 
   // Check if we should show date separator
   const shouldShowDateSeparator = (currentMessage: any, previousMessage: any) => {
@@ -314,10 +301,8 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => {
           if (planMessages.length > 0) {
-            // Don't auto-scroll on initial load, only for content size changes (new messages)
-            if (!isInitialLoad) {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }
+            // Always scroll to bottom without animation
+            flatListRef.current?.scrollToEnd({ animated: false });
           }
         }}
         onLayout={() => {
