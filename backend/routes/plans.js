@@ -352,9 +352,12 @@ const getPlanWithDetails = async (planId, userId = null) => {
       return transformParticipantStatus(transformedParticipant, userId);
     });
 
+    const isAnonymousPlan = Boolean(plan.is_private || plan.is_anonymous);
+
     const response = {
       ...plan,
-      creator: creator,
+      isAnonymous: isAnonymousPlan,
+      creator: isAnonymousPlan ? null : creator,
       participants: transformedParticipants,
       polls: transformedPolls,
       attendance: attendance

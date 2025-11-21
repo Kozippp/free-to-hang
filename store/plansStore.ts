@@ -86,6 +86,14 @@ const subscriptionMetrics: SubscriptionMetrics = {
 const reconnectMeasurementStart: Record<string, number> = {};
 let reconnectSampleCount = 0;
 
+const resolveIsAnonymous = (plan: any): boolean => {
+  if (!plan) return false;
+  if (typeof plan.isAnonymous === 'boolean') return plan.isAnonymous;
+  if (typeof plan.is_anonymous === 'boolean') return plan.is_anonymous;
+  if (typeof plan.is_private === 'boolean') return plan.is_private;
+  return false;
+};
+
 // Helper function to transform API plan to store format
 const transformPlanForStore = (plan: any, currentUserId: string): Plan => {
   const userParticipant = plan.participants.find((p: any) => p.id === currentUserId);
@@ -95,7 +103,7 @@ const transformPlanForStore = (plan: any, currentUserId: string): Plan => {
     id: plan.id,
     title: plan.title,
     description: plan.description,
-    type: plan.isAnonymous ? 'anonymous' : 'normal',
+    type: resolveIsAnonymous(plan) ? 'anonymous' : 'normal',
     creator: plan.creator ? {
       id: plan.creator.id === currentUserId ? 'current' : plan.creator.id,
       name: plan.creator.name,
@@ -431,7 +439,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         id: newPlan.id,
         title: newPlan.title,
         description: newPlan.description,
-        type: newPlan.isAnonymous ? 'anonymous' : 'normal',
+        type: resolveIsAnonymous(newPlan) ? 'anonymous' : 'normal',
         // Since this function is called by the current user, mark creator as 'current'
         creator: newPlan.creator ? {
           id: 'current',
@@ -520,7 +528,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         id: updatedPlan.id,
         title: updatedPlan.title,
         description: updatedPlan.description,
-        type: updatedPlan.isAnonymous ? 'anonymous' : 'normal',
+        type: resolveIsAnonymous(updatedPlan) ? 'anonymous' : 'normal',
         creator: updatedPlan.creator ? {
           id: updatedPlan.creator.id,
           name: updatedPlan.creator.name,
