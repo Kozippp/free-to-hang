@@ -1396,7 +1396,7 @@ function startPlansHealthCheck(userId: string) {
   let failedChecks = 0;
 
   plansHealthCheckInterval = setInterval(() => {
-    console.log('💓 Plans health check...');
+    // Health check runs silently unless there are issues
     usePlansStore.getState().recordHealthCheck();
     const channelsStatus = [
       { name: 'plans', state: plansChannel?.state },
@@ -1419,7 +1419,7 @@ function startPlansHealthCheck(userId: string) {
         failedChecks = 0;
       }
     } else if (failedChecks > 0) {
-      console.log('✅ Plans channels recovered after health check warnings');
+      // Silently reset failure count when healthy again
       failedChecks = 0;
     }
   }, PLANS_HEALTH_CHECK_INTERVAL);

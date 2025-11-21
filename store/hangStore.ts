@@ -628,7 +628,7 @@ function startHangHealthCheck() {
         console.log('⏸️ Health check skipping restart - already in progress');
       }
     } else if (failedChecks > 0) {
-      console.log('✅ Hang real-time subscription healthy again');
+      // Silently reset failure count when healthy again
       failedChecks = 0;
     }
   }, HANG_HEALTH_CHECK_INTERVAL);

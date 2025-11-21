@@ -1086,7 +1086,7 @@ function runChatHealthCheck() {
         chatHealthFailures[planId] = 0;
       }
     } else if (chatHealthFailures[planId]) {
-      console.log(`✅ Chat channel healthy again for plan ${planId}`);
+      // Silently reset failure count when healthy again
       chatHealthFailures[planId] = 0;
     }
   });

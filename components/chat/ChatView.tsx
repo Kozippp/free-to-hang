@@ -90,8 +90,8 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
 
     // Cleanup: unsubscribe when component unmounts
     return () => {
-      console.log(`🔌 Unsubscribing from chat ${plan.id}`);
-      unsubscribeFromChat(plan.id);
+      console.log(`🔌 Cleanup for chat ${plan.id}`);
+      unsubscribeFromChat(plan.id, { preserveDesired: false });
     };
   }, [plan.id, currentUserId, isAuthenticated, fetchMessages, fetchReadReceipts, subscribeToChat, unsubscribeFromChat]);
 

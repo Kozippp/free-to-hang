@@ -7,6 +7,7 @@ import { Platform, View, Text } from "react-native";
 import usePlansStore from "@/store/plansStore";
 import useHangStore from "@/store/hangStore";
 import useFriendsStore from "@/store/friendsStore";
+import useChatStore from "@/store/chatStore";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function TabLayout() {
@@ -48,9 +49,20 @@ export default function TabLayout() {
     // Cleanup when layout unmounts or user signs out
     return () => {
       isMounted = false;
-      console.log('⏹️ Stopping global realtime systems...');
+      console.log('⏹️ Tab layout cleanup');
+      
       stopHangRealtime();
       stopFriendsRealtime();
+      
+      // Stop plans realtime
+      const plansStore = usePlansStore.getState();
+      plansStore.stopRealTimeUpdates();
+      
+      // Cleanup all chat subscriptions
+      const chatStore = useChatStore.getState();
+      Object.keys(chatStore.subscriptions || {}).forEach(planId => {
+        chatStore.unsubscribeFromChat(planId, { preserveDesired: false });
+      });
     };
   }, [user]); // Add user as dependency
   

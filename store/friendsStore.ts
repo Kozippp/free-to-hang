@@ -742,7 +742,7 @@ function startFriendHealthCheck() {
         failedChecks = 0;
       }
     } else if (failedChecks > 0) {
-      console.log('✅ Friend real-time subscription healthy again');
+      // Silently reset failure count when healthy again
       failedChecks = 0;
     }
   }, FRIEND_HEALTH_CHECK_INTERVAL);
