@@ -5,11 +5,13 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Image,
   TextInput,
   Animated,
   Platform,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Dimensions
@@ -321,6 +323,22 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     // In a real app, this would update the plan in the backend
     setEditingDescription(false);
     // Only people who are going can edit description
+  };
+
+  const handleBackgroundPress = () => {
+    if (!editingTitle && !editingDescription) {
+      return;
+    }
+
+    Keyboard.dismiss();
+
+    if (editingTitle) {
+      handleTitleSave();
+    }
+
+    if (editingDescription) {
+      handleDescriptionSave();
+    }
   };
   
   const handleCreatePoll = (type: 'when' | 'where' | 'custom', existingPoll?: Poll) => {
@@ -802,7 +820,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   // Manual completion voting removed; plans auto-complete after 24h
 
   return (
-    <View style={styles.container}>
+    <TouchableWithoutFeedback onPress={handleBackgroundPress} accessible={false}>
+      <View style={styles.container}>
       {/* Decline overlay effect */}
       {isClosing && (
         <Animated.View style={[
@@ -862,7 +881,7 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             onChangeTitle={setTitle}
             onChangeDescription={setDescription}
             canEdit={isInYesGang}
-            hideTitle={true}
+            hideTitle={!isInYesGang}
           />
           
           {/* Combined Voting Section */}
@@ -1098,7 +1117,8 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

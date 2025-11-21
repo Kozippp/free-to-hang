@@ -46,15 +46,24 @@ export default function PlanTitle({
                 autoFocus
                 onBlur={onSaveTitle}
                 onSubmitEditing={onSaveTitle}
+                onEndEditing={onSaveTitle}
+                returnKeyType="done"
+                blurOnSubmit
               />
             </View>
           ) : (
             <TouchableOpacity 
               style={styles.titleContainer}
-              onPress={canEdit ? onEditTitle : undefined}
+              onLongPress={canEdit ? onEditTitle : undefined}
+              delayLongPress={1000}
               activeOpacity={canEdit ? 0.7 : 1}
             >
-              <Text style={styles.title}>{title}</Text>
+              <View style={styles.titleTextWrapper}>
+                <Text style={styles.title}>{title || 'Untitled plan'}</Text>
+                {canEdit && (
+                  <Text style={styles.titleHint}>Hold for 1s to edit title</Text>
+                )}
+              </View>
             </TouchableOpacity>
           )}
         </>
@@ -73,6 +82,10 @@ export default function PlanTitle({
             textAlignVertical="top"
             autoFocus
             onBlur={onSaveDescription}
+            onEndEditing={onSaveDescription}
+            onSubmitEditing={onSaveDescription}
+            returnKeyType="done"
+            blurOnSubmit
           />
         </View>
       ) : (
@@ -119,6 +132,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.text,
     flex: 1,
+  },
+  titleTextWrapper: {
+    flex: 1,
+  },
+  titleHint: {
+    fontSize: 12,
+    color: Colors.light.secondaryText,
+    marginTop: 4,
   },
   editContainer: {
     flexDirection: 'row',
