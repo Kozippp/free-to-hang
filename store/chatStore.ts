@@ -139,8 +139,6 @@ const chatRestartTimeouts: Record<string, ReturnType<typeof setTimeout> | undefi
 const desiredChatSubscriptions = new Set<string>();
 let chatHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
 const chatHealthFailures: Record<string, number> = {};
-const MAX_CHAT_CHANNELS = 3;
-const activeChatChannelOrder: string[] = [];
 
 const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
@@ -688,28 +686,22 @@ const useChatStore = create<ChatState>((set, get) => ({
   // ============================================
   subscribeToChat: (planId: string) => {
     const state = get();
+    
+    // Guard: Check if already subscribed
+    if (state.subscriptions[planId]) {
+      const existingChannel = state.subscriptions[planId];
+      const channelState = existingChannel?.state;
+      
+      if (channelState === 'joined') {
+        console.log(`✅ Already subscribed: ${planId}`);
+        return;
+      }
+    }
+    
     desiredChatSubscriptions.add(planId);
     clearChatRestart(planId);
     chatRetryAttempts[planId] = 0;
     ensureChatHealthCheckRunning();
-
-    const currentSubscriptions = Object.keys(state.subscriptions).length;
-    if (currentSubscriptions >= MAX_CHAT_CHANNELS) {
-      const oldestPlanId = activeChatChannelOrder.shift();
-      if (oldestPlanId) {
-        console.log(
-          `🗑️ Max chat channels reached (${MAX_CHAT_CHANNELS}) - unsubscribing from ${oldestPlanId}`
-        );
-        desiredChatSubscriptions.delete(oldestPlanId);
-        get().unsubscribeFromChat(oldestPlanId);
-      }
-    }
-    
-    // Don't subscribe twice
-    if (state.subscriptions[planId]) {
-      console.log(`Already subscribed to chat ${planId}`);
-      return;
-    }
     
     console.log(`📡 Subscribing to chat ${planId}`);
     
@@ -899,7 +891,6 @@ const useChatStore = create<ChatState>((set, get) => ({
         [planId]: channel
       }
     }));
-    addActiveChatPlan(planId);
   },
   
   // ============================================
@@ -925,7 +916,6 @@ const useChatStore = create<ChatState>((set, get) => ({
     clearChatRestart(planId);
     delete chatRetryAttempts[planId];
     stopChatHealthCheckIfIdle();
-    removeActiveChatPlan(planId);
   },
   
   // ============================================
@@ -985,6 +975,11 @@ const useChatStore = create<ChatState>((set, get) => ({
 function handleChatChannelStatus(planId: string, status: string) {
   console.log(`📡 Chat subscription status for ${planId}:`, status);
 
+  // Ignore state changes to prevent unnecessary restarts
+  if (status === 'CHANNEL_STATE_CHANGE') {
+    return;
+  }
+
   if (status === 'SUBSCRIBED') {
     chatRetryAttempts[planId] = 0;
     clearChatRestart(planId);
@@ -1000,13 +995,14 @@ function handleChatChannelStatus(planId: string, status: string) {
       console.log(`⏰ Chat channel timed out for plan ${planId}`);
     }
 
-    useChatStore.getState().unsubscribeFromChat(planId, { preserveDesired: true });
-
-    if (desiredChatSubscriptions.has(planId)) {
-      scheduleChatRestart(planId);
-    } else {
-      console.log(`⚠️ Skipping auto-restart for plan ${planId} - no longer desired`);
+    // Check if still desired before restarting
+    if (!desiredChatSubscriptions.has(planId)) {
+      console.log(`⚠️ Skipping restart - no longer desired: ${planId}`);
+      return;
     }
+
+    useChatStore.getState().unsubscribeFromChat(planId, { preserveDesired: true });
+    scheduleChatRestart(planId);
   }
 }
 
@@ -1099,21 +1095,6 @@ function stopChatHealthCheckIfIdle() {
     clearInterval(chatHealthCheckInterval);
     chatHealthCheckInterval = null;
     console.log('💓 Chat health check stopped - no active chat subscriptions');
-  }
-}
-
-function addActiveChatPlan(planId: string) {
-  const existingIndex = activeChatChannelOrder.indexOf(planId);
-  if (existingIndex !== -1) {
-    activeChatChannelOrder.splice(existingIndex, 1);
-  }
-  activeChatChannelOrder.push(planId);
-}
-
-function removeActiveChatPlan(planId: string) {
-  const index = activeChatChannelOrder.indexOf(planId);
-  if (index !== -1) {
-    activeChatChannelOrder.splice(index, 1);
   }
 }
 
