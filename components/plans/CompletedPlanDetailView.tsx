@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -36,9 +36,19 @@ interface CompletedPlanDetailViewProps {
   onAttendanceUpdate?: (planId: string, userId: string, attended: boolean) => void;
 }
 
+type FriendSelection = {
+  id: string;
+  name: string;
+  avatar: string;
+  status: 'available' | 'offline' | 'pinged';
+  activity?: string;
+  lastActive?: string;
+  lastSeen?: string;
+};
+
 export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpdate }: CompletedPlanDetailViewProps) {
   const { getUnreadCount } = useChatStore();
-  const { user } = useHangStore();
+  const { user, friends } = useHangStore();
   const { completedPlans } = usePlansStore();
   const [activeTab, setActiveTab] = useState('Details');
   const [showPlanSheet, setShowPlanSheet] = useState(false);
@@ -163,7 +173,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
   };
 
   // Convert plan participants to the format expected by PlanSuggestionSheet
-  const getSelectedFriendsData = () => {
+  const getSelectedFriendsData = useCallback((): FriendSelection[] => {
     const currentUserId = user?.id;
 
     return latestPlan.participants
@@ -187,7 +197,39 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
         lastActive: '',
         lastSeen: ''
       }));
-  };
+  }, [latestPlan, user?.id]);
+
+  const [recreatedPlanFriends, setRecreatedPlanFriends] = useState<FriendSelection[]>(() => getSelectedFriendsData());
+
+  useEffect(() => {
+    setRecreatedPlanFriends(getSelectedFriendsData());
+  }, [getSelectedFriendsData]);
+
+  const availableFriendsForModal = useMemo(() => {
+    const selectedIds = new Set(recreatedPlanFriends.map(friend => friend.id));
+    const safeFriends = friends || [];
+
+    return safeFriends
+      .filter(friend => !selectedIds.has(friend.id))
+      .map(friend => ({
+        id: friend.id,
+        name: friend.name,
+        avatar: friend.avatar,
+        status: friend.status,
+        activity: friend.activity,
+        lastActive: friend.lastActive,
+        lastSeen: friend.lastSeen
+      }));
+  }, [friends, recreatedPlanFriends]);
+
+  const handleFriendsUpdated = useCallback((updatedFriends: FriendSelection[]) => {
+    setRecreatedPlanFriends(updatedFriends);
+  }, []);
+
+  const handleAddMoreFriends = useCallback(() => {
+    // No-op handler to display the Add More button.
+    // The actual friend list updates are handled via onFriendsUpdated.
+  }, []);
 
   // Helper function to get poll results
   const getPollResults = (poll: Poll) => {
@@ -510,10 +552,12 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
       <PlanSuggestionSheet
         visible={showPlanSheet}
         onClose={handleClosePlanSheet}
-        selectedFriends={getSelectedFriendsData()}
-        availableFriends={[]} // Empty since we're not showing additional friends for completed plans
+        selectedFriends={recreatedPlanFriends}
+        availableFriends={availableFriendsForModal}
         isAnonymous={isAnonymousPlan}
         onPlanSubmitted={handlePlanSubmitted}
+        onFriendsUpdated={handleFriendsUpdated}
+        onAddMoreFriends={handleAddMoreFriends}
         prefilledTitle={latestPlan.title}
         prefilledDescription={latestPlan.description}
       />
