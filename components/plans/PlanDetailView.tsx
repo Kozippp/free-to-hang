@@ -824,7 +824,11 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   // Manual completion voting removed; plans auto-complete after 24h
 
   return (
-    <TouchableWithoutFeedback onPress={handleBackgroundPress} accessible={false}>
+    <TouchableWithoutFeedback 
+      onPress={handleBackgroundPress} 
+      accessible={false}
+      disabled={!editingDescription}
+    >
       <View style={styles.container}>
       {/* Decline overlay effect */}
       {isClosing && (
@@ -851,7 +855,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         onHandlerStateChange={onHandlerStateChange}
         activeOffsetX={[-10, 10]}
         failOffsetX={activeTab === 'Chat' ? [-10, 10000] : undefined}
-        failOffsetY={[-10, 10]}
         simultaneousHandlers={scrollViewRef}
       >
         <Animated.View 

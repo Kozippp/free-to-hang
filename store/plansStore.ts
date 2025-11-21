@@ -889,6 +889,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
     const cutoffTime = now >= today6AM ? today6AM : new Date(today6AM.getTime() - 24 * 60 * 60 * 1000);
     
     set((state) => {
+      const userIdCandidates = new Set<string>(['current']);
+      if (state.currentUserId) {
+        userIdCandidates.add(state.currentUserId);
+      }
+
       const plansToComplete: Plan[] = [];
       const remainingActivePlans: Plan[] = [];
       
@@ -897,27 +902,26 @@ const usePlansStore = create<PlansState>((set, get) => ({
         
         // Plan should be completed if created before the cutoff time
         if (planCreatedAt < cutoffTime) {
-          // Filter participants based on their response
-          const respondedParticipants = plan.participants.filter(p => 
-            p.status === 'going' || p.status === 'declined'
-          );
-          
-          // Only include the plan in completed if current user responded
-          const currentUser = plan.participants.find(p => p.id === 'current');
-          if (currentUser && (currentUser.status === 'going' || currentUser.status === 'declined')) {
+          // Only include the plan in completed if the current user is a participant
+          const currentUser = plan.participants.find(p => userIdCandidates.has(p.id));
+          if (currentUser) {
+            const attendanceRecord = plan.participants.reduce((record: Record<string, boolean>, participant) => {
+              if (participant.status === 'going') {
+                record[participant.id] = true;
+              } else if (participant.status === 'declined') {
+                record[participant.id] = false;
+              }
+              return record;
+            }, { ...(plan.attendanceRecord || {}) });
+
             const completedPlan = {
               ...plan,
-              participants: respondedParticipants,
-              // Add attendance record - automatically mark "going" users as attended
-              attendanceRecord: respondedParticipants.reduce((record: Record<string, boolean>, participant) => {
-                record[participant.id] = participant.status === 'going';
-                return record;
-              }, {}),
+              participants: plan.participants,
+              attendanceRecord,
             };
             
             plansToComplete.push(completedPlan);
           }
-          // If current user didn't respond, plan won't appear in completed plans
         } else {
           remainingActivePlans.push(plan);
         }

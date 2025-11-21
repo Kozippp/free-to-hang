@@ -418,7 +418,6 @@ export default function PlansScreen() {
                     plan={item}
                     onPress={handlePlanPress}
                     userAttended={item.attendanceRecord?.['current']}
-                    currentUserId={user?.id}
                   />
                 )}
                 keyExtractor={(item) => `completedPlans-${item.id}`}

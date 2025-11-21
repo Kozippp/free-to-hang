@@ -1,0 +1,297 @@
+🔔 NOTIFICATION SYSTEM IMPLEMENTATION TASK
+
+You are GPT Codex, an expert engineer implementing a production-ready notification system for the Free to Hang app.
+
+═══════════════════════════════════════════════════════════════════
+
+📋 YOUR MISSION:
+
+Implement a complete 3-layer notification system:
+
+1. IN-APP NOTIFICATION CENTER - Feed of all notifications
+2. EVENT-BASED PUSH NOTIFICATIONS - Real-time alerts  
+3. STRATEGIC ENGAGEMENT (MVP) - Chain effect & re-engagement
+
+═══════════════════════════════════════════════════════════════════
+
+📖 IMPLEMENTATION GUIDE:
+
+Open and follow this comprehensive guide:
+→ docs/NOTIFICATIONS_SYSTEM_IMPLEMENTATION_GUIDE.md
+
+This guide contains:
+✓ Complete database schema
+✓ Step-by-step frontend implementation
+✓ Backend services and routes
+✓ Push notification setup
+✓ Engagement system
+✓ Testing checklist
+✓ Deployment instructions
+
+═══════════════════════════════════════════════════════════════════
+
+🎯 PRIORITIES (MVP Focus):
+
+HIGH PRIORITY (Must Have):
+1. Plan invitations
+2. Chat messages
+3. New polls & poll winners
+4. Friend requests & acceptances
+5. Chain effect (friend goes online → notify friends)
+
+MEDIUM PRIORITY (Nice to Have):
+- Re-engagement notifications (3+ days inactive)
+- Notification preferences
+- Quiet hours
+
+═══════════════════════════════════════════════════════════════════
+
+🏗️ IMPLEMENTATION ORDER:
+
+PHASE 1: DATABASE (30 min)
+□ Create notifications table
+□ Create push_tokens table  
+□ Create notification_preferences table
+□ Update user_status table with last_active
+□ Create RLS policies
+□ Create auto-triggers for user preferences
+
+PHASE 2: BACKEND (2-3 hours)
+□ Install expo-server-sdk and node-cron
+□ Create notificationService.js
+□ Create engagementService.js
+□ Create notifications routes
+□ Update plans routes (add notifications)
+□ Update chat routes (add notifications)
+□ Update friends routes (add notifications)
+□ Update user status route (chain effect trigger)
+□ Add notification routes to backend/index.js
+□ Start engagement scheduler
+
+PHASE 3: FRONTEND (3-4 hours)
+□ Install expo-notifications and expo-device
+□ Create notificationsStore.ts
+□ Create pushNotifications.ts utility
+□ Create notifications.tsx screen
+□ Add notifications tab to _layout.tsx
+□ Update app/_layout.tsx (push token registration)
+□ Add badge counter to tab bar
+□ Implement navigation from notifications
+
+PHASE 4: INTEGRATION (1-2 hours)
+□ Add notification triggers to all key events
+□ Test each notification type
+□ Test push notifications (real device)
+□ Test chain effect
+□ Test real-time updates
+□ Verify badge counts
+
+PHASE 5: POLISH (1 hour)
+□ Add notification icons
+□ Improve UI/UX
+□ Add loading states
+□ Add error handling
+□ Test on iOS and Android
+
+═══════════════════════════════════════════════════════════════════
+
+⚠️ IMPORTANT NOTES:
+
+1. READ THE GUIDE FIRST
+   - docs/NOTIFICATIONS_SYSTEM_IMPLEMENTATION_GUIDE.md has EVERYTHING
+   - Don't guess, follow the guide exactly
+
+2. SUPABASE RLS
+   - Service role policy needed for backend to insert notifications
+   - Users can only read/update/delete their own notifications
+
+3. PUSH TOKENS
+   - Must use physical device (not simulator)
+   - Get Expo project ID from app.json
+   - Test with Expo Go first, then production build
+
+4. CHAIN EFFECT MVP
+   - Simple: friend goes online → all their friends get notified
+   - No complex algorithms for MVP
+   - Just notify immediately
+
+5. RE-ENGAGEMENT
+   - Check daily at 6 PM
+   - Only notify if inactive 3+ days AND have active friends
+   - Use node-cron scheduler
+
+6. REAL-TIME UPDATES
+   - Use Supabase Realtime for instant notification updates
+   - Subscribe to notifications table filtered by user_id
+   - Handle INSERT, UPDATE, DELETE events
+
+7. BADGE COUNT
+   - Update badge on tab bar
+   - Show unread count from notifications store
+   - Clear when user opens notifications
+
+8. NAVIGATION
+   - Each notification type has specific navigation
+   - Use notification.data to pass plan_id, user_id, etc.
+   - Handle deep linking from push notifications
+
+═══════════════════════════════════════════════════════════════════
+
+🧪 TESTING REQUIREMENTS:
+
+Before marking complete, test ALL of these:
+
+EVENT-BASED NOTIFICATIONS:
+□ Plan invitation received
+□ Someone joins your plan
+□ New poll created in plan
+□ Poll ended with winner
+□ Chat message received
+□ Friend request received  
+□ Friend request accepted
+□ Friend goes online (chain effect)
+
+NOTIFICATION CENTER:
+□ Shows all notifications
+□ Real-time updates work
+□ Can mark as read
+□ Can mark all as read
+□ Can delete notification
+□ Can navigate to correct screen
+□ Badge count accurate
+□ Pull to refresh works
+
+PUSH NOTIFICATIONS:
+□ Received when app closed
+□ Received when app in background
+□ Shows in-app when app open
+□ Tapping navigates correctly
+□ Badge count updates
+
+ENGAGEMENT:
+□ Chain effect works (friend online)
+□ Comeback notification scheduled
+□ Quiet hours respected (if implemented)
+
+═══════════════════════════════════════════════════════════════════
+
+📝 IMPLEMENTATION CHECKLIST:
+
+Copy this and check off as you go:
+
+DATABASE:
+□ notifications table created with indexes and RLS
+□ push_tokens table created with indexes and RLS
+□ notification_preferences table created with trigger
+□ user_status.last_active column added
+□ All policies tested with sample queries
+
+BACKEND:
+□ expo-server-sdk installed
+□ node-cron installed
+□ notificationService.js created (all functions)
+□ engagementService.js created (chain effect + scheduler)
+□ notifications routes created
+□ Notifications added to plans routes
+□ Notifications added to chat routes
+□ Notifications added to friends routes
+□ Chain effect trigger added to status change
+□ Routes registered in backend/index.js
+□ Engagement scheduler started
+□ Backend tested with Postman/curl
+
+FRONTEND:
+□ expo-notifications installed
+□ expo-device installed
+□ notificationsStore.ts created
+□ pushNotifications.ts created
+□ notifications.tsx screen created
+□ Tab added to _layout.tsx
+□ Push token registration in app/_layout.tsx
+□ Badge counter working
+□ Navigation handlers implemented
+□ Real-time subscription working
+□ UI polished and responsive
+
+INTEGRATION:
+□ Plan invites send notifications
+□ Chat messages send notifications
+□ Friend requests send notifications
+□ Status changes trigger chain effect
+□ All notifications navigate correctly
+□ Push notifications work on real device
+□ Badge counts accurate
+□ Tested on both iOS and Android
+
+═══════════════════════════════════════════════════════════════════
+
+🚨 COMMON PITFALLS TO AVOID:
+
+1. ❌ Don't use simulator for push testing - use physical device
+2. ❌ Don't forget Service Role policy for backend inserts
+3. ❌ Don't send notifications if user is active in app
+4. ❌ Don't spam users - check if they want notifications
+5. ❌ Don't forget to clean up subscriptions on unmount
+6. ❌ Don't hardcode user IDs in testing
+7. ❌ Don't forget error handling in async functions
+8. ❌ Don't skip RLS policies - security is critical
+
+═══════════════════════════════════════════════════════════════════
+
+💡 TIPS FOR SUCCESS:
+
+1. Follow the guide step-by-step, don't skip ahead
+2. Test each component before moving to next
+3. Use console.log liberally for debugging
+4. Check Supabase logs for RLS errors
+5. Use Expo push tool to test notifications
+6. Start with database, then backend, then frontend
+7. Commit after each phase
+8. Ask for help if stuck > 30 minutes
+
+═══════════════════════════════════════════════════════════════════
+
+🎯 DEFINITION OF DONE:
+
+Your implementation is complete when:
+
+✅ All database tables exist with correct schema
+✅ All backend services and routes implemented
+✅ All frontend components implemented
+✅ All notification types work end-to-end
+✅ Push notifications work on real device
+✅ Real-time updates work instantly
+✅ Chain effect triggers correctly
+✅ Comeback scheduler runs daily
+✅ Badge counts are accurate
+✅ Navigation works from all notification types
+✅ UI is polished and user-friendly
+✅ All tests pass
+✅ Code is committed to git
+
+═══════════════════════════════════════════════════════════════════
+
+📞 COMMUNICATION:
+
+As you work:
+- Comment your code clearly
+- Log important events to console
+- Report progress after each phase
+- Ask questions if requirements unclear
+- Show screenshots of UI components
+- Share test results
+
+═══════════════════════════════════════════════════════════════════
+
+🚀 LET'S BUILD THIS!
+
+1. Open docs/NOTIFICATIONS_SYSTEM_IMPLEMENTATION_GUIDE.md
+2. Read the entire guide first
+3. Follow implementation order above
+4. Test thoroughly as you go
+5. Report when complete
+
+Remember: This is production code. Quality over speed. Make it bulletproof.
+
+Good luck, Codex! 🎉
+
