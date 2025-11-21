@@ -8,7 +8,9 @@ import {
   Animated,
   Dimensions,
   SafeAreaView,
-  TextInput
+  TextInput,
+  Pressable,
+  Keyboard
 } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -39,6 +41,7 @@ export default function PlanDetailModal({
   const [canEditHeaderTitle, setCanEditHeaderTitle] = useState(false);
   const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
   const headerInputRef = useRef<TextInput | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
   
   React.useEffect(() => {
     if (visible) {
@@ -92,6 +95,13 @@ export default function PlanDetailModal({
     setIsEditingHeaderTitle(false);
   };
 
+  const handleDismissHeaderEditing = () => {
+    if (!isEditingHeaderTitle) return;
+    headerInputRef.current?.blur();
+    Keyboard.dismiss();
+    handleHeaderTitleSave();
+  };
+
   if (!plan) return null;
   
   return (
@@ -108,8 +118,19 @@ export default function PlanDetailModal({
         ]}
       >
         <SafeAreaView style={styles.safeArea}>
+          {isEditingHeaderTitle && (
+            <Pressable 
+              style={[styles.editDismissOverlay, { top: headerHeight }]}
+              onPress={handleDismissHeaderEditing}
+            />
+          )}
           {/* Header with back button and title */}
-          <View style={styles.header}>
+          <View 
+            style={styles.header}
+            onLayout={(event) => {
+              setHeaderHeight(event.nativeEvent.layout.height);
+            }}
+          >
             <TouchableOpacity 
               style={styles.backButton} 
               onPress={handleClose}
@@ -175,6 +196,13 @@ const styles = StyleSheet.create({
   fullScreenContainer: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  editDismissOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
   },
   safeArea: {
     flex: 1,
