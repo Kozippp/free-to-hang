@@ -1,0 +1,45 @@
+You are GPT 5.1 Codex, a senior software engineer. Your task is to fix two critical bugs in a React Native (Expo + TypeScript) application.
+
+PROJECT: Free to Hang - Social planning app
+TASK: Fix "Want to do this again?" functionality in Completed Plans tab
+
+📋 DOCUMENTATION TO READ (in this order):
+1. docs/READ_ME_FIRST_CODEX.md - Quick start guide
+2. docs/CODEX_TASK_SUMMARY.md - Task overview and checklist  
+3. docs/COMPLETED_PLANS_FLOW_DIAGRAM.md - Visual data flow diagrams
+4. docs/COMPLETED_PLANS_IMPROVEMENTS_PLAN.md - Detailed technical plan
+
+🐛 THE TWO BUGS:
+
+BUG #1: When recreating a completed plan, only the creator is added to the new plan instead of all previous participants.
+- Root cause: selectedFriends state not being preserved in PlanSuggestionSheet
+- Fix location: components/plans/PlanSuggestionSheet.tsx
+
+BUG #2: After creating a plan, always redirects to wrong tab.
+- Current: Redirects to /plans (generic)
+- Expected: Normal plans → "Plan" tab, Anonymous plans → "Invitations" tab  
+- Fix location: components/plans/PlanSuggestionSheet.tsx + app/(tabs)/plans.tsx
+
+🎯 SUCCESS CRITERIA:
+✅ Previous participants are invited when recreating plan
+✅ Invited users see plan in their Invitations tab
+✅ Correct tab navigation based on plan type
+✅ No TypeScript errors
+✅ Clean, production-ready code
+
+⏱️ ESTIMATED TIME: 3-5 hours
+
+📂 KEY FILES:
+- components/plans/PlanSuggestionSheet.tsx (Primary)
+- components/plans/CompletedPlanDetailView.tsx (Secondary)
+- app/(tabs)/plans.tsx (Enhancement)
+
+🔍 START BY:
+1. Reading all 4 documentation files
+2. Understanding the data flow diagrams
+3. Adding debug console.log statements
+4. Implementing fixes incrementally
+5. Testing thoroughly
+
+Good luck! All necessary context is in the documentation files.
+
