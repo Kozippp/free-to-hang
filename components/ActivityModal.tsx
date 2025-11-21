@@ -15,6 +15,8 @@ import { activities } from '@/constants/mockData';
 import Colors from '@/constants/colors';
 import { X } from 'lucide-react-native';
 
+const MAX_ACTIVITY_LENGTH = 50;
+
 interface ActivityModalProps {
   visible: boolean;
   onClose: () => void;
@@ -28,14 +30,20 @@ export default function ActivityModal({
   onSubmit,
   initialActivity = ''
 }: ActivityModalProps) {
-  const [activity, setActivity] = useState(initialActivity);
+  const [activity, setActivity] = useState(initialActivity.slice(0, MAX_ACTIVITY_LENGTH));
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
+
+  const handleActivityChange = (text: string) => {
+    setActivity(text.slice(0, MAX_ACTIVITY_LENGTH));
+  };
 
   const handleSubmit = () => {
     // If there are selected activities, use those; otherwise use the text input
-    const finalActivity = selectedActivities.length > 0 
-      ? selectedActivities.join(', ')
+    const selectedActivityText = selectedActivities.join(', ');
+    const finalActivitySource = selectedActivities.length > 0 
+      ? selectedActivityText
       : activity;
+    const finalActivity = finalActivitySource.slice(0, MAX_ACTIVITY_LENGTH);
       
     onSubmit(finalActivity);
     onClose();
@@ -48,12 +56,13 @@ export default function ActivityModal({
   const handleActivitySelect = (activityName: string) => {
     // Toggle selection with a maximum of 3 activities
     if (selectedActivities.includes(activityName)) {
-      setSelectedActivities(selectedActivities.filter(a => a !== activityName));
-      setActivity(selectedActivities.filter(a => a !== activityName).join(', '));
+      const updatedSelections = selectedActivities.filter(a => a !== activityName);
+      setSelectedActivities(updatedSelections);
+      setActivity(updatedSelections.join(', ').slice(0, MAX_ACTIVITY_LENGTH));
     } else if (selectedActivities.length < 3) {
       const newSelected = [...selectedActivities, activityName];
       setSelectedActivities(newSelected);
-      setActivity(newSelected.join(', '));
+      setActivity(newSelected.join(', ').slice(0, MAX_ACTIVITY_LENGTH));
     }
   };
 
@@ -80,10 +89,11 @@ export default function ActivityModal({
             <TextInput
               style={styles.input}
               value={activity}
-              onChangeText={setActivity}
+              onChangeText={handleActivityChange}
               placeholder="E.g., Coffee, Movie night..."
               placeholderTextColor={Colors.light.secondaryText}
               autoFocus={false} // Don't auto-focus the keyboard
+              maxLength={MAX_ACTIVITY_LENGTH}
             />
             
             <Text style={styles.suggestionsTitle}>Quick suggestions</Text>

@@ -24,6 +24,8 @@ import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
 import { useRouter } from 'expo-router';
 import AddMoreFriendsModal from './AddMoreFriendsModal';
 
+const MAX_PLAN_TITLE_LENGTH = 50;
+
 interface Friend {
   id: string;
   name: string;
@@ -64,7 +66,7 @@ export default function PlanSuggestionSheet({
   const { createPlan } = usePlansStore();
   const router = useRouter();
   
-  const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
+  const [planTitle, setPlanTitle] = useState(prefilledTitle?.slice(0, MAX_PLAN_TITLE_LENGTH) || '');
   const [description, setDescription] = useState(prefilledDescription || '');
   const [currentSelectedFriends, setCurrentSelectedFriends] = useState<Friend[]>(selectedFriends);
   const [showAddMoreModal, setShowAddMoreModal] = useState(false);
@@ -108,6 +110,10 @@ export default function PlanSuggestionSheet({
     })
   ).current;
   
+  const handlePlanTitleChange = (text: string) => {
+    setPlanTitle(text.slice(0, MAX_PLAN_TITLE_LENGTH));
+  };
+
   // Reset all states when the modal becomes visible
   useEffect(() => {
     if (!visible) {
@@ -118,7 +124,7 @@ export default function PlanSuggestionSheet({
     } else {
       // Initialize with prefilled data when modal opens
       setTimeout(() => {
-        setPlanTitle(prefilledTitle || '');
+        setPlanTitle(prefilledTitle?.slice(0, MAX_PLAN_TITLE_LENGTH) || '');
         setDescription(prefilledDescription || '');
         setCurrentSelectedFriends(selectedFriends);
       }, 0);
@@ -148,7 +154,7 @@ export default function PlanSuggestionSheet({
     try {
       // Create plan data for API
       const planData = {
-        title: planTitle,
+        title: planTitle.trim(),
         description: description,
         isAnonymous: isAnonymous,
         date: 'Today, 7:00 PM', // This would be set by the user in a real app
@@ -264,9 +270,10 @@ export default function PlanSuggestionSheet({
                     <TextInput
                       style={styles.input}
                       value={planTitle}
-                      onChangeText={setPlanTitle}
+                      onChangeText={handlePlanTitleChange}
                       placeholder="Movie night? Chill in the park?"
                       placeholderTextColor={Colors.light.secondaryText}
+                      maxLength={MAX_PLAN_TITLE_LENGTH}
                     />
 
                     <Text style={styles.label}>Description (optional)</Text>
