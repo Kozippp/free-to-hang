@@ -1773,18 +1773,44 @@ router.post('/:id/invite', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Only going participants can invite others' });
     }
 
-    // Filter out users already in the plan
+    // Check current participation status for selected users
     const { data: existingParticipants } = await supabase
       .from('plan_participants')
-      .select('user_id')
+      .select('user_id, status')
       .eq('plan_id', id)
       .in('user_id', userIds);
 
-    const existingUserIds = existingParticipants?.map(p => p.user_id) || [];
-    const newUserIds = userIds.filter(uid => !existingUserIds.includes(uid));
+    const reactivatingUserIds =
+      existingParticipants
+        ?.filter(p => p.status === 'declined')
+        .map(p => p.user_id) || [];
 
-    if (newUserIds.length === 0) {
+    const alreadyActiveUserIds =
+      existingParticipants
+        ?.filter(p => p.status !== 'declined')
+        .map(p => p.user_id) || [];
+
+    const newUserIds = userIds.filter(uid => !alreadyActiveUserIds.includes(uid));
+
+    if (newUserIds.length === 0 && reactivatingUserIds.length === 0) {
       return res.status(400).json({ error: 'All selected users are already in the plan' });
+    }
+
+    // Reactivate declined users by moving them back to pending
+    if (reactivatingUserIds.length > 0) {
+      const { error: reactivateError } = await supabase
+        .from('plan_participants')
+        .update({
+          status: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('plan_id', id)
+        .in('user_id', reactivatingUserIds);
+
+      if (reactivateError) {
+        console.error('Error reactivating declined participants:', reactivateError);
+        return res.status(500).json({ error: 'Failed to re-invite some users' });
+      }
     }
 
     // Add new participants as pending
@@ -1805,14 +1831,15 @@ router.post('/:id/invite', requireAuth, async (req, res) => {
     }
 
     // Notify about new participants
-    for (const newUserId of newUserIds) {
+    const invitedUserIds = [...reactivatingUserIds, ...newUserIds];
+    for (const invitedUserId of invitedUserIds) {
       await notifyPlanUpdate(id, 'participant_invited', userId, {
-        invited_user_id: newUserId,
+        invited_user_id: invitedUserId,
         invited_by: userId
       });
     }
 
-    console.log(`✅ Invited ${newUserIds.length} users to plan ${id}`);
+    console.log(`✅ Invited ${newUserIds.length} new users and reactivated ${reactivatingUserIds.length} declined users for plan ${id}`);
 
     // Return updated plan
     const fullPlan = await getPlanWithDetails(id, userId);
