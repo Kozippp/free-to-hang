@@ -139,6 +139,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   // Swipe gesture state
   const { width } = Dimensions.get('window');
   const translateX = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView | null>(null);
   
   // Group participants by status
   const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
@@ -851,6 +852,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         activeOffsetX={[-10, 10]}
         failOffsetX={activeTab === 'Chat' ? [-10, 10000] : undefined}
         failOffsetY={[-10, 10]}
+        simultaneousHandlers={scrollViewRef}
       >
         <Animated.View 
           style={[
@@ -868,6 +870,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         >
           {activeTab === 'Control Panel' && (
             <ScrollView 
+              ref={scrollViewRef}
               style={styles.content}
               contentContainerStyle={styles.contentContainer}
               showsVerticalScrollIndicator={Platform.OS === 'web'}
