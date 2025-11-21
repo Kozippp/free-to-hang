@@ -86,15 +86,20 @@ export default function ActivityModal({
             
             <Text style={styles.modalTitle}>What do you feel like doing?</Text>
             
-            <TextInput
-              style={styles.input}
-              value={activity}
-              onChangeText={handleActivityChange}
-              placeholder="E.g., Coffee, Movie night..."
-              placeholderTextColor={Colors.light.secondaryText}
-              autoFocus={false} // Don't auto-focus the keyboard
-              maxLength={MAX_ACTIVITY_LENGTH}
-            />
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[styles.input, styles.inputWithCounter]}
+                value={activity}
+                onChangeText={handleActivityChange}
+                placeholder="E.g., Coffee, Movie night..."
+                placeholderTextColor={Colors.light.secondaryText}
+                autoFocus={false} // Don't auto-focus the keyboard
+                maxLength={MAX_ACTIVITY_LENGTH}
+              />
+              <Text style={styles.charCount}>
+                {activity.length}/{MAX_ACTIVITY_LENGTH}
+              </Text>
+            </View>
             
             <Text style={styles.suggestionsTitle}>Quick suggestions</Text>
             
@@ -182,6 +187,19 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     backgroundColor: Colors.light.cardBackground,
     color: Colors.light.text,
+  },
+  inputContainer: {
+    position: 'relative',
+  },
+  inputWithCounter: {
+    paddingRight: 80,
+  },
+  charCount: {
+    position: 'absolute',
+    right: 12,
+    top: 50 / 2 - 8,
+    fontSize: 12,
+    color: Colors.light.secondaryText,
   },
   suggestionsTitle: {
     fontSize: 16,

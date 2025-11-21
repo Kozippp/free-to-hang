@@ -267,14 +267,19 @@ export default function PlanSuggestionSheet({
                       <Text style={styles.label}>What's the plan?</Text>
                       <Text style={styles.requiredAsterisk}>*</Text>
                     </View>
-                    <TextInput
-                      style={styles.input}
-                      value={planTitle}
-                      onChangeText={handlePlanTitleChange}
-                      placeholder="Movie night? Chill in the park?"
-                      placeholderTextColor={Colors.light.secondaryText}
-                      maxLength={MAX_PLAN_TITLE_LENGTH}
-                    />
+                    <View style={styles.inputContainer}>
+                      <TextInput
+                        style={[styles.input, styles.inputWithCounter]}
+                        value={planTitle}
+                        onChangeText={handlePlanTitleChange}
+                        placeholder="Movie night? Chill in the park?"
+                        placeholderTextColor={Colors.light.secondaryText}
+                        maxLength={MAX_PLAN_TITLE_LENGTH}
+                      />
+                      <Text style={styles.charCount}>
+                        {planTitle.length}/{MAX_PLAN_TITLE_LENGTH}
+                      </Text>
+                    </View>
 
                     <Text style={styles.label}>Description (optional)</Text>
                     <TextInput
@@ -494,6 +499,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 20,
     backgroundColor: Colors.light.buttonBackground,
+  },
+  inputContainer: {
+    position: 'relative',
+    marginBottom: 20,
+  },
+  inputWithCounter: {
+    paddingRight: 80,
+    marginBottom: 0,
+  },
+  charCount: {
+    position: 'absolute',
+    right: 16,
+    top: 12,
+    fontSize: 12,
+    color: Colors.light.secondaryText,
   },
   textArea: {
     minHeight: 100,
