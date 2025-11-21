@@ -48,6 +48,7 @@ export default function TabLayout() {
     
     // Cleanup when layout unmounts or user signs out
     return () => {
+      if (!isMounted) return; // Prevent double cleanup
       isMounted = false;
       console.log('⏹️ Tab layout cleanup');
       
@@ -60,7 +61,9 @@ export default function TabLayout() {
       
       // Cleanup all chat subscriptions
       const chatStore = useChatStore.getState();
-      Object.keys(chatStore.subscriptions || {}).forEach(planId => {
+      const chatPlanIds = Object.keys(chatStore.subscriptions || {});
+      console.log(`🧹 Cleaning up ${chatPlanIds.length} chat subscriptions`);
+      chatPlanIds.forEach(planId => {
         chatStore.unsubscribeFromChat(planId, { preserveDesired: false });
       });
     };

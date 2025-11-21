@@ -988,6 +988,12 @@ function handleChatChannelStatus(planId: string, status: string) {
   }
 
   if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+    // If we already have a restart scheduled for this plan, ignore duplicate error status
+    if (chatRestartTimeouts[planId]) {
+      console.log(`⏸️ Restart already scheduled for ${planId}, ignoring ${status}`);
+      return;
+    }
+
     if (status === 'CHANNEL_ERROR') {
       console.log(`❌ Chat channel error for plan ${planId}`);
     } else if (status === 'CLOSED') {
@@ -1002,7 +1008,8 @@ function handleChatChannelStatus(planId: string, status: string) {
       return;
     }
 
-    useChatStore.getState().unsubscribeFromChat(planId, { preserveDesired: true });
+    // Don't call unsubscribe here - it triggers CLOSED again causing a loop
+    // Just schedule a restart, which will create a fresh channel
     scheduleChatRestart(planId);
   }
 }
