@@ -59,11 +59,6 @@ export default function PlanParticipants({
             {participant.name}{participant.id === 'current' ? ' (you)' : ''}
           </Text>
         </View>
-        {participant.status === 'declined' && (
-          <View style={styles.declinedBadge}>
-            <Text style={styles.declinedBadgeText}>Can't come</Text>
-          </View>
-        )}
       </View>
     );
   };
@@ -216,17 +211,6 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: 14,
     color: Colors.light.text,
-  },
-  declinedBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: `${Colors.light.destructive}15`,
-  },
-  declinedBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.destructive,
   },
   invitationsSection: {
     marginBottom: 16,
