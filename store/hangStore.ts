@@ -49,8 +49,8 @@ interface HangState {
   loadUserData: () => Promise<void>;
   loadFriends: () => Promise<void>;
   updateUserData: (updates: Partial<{name: string; username: string; vibe: string; avatar_url: string}>) => Promise<boolean>;
-  startRealTimeUpdates: () => void;
-  stopRealTimeUpdates: () => void;
+  startRealTimeUpdates: () => Promise<void>;
+  stopRealTimeUpdates: () => Promise<void>;
 }
 
 // Remove old defaultUser object and create a function instead
@@ -423,7 +423,7 @@ const useHangStore = create<HangState>()(
         }
       },
 
-      startRealTimeUpdates: () => {
+      startRealTimeUpdates: async () => {
         // Guard against parallel starts
         if (isStartingRealtime) {
           console.log('⏸️ Hang real-time already starting - skipping');
@@ -439,8 +439,15 @@ const useHangStore = create<HangState>()(
         }
         if (statusChannel) {
           stopHangHealthCheck();
-          supabase.removeChannel(statusChannel);
+          try {
+            await supabase.removeChannel(statusChannel);
+            console.log('✅ Old hang channel removed successfully');
+          } catch (error) {
+            console.warn('⚠️ Error removing old hang channel:', error);
+          }
           statusChannel = null;
+
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
         if (hangRestartTimeout) {
           clearTimeout(hangRestartTimeout);
@@ -452,10 +459,13 @@ const useHangStore = create<HangState>()(
         get().loadFriends();
         
         console.log('🚀 Starting real-time friend status updates...');
+
+        const channelName = `user_status_changes_${Date.now()}`;
+        console.log(`📡 Creating new hang channel: ${channelName}`);
         
         // Set up real-time subscription for user status changes
         statusChannel = supabase
-          .channel('user_status_changes')
+          .channel(channelName)
           .on(
             'postgres_changes',
             {
@@ -501,7 +511,7 @@ const useHangStore = create<HangState>()(
         }, 10000);
       },
 
-      stopRealTimeUpdates: () => {
+      stopRealTimeUpdates: async () => {
         isStartingRealtime = false; // Release lock
         
         if (refreshInterval) {
@@ -509,7 +519,12 @@ const useHangStore = create<HangState>()(
           refreshInterval = null;
         }
         if (statusChannel) {
-          supabase.removeChannel(statusChannel);
+          try {
+            await supabase.removeChannel(statusChannel);
+            console.log('✅ Hang channel removed in stop');
+          } catch (error) {
+            console.warn('⚠️ Error removing hang channel in stop:', error);
+          }
           statusChannel = null;
         }
         stopHangHealthCheck();
@@ -532,6 +547,7 @@ function handleHangChannelStatus(status: string) {
   console.log('📡 Status channel status:', status);
 
   if (status === 'SUBSCRIBED') {
+    console.log('✅ Hang channel SUBSCRIBED');
     hangRetryAttempts = 0;
     if (hangRestartTimeout) {
       clearTimeout(hangRestartTimeout);
@@ -540,11 +556,17 @@ function handleHangChannelStatus(status: string) {
     return;
   }
 
+  if (status === 'CHANNEL_STATE_CHANGE') {
+    console.log('🔄 Hang channel state changed, current state:', statusChannel?.state);
+    return;
+  }
+
   if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
     if (status === 'CHANNEL_ERROR') {
       console.log('❌ Hang status channel error');
     } else if (status === 'CLOSED') {
       console.log('🔒 Hang status channel closed');
+      console.log('📊 Channel state at close:', statusChannel?.state);
     } else {
       console.log('⏰ Hang status channel timed out');
     }
@@ -571,10 +593,10 @@ function scheduleHangRealtimeRestart() {
     `🔄 Scheduling hang real-time restart in ${delay}ms (attempt ${hangRetryAttempts}/${MAX_HANG_RETRIES})`
   );
 
-  hangRestartTimeout = setTimeout(() => {
+  hangRestartTimeout = setTimeout(async () => {
     hangRestartTimeout = null;
     console.log('♻️ Attempting to restart hang real-time subscriptions...');
-    useHangStore.getState().startRealTimeUpdates();
+    await useHangStore.getState().startRealTimeUpdates();
   }, delay);
 }
 
