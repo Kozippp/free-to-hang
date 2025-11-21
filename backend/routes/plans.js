@@ -16,6 +16,8 @@ if (!supabaseAnonKey) {
   console.warn('🔧 Backend will start but plan creation will fail until this is fixed');
 }
 
+const MAX_PLAN_TITLE_LENGTH = 50;
+
 // Helper function to get user from token
 const getUserFromToken = async (req) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -1167,6 +1169,88 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
     res.json(fullPlan);
   } catch (error) {
     console.error('Error in POST /plans/:id/respond:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /plans/:id - Update plan details (title, description)
+router.put('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const { title, description } = req.body || {};
+
+    const updates = {};
+
+    if (typeof title !== 'undefined') {
+      const normalizedTitle = String(title).trim();
+      if (!normalizedTitle) {
+        return res.status(400).json({ error: 'Title cannot be empty' });
+      }
+      updates.title = normalizedTitle.slice(0, MAX_PLAN_TITLE_LENGTH);
+    }
+
+    if (typeof description !== 'undefined') {
+      updates.description = typeof description === 'string' ? description.trim() : description;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided for update' });
+    }
+
+    const { data: plan, error: planError } = await supabase
+      .from('plans')
+      .select('id, creator_id')
+      .eq('id', id)
+      .single();
+
+    if (planError || !plan) {
+      console.error('Error fetching plan for update:', planError);
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    const isCreator = plan.creator_id === userId;
+
+    const { data: participant, error: participantError } = await supabase
+      .from('plan_participants')
+      .select('status')
+      .eq('plan_id', id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (participantError && participantError.code !== 'PGRST116') {
+      console.error('Error checking participant permissions:', participantError);
+      return res.status(500).json({ error: 'Failed to verify permissions' });
+    }
+
+    const isGoing = participant?.status === 'going';
+
+    if (!isCreator && !isGoing) {
+      return res.status(403).json({ error: 'You do not have permission to edit this plan' });
+    }
+
+    const { data: updatedPlanRow, error: updateError } = await supabase
+      .from('plans')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError || !updatedPlanRow) {
+      console.error('Error updating plan:', updateError);
+      return res.status(500).json({ error: 'Failed to update plan' });
+    }
+
+    const updateType = updates.title ? 'title_updated' : 'plan_updated';
+    await notifyPlanUpdate(id, updateType, userId, { fields: Object.keys(updates) });
+
+    const fullPlan = await getPlanWithDetails(id, userId);
+    res.json(fullPlan);
+  } catch (error) {
+    console.error('Error in PUT /plans/:id:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

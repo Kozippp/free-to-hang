@@ -237,6 +237,22 @@ class PlansService {
     }
   }
 
+  // Update plan details (title, description)
+  async updatePlan(planId: string, payload: { title?: string; description?: string }): Promise<Plan> {
+    try {
+      console.log('✏️ Updating plan:', planId, 'payload:', payload);
+      const updatedPlan = await this.apiRequest(`/plans/${planId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+      console.log('✅ Plan updated successfully:', planId);
+      return updatedPlan;
+    } catch (error) {
+      console.error('❌ Error updating plan:', error);
+      throw error;
+    }
+  }
+
   // Create poll for plan
   async createPoll(planId: string, pollData: CreatePollData): Promise<Plan> {
     try {

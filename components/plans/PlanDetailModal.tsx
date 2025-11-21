@@ -10,14 +10,18 @@ import {
   SafeAreaView,
   TextInput,
   Pressable,
-  Keyboard
+  Keyboard,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { MAX_PLAN_TITLE_LENGTH } from '@/constants/limits';
-import { Plan, ParticipantStatus } from '@/store/plansStore';
+import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 import PlanDetailView from './PlanDetailView';
 import CompletedPlanDetailView from './CompletedPlanDetailView';
+import { useAuth } from '@/contexts/AuthContext';
+import { plansService } from '@/lib/plans-service';
 
 interface PlanDetailModalProps {
   visible: boolean;
@@ -38,11 +42,14 @@ export default function PlanDetailModal({
 }: PlanDetailModalProps) {
   const { width } = Dimensions.get('window');
   const slideAnim = useRef(new Animated.Value(width)).current;
+  const loadPlan = usePlansStore(state => state.loadPlan);
+  const { user: authUser } = useAuth();
   const [headerTitle, setHeaderTitle] = useState(
     plan?.title?.slice(0, MAX_PLAN_TITLE_LENGTH) ?? ''
   );
   const [canEditHeaderTitle, setCanEditHeaderTitle] = useState(false);
   const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
+  const [isSavingHeaderTitle, setIsSavingHeaderTitle] = useState(false);
   const headerInputRef = useRef<TextInput | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   
@@ -84,25 +91,63 @@ export default function PlanDetailModal({
   }, [isEditingHeaderTitle]);
 
   const handleHeaderLongPress = () => {
-    if (!canEditHeaderTitle || isEditingHeaderTitle) {
+    if (!canEditHeaderTitle || isEditingHeaderTitle || isSavingHeaderTitle) {
       return;
     }
     setIsEditingHeaderTitle(true);
   };
 
   const handleHeaderTitleChange = (text: string) => {
+    if (isSavingHeaderTitle) {
+      return;
+    }
     setHeaderTitle(text.slice(0, MAX_PLAN_TITLE_LENGTH));
   };
 
-  const handleHeaderTitleSave = () => {
-    setIsEditingHeaderTitle(false);
+  const handleHeaderTitleSave = async () => {
+    if (!plan || isSavingHeaderTitle) {
+      setIsEditingHeaderTitle(false);
+      return;
+    }
+
+    const trimmedTitle = headerTitle.trim();
+
+    if (!trimmedTitle) {
+      Alert.alert('Title required', 'Please enter a plan title.');
+      setHeaderTitle(plan.title?.slice(0, MAX_PLAN_TITLE_LENGTH) ?? '');
+      setIsEditingHeaderTitle(false);
+      return;
+    }
+
+    if (trimmedTitle === (plan.title || '').trim()) {
+      setHeaderTitle(trimmedTitle.slice(0, MAX_PLAN_TITLE_LENGTH));
+      setIsEditingHeaderTitle(false);
+      return;
+    }
+
+    try {
+      setIsSavingHeaderTitle(true);
+      Keyboard.dismiss();
+      await plansService.updatePlan(plan.id, { title: trimmedTitle });
+      await loadPlan(plan.id, authUser?.id);
+      setHeaderTitle(trimmedTitle.slice(0, MAX_PLAN_TITLE_LENGTH));
+    } catch (error) {
+      console.error('❌ Error updating plan title:', error);
+      const message = error instanceof Error
+        ? error.message
+        : 'Failed to update the plan title. Please try again.';
+      Alert.alert('Title update failed', message);
+      setHeaderTitle(plan.title?.slice(0, MAX_PLAN_TITLE_LENGTH) ?? '');
+    } finally {
+      setIsSavingHeaderTitle(false);
+      setIsEditingHeaderTitle(false);
+    }
   };
 
   const handleDismissHeaderEditing = () => {
     if (!isEditingHeaderTitle) return;
     headerInputRef.current?.blur();
     Keyboard.dismiss();
-    handleHeaderTitleSave();
   };
 
   if (!plan) return null;
@@ -146,7 +191,7 @@ export default function PlanDetailModal({
               style={styles.titleContainer}
               onLongPress={handleHeaderLongPress}
               delayLongPress={1000}
-              activeOpacity={canEditHeaderTitle ? 0.7 : 1}
+              activeOpacity={canEditHeaderTitle && !isSavingHeaderTitle ? 0.7 : 1}
             >
               {isEditingHeaderTitle ? (
                 <View style={styles.headerInputContainer}>
@@ -156,6 +201,7 @@ export default function PlanDetailModal({
                     value={headerTitle}
                     onChangeText={handleHeaderTitleChange}
                     placeholder="Enter plan title"
+                    placeholderTextColor={Colors.light.secondaryText}
                     autoFocus
                     onBlur={handleHeaderTitleSave}
                     onSubmitEditing={handleHeaderTitleSave}
@@ -164,16 +210,25 @@ export default function PlanDetailModal({
                     maxLength={MAX_PLAN_TITLE_LENGTH}
                     multiline={false}
                     numberOfLines={1}
+                    editable={!isSavingHeaderTitle}
+                    selectionColor={Colors.light.primary}
                   />
-                  <Text
-                    style={[
-                      styles.headerCharCount,
-                      headerTitle.length >= MAX_PLAN_TITLE_LENGTH && styles.headerCharCountLimit
-                    ]}
-                    pointerEvents="none"
-                  >
-                    {headerTitle.length}/{MAX_PLAN_TITLE_LENGTH}
-                  </Text>
+                  {isSavingHeaderTitle ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={Colors.light.primary}
+                      style={styles.headerSavingIndicator}
+                    />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.headerCharCount,
+                        headerTitle.length >= MAX_PLAN_TITLE_LENGTH && styles.headerCharCountLimit
+                      ]}
+                    >
+                      {headerTitle.length}/{MAX_PLAN_TITLE_LENGTH}
+                    </Text>
+                  )}
                 </View>
               ) : (
                 <Text 
@@ -253,20 +308,27 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 0,
-    paddingRight: 80,
   },
   headerInputContainer: {
-    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 10,
+    backgroundColor: Colors.light.cardBackground,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   headerCharCount: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
     fontSize: 12,
     color: Colors.light.secondaryText,
+    marginLeft: 8,
   },
   headerCharCountLimit: {
     color: Colors.light.secondary,
     fontWeight: '600',
+  },
+  headerSavingIndicator: {
+    marginLeft: 8,
   },
 });
