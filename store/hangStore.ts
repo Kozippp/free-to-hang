@@ -424,9 +424,9 @@ const useHangStore = create<HangState>()(
       },
 
       startRealTimeUpdates: async () => {
-        // Guard against parallel starts
-        if (isStartingRealtime) {
-          console.log('⏸️ Hang real-time already starting - skipping');
+        // Guard against parallel starts and duplicate subscriptions
+        if (isStartingRealtime || statusChannel) {
+          console.log('⏸️ Hang real-time already running - skipping');
           return;
         }
         

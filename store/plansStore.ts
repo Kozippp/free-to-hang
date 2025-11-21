@@ -1109,6 +1109,12 @@ const usePlansStore = create<PlansState>((set, get) => ({
       console.log('🛑 Plans real-time subscriptions already active');
       return;
     }
+    
+    // If channels exist but status is not subscribed, clean them up
+    if (plansChannel || updatesChannel) {
+      console.log('⚠️ Found orphaned channels - cleaning up');
+      await stopAllRealtimeChannels();
+    }
 
     console.log('🚀 Starting plans real-time updates...');
 
@@ -1118,7 +1124,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       // Stop any existing channels first
       stopPlansHealthCheck();
-      await stopAllRealtimeChannels();
 
       // Load initial data immediately when real-time starts
       console.log('📊 Loading initial plans data...');

@@ -524,15 +524,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
   // Start real-time updates
   startRealTimeUpdates: async () => {
-    if (isStartingRealTime) {
-      console.log('🛑 Real-time subscription already starting');
+    if (isStartingRealTime || friendRequestsChannel) {
+      console.log('🛑 Friend real-time already running - skipping');
       return;
-    }
-
-    // Reset subscription state if there was an error
-    if (isSubscribed && !friendRequestsChannel) {
-      console.log('🔄 Resetting subscription state due to missing channel');
-      isSubscribed = false;
     }
 
     isStartingRealTime = true;

@@ -125,18 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setNavigationReady(false);
           }
 
-          // Restart realtime subscriptions after sign-in
-          console.log('🔄 Restarting realtime subscriptions after sign-in');
-          setTimeout(() => {
-            try {
-              startHangRealtime();
-              startPlansRealtime(session.user.id);
-              startFriendsRealtime(session.user.id);
-              console.log('✅ Realtime subscriptions restarted after sign-in');
-            } catch (error) {
-              console.error('❌ Error restarting realtime subscriptions:', error);
-            }
-          }, 1000); // Small delay to ensure auth state is stable
+          // Note: Realtime subscriptions are managed by individual stores
+          // and will start automatically when needed. No manual restart required.
         }
         
         if (event === 'SIGNED_OUT') {
