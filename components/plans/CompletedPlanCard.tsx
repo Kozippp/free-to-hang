@@ -3,6 +3,8 @@ import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Users, Check, X, Eye } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan, ParticipantStatus } from '@/store/plansStore';
+import useHangStore from '@/store/hangStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CompletedPlanCardProps {
   plan: Plan;
@@ -11,14 +13,34 @@ interface CompletedPlanCardProps {
 }
 
 export default function CompletedPlanCard({ plan, onPress, userAttended }: CompletedPlanCardProps) {
+  const { user: hangUser } = useHangStore();
+  const { user: authUser } = useAuth();
+
   // Get participants who actually joined (going status)
   const joinedParticipants = plan.participants.filter(p => p.status === 'going');
 
-  const currentUserParticipant = plan.participants.find(participant => participant.id === 'current');
+  const userIdCandidates = [
+    authUser?.id,
+    hangUser?.id,
+    'current',
+  ].filter(Boolean) as string[];
+
+  const currentUserParticipant = plan.participants.find(participant =>
+    userIdCandidates.includes(participant.id)
+  );
 
   const resolveUserStatus = (): ParticipantStatus => {
     if (currentUserParticipant?.status) {
       return currentUserParticipant.status;
+    }
+
+    const attendanceRecord = plan.attendanceRecord;
+    if (attendanceRecord) {
+      for (const candidate of userIdCandidates) {
+        if (candidate in attendanceRecord) {
+          return attendanceRecord[candidate] ? 'going' : 'declined';
+        }
+      }
     }
 
     if (userAttended === true) {
