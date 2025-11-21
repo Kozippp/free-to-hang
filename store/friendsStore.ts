@@ -54,6 +54,11 @@ interface FriendsState {
 let friendRequestsChannel: any = null;
 let isStartingRealTime = false;
 let isSubscribed = false;
+let friendRestartTimeout: ReturnType<typeof setTimeout> | null = null;
+let friendRetryAttempts = 0;
+const FRIEND_RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
+const MAX_FRIEND_RETRIES = 5;
+let friendHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 // Throttling for real-time updates
 let lastUpdateTime = 0;
@@ -531,13 +536,19 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     }
 
     isStartingRealTime = true;
-    
+
     try {
       console.log('🚀 Starting friend real-time updates...');
+      if (friendRestartTimeout) {
+        clearTimeout(friendRestartTimeout);
+        friendRestartTimeout = null;
+      }
+      friendRetryAttempts = 0;
       
       // Stop any existing channel first
       if (friendRequestsChannel) {
         console.log('🛑 Stopping existing friend real-time subscription...');
+        stopFriendHealthCheck();
         await supabase.removeChannel(friendRequestsChannel);
         friendRequestsChannel = null;
         isSubscribed = false;
@@ -601,24 +612,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           }
         )
         .subscribe((status) => {
-          console.log('📡 Friend requests channel status:', status);
-          
-          if (status === 'SUBSCRIBED') {
-            isSubscribed = true;
-            console.log('✅ Friend real-time subscription started');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Friend real-time channel error');
-            isSubscribed = false;
-            friendRequestsChannel = null;
-          } else if (status === 'CLOSED') {
-            isSubscribed = false;
-            friendRequestsChannel = null;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Friend real-time subscription timed out');
-            isSubscribed = false;
-            friendRequestsChannel = null;
-          }
+          handleFriendChannelStatus(status);
         });
+      startFriendHealthCheck();
 
     } catch (error) {
       console.error('❌ Error starting friend real-time updates:', error);
@@ -637,7 +633,12 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       supabase.removeChannel(friendRequestsChannel);
       friendRequestsChannel = null;
     }
-    
+    if (friendRestartTimeout) {
+      clearTimeout(friendRestartTimeout);
+      friendRestartTimeout = null;
+    }
+    friendRetryAttempts = 0;
+    stopFriendHealthCheck();
     isSubscribed = false;
     isStartingRealTime = false;
     console.log('✅ Friend real-time updates stopped');
@@ -656,5 +657,106 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     console.log('✅ Force refresh completed');
   },
 }));
+
+function handleFriendChannelStatus(status: string) {
+  console.log('📡 Friend requests channel status:', status);
+
+  if (status === 'SUBSCRIBED') {
+    isSubscribed = true;
+    friendRetryAttempts = 0;
+    if (friendRestartTimeout) {
+      clearTimeout(friendRestartTimeout);
+      friendRestartTimeout = null;
+    }
+    console.log('✅ Friend real-time subscription started');
+    return;
+  }
+
+  if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+    if (status === 'CHANNEL_ERROR') {
+      console.log('❌ Friend real-time channel error');
+    } else if (status === 'CLOSED') {
+      console.log('🔒 Friend real-time channel closed');
+    } else {
+      console.log('⏰ Friend real-time subscription timed out');
+    }
+
+    isSubscribed = false;
+    friendRequestsChannel = null;
+    scheduleFriendRealtimeRestart();
+  }
+}
+
+function scheduleFriendRealtimeRestart() {
+  if (friendRetryAttempts >= MAX_FRIEND_RETRIES) {
+    console.error('❌ Friend real-time subscription failed after maximum retries');
+    return;
+  }
+
+  const delay =
+    FRIEND_RETRY_DELAYS_MS[Math.min(friendRetryAttempts, FRIEND_RETRY_DELAYS_MS.length - 1)];
+  const attemptNumber = friendRetryAttempts + 1;
+  friendRetryAttempts = attemptNumber;
+
+  if (friendRestartTimeout) {
+    clearTimeout(friendRestartTimeout);
+  }
+
+  console.log(
+    `🔄 Scheduling friend real-time restart in ${delay}ms (attempt ${attemptNumber}/${MAX_FRIEND_RETRIES})`
+  );
+
+  friendRestartTimeout = setTimeout(() => {
+    console.log('♻️ Attempting to restart friend real-time subscriptions...');
+    friendRestartTimeout = null;
+
+    useFriendsStore
+      .getState()
+      .startRealTimeUpdates()
+      .catch((error) => {
+        console.error('❌ Error restarting friend real-time updates:', error);
+      });
+  }, delay);
+}
+
+function startFriendHealthCheck() {
+  if (friendHealthCheckInterval) {
+    return;
+  }
+
+  console.log('💓 Starting friend health check system...');
+  let failedChecks = 0;
+
+  friendHealthCheckInterval = setInterval(() => {
+    const channelState = friendRequestsChannel?.state;
+
+    if (channelState !== 'joined') {
+      failedChecks += 1;
+      console.log(
+        `⚠️ Friend health check warning (state: ${channelState ?? 'null'}, failures: ${failedChecks})`
+      );
+
+      if (failedChecks >= 2) {
+        console.log('🔄 Friend health check triggering restart...');
+        useFriendsStore
+          .getState()
+          .startRealTimeUpdates()
+          .catch((error) => console.error('❌ Error restarting friend real-time via health check:', error));
+        failedChecks = 0;
+      }
+    } else if (failedChecks > 0) {
+      console.log('✅ Friend real-time subscription healthy again');
+      failedChecks = 0;
+    }
+  }, 30000);
+}
+
+function stopFriendHealthCheck() {
+  if (friendHealthCheckInterval) {
+    clearInterval(friendHealthCheckInterval);
+    friendHealthCheckInterval = null;
+    console.log('💓 Friend health check stopped');
+  }
+}
 
 export default useFriendsStore; 

@@ -78,7 +78,7 @@ interface ChatState {
   getReplyingTo: (planId: string) => ChatMessage | null;
   // Real-time subscription
   subscribeToChat: (planId: string) => void;
-  unsubscribeFromChat: (planId: string) => void;
+  unsubscribeFromChat: (planId: string, options?: { preserveDesired?: boolean }) => void;
   // Helper actions
   addMessageToStore: (planId: string, message: ChatMessage) => void;
   updateMessageInStore: (planId: string, messageId: string, updates: Partial<ChatMessage>) => void;
@@ -131,6 +131,16 @@ const getAuthToken = async () => {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token;
 };
+
+const MAX_CHAT_CHANNEL_RETRIES = 5;
+const CHAT_RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
+const chatRetryAttempts: Record<string, number> = {};
+const chatRestartTimeouts: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
+const desiredChatSubscriptions = new Set<string>();
+let chatHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
+const chatHealthFailures: Record<string, number> = {};
+const MAX_CHAT_CHANNELS = 3;
+const activeChatChannelOrder: string[] = [];
 
 const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
@@ -678,6 +688,22 @@ const useChatStore = create<ChatState>((set, get) => ({
   // ============================================
   subscribeToChat: (planId: string) => {
     const state = get();
+    desiredChatSubscriptions.add(planId);
+    clearChatRestart(planId);
+    chatRetryAttempts[planId] = 0;
+    ensureChatHealthCheckRunning();
+
+    const currentSubscriptions = Object.keys(state.subscriptions).length;
+    if (currentSubscriptions >= MAX_CHAT_CHANNELS) {
+      const oldestPlanId = activeChatChannelOrder.shift();
+      if (oldestPlanId) {
+        console.log(
+          `🗑️ Max chat channels reached (${MAX_CHAT_CHANNELS}) - unsubscribing from ${oldestPlanId}`
+        );
+        desiredChatSubscriptions.delete(oldestPlanId);
+        get().unsubscribeFromChat(oldestPlanId);
+      }
+    }
     
     // Don't subscribe twice
     if (state.subscriptions[planId]) {
@@ -863,7 +889,7 @@ const useChatStore = create<ChatState>((set, get) => ({
         }
       )
       .subscribe((status) => {
-        console.log(`📡 Chat subscription status for ${planId}:`, status);
+        handleChatChannelStatus(planId, status);
       });
     
     // Store subscription
@@ -873,12 +899,13 @@ const useChatStore = create<ChatState>((set, get) => ({
         [planId]: channel
       }
     }));
+    addActiveChatPlan(planId);
   },
   
   // ============================================
   // UNSUBSCRIBE FROM CHAT
   // ============================================
-  unsubscribeFromChat: (planId: string) => {
+  unsubscribeFromChat: (planId: string, options?: { preserveDesired?: boolean }) => {
     const state = get();
     const channel = state.subscriptions[planId];
     
@@ -891,6 +918,14 @@ const useChatStore = create<ChatState>((set, get) => ({
         return { subscriptions: remainingSubscriptions };
       });
     }
+    
+    if (!options?.preserveDesired) {
+      desiredChatSubscriptions.delete(planId);
+    }
+    clearChatRestart(planId);
+    delete chatRetryAttempts[planId];
+    stopChatHealthCheckIfIdle();
+    removeActiveChatPlan(planId);
   },
   
   // ============================================
@@ -946,5 +981,140 @@ const useChatStore = create<ChatState>((set, get) => ({
     }));
   }
 }));
+
+function handleChatChannelStatus(planId: string, status: string) {
+  console.log(`📡 Chat subscription status for ${planId}:`, status);
+
+  if (status === 'SUBSCRIBED') {
+    chatRetryAttempts[planId] = 0;
+    clearChatRestart(planId);
+    return;
+  }
+
+  if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+    if (status === 'CHANNEL_ERROR') {
+      console.log(`❌ Chat channel error for plan ${planId}`);
+    } else if (status === 'CLOSED') {
+      console.log(`🔒 Chat channel closed for plan ${planId}`);
+    } else {
+      console.log(`⏰ Chat channel timed out for plan ${planId}`);
+    }
+
+    useChatStore.getState().unsubscribeFromChat(planId, { preserveDesired: true });
+
+    if (desiredChatSubscriptions.has(planId)) {
+      scheduleChatRestart(planId);
+    } else {
+      console.log(`⚠️ Skipping auto-restart for plan ${planId} - no longer desired`);
+    }
+  }
+}
+
+function scheduleChatRestart(planId: string) {
+  if (!desiredChatSubscriptions.has(planId)) {
+    return;
+  }
+
+  const attempts = chatRetryAttempts[planId] || 0;
+  if (attempts >= MAX_CHAT_CHANNEL_RETRIES) {
+    console.error(`❌ Chat channel for plan ${planId} failed after maximum retries`);
+    return;
+  }
+
+  const delay = CHAT_RETRY_DELAYS_MS[Math.min(attempts, CHAT_RETRY_DELAYS_MS.length - 1)];
+  chatRetryAttempts[planId] = attempts + 1;
+
+  clearChatRestart(planId);
+
+  console.log(
+    `🔄 Scheduling chat channel restart for plan ${planId} in ${delay}ms (attempt ${chatRetryAttempts[planId]}/${MAX_CHAT_CHANNEL_RETRIES})`
+  );
+
+  chatRestartTimeouts[planId] = setTimeout(() => {
+    delete chatRestartTimeouts[planId];
+
+    if (!desiredChatSubscriptions.has(planId)) {
+      console.log(`⚠️ Cancelled chat restart for plan ${planId} - no longer desired`);
+      return;
+    }
+
+    console.log(`♻️ Attempting to restart chat subscription for plan ${planId}`);
+    useChatStore.getState().subscribeToChat(planId);
+  }, delay);
+}
+
+function clearChatRestart(planId: string) {
+  const timeout = chatRestartTimeouts[planId];
+  if (timeout) {
+    clearTimeout(timeout);
+  }
+
+  delete chatRestartTimeouts[planId];
+}
+
+function ensureChatHealthCheckRunning() {
+  if (chatHealthCheckInterval) {
+    return;
+  }
+
+  console.log('💓 Starting chat health check system...');
+  chatHealthCheckInterval = setInterval(runChatHealthCheck, 30000);
+}
+
+function runChatHealthCheck() {
+  const { subscriptions } = useChatStore.getState();
+  const planIds = Object.keys(subscriptions);
+
+  if (planIds.length === 0) {
+    stopChatHealthCheckIfIdle();
+    return;
+  }
+
+  planIds.forEach((planId) => {
+    const channel = subscriptions[planId];
+    const channelState = channel?.state;
+
+    if (channelState !== 'joined') {
+      chatHealthFailures[planId] = (chatHealthFailures[planId] || 0) + 1;
+      console.log(
+        `⚠️ Chat health check warning for plan ${planId} (state: ${channelState ?? 'null'}, failures: ${chatHealthFailures[planId]})`
+      );
+
+      if (chatHealthFailures[planId] >= 2) {
+        console.log(`🔄 Chat health check restarting subscription for plan ${planId}`);
+        useChatStore.getState().unsubscribeFromChat(planId, { preserveDesired: true });
+        scheduleChatRestart(planId);
+        chatHealthFailures[planId] = 0;
+      }
+    } else if (chatHealthFailures[planId]) {
+      console.log(`✅ Chat channel healthy again for plan ${planId}`);
+      chatHealthFailures[planId] = 0;
+    }
+  });
+}
+
+function stopChatHealthCheckIfIdle() {
+  const { subscriptions } = useChatStore.getState();
+  if (chatHealthCheckInterval && Object.keys(subscriptions).length === 0) {
+    clearInterval(chatHealthCheckInterval);
+    chatHealthCheckInterval = null;
+    console.log('💓 Chat health check stopped - no active chat subscriptions');
+  }
+}
+
+function addActiveChatPlan(planId: string) {
+  const existingIndex = activeChatChannelOrder.indexOf(planId);
+  if (existingIndex !== -1) {
+    activeChatChannelOrder.splice(existingIndex, 1);
+  }
+  activeChatChannelOrder.push(planId);
+}
+
+function removeActiveChatPlan(planId: string) {
+  const index = activeChatChannelOrder.indexOf(planId);
+  if (index !== -1) {
+    activeChatChannelOrder.splice(index, 1);
+  }
+}
 
 export default useChatStore; 

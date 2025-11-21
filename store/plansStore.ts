@@ -55,6 +55,37 @@ export interface Plan {
   attendanceRecord?: Record<string, boolean>; // Track attendance for completed plans
 }
 
+type ChannelConnectionState = 'connected' | 'disconnected' | 'connecting' | null;
+
+interface ChannelStatus {
+  state: ChannelConnectionState;
+  lastError: string | null;
+}
+
+type PlansChannelName = 'plans' | 'plan_updates';
+
+interface SubscriptionMetrics {
+  totalConnections: number;
+  totalDisconnections: number;
+  totalReconnects: number;
+  failedReconnects: number;
+  lastConnectionTime: string | null;
+  lastDisconnectionTime: string | null;
+  averageReconnectTime: number;
+}
+
+const subscriptionMetrics: SubscriptionMetrics = {
+  totalConnections: 0,
+  totalDisconnections: 0,
+  totalReconnects: 0,
+  failedReconnects: 0,
+  lastConnectionTime: null,
+  lastDisconnectionTime: null,
+  averageReconnectTime: 0
+};
+const reconnectMeasurementStart: Record<string, number> = {};
+let reconnectSampleCount = 0;
+
 // Helper function to transform API plan to store format
 const transformPlanForStore = (plan: any, currentUserId: string): Plan => {
   const userParticipant = plan.participants.find((p: any) => p.id === currentUserId);
@@ -109,6 +140,15 @@ interface PlansState {
   completedPlans: Plan[]; // computed from plans
   isLoading: boolean;
   currentUserId?: string;
+  subscriptionStatus: {
+    isSubscribed: boolean;
+    lastCheckTime: string | null;
+    retryAttempts: Record<string, number>;
+    channels: {
+      plans: ChannelStatus;
+      plan_updates: ChannelStatus;
+    };
+  };
 
   // API Actions
   loadPlans: (userId?: string) => Promise<void>;
@@ -122,6 +162,24 @@ interface PlansState {
   startRealTimeUpdates: (userId: string) => Promise<void>;
   stopRealTimeUpdates: () => void;
   checkAndRestartSubscriptions: (userId: string) => Promise<void>;
+  updateChannelStatus: (
+    channel: 'plans' | 'plan_updates',
+    state: ChannelConnectionState,
+    error?: string
+  ) => void;
+  setSubscriptionActive: (active: boolean) => void;
+  setChannelRetryAttempt: (channel: string, attempts: number) => void;
+  recordHealthCheck: () => void;
+  getSubscriptionDebugInfo: () => {
+    isSubscribed: boolean;
+    channels: PlansState['subscriptionStatus']['channels'];
+    metrics: SubscriptionMetrics;
+    activeChannels: {
+      plans: boolean;
+      updates: boolean;
+    };
+    timestamp: string;
+  };
 
   // Actions
   markAsRead: (planId: string) => void;
@@ -168,25 +226,18 @@ interface PlansState {
 
 // Global variables for real-time subscriptions
 let plansChannel: any = null;
-let participantsChannel: any = null;
-let pollsChannel: any = null;
-let pollOptionsChannel: any = null;
-let pollVotesChannel: any = null;
-let invitationPollsChannel: any = null;
-let invitationPollVotesChannel: any = null;
 let updatesChannel: any = null;
-let attendanceChannel: any = null;
-let isSubscribed = false;
 
-// Debouncing for real-time updates to prevent rate limiting
-let plansRefreshTimeout: NodeJS.Timeout | null = null;
-let participantsRefreshTimeout: NodeJS.Timeout | null = null;
-let pollsRefreshTimeout: NodeJS.Timeout | null = null;
-let invitationPollsRefreshTimeout: NodeJS.Timeout | null = null;
-let pollVotesRefreshTimeout: NodeJS.Timeout | null = null;
+// Debouncing map for per-plan refresh control
+const planRefreshTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
+let plansHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
+const lastPlanRefreshCallTimes: Record<string, number> = {};
+const MIN_TIME_BETWEEN_PLAN_CALLS = 500;
 
-// Track which polls are currently being updated to prevent duplicate requests
-let updatingPolls = new Set<string>();
+// Reconnection tracking
+const MAX_CHANNEL_RETRIES = 5;
+const RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
+const retryAttempts: Record<string, number> = {};
 
 const usePlansStore = create<PlansState>((set, get) => ({
   plans: {},
@@ -195,6 +246,70 @@ const usePlansStore = create<PlansState>((set, get) => ({
   completedPlans: [],
   isLoading: false,
   currentUserId: undefined,
+  subscriptionStatus: {
+    isSubscribed: false,
+    lastCheckTime: null,
+    retryAttempts: {},
+    channels: {
+      plans: { state: null, lastError: null },
+      plan_updates: { state: null, lastError: null }
+    }
+  },
+  updateChannelStatus: (channel, state, error) => {
+    set((currentState) => ({
+      subscriptionStatus: {
+        ...currentState.subscriptionStatus,
+        lastCheckTime: new Date().toISOString(),
+        channels: {
+          ...currentState.subscriptionStatus.channels,
+          [channel]: {
+            state,
+            lastError: error ?? null
+          }
+        }
+      }
+    }));
+  },
+  setSubscriptionActive: (active) => {
+    set((currentState) => ({
+      subscriptionStatus: {
+        ...currentState.subscriptionStatus,
+        isSubscribed: active
+      }
+    }));
+  },
+  setChannelRetryAttempt: (channel, attempts) => {
+    set((currentState) => ({
+      subscriptionStatus: {
+        ...currentState.subscriptionStatus,
+        retryAttempts: {
+          ...currentState.subscriptionStatus.retryAttempts,
+          [channel]: attempts
+        }
+      }
+    }));
+  },
+  recordHealthCheck: () => {
+    set((currentState) => ({
+      subscriptionStatus: {
+        ...currentState.subscriptionStatus,
+        lastCheckTime: new Date().toISOString()
+      }
+    }));
+  },
+  getSubscriptionDebugInfo: () => {
+    const state = get();
+    return {
+      isSubscribed: state.subscriptionStatus.isSubscribed,
+      channels: state.subscriptionStatus.channels,
+      metrics: subscriptionMetrics,
+      activeChannels: {
+        plans: !!plansChannel,
+        updates: !!updatesChannel
+      },
+      timestamp: new Date().toISOString()
+    };
+  },
 
   // Load single plan from API
   loadPlan: async (planId: string, userId?: string) => {
@@ -988,292 +1103,87 @@ const usePlansStore = create<PlansState>((set, get) => ({
     });
   },
   
-  // Real-time subscriptions - separate channels for each table
+  // Real-time subscriptions - consolidated channels
   startRealTimeUpdates: async (userId: string) => {
-    if (isSubscribed) {
+    if (get().subscriptionStatus.isSubscribed) {
       console.log('🛑 Plans real-time subscriptions already active');
       return;
     }
 
-    console.log('🚀 Starting plans real-time updates with separate channels...');
+    console.log('🚀 Starting plans real-time updates...');
 
     try {
       // Remember current user for filtering
       set({ currentUserId: userId });
 
       // Stop any existing channels first
+      stopPlansHealthCheck();
       await stopAllRealtimeChannels();
 
       // Load initial data immediately when real-time starts
       console.log('📊 Loading initial plans data...');
       await get().loadPlans(userId);
 
-      // Get user's plans for filtering other subscriptions
-      const userPlans = await plansService.getPlans();
-      const userPlanIds = userPlans.map(plan => plan.id);
-
       // 0. PLANS CHANNEL - Listen for new plans (main table INSERT events)
-      plansChannel = supabase
-        .channel(`plans_channel_${userId}_${Date.now()}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'plans'
-          },
-          (payload) => {
-            console.log('🆕 New plan INSERT event:', payload);
-            handlePlansInsert(payload, userId);
-          }
-        )
-        .subscribe((status) => {
-          console.log('📡 Plans channel status:', status);
-
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Plans channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Plans channel error - marking as unsubscribed');
-            isSubscribed = false;
-            plansChannel = null;
-          } else if (status === 'CLOSED') {
-            console.log('🔒 Plans channel closed - marking as unsubscribed');
-            isSubscribed = false;
-            plansChannel = null;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Plans channel timed out - marking as unsubscribed');
-            isSubscribed = false;
-            plansChannel = null;
-          }
-        });
+      plansChannel = createChannelWithRetry(
+        'plans',
+        `plans_channel_${userId}_${Date.now()}`,
+        (channel) =>
+          channel.on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'plans'
+            },
+            (payload: any) => {
+              console.log('🆕 New plan INSERT event:', payload);
+              handlePlansInsert(payload, userId);
+            }
+          ),
+        () => {
+          plansChannel = null;
+        },
+        userId
+      );
 
       // 1. PLAN UPDATES CHANNEL - The main notification system
-      updatesChannel = supabase
-        .channel(`plan_updates_channel_${userId}_${Date.now()}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'plan_updates'
-          },
-          (payload) => {
-            console.log('📢 Plan update notification:', payload);
-            handlePlanUpdateNotification(payload, userId);
-          }
-        )
-        .subscribe((status) => {
-          console.log('📡 Plan updates channel status:', status);
+      updatesChannel = createChannelWithRetry(
+        'plan_updates',
+        `plan_updates_channel_${userId}_${Date.now()}`,
+        (channel) =>
+          channel.on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'plan_updates'
+            },
+            (payload: any) => {
+              console.log('📢 Plan update notification:', payload);
+              handlePlanUpdateNotification(payload, userId);
+            }
+          ),
+        () => {
+          updatesChannel = null;
+        },
+        userId
+      );
 
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Plan updates channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Plan updates channel error - marking as unsubscribed');
-            isSubscribed = false;
-            updatesChannel = null;
-          } else if (status === 'CLOSED') {
-            console.log('🔒 Plan updates channel closed - marking as unsubscribed');
-            isSubscribed = false;
-            updatesChannel = null;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Plan updates channel timed out - marking as unsubscribed');
-            isSubscribed = false;
-            updatesChannel = null;
-          }
-        });
-
-      // 2. PARTICIPANTS CHANNEL - Listen for participant changes in user's plans
-      participantsChannel = supabase
-        .channel(`participants_channel_${userId}_${Date.now()}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'plan_participants'
-          },
-          (payload) => {
-            console.log('👥 Participants table change:', payload);
-            handleParticipantsChange(payload, userId);
-          }
-        )
-        .subscribe((status) => {
-          console.log('📡 Participants channel status:', status);
-
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Participants channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Participants channel error - marking as unsubscribed');
-            isSubscribed = false;
-            participantsChannel = null;
-          } else if (status === 'CLOSED') {
-            console.log('🔒 Participants channel closed - marking as unsubscribed');
-            isSubscribed = false;
-            participantsChannel = null;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Participants channel timed out - marking as unsubscribed');
-            isSubscribed = false;
-            participantsChannel = null;
-          }
-        });
-
-      // 3. POLLS CHANNEL - Listen for polls in user's plans
-      pollsChannel = supabase
-        .channel(`polls_channel_${userId}_${Date.now()}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'plan_polls'
-          },
-          (payload) => {
-            console.log('📊 Polls table change:', payload);
-            handlePollsChange(payload, userId);
-          }
-        )
-        .subscribe((status) => {
-          console.log('📡 Polls channel status:', status);
-
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Polls channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Polls channel error - marking as unsubscribed');
-            isSubscribed = false;
-            pollsChannel = null;
-          } else if (status === 'CLOSED') {
-            console.log('🔒 Polls channel closed - marking as unsubscribed');
-            isSubscribed = false;
-            pollsChannel = null;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Polls channel timed out - marking as unsubscribed');
-            isSubscribed = false;
-            pollsChannel = null;
-          }
-        });
-
-      // 4. POLL VOTES CHANNEL - Listen for vote changes
-      pollVotesChannel = supabase
-        .channel(`poll_votes_channel_${userId}_${Date.now()}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'plan_poll_votes'
-          },
-          (payload) => {
-            console.log('🗳️ Poll votes change:', payload);
-            handlePollVotesChange(payload, userId);
-          }
-        )
-        .subscribe((status) => {
-          console.log('📡 Poll votes channel status:', status);
-
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Poll votes channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Poll votes channel error - marking as unsubscribed');
-            isSubscribed = false;
-            pollVotesChannel = null;
-          } else if (status === 'CLOSED') {
-            console.log('🔒 Poll votes channel closed - marking as unsubscribed');
-            isSubscribed = false;
-            pollVotesChannel = null;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Poll votes channel timed out - marking as unsubscribed');
-            isSubscribed = false;
-            pollVotesChannel = null;
-          }
-        });
-
-      // 5. INVITATION POLLS CHANNEL - Listen for invitation poll changes
-      invitationPollsChannel = supabase
-        .channel(`invitation_polls_channel_${userId}_${Date.now()}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'invitation_polls'
-          },
-          (payload) => {
-            console.log('📊 Invitation polls change:', payload);
-            handleInvitationPollVotesChange(payload, userId);
-          }
-        )
-        .subscribe((status) => {
-          console.log('📡 Invitation polls channel status:', status);
-
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Invitation polls channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Invitation polls channel error - marking as unsubscribed');
-            isSubscribed = false;
-            invitationPollsChannel = null;
-          } else if (status === 'CLOSED') {
-            console.log('🔒 Invitation polls channel closed - marking as unsubscribed');
-            isSubscribed = false;
-            invitationPollsChannel = null;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Invitation polls channel timed out - marking as unsubscribed');
-            isSubscribed = false;
-            invitationPollsChannel = null;
-          }
-        });
-
-      // 6. INVITATION POLL VOTES CHANNEL - Listen for invitation poll vote changes
-      invitationPollVotesChannel = supabase
-        .channel(`invitation_poll_votes_channel_${userId}_${Date.now()}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'invitation_poll_votes'
-          },
-          (payload) => {
-            console.log('🗳️ Invitation poll votes change:', payload);
-            handleInvitationPollVotesChange(payload, userId);
-          }
-        )
-        .subscribe((status) => {
-          console.log('📡 Invitation poll votes channel status:', status);
-
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Invitation poll votes channel subscribed successfully');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.log('❌ Invitation poll votes channel error - marking as unsubscribed');
-            isSubscribed = false;
-            invitationPollVotesChannel = null;
-          } else if (status === 'CLOSED') {
-            console.log('🔒 Invitation poll votes channel closed - marking as unsubscribed');
-            isSubscribed = false;
-            invitationPollVotesChannel = null;
-          } else if (status === 'TIMED_OUT') {
-            console.log('⏰ Invitation poll votes channel timed out - marking as unsubscribed');
-            isSubscribed = false;
-            invitationPollVotesChannel = null;
-          }
-        });
+      startPlansHealthCheck(userId);
 
       // Wait a moment for all subscriptions to establish
       setTimeout(() => {
-        isSubscribed = true;
+        usePlansStore.getState().setSubscriptionActive(true);
         console.log('✅ Plans real-time subscriptions started successfully!');
         console.log('🔥 Listening for:');
         console.log('  🆕 plans - new plan INSERT events');
         console.log('  📢 plan_updates - main notification system');
-        console.log('  👥 participants - status changes in user plans');
-        console.log('  📊 polls - new polls in user plans');
-        console.log('  🗳️ poll_votes - vote changes');
-        console.log('  📊 invitation_polls - invitation poll changes');
-        console.log('  🗳️ invitation_poll_votes - invitation poll vote changes');
       }, 1000);
 
     } catch (error) {
       console.error('❌ Error starting plans real-time updates:', error);
-      isSubscribed = false;
+      usePlansStore.getState().setSubscriptionActive(false);
       await stopAllRealtimeChannels();
     }
   },
@@ -1281,26 +1191,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
   stopRealTimeUpdates: () => {
     console.log('🛑 Stopping all plans real-time updates...');
 
-    // Clear all debounced timeouts
-    if (plansRefreshTimeout) {
-      clearTimeout(plansRefreshTimeout);
-      plansRefreshTimeout = null;
-    }
-    if (participantsRefreshTimeout) {
-      clearTimeout(participantsRefreshTimeout);
-      participantsRefreshTimeout = null;
-    }
-    if (pollsRefreshTimeout) {
-      clearTimeout(pollsRefreshTimeout);
-      pollsRefreshTimeout = null;
-    }
-    if (pollVotesRefreshTimeout) {
-      clearTimeout(pollVotesRefreshTimeout);
-      pollVotesRefreshTimeout = null;
-    }
-
-    // Clear updating polls set
-    updatingPolls.clear();
+    // Clear all per-plan debounced timeouts
+    clearAllPlanRefreshTimeouts();
+    stopPlansHealthCheck();
 
     stopAllRealtimeChannels();
     console.log('✅ All plans real-time updates stopped');
@@ -1310,7 +1203,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.log('🔍 Checking plans real-time subscriptions status...');
 
     // If already subscribed and all channels exist, no need to restart
-    if (isSubscribed && plansChannel && updatesChannel && participantsChannel && pollsChannel && pollVotesChannel && invitationPollsChannel && invitationPollVotesChannel) {
+    if (get().subscriptionStatus.isSubscribed && plansChannel && updatesChannel) {
       console.log('✅ All plans real-time subscriptions are active');
       return;
     }
@@ -1318,24 +1211,10 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.log('🔄 Plans subscriptions missing or failed - restarting...');
 
     // Clear any pending timeouts
-    if (plansRefreshTimeout) {
-      clearTimeout(plansRefreshTimeout);
-      plansRefreshTimeout = null;
-    }
-    if (participantsRefreshTimeout) {
-      clearTimeout(participantsRefreshTimeout);
-      participantsRefreshTimeout = null;
-    }
-    if (pollsRefreshTimeout) {
-      clearTimeout(pollsRefreshTimeout);
-      pollsRefreshTimeout = null;
-    }
-    if (pollVotesRefreshTimeout) {
-      clearTimeout(pollVotesRefreshTimeout);
-      pollVotesRefreshTimeout = null;
-    }
+    clearAllPlanRefreshTimeouts();
 
     // Stop any existing channels first
+    stopPlansHealthCheck();
     await stopAllRealtimeChannels();
 
     // Restart subscriptions
@@ -1345,22 +1224,205 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
 // Helper function to stop all realtime channels
 async function stopAllRealtimeChannels() {
-  const channels = [plansChannel, updatesChannel, participantsChannel, pollsChannel, pollVotesChannel, invitationPollsChannel, invitationPollVotesChannel];
-  const channelNames = ['plans', 'plan_updates', 'participants', 'polls', 'poll_votes', 'invitation_polls', 'invitation_poll_votes'];
+  const channelEntries: Array<[string, any]> = [
+    ['plans', plansChannel],
+    ['plan_updates', updatesChannel],
+  ];
 
-  for (let i = 0; i < channels.length; i++) {
-    if (channels[i]) {
-      try {
-        await supabase.removeChannel(channels[i]);
-        console.log(`🛑 Stopped ${channelNames[i]} channel`);
-      } catch (error) {
-        console.error(`❌ Error stopping ${channelNames[i]} channel:`, error);
-      }
-      channels[i] = null;
+  for (const [name, channel] of channelEntries) {
+    if (!channel) continue;
+
+    try {
+      await supabase.removeChannel(channel);
+      console.log(`🛑 Stopped ${name} channel`);
+    } catch (error) {
+      console.error(`❌ Error stopping ${name} channel:`, error);
     }
+
+    usePlansStore.getState().updateChannelStatus(name as PlansChannelName, 'disconnected');
   }
 
-  isSubscribed = false;
+  plansChannel = null;
+  updatesChannel = null;
+  Object.keys(retryAttempts).forEach((key) => {
+    retryAttempts[key] = 0;
+  });
+  stopPlansHealthCheck();
+  usePlansStore.getState().setSubscriptionActive(false);
+}
+
+function clearAllPlanRefreshTimeouts() {
+  Object.keys(planRefreshTimeouts).forEach((planId) => {
+    const timeout = planRefreshTimeouts[planId];
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    delete planRefreshTimeouts[planId];
+  });
+}
+
+function schedulePlanRefresh(
+  planId: string,
+  currentUserId: string,
+  delay: number,
+  reason?: string
+) {
+  if (!planId) {
+    console.warn('⚠️ Cannot schedule plan refresh without planId');
+    return;
+  }
+
+  if (planRefreshTimeouts[planId]) {
+    clearTimeout(planRefreshTimeouts[planId]);
+    delete planRefreshTimeouts[planId];
+  }
+
+  const triggerRefresh = async () => {
+    try {
+      const now = Date.now();
+      const lastCall = lastPlanRefreshCallTimes[planId] || 0;
+      if (now - lastCall < MIN_TIME_BETWEEN_PLAN_CALLS) {
+        console.log(
+          `⏰ Rate limiting plan refresh for ${planId} (last call ${now - lastCall}ms ago)`
+        );
+        return;
+      }
+      lastPlanRefreshCallTimes[planId] = now;
+
+      console.log(
+        `🔄 Refreshing plan ${planId} after update${reason ? ` (${reason})` : ''}`
+      );
+      await usePlansStore.getState().loadPlan(planId, currentUserId);
+      console.log('✅ Plan refreshed after update:', planId);
+    } catch (error) {
+      console.error('❌ Error refreshing plan after update:', error);
+      if (error instanceof Error && error.message.includes('429')) {
+        console.log(`⚠️ Rate limit hit while refreshing plan ${planId} - backing off`);
+      }
+    } finally {
+      delete planRefreshTimeouts[planId];
+    }
+  };
+
+  if (delay <= 0) {
+    triggerRefresh();
+    return;
+  }
+
+  planRefreshTimeouts[planId] = setTimeout(triggerRefresh, delay);
+}
+
+function createChannelWithRetry(
+  channelName: PlansChannelName,
+  channelId: string,
+  configureChannel: (channel: any) => any,
+  onDisconnect: () => void,
+  userId: string
+) {
+  usePlansStore.getState().updateChannelStatus(channelName, 'connecting');
+  const channel = configureChannel(supabase.channel(channelId));
+
+  channel.subscribe((status: string) => {
+    console.log(`📡 ${channelName} status:`, status);
+
+    if (status === 'SUBSCRIBED') {
+      console.log(`✅ ${channelName} connected`);
+      retryAttempts[channelName] = 0;
+      const state = usePlansStore.getState();
+      state.updateChannelStatus(channelName, 'connected');
+      state.setChannelRetryAttempt(channelName, 0);
+      subscriptionMetrics.totalConnections += 1;
+      subscriptionMetrics.lastConnectionTime = new Date().toISOString();
+      if (reconnectMeasurementStart[channelName]) {
+        const duration = Date.now() - reconnectMeasurementStart[channelName];
+        reconnectSampleCount += 1;
+        subscriptionMetrics.averageReconnectTime =
+          (subscriptionMetrics.averageReconnectTime * (reconnectSampleCount - 1) + duration) /
+          reconnectSampleCount;
+        delete reconnectMeasurementStart[channelName];
+      }
+      logSubscriptionMetrics();
+    } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+      console.log(`❌ ${channelName} disconnected:`, status);
+      onDisconnect();
+      const state = usePlansStore.getState();
+      state.updateChannelStatus(channelName, 'disconnected', status);
+      state.setSubscriptionActive(false);
+      subscriptionMetrics.totalDisconnections += 1;
+      subscriptionMetrics.lastDisconnectionTime = new Date().toISOString();
+      reconnectMeasurementStart[channelName] = Date.now();
+      logSubscriptionMetrics();
+
+      const attempt = retryAttempts[channelName] || 0;
+
+      if (attempt < MAX_CHANNEL_RETRIES) {
+        const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
+        console.log(`🔄 Retrying ${channelName} in ${delay}ms (attempt ${attempt + 1}/${MAX_CHANNEL_RETRIES})`);
+
+        retryAttempts[channelName] = attempt + 1;
+        state.setChannelRetryAttempt(channelName, attempt + 1);
+        subscriptionMetrics.totalReconnects += 1;
+        logSubscriptionMetrics();
+
+        setTimeout(() => {
+          console.log(`♻️ Attempting to restart ${channelName}...`);
+          usePlansStore.getState().checkAndRestartSubscriptions(userId);
+        }, delay);
+      } else {
+        console.error(`❌ ${channelName} failed after ${MAX_CHANNEL_RETRIES} attempts - giving up`);
+        subscriptionMetrics.failedReconnects += 1;
+        logSubscriptionMetrics();
+      }
+    }
+  });
+
+  return channel;
+}
+
+function startPlansHealthCheck(userId: string) {
+  if (plansHealthCheckInterval) {
+    return;
+  }
+
+  console.log('💓 Starting plans health check system...');
+  let failedChecks = 0;
+
+  plansHealthCheckInterval = setInterval(() => {
+    console.log('💓 Plans health check...');
+    usePlansStore.getState().recordHealthCheck();
+    const channelsStatus = [
+      { name: 'plans', state: plansChannel?.state },
+      { name: 'plan_updates', state: updatesChannel?.state },
+    ];
+
+    const allHealthy = channelsStatus.every((channel) => channel.state === 'joined');
+
+    if (!allHealthy) {
+      failedChecks += 1;
+      console.log(
+        `⚠️ Health check failed (${failedChecks}) - Channel status: ${channelsStatus
+          .map((channel) => `${channel.name}: ${channel.state ?? 'null'}`)
+          .join(', ')}`
+      );
+
+      if (failedChecks >= 2) {
+        console.log('🔄 Multiple failed health checks - restarting subscriptions...');
+        usePlansStore.getState().checkAndRestartSubscriptions(userId);
+        failedChecks = 0;
+      }
+    } else if (failedChecks > 0) {
+      console.log('✅ Plans channels recovered after health check warnings');
+      failedChecks = 0;
+    }
+  }, 30000);
+}
+
+function stopPlansHealthCheck() {
+  if (plansHealthCheckInterval) {
+    clearInterval(plansHealthCheckInterval);
+    plansHealthCheckInterval = null;
+    console.log('💓 Plans health check stopped');
+  }
 }
 
 // Handle plans table INSERT events
@@ -1403,234 +1465,63 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
   if (eventType === 'INSERT' && newRecord) {
     const updateType = newRecord.update_type;
     const planId = newRecord.plan_id;
-    const triggeredBy = newRecord.triggered_by;
 
-    // Debounced refresh for specific plan
-    const debouncedRefresh = () => {
-      const { loadPlan } = usePlansStore.getState();
-      console.log('🔄 Debounced refresh triggered for plan:', planId, 'update type:', updateType);
-
-      loadPlan(planId, currentUserId).then(() => {
-        console.log('✅ Plan refreshed after update:', planId, updateType);
-      }).catch(error => {
-        console.error('❌ Error refreshing plan after update:', error);
-      });
-    };
-
-    // Clear existing timeout
-    if (plansRefreshTimeout) {
-      clearTimeout(plansRefreshTimeout);
+    if (!planId) {
+      console.warn('⚠️ Plan update notification missing plan_id, skipping refresh');
+      return;
     }
 
-    // Handle different types of plan updates with debouncing
+    // Handle different types of plan updates with per-plan debouncing
     if (updateType === 'plan_created') {
       console.log('🎯 New plan created - immediate refresh needed');
-      debouncedRefresh(); // Immediate for new plans
-    } else if (updateType === 'participant_joined') {
-      console.log('👥 Participant joined/changed status - debounced refresh');
-      plansRefreshTimeout = setTimeout(debouncedRefresh, 1000); // 1 second debounce
-    } else if (updateType === 'poll_created' || updateType === 'poll_voted' ||
-               updateType === 'invitation_poll_created' || updateType === 'invitation_poll_voted' ||
-               updateType === 'participant_invited') {
-      console.log('📊 Poll or invitation activity - debounced refresh');
-      plansRefreshTimeout = setTimeout(debouncedRefresh, 1500); // 1.5 second debounce
+      schedulePlanRefresh(planId, currentUserId, 0, updateType);
+    } else if (
+      updateType === 'participant_joined' ||
+      updateType === 'participant_status_changed' ||
+      updateType === 'participant_invited'
+    ) {
+      console.log('👥 Participant activity detected - scheduling refresh');
+      schedulePlanRefresh(planId, currentUserId, 1500, updateType);
+    } else if (updateType === 'poll_voted') {
+      console.log('🗳️ Poll vote detected - scheduling faster refresh');
+      schedulePlanRefresh(planId, currentUserId, 1000, updateType);
+    } else if (
+      updateType === 'invitation_poll_voted' ||
+      updateType === 'invitation_poll_created' ||
+      updateType === 'invitation_poll_expired'
+    ) {
+      console.log('🗳️ Invitation poll activity - scheduling quick refresh');
+      schedulePlanRefresh(planId, currentUserId, 750, updateType);
+    } else if (
+      updateType === 'poll_created' ||
+      updateType === 'poll_option_added' ||
+      updateType === 'poll_option_removed'
+    ) {
+      console.log('📊 Poll structure change - scheduling refresh');
+      schedulePlanRefresh(planId, currentUserId, 1200, updateType);
     } else {
-      console.log(`🔄 Other update type (${updateType}) - debounced refresh`);
-      plansRefreshTimeout = setTimeout(debouncedRefresh, 1000); // 1 second debounce
+      console.log(`🔄 Other update type (${updateType}) - scheduling default refresh`);
+      schedulePlanRefresh(planId, currentUserId, 1000, updateType);
     }
   }
 }
 
-// Handle participants table changes
-function handleParticipantsChange(payload: any, currentUserId: string) {
-  const { eventType, new: newRecord, old: oldRecord } = payload;
-  const planId = newRecord?.plan_id || oldRecord?.plan_id;
-
-  console.log('👥 Processing participants table change:', { eventType, planId, currentUserId });
-
-  if (!planId) {
-    console.warn('⚠️ No plan_id found in participants change payload');
+function logSubscriptionMetrics() {
+  if (typeof __DEV__ !== 'undefined' && !__DEV__) {
     return;
   }
 
-  // Debounced refresh for specific plan
-  const debouncedRefresh = () => {
-    const { loadPlan } = usePlansStore.getState();
-    loadPlan(planId, currentUserId).then(() => {
-      console.log('✅ Plan updated after participants table change:', planId);
-    }).catch(error => {
-      console.error('❌ Error updating plan after participants table change:', error);
-    });
-  };
+  const uptime =
+    subscriptionMetrics.lastConnectionTime
+      ? `${Math.floor(
+          (Date.now() - new Date(subscriptionMetrics.lastConnectionTime).getTime()) / 1000
+        )}s`
+      : 'N/A';
 
-  // Clear existing timeout
-  if (participantsRefreshTimeout) {
-    clearTimeout(participantsRefreshTimeout);
-  }
-
-  // Debounce participants changes by 2 seconds
-  participantsRefreshTimeout = setTimeout(debouncedRefresh, 2000);
-}
-
-// Handle polls table changes
-function handlePollsChange(payload: any, currentUserId: string) {
-  const { eventType, new: newRecord, old: oldRecord } = payload;
-  const planId = newRecord?.plan_id || oldRecord?.plan_id;
-
-  console.log('📊 Processing polls table change:', { eventType, planId, currentUserId });
-
-  if (!planId) {
-    console.warn('⚠️ No plan_id found in polls change payload');
-    return;
-  }
-
-  // Debounced refresh for specific plan
-  const debouncedRefresh = () => {
-    const { loadPlan } = usePlansStore.getState();
-    loadPlan(planId, currentUserId).then(() => {
-      console.log('✅ Plan updated after polls table change:', planId);
-    }).catch(error => {
-      console.error('❌ Error updating plan after polls table change:', error);
-    });
-  };
-
-  // Clear existing timeout
-  if (pollsRefreshTimeout) {
-    clearTimeout(pollsRefreshTimeout);
-  }
-
-  // Debounce polls changes by 1.5 seconds
-  pollsRefreshTimeout = setTimeout(debouncedRefresh, 1500);
-}
-
-// Handle poll votes changes - now updates only specific poll
-function handlePollVotesChange(payload: any, currentUserId: string) {
-  const { eventType, new: newRecord, old: oldRecord } = payload;
-  const pollId = newRecord?.poll_id || oldRecord?.poll_id;
-
-  console.log('🗳️ Processing poll votes change:', {
-    eventType,
-    pollId,
-    currentUserId,
-    currentlyUpdating: Array.from(updatingPolls)
+  console.log('📊 Subscription Metrics:', {
+    ...subscriptionMetrics,
+    uptime
   });
-
-  if (newRecord && pollId) {
-    // Check if this poll is already being updated
-    if (updatingPolls.has(pollId)) {
-      console.log('⚠️ Poll already updating, skipping duplicate request:', pollId);
-      return;
-    }
-
-    // Mark this poll as being updated
-    updatingPolls.add(pollId);
-
-    const debouncedRefresh = async () => {
-      try {
-        console.log('🔄 Starting poll update for:', pollId);
-        const { loadPlans } = usePlansStore.getState();
-        await loadPlans(currentUserId);
-        console.log('✅ Plans updated after poll votes change for poll:', pollId);
-      } catch (error) {
-        console.error('❌ Error updating plans after poll votes change:', error);
-        // Check if it's a rate limit error
-        if (error instanceof Error && error.message.includes('429')) {
-          console.log('⏰ Rate limit hit, will retry later for poll:', pollId);
-          // Could implement retry logic here
-        }
-      } finally {
-        // Always remove from updating set
-        updatingPolls.delete(pollId);
-        console.log('🧹 Cleaned up updating poll:', pollId, 'Remaining:', Array.from(updatingPolls));
-      }
-    };
-
-    // Clear existing timeout
-    if (pollVotesRefreshTimeout) {
-      clearTimeout(pollVotesRefreshTimeout);
-    }
-
-    // Longer debounce time to prevent rate limiting - 2000ms
-    console.log('⏰ Setting debounce timeout for poll:', pollId, 'Duration: 2000ms');
-    pollVotesRefreshTimeout = setTimeout(debouncedRefresh, 2000);
-  }
-}
-
-// Handle invitation poll votes changes (similar to poll votes)
-function handleInvitationPollVotesChange(payload: any, currentUserId: string) {
-  const { eventType, new: newRecord, old: oldRecord } = payload;
-  const pollId = newRecord?.poll_id || oldRecord?.poll_id || newRecord?.id || oldRecord?.id;
-
-  console.log('🗳️ Processing invitation poll votes change:', {
-    eventType,
-    pollId,
-    table: payload.table,
-    currentUserId
-  });
-
-  // Handle invitation_polls table changes (INSERT events when polls are created, DELETE events when polls are removed)
-  if (payload.table === 'invitation_polls') {
-    const planId = newRecord?.plan_id || oldRecord?.plan_id;
-
-    if (eventType === 'INSERT' && newRecord && planId) {
-      console.log('📝 New invitation poll created, refreshing plan immediately:', planId, pollId);
-      // Immediate refresh when new poll is created (no debounce needed)
-      const { loadPlan } = usePlansStore.getState();
-      loadPlan(planId, currentUserId).catch(error => {
-        console.error('❌ Error refreshing plan after invitation poll creation:', error);
-      });
-      return;
-    }
-
-    if (eventType === 'DELETE' && oldRecord && planId) {
-      console.log('🗑️ Invitation poll deleted, refreshing plan immediately:', planId, pollId);
-      // Immediate refresh when poll is deleted (no debounce needed)
-      const { loadPlan } = usePlansStore.getState();
-      loadPlan(planId, currentUserId).catch(error => {
-        console.error('❌ Error refreshing plan after invitation poll deletion:', error);
-      });
-      return;
-    }
-  }
-
-  // Handle invitation_poll_votes table changes (INSERT/UPDATE events)
-  if (payload.table === 'invitation_poll_votes' && newRecord && pollId) {
-    const planId = newRecord.plan_id;
-
-    if (planId) {
-      const debouncedRefresh = async () => {
-        try {
-          console.log('🔄 Starting invitation poll votes update for plan:', planId, 'poll:', pollId);
-          const { loadPlan } = usePlansStore.getState();
-          await loadPlan(planId, currentUserId);
-          console.log('✅ Plan updated after invitation poll votes change for poll:', pollId);
-        } catch (error) {
-          console.error('❌ Error updating plan after invitation poll votes change:', error);
-        }
-      };
-
-      // Clear existing timeout
-      if (invitationPollsRefreshTimeout) {
-        clearTimeout(invitationPollsRefreshTimeout);
-      }
-
-      // Shorter debounce for invitation polls since they expire quickly - 1000ms
-      console.log('⏰ Setting debounce timeout for invitation poll:', pollId, 'Duration: 1000ms');
-      invitationPollsRefreshTimeout = setTimeout(debouncedRefresh, 1000);
-    } else {
-      console.warn('⚠️ No plan_id found in invitation_poll_votes payload, falling back to loadPlans');
-      // Fallback to old behavior if plan_id is missing
-      const debouncedRefresh = async () => {
-        const { loadPlans } = usePlansStore.getState();
-        await loadPlans(currentUserId);
-      };
-
-      if (invitationPollsRefreshTimeout) {
-        clearTimeout(invitationPollsRefreshTimeout);
-      }
-      invitationPollsRefreshTimeout = setTimeout(debouncedRefresh, 1000);
-    }
-  }
 }
 
 export default usePlansStore;

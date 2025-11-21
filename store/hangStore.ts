@@ -64,6 +64,11 @@ const getDefaultAvatar = (name?: string, userId?: string) => {
 // Add at the top of the file after imports
 let refreshInterval: ReturnType<typeof setInterval> | null = null;
 let statusChannel: any = null;
+let hangRestartTimeout: ReturnType<typeof setTimeout> | null = null;
+let hangRetryAttempts = 0;
+const HANG_RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
+const MAX_HANG_RETRIES = 5;
+let hangHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 // Create the store with persistence
 const useHangStore = create<HangState>()(
@@ -424,9 +429,15 @@ const useHangStore = create<HangState>()(
           refreshInterval = null;
         }
         if (statusChannel) {
+          stopHangHealthCheck();
           supabase.removeChannel(statusChannel);
           statusChannel = null;
         }
+        if (hangRestartTimeout) {
+          clearTimeout(hangRestartTimeout);
+          hangRestartTimeout = null;
+        }
+        hangRetryAttempts = 0;
         
         // Load friends once initially
         get().loadFriends();
@@ -464,8 +475,9 @@ const useHangStore = create<HangState>()(
             }
           )
           .subscribe((status) => {
-            console.log('📡 Status channel status:', status);
+            handleHangChannelStatus(status);
           });
+        startHangHealthCheck();
         
         // More frequent polling for better real-time feel (every 10 seconds)
         refreshInterval = setInterval(() => {
@@ -482,6 +494,12 @@ const useHangStore = create<HangState>()(
           supabase.removeChannel(statusChannel);
           statusChannel = null;
         }
+        stopHangHealthCheck();
+        if (hangRestartTimeout) {
+          clearTimeout(hangRestartTimeout);
+          hangRestartTimeout = null;
+        }
+        hangRetryAttempts = 0;
         console.log('🛑 Stopped real-time friend status updates');
       }
     }),
@@ -491,5 +509,92 @@ const useHangStore = create<HangState>()(
     }
   )
 );
+
+function handleHangChannelStatus(status: string) {
+  console.log('📡 Status channel status:', status);
+
+  if (status === 'SUBSCRIBED') {
+    hangRetryAttempts = 0;
+    if (hangRestartTimeout) {
+      clearTimeout(hangRestartTimeout);
+      hangRestartTimeout = null;
+    }
+    return;
+  }
+
+  if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+    if (status === 'CHANNEL_ERROR') {
+      console.log('❌ Hang status channel error');
+    } else if (status === 'CLOSED') {
+      console.log('🔒 Hang status channel closed');
+    } else {
+      console.log('⏰ Hang status channel timed out');
+    }
+
+    statusChannel = null;
+    scheduleHangRealtimeRestart();
+  }
+}
+
+function scheduleHangRealtimeRestart() {
+  if (hangRetryAttempts >= MAX_HANG_RETRIES) {
+    console.error('❌ Hang real-time subscription failed after maximum retries');
+    return;
+  }
+
+  const delay = HANG_RETRY_DELAYS_MS[Math.min(hangRetryAttempts, HANG_RETRY_DELAYS_MS.length - 1)];
+  hangRetryAttempts += 1;
+
+  if (hangRestartTimeout) {
+    clearTimeout(hangRestartTimeout);
+  }
+
+  console.log(
+    `🔄 Scheduling hang real-time restart in ${delay}ms (attempt ${hangRetryAttempts}/${MAX_HANG_RETRIES})`
+  );
+
+  hangRestartTimeout = setTimeout(() => {
+    hangRestartTimeout = null;
+    console.log('♻️ Attempting to restart hang real-time subscriptions...');
+    useHangStore.getState().startRealTimeUpdates();
+  }, delay);
+}
+
+function startHangHealthCheck() {
+  if (hangHealthCheckInterval) {
+    return;
+  }
+
+  console.log('💓 Starting hang health check system...');
+  let failedChecks = 0;
+
+  hangHealthCheckInterval = setInterval(() => {
+    const channelState = statusChannel?.state;
+
+    if (channelState !== 'joined') {
+      failedChecks += 1;
+      console.log(
+        `⚠️ Hang health check warning (state: ${channelState ?? 'null'}, failures: ${failedChecks})`
+      );
+
+      if (failedChecks >= 2) {
+        console.log('🔄 Hang health check triggering restart...');
+        useHangStore.getState().startRealTimeUpdates();
+        failedChecks = 0;
+      }
+    } else if (failedChecks > 0) {
+      console.log('✅ Hang real-time subscription healthy again');
+      failedChecks = 0;
+    }
+  }, 30000);
+}
+
+function stopHangHealthCheck() {
+  if (hangHealthCheckInterval) {
+    clearInterval(hangHealthCheckInterval);
+    hangHealthCheckInterval = null;
+    console.log('💓 Hang health check stopped');
+  }
+}
 
 export default useHangStore;
