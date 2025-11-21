@@ -2,7 +2,8 @@
 
 > **Completed:** 2024-11-21  
 > **Branch:** Hakkame-chati-looma  
-> **Commits:** 4 (eff7414, 8850191, aab4b10, d72aa9a)
+> **Commits:** 6 (eff7414, 8850191, aab4b10, d72aa9a, faccd3a, 062f8eb)  
+> **Status:** ✅ All critical issues fixed
 
 ---
 
@@ -60,6 +61,18 @@
 
 ---
 
+### Phase 5: Critical Hotfix (Post-Implementation)
+- [x] Fixed infinite CLOSED status loop when closing chat (400+ duplicate events)
+- [x] Removed unsubscribeFromChat call from handleChatChannelStatus
+- [x] Added guard to ignore duplicate error statuses when restart is scheduled
+- [x] Added double cleanup protection in tab layout
+
+**Result:** Chat close now properly cleans up without triggering restart loop.
+
+**Commit:** `062f8eb` - fix: prevent chat channel restart loop on close
+
+---
+
 ## 📊 IMPLEMENTATION SUMMARY
 
 ### Files Modified
@@ -83,10 +96,26 @@
 
 ---
 
-## 🐛 KNOWN ISSUES & LIMITATIONS
+## 🐛 ISSUES FOUND & FIXED
+
+### Issue #1: Chat Channel Restart Loop (FIXED in 062f8eb)
+**Problem:** After closing a chat, 400+ duplicate CLOSED status events were triggered, causing massive log spam.
+
+**Root Cause:** `handleChatChannelStatus` was calling `unsubscribeFromChat`, which triggered CLOSED status again, creating an infinite loop.
+
+**Solution:**
+- Removed `unsubscribeFromChat` call from `handleChatChannelStatus`
+- Added guard to ignore duplicate error statuses when restart is already scheduled
+- Added double cleanup protection in tab layout
+
+**Status:** ✅ Fixed
+
+---
+
+## ⚠️ KNOWN ISSUES & LIMITATIONS
 
 ### None Identified
-All checkpoints from the refactor checklist have been completed successfully without introducing new issues.
+All issues discovered during implementation have been fixed.
 
 ---
 
