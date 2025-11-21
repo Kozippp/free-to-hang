@@ -54,22 +54,17 @@ export default function PlanTitle({
           ) : (
             <TouchableOpacity 
               style={styles.titleContainer}
-              onLongPress={canEdit ? onEditTitle : undefined}
-              delayLongPress={1000}
+              onPress={canEdit ? onEditTitle : undefined}
               activeOpacity={canEdit ? 0.7 : 1}
             >
-              <View style={styles.titleTextWrapper}>
-                <Text style={styles.title}>{title || 'Untitled plan'}</Text>
-                {canEdit && (
-                  <Text style={styles.titleHint}>Hold for 1s to edit title</Text>
-                )}
-              </View>
+              <Text style={styles.title}>{title}</Text>
             </TouchableOpacity>
           )}
         </>
       )}
 
       {/* Description */}
+      <Text style={styles.descriptionHeader}>Description</Text>
       {isEditingDescription ? (
         <View style={styles.editContainer}>
           <TextInput
@@ -133,14 +128,6 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     flex: 1,
   },
-  titleTextWrapper: {
-    flex: 1,
-  },
-  titleHint: {
-    fontSize: 12,
-    color: Colors.light.secondaryText,
-    marginTop: 4,
-  },
   editContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -179,5 +166,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     minHeight: 100,
+  },
+  descriptionHeader: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 16,
   },
 });

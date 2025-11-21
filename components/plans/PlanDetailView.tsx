@@ -51,13 +51,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { plansService } from '@/lib/plans-service';
 import { supabase } from '@/lib/supabase';
 
+const noop = () => {};
+
 interface PlanDetailViewProps {
   plan: Plan;
   onClose: () => void;
   onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => Promise<void>;
+  editedTitle?: string;
+  onEditPermissionChange?: (canEdit: boolean) => void;
 }
 
-export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailViewProps) {
+export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, onEditPermissionChange }: PlanDetailViewProps) {
   const { user } = useAuth();
   const { 
     markAsRead, 
@@ -86,12 +90,11 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   const latestPlan = [...invitations, ...activePlans].find(p => p.id === plan.id) || plan;
   
   const [activeTab, setActiveTab] = useState('Control Panel');
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [title, setTitle] = useState(plan.title);
   const [description, setDescription] = useState(plan.description);
   const [editingDescription, setEditingDescription] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
+  const displayTitle = editedTitle ?? plan.title;
   
   // Response confirmation states
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -125,6 +128,10 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   
   // Check if user is going
   const isInYesGang = currentUserStatus === 'going';
+
+  React.useEffect(() => {
+    onEditPermissionChange?.(isInYesGang);
+  }, [isInYesGang, onEditPermissionChange]);
   
   // Swipe gesture state
   const { width } = Dimensions.get('window');
@@ -313,12 +320,6 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
     setActiveTab(tab);
   };
   
-  const handleTitleSave = () => {
-    // In a real app, this would update the plan in the backend
-    setEditingTitle(false);
-    // Only people who are going can edit title
-  };
-  
   const handleDescriptionSave = () => {
     // In a real app, this would update the plan in the backend
     setEditingDescription(false);
@@ -326,19 +327,12 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
   };
 
   const handleBackgroundPress = () => {
-    if (!editingTitle && !editingDescription) {
+    if (!editingDescription) {
       return;
     }
 
     Keyboard.dismiss();
-
-    if (editingTitle) {
-      handleTitleSave();
-    }
-
-    if (editingDescription) {
-      handleDescriptionSave();
-    }
+    handleDescriptionSave();
   };
   
   const handleCreatePoll = (type: 'when' | 'where' | 'custom', existingPoll?: Poll) => {
@@ -870,18 +864,18 @@ export default function PlanDetailView({ plan, onClose, onRespond }: PlanDetailV
             >
           {/* Description Section - Title moved to modal header */}
           <PlanTitle 
-            title={title}
+            title={displayTitle}
             description={description}
-            isEditingTitle={editingTitle}
+            isEditingTitle={false}
             isEditingDescription={editingDescription}
-            onEditTitle={() => isInYesGang && setEditingTitle(true)}
+            onEditTitle={noop}
             onEditDescription={() => isInYesGang && setEditingDescription(true)}
-            onSaveTitle={handleTitleSave}
+            onSaveTitle={noop}
             onSaveDescription={handleDescriptionSave}
-            onChangeTitle={setTitle}
+            onChangeTitle={noop}
             onChangeDescription={setDescription}
             canEdit={isInYesGang}
-            hideTitle={!isInYesGang}
+            hideTitle={true}
           />
           
           {/* Combined Voting Section */}

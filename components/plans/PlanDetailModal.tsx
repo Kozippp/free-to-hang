@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
-  Platform,
-  SafeAreaView
+  SafeAreaView,
+  TextInput
 } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -35,6 +35,10 @@ export default function PlanDetailModal({
 }: PlanDetailModalProps) {
   const { width } = Dimensions.get('window');
   const slideAnim = useRef(new Animated.Value(width)).current;
+  const [headerTitle, setHeaderTitle] = useState(plan?.title ?? '');
+  const [canEditHeaderTitle, setCanEditHeaderTitle] = useState(false);
+  const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
+  const headerInputRef = useRef<TextInput | null>(null);
   
   React.useEffect(() => {
     if (visible) {
@@ -60,6 +64,35 @@ export default function PlanDetailModal({
     });
   };
   
+  React.useEffect(() => {
+    if (plan) {
+      setHeaderTitle(plan.title);
+      setIsEditingHeaderTitle(false);
+      setCanEditHeaderTitle(false);
+    }
+  }, [plan?.id, plan?.title]);
+
+  React.useEffect(() => {
+    if (isEditingHeaderTitle) {
+      headerInputRef.current?.focus();
+    }
+  }, [isEditingHeaderTitle]);
+
+  const handleHeaderLongPress = () => {
+    if (!canEditHeaderTitle || isEditingHeaderTitle) {
+      return;
+    }
+    setIsEditingHeaderTitle(true);
+  };
+
+  const handleHeaderTitleChange = (text: string) => {
+    setHeaderTitle(text);
+  };
+
+  const handleHeaderTitleSave = () => {
+    setIsEditingHeaderTitle(false);
+  };
+
   if (!plan) return null;
   
   return (
@@ -86,15 +119,36 @@ export default function PlanDetailModal({
               <ChevronLeft size={28} color={Colors.light.text} strokeWidth={2} />
             </TouchableOpacity>
             
-            <View style={styles.titleContainer}>
-              <Text 
-                style={styles.headerTitle} 
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {plan.title}
-              </Text>
-            </View>
+            <TouchableOpacity
+              style={styles.titleContainer}
+              onLongPress={handleHeaderLongPress}
+              delayLongPress={1000}
+              activeOpacity={canEditHeaderTitle ? 0.7 : 1}
+              disabled={!canEditHeaderTitle}
+            >
+              {isEditingHeaderTitle ? (
+                <TextInput
+                  ref={headerInputRef}
+                  style={styles.headerTitleInput}
+                  value={headerTitle}
+                  onChangeText={handleHeaderTitleChange}
+                  placeholder="Enter plan title"
+                  autoFocus
+                  onBlur={handleHeaderTitleSave}
+                  onSubmitEditing={handleHeaderTitleSave}
+                  returnKeyType="done"
+                  blurOnSubmit
+                />
+              ) : (
+                <Text 
+                  style={styles.headerTitle} 
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {headerTitle || 'Untitled plan'}
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
           
           {/* Content */}
@@ -109,6 +163,8 @@ export default function PlanDetailModal({
               plan={plan} 
               onClose={handleClose} 
               onRespond={onRespond} 
+              editedTitle={headerTitle}
+              onEditPermissionChange={setCanEditHeaderTitle}
             />
           )}
         </SafeAreaView>
@@ -146,5 +202,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
+  },
+  headerTitleInput: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.light.text,
+    flex: 1,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
 });
