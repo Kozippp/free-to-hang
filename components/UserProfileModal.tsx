@@ -434,7 +434,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
                     <View style={styles.infoCard}>
                       <View style={styles.cardHeader}>
                         <MessageCircle size={16} color={Colors.light.primary} />
-                        <Text style={styles.cardTitle}>Current Vibe</Text>
+                        <Text style={styles.cardTitle}>Ideal hang vibe</Text>
                       </View>
                       <Text style={styles.cardContent}>{user.vibe}</Text>
                     </View>

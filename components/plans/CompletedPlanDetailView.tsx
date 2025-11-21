@@ -7,8 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Platform,
-  KeyboardAvoidingView,
-  Alert
+  KeyboardAvoidingView
 } from 'react-native';
 import { 
   Clock, 
@@ -19,13 +18,14 @@ import {
   RotateCcw,
   UserPlus,
   Check,
-  HelpCircle
+  Eye
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { Plan, Poll } from '@/store/plansStore';
+import { Plan, Poll, Participant } from '@/store/plansStore';
 import PlanTabs from './PlanTabs';
 import ChatView from '../chat/ChatView';
 import PlanSuggestionSheet from './PlanSuggestionSheet';
+import PollDisplay from './PollDisplay';
 import useChatStore from '@/store/chatStore';
 import useHangStore from '@/store/hangStore';
 import usePlansStore from '@/store/plansStore';
@@ -47,6 +47,9 @@ type FriendSelection = {
   lastSeen?: string;
 };
 
+const DEFAULT_AVATAR_URI = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face';
+const noop = () => {};
+
 export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpdate }: CompletedPlanDetailViewProps) {
   const { getUnreadCount } = useChatStore();
   const { user: hangUser, friends } = useHangStore();
@@ -64,9 +67,6 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
   // Get the latest plan data from store to reflect attendance updates
   const latestPlan = completedPlans.find(p => p.id === plan.id) || plan;
   
-  // Get attendance status from latest plan's attendanceRecord
-  const currentUserAttended = latestPlan.attendanceRecord?.['current'] ?? null;
-  
   // Group participants by status
   const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
   const maybeParticipants = latestPlan.participants.filter(p => 
@@ -74,6 +74,16 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
   );
   const pendingParticipants = latestPlan.participants.filter(p => p.status === 'pending');
   const declinedParticipants = latestPlan.participants.filter(p => p.status === 'declined');
+  const attendedParticipants = acceptedParticipants;
+  const interestedParticipants = maybeParticipants;
+  const didntRespondParticipants = pendingParticipants;
+  const didNotAttendParticipants = declinedParticipants;
+  const hasAttendanceData = [
+    attendedParticipants.length,
+    interestedParticipants.length,
+    didntRespondParticipants.length,
+    didNotAttendParticipants.length
+  ].some(count => count > 0);
   
   // Get final poll results
   const polls = latestPlan.polls || [];
@@ -85,25 +95,22 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
     setActiveTab(tab);
   };
   
-  // Format creation date and time
-  const formatCompletionInfo = (createdAt: string) => {
-    const date = new Date(createdAt);
-    return {
-      date: date.toLocaleDateString('en-GB', { 
-        weekday: 'long',
-        day: 'numeric', 
-        month: 'long', 
-        year: 'numeric' 
-      }),
-      time: date.toLocaleTimeString('en-GB', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-      })
-    };
+  // Format plan date for footer
+  const formatPlanDate = (dateString?: string) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
   };
   
-  const completionInfo = formatCompletionInfo(latestPlan.createdAt);
+  const planDateLabel = formatPlanDate(latestPlan.date || latestPlan.createdAt);
   
   // Get unread message count for this plan
   const unreadCount = getUnreadCount(latestPlan.id, 'current');
@@ -129,54 +136,6 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
       // Optionally close the detail view and navigate to the new plan
       onClose();
     }, 0);
-  };
-
-  // Enhanced attendance handling
-  const handleAttendanceConfirmation = (attended: boolean) => {
-    if (attended) {
-      // User attended - record attendance
-      onAttendanceUpdate?.(latestPlan.id, 'current', true);
-      // In a real app, this would also update the backend/store
-      Alert.alert(
-        'Attendance Recorded',
-        'Thanks for confirming! This plan is now marked as attended.',
-        [{ text: 'OK', style: 'default' }]
-      );
-    } else {
-      // User didn't attend - show deletion prompt
-      Alert.alert(
-        'Plan Removal',
-        'Would you like to delete this from your completed plans?',
-        [
-          {
-            text: 'Keep',
-            style: 'cancel',
-            onPress: () => {
-              onAttendanceUpdate?.(latestPlan.id, 'current', false);
-            }
-          },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              // In a real app, this would remove the plan from completed plans
-              Alert.alert(
-                'Plan Deleted',
-                'This plan has been removed from your completed plans.',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      onClose(); // Close the detail view since plan is deleted
-                    }
-                  }
-                ]
-              );
-            }
-          }
-        ]
-      );
-    }
   };
 
   // Convert plan participants to the format expected by PlanSuggestionSheet
@@ -238,77 +197,124 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
     // The actual friend list updates are handled via onFriendsUpdated.
   }, []);
 
-  // Helper function to get poll results
-  const getPollResults = (poll: Poll) => {
-    const totalVotes = poll.options.reduce((sum, option) => sum + option.votes.length, 0);
-    const goingParticipants = latestPlan.participants.filter(p => p.status === 'going').length;
-    const winningOption = poll.options.reduce((winner, current) =>
-      current.votes.length > winner.votes.length ? current : winner
-    );
+  // Helper function to get total unique voters for a poll
+  const getTotalVotesForPoll = (poll?: Poll) => {
+    if (!poll) return 0;
 
-    return {
-      totalVotes,
-      goingParticipants,
-      winningOption,
-      options: poll.options.map(option => ({
-        ...option,
-        percentage: goingParticipants > 0 ? Math.round((option.votes.length / goingParticipants) * 100) : 0
-      }))
-    };
+    const uniqueVoters = new Set<string>();
+    poll.options.forEach(option => {
+      option.votes.forEach(voterId => uniqueVoters.add(voterId));
+    });
+
+    return uniqueVoters.size;
   };
 
-  const renderParticipant = (participant: any) => (
-    <View key={participant.id} style={styles.participantItem}>
-      <Image source={{ uri: participant.avatar }} style={styles.participantAvatar} />
-      <Text style={styles.participantName}>
-        {participant.id === 'current' ? 'You' : participant.name}
-      </Text>
-    </View>
-  );
+  const preparePollForDisplay = (poll: Poll) => ({
+    ...poll,
+    options: poll.options.map(option => ({
+      ...option,
+      votes: option.votes.length,
+      voters: option.votes.map(voterId => {
+        const participant = latestPlan.participants.find(p => p.id === voterId);
+        return participant ? {
+          id: participant.id,
+          name: participant.name,
+          avatar: participant.avatar || DEFAULT_AVATAR_URI
+        } : {
+          id: voterId,
+          name: `User ${voterId}`,
+          avatar: DEFAULT_AVATAR_URI
+        };
+      })
+    }))
+  });
 
-  const renderPollResults = (poll: Poll) => {
-    const results = getPollResults(poll);
-    
+  const renderAttendanceParticipant = (participant: Participant) => {
+    const avatarUri = participant.avatar || DEFAULT_AVATAR_URI;
     return (
-      <View key={poll.id} style={styles.pollResultsContainer}>
-        <Text style={styles.pollStats}>
-          {results.totalVotes} out of {results.goingParticipants} going {results.totalVotes === 1 ? 'voted' : 'voted'}
-          {results.totalVotes > 0 && (
-            <Text style={styles.winnerIndicator}> • Winner: {results.winningOption.text}</Text>
-          )}
-        </Text>
-        
-        <View style={styles.pollOptionsContainer}>
-          {results.options.map((option) => (
-            <View key={option.id} style={styles.pollOption}>
-              <View style={styles.pollOptionHeader}>
-                <Text style={[
-                  styles.pollOptionText,
-                  option.id === results.winningOption.id && styles.winnerText
-                ]}>
-                  {option.text}
-                </Text>
-                <Text style={styles.pollOptionPercentage}>{option.percentage}%</Text>
-              </View>
-              <View style={styles.pollOptionBar}>
-                <View 
-                  style={[
-                    styles.pollOptionProgress,
-                    { 
-                      width: `${option.percentage}%`,
-                      backgroundColor: option.id === results.winningOption.id 
-                        ? Colors.light.primary 
-                        : Colors.light.buttonBackground
-                    }
-                  ]} 
-                />
-              </View>
+      <View key={`${participant.id}-${participant.status}`} style={styles.participantRow}>
+        <View style={styles.participantInfo}>
+          <View style={styles.avatarContainer}>
+            <Image source={{ uri: avatarUri }} style={styles.avatar} />
+            <View style={[
+              styles.statusIndicator,
+              participant.status === 'going' && styles.acceptedIndicator,
+              participant.status === 'maybe' && styles.maybeIndicator,
+              participant.status === 'conditional' && styles.conditionalIndicator,
+              participant.status === 'pending' && styles.pendingIndicator,
+              participant.status === 'declined' && styles.declinedIndicator,
+            ]}>
+              {participant.status === 'going' && (
+                <Check size={10} color="white" />
+              )}
+              {participant.status === 'maybe' && (
+                <Text style={styles.questionMark}>?</Text>
+              )}
+              {participant.status === 'conditional' && (
+                <Eye size={10} color="white" />
+              )}
+              {participant.status === 'pending' && (
+                <View style={styles.eyeIcon}>
+                  <View style={styles.eyePupil} />
+                </View>
+              )}
+              {participant.status === 'declined' && (
+                <X size={10} color="white" />
+              )}
             </View>
-          ))}
+          </View>
+          <Text style={styles.participantName}>
+            {participant.id === 'current' ? 'You' : participant.name}
+          </Text>
         </View>
       </View>
     );
   };
+
+  const renderAttendanceGroup = (title: string, participants: Participant[]) => {
+    if (!participants.length) {
+      return null;
+    }
+
+    return (
+      <View key={title} style={styles.participantGroup}>
+        <Text style={styles.groupTitle}>
+          {title} ({participants.length})
+        </Text>
+        {participants.map(renderAttendanceParticipant)}
+      </View>
+    );
+  };
+
+  const renderCompletedPoll = (
+    poll: Poll,
+    config?: {
+      title?: string;
+      icon?: React.ReactNode;
+      hideQuestion?: boolean;
+    }
+  ) => (
+    <View key={poll.id} style={styles.pollContainer}>
+      {config?.title && (
+        <View style={styles.pollHeader}>
+          {config.icon}
+          <Text style={styles.pollTitle}>{config.title}</Text>
+        </View>
+      )}
+      <PollDisplay
+        pollId={poll.id}
+        question={poll.question}
+        options={preparePollForDisplay(poll).options}
+        onVote={noop}
+        userVotes={[]}
+        totalVotes={getTotalVotesForPoll(poll)}
+        canVote={false}
+        totalGoingParticipants={acceptedParticipants.length}
+        hideQuestion={config?.hideQuestion ?? false}
+        readOnly
+      />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -325,39 +331,71 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={Platform.OS === 'web'}
         >
-          {/* Plan Summary */}
+          {/* Description */}
           <View style={styles.section}>
-            {/* Status and Date Row */}
-            <View style={styles.statusRow}>
-              <View style={styles.statusIcon}>
-                {currentUserAttended === true ? (
-                  <Check size={16} color={Colors.light.onlineGreen} />
-                ) : currentUserAttended === false ? (
-                  <X size={16} color="#FF6B6B" />
-                ) : (
-                  <HelpCircle size={16} color={Colors.light.secondaryText} />
-                )}
-              </View>
-              <Text style={styles.dateText}>
-                {completionInfo.date}
-              </Text>
+            <View style={styles.headerRow}>
+              <Text style={styles.sectionTitle}>Description</Text>
             </View>
-            
-            {/* Plan Description - Title moved to modal header */}
-            {latestPlan.description && (
+            {latestPlan.description ? (
               <Text style={styles.planDescription}>{latestPlan.description}</Text>
+            ) : (
+              <Text style={styles.planDescriptionPlaceholder}>
+                This plan didn't include a description.
+              </Text>
             )}
           </View>
 
-          {/* Want to do this again? Section */}
+          {/* Poll Results */}
+          {(whenPoll || wherePoll || customPolls.length > 0) && (
+            <View style={styles.section}>
+              <View style={styles.headerRow}>
+                <Text style={styles.sectionTitle}>Poll Results</Text>
+              </View>
+              
+              {whenPoll && renderCompletedPoll(whenPoll, {
+                title: 'When did it work best?',
+                icon: <Clock size={18} color={Colors.light.text} style={styles.pollIcon} />,
+                hideQuestion: true
+              })}
+              
+              {wherePoll && renderCompletedPoll(wherePoll, {
+                title: 'Where you met',
+                icon: <MapPin size={18} color={Colors.light.text} style={styles.pollIcon} />,
+                hideQuestion: true
+              })}
+              
+              {customPolls.map((poll) => renderCompletedPoll(poll))}
+            </View>
+          )}
+
+          {/* Who Attended */}
+          <View style={styles.section}>
+            <View style={styles.headerRow}>
+              <Users size={20} color={Colors.light.text} style={styles.headerIcon} />
+              <Text style={styles.sectionTitle}>Who Attended</Text>
+            </View>
+            <View style={styles.participantsContainer}>
+              {renderAttendanceGroup('Attended', attendedParticipants)}
+              {renderAttendanceGroup('Interested', interestedParticipants)}
+              {renderAttendanceGroup("Didn't respond", didntRespondParticipants)}
+              {renderAttendanceGroup('Did not attend', didNotAttendParticipants)}
+              {!hasAttendanceData && (
+                <Text style={styles.emptyParticipantsText}>
+                  Attendance responses will appear here once everyone has replied.
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* Want to do this again? */}
           <View style={styles.section}>
             <View style={styles.headerRow}>
               <RotateCcw size={20} color={Colors.light.text} style={styles.headerIcon} />
-              <Text style={styles.sectionTitle}>Want to do this again?</Text>
+              <Text style={styles.sectionTitle}>Recreate this plan</Text>
             </View>
             
             <Text style={styles.doItAgainDescription}>
-              Recreate this plan with the same people. You can modify the details before sending.
+              You can modify the details before sending.
             </Text>
             
             <View style={styles.planButtonsContainer}>
@@ -381,152 +419,15 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
             </View>
           </View>
 
-          {/* Final Decisions */}
-          {(whenPoll || wherePoll || customPolls.length > 0) && (
-            <View style={styles.section}>
-              <View style={styles.headerRow}>
-                <Text style={styles.sectionTitle}>Final Decisions</Text>
-              </View>
-              
-              {whenPoll && (
-                <View style={styles.decisionContainer}>
-                  <Text style={styles.decisionTitle}>What time worked best</Text>
-                  {renderPollResults(whenPoll)}
-                </View>
-              )}
-              
-              {wherePoll && (
-                <View style={styles.decisionContainer}>
-                  <Text style={styles.decisionTitle}>Where you met</Text>
-                  {renderPollResults(wherePoll)}
-                </View>
-              )}
-              
-              {customPolls.map((poll) => (
-                <View key={poll.id} style={styles.decisionContainer}>
-                  {renderPollResults(poll)}
-                </View>
-              ))}
+          {/* Plan Date */}
+          {planDateLabel && (
+            <View style={styles.planDateFooter}>
+              <Calendar size={16} color={Colors.light.secondaryText} style={styles.planDateIcon} />
+              <Text style={styles.planDateFooterText}>
+                Plan took place on {planDateLabel}
+              </Text>
             </View>
           )}
-
-          {/* Final Attendance */}
-          <View style={styles.section}>
-            <View style={styles.headerRow}>
-              <Users size={20} color={Colors.light.text} style={styles.headerIcon} />
-              <Text style={styles.sectionTitle}>Who Attended</Text>
-            </View>
-            
-            {/* Attended Section */}
-            {(currentUserAttended === true || acceptedParticipants.filter(p => p.id !== 'current').length > 0) && (
-              <View style={styles.participantGroup}>
-                <Text style={styles.groupTitle}>
-                  Attended ({(currentUserAttended === true ? 1 : 0) + acceptedParticipants.filter(p => p.id !== 'current').length})
-                </Text>
-                <View style={styles.participantsList}>
-                  {/* Show current user first if they attended */}
-                  {currentUserAttended === true && (
-                    <View style={styles.participantItem}>
-                      <Image 
-                        source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
-                        style={styles.participantAvatar} 
-                      />
-                      <Text style={styles.participantName}>You</Text>
-                    </View>
-                  )}
-                  {/* Then show others who attended */}
-                  {acceptedParticipants.filter(p => p.id !== 'current').map(renderParticipant)}
-                </View>
-              </View>
-            )}
-            
-            {/* Haven't Responded Section */}
-            {(currentUserAttended === null || maybeParticipants.length > 0 || pendingParticipants.length > 0) && (
-              <View style={styles.participantGroup}>
-                <Text style={styles.groupTitle}>
-                  Haven't Responded ({(currentUserAttended === null ? 1 : 0) + maybeParticipants.length + pendingParticipants.length})
-                </Text>
-                <View style={styles.participantsList}>
-                  {/* Show current user if they haven't responded */}
-                  {currentUserAttended === null && (
-                    <View style={styles.participantItem}>
-                      <Image 
-                        source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
-                        style={styles.participantAvatar} 
-                      />
-                      <Text style={styles.participantName}>You</Text>
-                    </View>
-                  )}
-                  {/* Show maybe and pending participants */}
-                  {maybeParticipants.map(renderParticipant)}
-                  {pendingParticipants.map(renderParticipant)}
-                </View>
-              </View>
-            )}
-            
-            {/* Did Not Attend Section */}
-            {(currentUserAttended === false || declinedParticipants.length > 0) && (
-              <View style={styles.participantGroup}>
-                <Text style={styles.groupTitle}>
-                  Did Not Attend ({(currentUserAttended === false ? 1 : 0) + declinedParticipants.length})
-                </Text>
-                <View style={styles.participantsList}>
-                  {/* Show current user if they didn't attend */}
-                  {currentUserAttended === false && (
-                    <View style={styles.participantItem}>
-                      <Image 
-                        source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face' }} 
-                        style={styles.participantAvatar} 
-                      />
-                      <Text style={styles.participantName}>You</Text>
-                    </View>
-                  )}
-                  {/* Show declined participants */}
-                  {declinedParticipants.map(renderParticipant)}
-                </View>
-              </View>
-            )}
-            
-            {/* Your Attendance Status Toggle */}
-            <View style={styles.attendanceStatusContainer}>
-              <Text style={styles.attendanceStatusLabel}>Did you actually attend this hangout?</Text>
-              <View style={styles.attendanceToggleContainer}>
-                <TouchableOpacity 
-                  style={[
-                    styles.attendanceToggleButton,
-                    currentUserAttended === true && styles.attendanceToggleButtonActive
-                  ]}
-                  onPress={() => {
-                    handleAttendanceConfirmation(true);
-                  }}
-                >
-                  <Text style={[
-                    styles.attendanceToggleText,
-                    currentUserAttended === true && styles.attendanceToggleTextActive
-                  ]}>
-                    Yes, I attended
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[
-                    styles.attendanceToggleButton,
-                    currentUserAttended === false && styles.attendanceToggleButtonActive
-                  ]}
-                  onPress={() => {
-                    handleAttendanceConfirmation(false);
-                  }}
-                >
-                  <Text style={[
-                    styles.attendanceToggleText,
-                    currentUserAttended === false && styles.attendanceToggleTextActive
-                  ]}>
-                    No, I didn't attend
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
           
           {/* Bottom padding for better scrolling */}
           <View style={styles.bottomPadding} />
@@ -535,12 +436,6 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
       
       {activeTab === 'Chat' && (
         <View style={styles.chatContainer}>
-          {/* Chat Deletion Warning */}
-          <View style={styles.chatWarning}>
-            <Text style={styles.chatWarningText}>
-              💬 Chat messages will be automatically deleted in 7 days from completion
-            </Text>
-          </View>
           <KeyboardAvoidingView 
             style={styles.chatKeyboardView}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -607,75 +502,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.text,
   },
-  planTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: 8,
-  },
   planDescription: {
     fontSize: 16,
     color: Colors.light.secondaryText,
     lineHeight: 22,
     marginBottom: 0,
   },
-  decisionContainer: {
+  planDescriptionPlaceholder: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+    lineHeight: 22,
+    opacity: 0.8,
+  },
+  pollContainer: {
     marginBottom: 16,
   },
-  decisionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginLeft: 6,
-  },
-  pollResultsContainer: {
-    backgroundColor: '#FAFAFA',
-    borderRadius: 8,
-    padding: 12,
-  },
-  pollStats: {
-    fontSize: 13,
-    color: Colors.light.secondaryText,
-    marginBottom: 12,
-  },
-  winnerIndicator: {
-    fontWeight: '600',
-    color: Colors.light.primary,
-  },
-  pollOptionsContainer: {
-    gap: 8,
-  },
-  pollOption: {
-    marginBottom: 4,
-  },
-  pollOptionHeader: {
+  pollHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  pollOptionText: {
+  pollIcon: {
+    marginRight: 8,
+  },
+  pollTitle: {
     fontSize: 14,
+    fontWeight: '600',
     color: Colors.light.text,
   },
-  winnerText: {
-    fontWeight: '600',
-    color: Colors.light.primary,
-  },
-  pollOptionPercentage: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
-  },
-  pollOptionBar: {
-    height: 6,
-    backgroundColor: `${Colors.light.buttonBackground}50`,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  pollOptionProgress: {
-    height: '100%',
-    borderRadius: 3,
+  participantsContainer: {
+    marginBottom: 8,
   },
   participantGroup: {
     marginBottom: 16,
@@ -683,29 +539,83 @@ const styles = StyleSheet.create({
   groupTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.text,
+    color: Colors.light.secondaryText,
     marginBottom: 8,
   },
-  participantsList: {
+  participantRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  participantItem: {
     alignItems: 'center',
-    marginBottom: 8,
+    paddingVertical: 8,
   },
-  participantAvatar: {
+  participantInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginBottom: 4,
+  },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.light.background,
+    backgroundColor: Colors.light.border,
+  },
+  acceptedIndicator: {
+    backgroundColor: Colors.light.onlineGreen,
+  },
+  maybeIndicator: {
+    backgroundColor: '#FFC107',
+  },
+  conditionalIndicator: {
+    backgroundColor: Colors.light.primary,
+  },
+  pendingIndicator: {
+    backgroundColor: Colors.light.offlineGray,
+  },
+  declinedIndicator: {
+    backgroundColor: Colors.light.destructive,
+  },
+  questionMark: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  eyeIcon: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyePupil: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.light.offlineGray,
   },
   participantName: {
-    fontSize: 12,
+    fontSize: 14,
     color: Colors.light.text,
-    textAlign: 'center',
-    maxWidth: 60,
+  },
+  emptyParticipantsText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    fontStyle: 'italic',
   },
   bottomPadding: {
     height: 40,
@@ -752,66 +662,23 @@ const styles = StyleSheet.create({
   chatContainer: {
     flex: 1,
   },
-  chatWarning: {
-    backgroundColor: `${Colors.light.warning}15`,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  chatWarningText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.warning,
-  },
-  attendanceStatusContainer: {
-    marginTop: 16,
-  },
-  attendanceStatusLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 12,
-  },
-  attendanceToggleContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  attendanceToggleButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-  },
-  attendanceToggleButtonActive: {
-    borderColor: Colors.light.primary,
-    backgroundColor: `${Colors.light.primary}15`,
-  },
-  attendanceToggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
-  },
-  attendanceToggleTextActive: {
-    color: Colors.light.primary,
-  },
   chatKeyboardView: {
     flex: 1,
   },
-  statusRow: {
+  planDateFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 8,
   },
-  statusIcon: {
+  planDateIcon: {
     marginRight: 8,
   },
-  dateText: {
-    fontSize: 14,
+  planDateFooterText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.text,
+    color: Colors.light.secondaryText,
   },
 }); 

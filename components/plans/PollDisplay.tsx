@@ -38,6 +38,7 @@ interface PollDisplayProps {
   isRealTimeUpdate?: boolean; // New prop to indicate if this is a real-time update
   isLoading?: boolean; // New prop to show loading state on the poll
   loadingText?: string; // Custom loading text
+  readOnly?: boolean; // When true, renders poll results without interactions
 }
 
 export default function PollDisplay({
@@ -54,7 +55,8 @@ export default function PollDisplay({
   onDelete,
   isRealTimeUpdate = false,
   isLoading = false,
-  loadingText = "Updating poll..."
+  loadingText = "Updating poll...",
+  readOnly = false
 }: PollDisplayProps) {
   // Local state to manage poll data independently
   const [localOptions, setLocalOptions] = useState<PollOption[]>(options);
@@ -149,6 +151,10 @@ export default function PollDisplay({
   }, [isRealTimeUpdate, localOptions]); // Removed animatedValues to prevent infinite loops
 
   const handleVote = (optionId: string) => {
+    if (readOnly) {
+      return;
+    }
+
     if (!canVote) {
       Alert.alert(
         'Cannot Vote',
@@ -310,12 +316,12 @@ export default function PollDisplay({
           <View style={styles.headerContainer}>
             <Text style={styles.question}>{question}</Text>
             <View style={styles.headerActions}>
-              {canVote && onEdit && (
+              {canVote && onEdit && !readOnly && (
                 <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
                   <Edit2 size={16} color={Colors.light.secondaryText} />
                 </TouchableOpacity>
               )}
-              {canVote && onDelete && (
+              {canVote && onDelete && !readOnly && (
                 <TouchableOpacity 
                   onPress={() => {
                     Alert.alert(
@@ -378,7 +384,7 @@ export default function PollDisplay({
               </Text>
             )}
           </View>
-          {canVote && onEdit && (
+          {canVote && onEdit && !readOnly && (
             <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
               <Edit2 size={16} color={Colors.light.secondaryText} />
             </TouchableOpacity>
@@ -416,7 +422,8 @@ export default function PollDisplay({
               <TouchableOpacity
                 style={styles.optionButton}
                 onPress={() => handleVote(option.id)}
-                activeOpacity={0.8}
+                activeOpacity={readOnly ? 1 : 0.8}
+                disabled={readOnly}
               >
                 {/* Check mark for selected - top left corner */}
                 {isSelected && (

@@ -1774,33 +1774,37 @@ router.post('/:id/invite', requireAuth, async (req, res) => {
     }
 
     // Check current participation status for selected users
-    const { data: existingParticipants } = await supabase
+    const { data: existingParticipants, error: checkError } = await supabase
       .from('plan_participants')
-      .select('user_id, status, response')
+      .select('user_id, status')
       .eq('plan_id', id)
       .in('user_id', userIds);
+
+    if (checkError) {
+      console.error('❌ Error checking existing participants:', checkError);
+      return res.status(500).json({ error: 'Failed to check participant status' });
+    }
+
+    console.log('📋 Existing participants status:', existingParticipants);
     
-    const normalizeStatus = (participant = {}) => {
-      const statusValue = participant.status || participant.response || '';
-      return typeof statusValue === 'string' ? statusValue.toLowerCase() : '';
-    };
+    // Separate users by their current status
+    const reactivatingUserIds = existingParticipants
+      ?.filter(p => p.status === 'declined')
+      .map(p => p.user_id) || [];
 
-    const reactivatingUserIds =
-      existingParticipants
-        ?.filter(p => normalizeStatus(p) === 'declined' || normalizeStatus(p) === 'not_going')
-        .map(p => p.user_id) || [];
-
-    const alreadyActiveUserIds =
-      existingParticipants
-        ?.filter(p => {
-          const status = normalizeStatus(p);
-          return status && status !== 'declined' && status !== 'not_going';
-        })
-        .map(p => p.user_id) || [];
+    const alreadyActiveUserIds = existingParticipants
+      ?.filter(p => p.status !== 'declined')
+      .map(p => p.user_id) || [];
 
     const newUserIds = userIds.filter(uid =>
       !alreadyActiveUserIds.includes(uid) && !reactivatingUserIds.includes(uid)
     );
+
+    console.log('📊 Categorized users:', {
+      reactivating: reactivatingUserIds,
+      alreadyActive: alreadyActiveUserIds,
+      new: newUserIds
+    });
 
     if (newUserIds.length === 0 && reactivatingUserIds.length === 0) {
       return res.status(400).json({ error: 'All selected users are already in the plan' });
@@ -1808,37 +1812,42 @@ router.post('/:id/invite', requireAuth, async (req, res) => {
 
     // Reactivate declined users by moving them back to pending
     if (reactivatingUserIds.length > 0) {
+      console.log('🔄 Reactivating declined users:', reactivatingUserIds);
       const { error: reactivateError } = await supabase
         .from('plan_participants')
         .update({
-          status: 'pending',
-          response: 'pending',
-          updated_at: new Date().toISOString()
+          status: 'pending'
+          // updated_at is handled by database trigger
         })
         .eq('plan_id', id)
         .in('user_id', reactivatingUserIds);
 
       if (reactivateError) {
-        console.error('Error reactivating declined participants:', reactivateError);
+        console.error('❌ Error reactivating declined participants:', reactivateError);
         return res.status(500).json({ error: 'Failed to re-invite some users' });
       }
+      console.log('✅ Successfully reactivated declined users');
     }
 
     // Add new participants as pending
-    const participantsToAdd = newUserIds.map(newUserId => ({
-      plan_id: id,
-      user_id: newUserId,
-      status: 'pending',
-      created_at: new Date().toISOString()
-    }));
+    if (newUserIds.length > 0) {
+      console.log('➕ Adding new participants:', newUserIds);
+      const participantsToAdd = newUserIds.map(newUserId => ({
+        plan_id: id,
+        user_id: newUserId,
+        status: 'pending'
+        // created_at is handled by database default
+      }));
 
-    const { error: insertError } = await supabase
-      .from('plan_participants')
-      .insert(participantsToAdd);
+      const { error: insertError } = await supabase
+        .from('plan_participants')
+        .insert(participantsToAdd);
 
-    if (insertError) {
-      console.error('Error adding participants:', insertError);
-      return res.status(500).json({ error: 'Failed to invite users' });
+      if (insertError) {
+        console.error('❌ Error adding participants:', insertError);
+        return res.status(500).json({ error: 'Failed to invite users' });
+      }
+      console.log('✅ Successfully added new participants');
     }
 
     // Notify about new participants
