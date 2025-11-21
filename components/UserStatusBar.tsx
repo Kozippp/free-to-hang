@@ -19,6 +19,11 @@ export default function UserStatusBar({
   activity, 
   onToggle 
 }: UserStatusBarProps) {
+  const formattedActivity = activity
+    ? activity.replace(/[\r\n]+/g, ' ').trim()
+    : '';
+  const hasActivity = Boolean(formattedActivity);
+
   return (
     <View style={styles.container}>
       <View style={styles.userInfo}>
@@ -38,7 +43,7 @@ export default function UserStatusBar({
               {isAvailable ? 'Free to hang' : 'Unavailable'}
             </Text>
           </View>
-          {activity ? (
+          {hasActivity ? (
             <View style={styles.activityContainer}>
               <MapPin size={14} color={Colors.light.secondaryText} />
               <Text 
@@ -46,7 +51,7 @@ export default function UserStatusBar({
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
-                {activity}
+                {formattedActivity}
               </Text>
             </View>
           ) : null}
