@@ -3,6 +3,7 @@ const router = express.Router();
 
 // Use global supabase instance
 const supabase = global.supabase;
+const { notifyUser, NotificationTemplates } = require('../services/notificationService');
 
 // Select anon key based on active project (fallback to base var)
 const ACTIVE = (process.env.SUPABASE_ACTIVE_PROJECT || 'KOZIPPP').toUpperCase();
@@ -133,6 +134,160 @@ const transformParticipantStatus = (participant, currentUserId) => {
     status: actualStatus,
     conditionalFriends: conditionalFriends
   };
+};
+
+const getPlanTitle = async (planId) => {
+  const { data } = await supabase
+    .from('plans')
+    .select('title')
+    .eq('id', planId)
+    .single();
+  return data?.title || 'Plan';
+};
+
+const sendPlanInviteNotifications = async (planId, inviterId, invitedUserIds) => {
+  if (!invitedUserIds || invitedUserIds.length === 0) return;
+
+  const [planTitle, inviter] = await Promise.all([
+    getPlanTitle(planId),
+    supabase.from('users').select('name').eq('id', inviterId).single()
+  ]);
+
+  const template = NotificationTemplates.plan_invite(
+    planTitle,
+    inviter.data?.name || 'Someone'
+  );
+
+  await Promise.all(
+    invitedUserIds.map((userId) =>
+      notifyUser({
+        userId,
+        ...template,
+        data: { plan_id: planId },
+        triggeredBy: inviterId
+      })
+    )
+  );
+};
+
+const sendParticipantJoinedNotifications = async (planId, participantId) => {
+  const [{ data: participants }, { data: user }, planTitle] = await Promise.all([
+    supabase
+      .from('plan_participants')
+      .select('user_id')
+      .eq('plan_id', planId)
+      .neq('user_id', participantId),
+    supabase.from('users').select('name').eq('id', participantId).single(),
+    getPlanTitle(planId)
+  ]);
+
+  if (!participants || participants.length === 0) return;
+
+  const template = NotificationTemplates.plan_participant_joined(
+    planTitle,
+    user?.name || 'A friend'
+  );
+
+  await Promise.all(
+    participants.map(({ user_id }) =>
+      notifyUser({
+        userId: user_id,
+        ...template,
+        data: { plan_id: planId },
+        triggeredBy: participantId
+      })
+    )
+  );
+};
+
+const sendPollCreatedNotifications = async (planId, pollId, question, creatorId) => {
+  const [{ data: participants }, planTitle] = await Promise.all([
+    supabase
+      .from('plan_participants')
+      .select('user_id')
+      .eq('plan_id', planId)
+      .neq('user_id', creatorId),
+    getPlanTitle(planId)
+  ]);
+
+  if (!participants || participants.length === 0) return;
+
+  const template = NotificationTemplates.poll_created(planTitle, question);
+
+  await Promise.all(
+    participants.map(({ user_id }) =>
+      notifyUser({
+        userId: user_id,
+        ...template,
+        data: { plan_id: planId, poll_id: pollId },
+        triggeredBy: creatorId
+      })
+    )
+  );
+};
+
+const maybeNotifyPollWinner = async (planId, pollId) => {
+  const { data: votes, error: votesError } = await supabase
+    .from('plan_poll_votes')
+    .select('option_id')
+    .eq('poll_id', pollId);
+
+  if (votesError || !votes || votes.length === 0) {
+    return;
+  }
+
+  const voteCounts = votes.reduce((acc, vote) => {
+    acc[vote.option_id] = (acc[vote.option_id] || 0) + 1;
+    return acc;
+  }, {});
+
+  const sortedOptions = Object.entries(voteCounts)
+    .map(([optionId, count]) => ({ optionId, count }))
+    .sort((a, b) => b.count - a.count);
+
+  if (sortedOptions.length === 0 || sortedOptions[0].count === 0) {
+    return;
+  }
+
+  if (sortedOptions.length > 1 && sortedOptions[0].count === sortedOptions[1].count) {
+    return;
+  }
+
+  const winnerOptionId = sortedOptions[0].optionId;
+
+  const { data: existingWinner } = await supabase
+    .from('notifications')
+    .select('id')
+    .eq('type', 'poll_winner')
+    .eq('data->>poll_id', pollId)
+    .maybeSingle();
+
+  if (existingWinner) {
+    return;
+  }
+
+  const [{ data: option }, planTitle, { data: participants }] = await Promise.all([
+    supabase.from('plan_poll_options').select('option_text').eq('id', winnerOptionId).single(),
+    getPlanTitle(planId),
+    supabase.from('plan_participants').select('user_id').eq('plan_id', planId)
+  ]);
+
+  if (!participants || participants.length === 0) return;
+
+  const template = NotificationTemplates.poll_winner(
+    planTitle,
+    option?.option_text || 'Winning option'
+  );
+
+  await Promise.all(
+    participants.map(({ user_id }) =>
+      notifyUser({
+        userId: user_id,
+        ...template,
+        data: { plan_id: planId, poll_id: pollId, option_id: winnerOptionId }
+      })
+    )
+  );
 };
 
 // Helper function to get plan with full details
@@ -1162,6 +1317,14 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
     // Notify plan update
     await notifyPlanUpdate(id, 'participant_joined', userId);
 
+    if ((statusMapping[status] || status) === 'going') {
+      try {
+        await sendParticipantJoinedNotifications(id, userId);
+      } catch (notifyError) {
+        console.error('❌ Failed to send participant joined notifications:', notifyError);
+      }
+    }
+
     // Process conditional dependencies after status change
     await processConditionalDependencies(id);
 
@@ -1371,6 +1534,12 @@ router.post('/:id/polls', requireAuth, async (req, res) => {
     // Notify poll creation
     await notifyPlanUpdate(id, 'poll_created', userId, { poll_id: poll.id });
 
+    try {
+      await sendPollCreatedNotifications(id, poll.id, question, userId);
+    } catch (notifyError) {
+      console.error('❌ Failed to send poll created notifications:', notifyError);
+    }
+
     const fullPlan = await getPlanWithDetails(id, userId);
     res.json(fullPlan);
   } catch (error) {
@@ -1446,6 +1615,12 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
     // Check if this vote creates a winner (simplified logic)
     // Just notify that someone voted - poll winner logic can be implemented later
     await notifyPlanUpdate(id, 'poll_voted', userId, { poll_id: pollId });
+
+    try {
+      await maybeNotifyPollWinner(id, pollId);
+    } catch (notifyError) {
+      console.error('❌ Failed to send poll winner notification:', notifyError);
+    }
 
     const fullPlan = await getPlanWithDetails(id, userId);
     res.json(fullPlan);
@@ -1944,6 +2119,14 @@ router.post('/:id/invite', requireAuth, async (req, res) => {
         invited_user_id: invitedUserId,
         invited_by: userId
       });
+    }
+
+    if (invitedUserIds.length > 0) {
+      try {
+        await sendPlanInviteNotifications(id, userId, invitedUserIds);
+      } catch (notifyError) {
+        console.error('❌ Failed to send invite notifications:', notifyError);
+      }
     }
 
     console.log(`✅ Invited ${newUserIds.length} new users and reactivated ${reactivatingUserIds.length} declined users for plan ${id}`);

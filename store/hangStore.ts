@@ -5,6 +5,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar, SILHOUETTE_AVATAR_URL } from '@/constants/defaultImages';
 import { formatFriendLastAvailable } from '@/utils/time';
+import { API_CONFIG } from '@/constants/config';
 
 interface Friend {
   id: string;
@@ -72,6 +73,13 @@ const MAX_HANG_RETRIES = 3;
 const HANG_HEALTH_CHECK_INTERVAL = 60000; // 60s
 let hangHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
+const getAuthToken = async () => {
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+  return session?.access_token;
+};
+
 // Create the store with persistence
 const useHangStore = create<HangState>()(
   persist(
@@ -105,44 +113,30 @@ const useHangStore = create<HangState>()(
           }
         });
         
-        // Update status in database directly on users table (no RPC)
         try {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser) {
-            const nextStatus = newStatus ? 'available' as const : 'offline' as const;
-            const nextActivity = newStatus && currentActivity ? currentActivity : null;
+          const token = await getAuthToken();
+          if (!token) {
+            throw new Error('No auth token available');
+          }
 
-            const { data, error } = await supabase
-              .from('users')
-              .update({
-                status: nextStatus,
-                current_activity: nextActivity,
-                status_changed_at: new Date().toISOString(),
-                // when going offline, capture last seen
-                last_seen_at: !newStatus ? new Date().toISOString() : null,
-              })
-              .eq('id', authUser.id)
-              .select()
-              .maybeSingle();
-            
-            if (error) {
-              console.error('Error updating status in database:', error);
-              // Revert local state on error
-              set({ 
-                isAvailable: currentStatus,
-                user: {
-                  ...get().user,
-                  status: currentStatus ? 'available' : 'offline'
-                }
-              });
-            } else {
-              console.log('Status updated in database:', nextStatus, 'activity:', nextActivity ?? '-');
-            }
+          const response = await fetch(`${API_CONFIG.BASE_URL}/user/status`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              is_available: newStatus,
+              activity: newStatus && currentActivity ? currentActivity : null
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Backend status update failed: ${response.status}`);
           }
         } catch (error) {
-          console.error('Error updating status:', error);
-          // Revert local state on error
-          set({ 
+          console.error('Error updating status via backend:', error);
+          set({
             isAvailable: currentStatus,
             user: {
               ...get().user,

@@ -219,6 +219,7 @@ try {
   const pollsRoutes = require('./routes/polls');
   const storageRoutes = require('./routes/storage');
   const chatRoutes = require('./routes/chat');
+  const notificationRoutes = require('./routes/notifications');
 
   // API routes
   app.use('/api/user', userRoutes);
@@ -227,6 +228,7 @@ try {
   app.use('/api/polls', pollsRoutes);
   app.use('/api/storage', storageRoutes);
   app.use('/api/chat', chatRoutes);
+  app.use('/api/notifications', notificationRoutes);
 
   console.log('✅ Routes loaded successfully');
 } catch (error) {
@@ -239,6 +241,9 @@ if (supabase) {
   try {
     const scheduler = require('./services/scheduler');
     scheduler.start();
+
+    const { startEngagementScheduler } = require('./services/engagementService');
+    startEngagementScheduler();
 
     // Graceful shutdown for scheduler
     process.on('SIGTERM', () => {

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
-import { Calendar, ToggleLeft, User } from "lucide-react-native";
+import { Bell, Calendar, ToggleLeft, User } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { StatusBar } from "expo-status-bar";
-import { Platform, View, Text } from "react-native";
+import { View, Text } from "react-native";
 import usePlansStore from "@/store/plansStore";
 import useHangStore from "@/store/hangStore";
 import useFriendsStore from "@/store/friendsStore";
 import useChatStore from "@/store/chatStore";
+import useNotificationsStore from "@/store/notificationsStore";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function TabLayout() {
@@ -18,6 +19,12 @@ export default function TabLayout() {
   // Real-time management for both hang and friends
   const { startRealTimeUpdates: startHangRealtime, stopRealTimeUpdates: stopHangRealtime } = useHangStore();
   const { startRealTimeUpdates: startFriendsRealtime, stopRealTimeUpdates: stopFriendsRealtime } = useFriendsStore();
+  const {
+    unreadCount,
+    fetchNotifications,
+    startRealTimeUpdates: startNotificationsRealtime,
+    stopRealTimeUpdates: stopNotificationsRealtime
+  } = useNotificationsStore();
   
   // Check for unread invitations
   useEffect(() => {
@@ -39,6 +46,10 @@ export default function TabLayout() {
 
       // Start hang realtime system globally
       startHangRealtime();
+      if (user?.id) {
+        fetchNotifications(user.id);
+        startNotificationsRealtime(user.id);
+      }
       // Friends realtime starts individually in profile tab to avoid duplication
     };
     
@@ -54,6 +65,7 @@ export default function TabLayout() {
       
       stopHangRealtime();
       stopFriendsRealtime();
+      stopNotificationsRealtime();
       
       // Stop plans realtime
       const plansStore = usePlansStore.getState();
@@ -130,6 +142,37 @@ export default function TabLayout() {
                 )}
               </View>
             ),
+          }}
+        />
+        <Tabs.Screen
+          name="notifications"
+          options={{
+            title: "Notifications",
+            tabBarIcon: ({ color, size }) => (
+              <View>
+                <Bell size={size} color={color} />
+                {unreadCount > 0 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -6,
+                      backgroundColor: '#FF3B30',
+                      borderRadius: 7,
+                      width: 14,
+                      height: 14,
+                      justifyContent: 'center',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ),
+            tabBarBadge: unreadCount > 0 ? unreadCount : undefined
           }}
         />
         <Tabs.Screen

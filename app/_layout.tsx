@@ -5,10 +5,13 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Notifications from 'expo-notifications';
 
 import { ErrorBoundary } from "./error-boundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Colors from "@/constants/colors";
+import { registerForPushNotifications, updateLastActive } from "@/utils/pushNotifications";
+import useNotificationsStore from "@/store/notificationsStore";
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
@@ -50,7 +53,30 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
+  const unreadCount = useNotificationsStore(state => state.unreadCount);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    registerForPushNotifications(user.id);
+    updateLastActive(user.id);
+
+    const interval = setInterval(() => {
+      updateLastActive(user.id);
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
+    Notifications.setBadgeCountAsync(unreadCount).catch((error) =>
+      console.error('❌ Failed to set badge count:', error)
+    );
+  }, [unreadCount]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

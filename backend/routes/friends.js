@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
+const { notifyUser, NotificationTemplates } = require('../services/notificationService');
 // Use global supabase instance initialised in backend/index.js
 const supabase = global.supabase;
 
@@ -47,6 +48,24 @@ router.post('/request', verifyToken, async (req, res) => {
       .single();
     
     if (error) throw error;
+
+    try {
+      const { data: senderProfile } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', senderId)
+        .single();
+
+      const template = NotificationTemplates.friend_request(senderProfile?.name || 'Someone');
+      await notifyUser({
+        userId: receiver_id,
+        ...template,
+        data: { user_id: senderId, request_id: data.id },
+        triggeredBy: senderId
+      });
+    } catch (notifyError) {
+      console.error('❌ Failed to send friend request notification:', notifyError);
+    }
     
     res.json({ 
       success: true, 
@@ -137,6 +156,24 @@ router.post('/request/accept', verifyToken, async (req, res) => {
     
     if (!data) {
       return res.status(404).json({ error: 'Friend request not found or already processed' });
+    }
+
+    try {
+      const { data: receiverProfile } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', userId)
+        .single();
+
+      const template = NotificationTemplates.friend_accepted(receiverProfile?.name || 'Your friend');
+      await notifyUser({
+        userId: data.sender_id,
+        ...template,
+        data: { user_id: userId, request_id },
+        triggeredBy: userId
+      });
+    } catch (notifyError) {
+      console.error('❌ Failed to send friend accepted notification:', notifyError);
     }
     
     res.json({ 

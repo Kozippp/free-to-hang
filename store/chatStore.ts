@@ -799,8 +799,9 @@ const useChatStore = create<ChatState>((set, get) => ({
         async (payload) => {
           console.log('👍 Reaction changed:', payload);
 
-          // Refetch all reactions for this message
-          const messageId = payload.new?.message_id || payload.old?.message_id;
+          const newReaction = payload.new as { message_id?: string } | null;
+          const oldReaction = payload.old as { message_id?: string } | null;
+          const messageId = newReaction?.message_id || oldReaction?.message_id;
           if (!messageId || typeof messageId !== 'string') return;
 
           const { data: reactions } = await supabase

@@ -220,3 +220,179 @@ CREATE TRIGGER update_plan_participants_updated_at BEFORE UPDATE ON plan_partici
 
 CREATE TRIGGER update_user_status_updated_at BEFORE UPDATE ON user_status 
     FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column(); 
+
+-- ============================================
+-- Notification system tables
+-- ============================================
+
+-- Notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  type TEXT CHECK (type IN (
+    'plan_invite',
+    'plan_update', 
+    'plan_participant_joined',
+    'chat_message',
+    'poll_created',
+    'poll_ended',
+    'poll_winner',
+    'friend_request',
+    'friend_accepted',
+    'status_change',
+    'engagement_friends_online',
+    'engagement_comeback'
+  )) NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB DEFAULT '{}'::jsonb,
+  read BOOLEAN DEFAULT FALSE,
+  read_at TIMESTAMP WITH TIME ZONE,
+  triggered_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read) WHERE read = FALSE;
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "Users can view their own notifications"
+ON notifications FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY IF NOT EXISTS "Users can update their own notifications"
+ON notifications FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY IF NOT EXISTS "Users can delete their own notifications"
+ON notifications FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY IF NOT EXISTS "Service role can insert notifications"
+ON notifications FOR INSERT WITH CHECK (true);
+
+-- Push tokens table
+CREATE TABLE IF NOT EXISTS push_tokens (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  expo_push_token TEXT NOT NULL UNIQUE,
+  device_type TEXT CHECK (device_type IN ('ios', 'android', 'web')) NOT NULL,
+  active BOOLEAN DEFAULT TRUE,
+  last_used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, expo_push_token)
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_tokens_active ON push_tokens(active) WHERE active = TRUE;
+
+ALTER TABLE push_tokens ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "Users can view their own push tokens"
+ON push_tokens FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY IF NOT EXISTS "Users can insert their own push tokens"
+ON push_tokens FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY IF NOT EXISTS "Users can update their own push tokens"
+ON push_tokens FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY IF NOT EXISTS "Users can delete their own push tokens"
+ON push_tokens FOR DELETE USING (auth.uid() = user_id);
+
+-- Notification preferences table
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE PRIMARY KEY,
+  push_enabled BOOLEAN DEFAULT TRUE,
+  plan_notifications BOOLEAN DEFAULT TRUE,
+  chat_notifications BOOLEAN DEFAULT TRUE,
+  friend_notifications BOOLEAN DEFAULT TRUE,
+  status_notifications BOOLEAN DEFAULT TRUE,
+  engagement_notifications BOOLEAN DEFAULT TRUE,
+  quiet_hours_enabled BOOLEAN DEFAULT FALSE,
+  quiet_hours_start TIME,
+  quiet_hours_end TIME,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "Users can manage their own notification preferences"
+ON notification_preferences FOR ALL USING (auth.uid() = user_id);
+
+-- Auto create notification preferences for each new user
+CREATE OR REPLACE FUNCTION create_notification_preferences()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO notification_preferences (user_id)
+  VALUES (NEW.id)
+  ON CONFLICT (user_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER IF NOT EXISTS on_user_created_notification_prefs
+  AFTER INSERT ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION create_notification_preferences();
+
+-- Track last_active timestamp on user_status table
+ALTER TABLE user_status 
+  ADD COLUMN IF NOT EXISTS last_active TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+CREATE INDEX IF NOT EXISTS idx_user_status_last_active ON user_status(last_active);
+
+UPDATE user_status 
+SET last_active = COALESCE(last_seen, NOW())
+WHERE last_active IS NULL;
+
+-- Notification analytics view
+CREATE OR REPLACE VIEW notification_stats AS
+SELECT 
+  user_id,
+  COUNT(*) AS total_notifications,
+  COUNT(*) FILTER (WHERE read = FALSE) AS unread_count,
+  COUNT(*) FILTER (WHERE type = 'plan_invite') AS plan_invites,
+  COUNT(*) FILTER (WHERE type = 'chat_message') AS chat_messages,
+  COUNT(*) FILTER (WHERE type = 'friend_request') AS friend_requests,
+  MAX(created_at) AS last_notification_at
+FROM notifications
+GROUP BY user_id;
+
+COMMENT ON VIEW notification_stats IS 'Aggregated notification statistics per user';
+
+-- Helper functions
+CREATE OR REPLACE FUNCTION mark_all_notifications_read(target_user_id UUID)
+RETURNS INTEGER AS $$
+DECLARE
+  updated_count INTEGER;
+BEGIN
+  UPDATE notifications
+  SET read = TRUE, read_at = NOW()
+  WHERE user_id = target_user_id AND read = FALSE;
+
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  RETURN updated_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION cleanup_old_notifications()
+RETURNS INTEGER AS $$
+DECLARE
+  deleted_count INTEGER;
+BEGIN
+  DELETE FROM notifications
+  WHERE created_at < NOW() - INTERVAL '90 days';
+
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+  RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Backfill notification preferences for existing users
+INSERT INTO notification_preferences (user_id)
+SELECT id FROM users
+ON CONFLICT (user_id) DO NOTHING;

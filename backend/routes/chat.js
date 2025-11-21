@@ -3,6 +3,7 @@ const router = express.Router();
 
 // Use global supabase instance
 const supabase = global.supabase;
+const { notifyUser, NotificationTemplates } = require('../services/notificationService');
 
 // Select anon key based on active project (fallback to base var)
 const ACTIVE = (process.env.SUPABASE_ACTIVE_PROJECT || 'KOZIPPP').toUpperCase();
@@ -328,6 +329,56 @@ router.post('/:planId/messages', requireAuth, async (req, res) => {
     
     // Get message with full details
     const fullMessage = await getMessageWithDetails(message.id);
+
+    try {
+      const [{ data: plan }] = await Promise.all([
+        supabase
+          .from('plans')
+          .select('title')
+          .eq('id', planId)
+          .single()
+      ]);
+
+      const { data: participants } = await supabase
+        .from('plan_participants')
+        .select('user_id')
+        .eq('plan_id', planId)
+        .neq('user_id', senderId);
+
+      const { data: senderProfile } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', senderId)
+        .single();
+
+      const preview = (() => {
+        if (type === 'text') {
+          return (content || '').trim().slice(0, 140) || 'Sent a message';
+        }
+        if (type === 'image') return 'Sent a photo';
+        if (type === 'voice') return 'Sent a voice message';
+        return 'New activity in chat';
+      })();
+
+      const template = NotificationTemplates.chat_message(
+        plan?.title || 'Plan chat',
+        senderProfile?.name || 'Someone',
+        preview
+      );
+
+      await Promise.all(
+        (participants || []).map(({ user_id }) =>
+          notifyUser({
+            userId: user_id,
+            ...template,
+            data: { plan_id: planId, message_id: message.id },
+            triggeredBy: senderId
+          })
+        )
+      );
+    } catch (notifyError) {
+      console.error('❌ Failed to send chat notifications:', notifyError);
+    }
     
     res.status(201).json({
       success: true,

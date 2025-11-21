@@ -57,9 +57,23 @@
           "photosPermission": "The app accesses your photos to let you share them with your friends.",
           "cameraPermission": "The app accesses your camera to let you take photos to share with friends."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#111827",
+          "sounds": []
+        }
       ]
     ],
     "scheme": "freetohang",
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#111827",
+      "androidMode": "default",
+      "androidCollapsedTitle": "{{unread_count}} new notifications"
+    },
     "extra": {
       "router": {
         "origin": false
