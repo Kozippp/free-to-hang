@@ -105,7 +105,7 @@ export default function PlanParticipants({
         >
           <UserPlus size={16} color={Colors.light.primary} />
           <Text style={styles.simpleInviteButtonText}>
-            Invite more people
+            Invite more friends
           </Text>
         </TouchableOpacity>
       )}
