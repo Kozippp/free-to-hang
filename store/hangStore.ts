@@ -464,27 +464,20 @@ const useHangStore = create<HangState>()(
           .on(
             'postgres_changes',
             {
-              event: 'UPDATE',
+              event: '*',
               schema: 'public',
-              table: 'users',
-              filter: 'status=neq.null'
+              table: 'user_status',
             },
             (payload) => {
               console.log('📡 User status change detected:', payload);
+              
+              // If a friend went online (chain effect trigger)
+              const newStatus = payload.new;
+              if (payload.eventType === 'UPDATE' && newStatus?.is_available === true) {
+                console.log('🔥 Friend went online, chain effect will trigger from backend');
+              }
+              
               // Immediately reload friends data when any user status changes
-              get().loadFriends();
-            }
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'users'
-            },
-            (payload) => {
-              console.log('📡 New user detected:', payload);
-              // Reload friends data when new users join
               get().loadFriends();
             }
           )
