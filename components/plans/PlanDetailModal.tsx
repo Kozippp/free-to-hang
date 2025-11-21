@@ -124,7 +124,6 @@ export default function PlanDetailModal({
               onLongPress={handleHeaderLongPress}
               delayLongPress={1000}
               activeOpacity={canEditHeaderTitle ? 0.7 : 1}
-              disabled={!canEditHeaderTitle}
             >
               {isEditingHeaderTitle ? (
                 <TextInput

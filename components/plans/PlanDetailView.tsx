@@ -126,12 +126,14 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const currentUser = latestPlan.participants.find(p => p.id === user.id);
   const currentUserStatus = currentUser?.status || 'pending';
   
-  // Check if user is going
+  // Check edit permissions
   const isInYesGang = currentUserStatus === 'going';
+  const isPlanCreator = latestPlan.creator?.id === 'current';
+  const canEditPlan = isInYesGang || isPlanCreator;
 
   React.useEffect(() => {
-    onEditPermissionChange?.(isInYesGang);
-  }, [isInYesGang, onEditPermissionChange]);
+    onEditPermissionChange?.(canEditPlan);
+  }, [canEditPlan, onEditPermissionChange]);
   
   // Swipe gesture state
   const { width } = Dimensions.get('window');
@@ -870,12 +872,12 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
             isEditingTitle={false}
             isEditingDescription={editingDescription}
             onEditTitle={noop}
-            onEditDescription={() => isInYesGang && setEditingDescription(true)}
+            onEditDescription={() => canEditPlan && setEditingDescription(true)}
             onSaveTitle={noop}
             onSaveDescription={handleDescriptionSave}
             onChangeTitle={noop}
             onChangeDescription={setDescription}
-            canEdit={isInYesGang}
+            canEdit={canEditPlan}
             hideTitle={true}
           />
           
