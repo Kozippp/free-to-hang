@@ -850,6 +850,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         onHandlerStateChange={onHandlerStateChange}
         activeOffsetX={[-10, 10]}
         failOffsetX={activeTab === 'Chat' ? [-10, 10000] : undefined}
+        failOffsetY={[-10, 10]}
       >
         <Animated.View 
           style={[
