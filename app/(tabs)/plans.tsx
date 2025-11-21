@@ -48,6 +48,33 @@ export default function PlansScreen() {
     };
   }, [user?.id]); // Only depend on user.id to avoid infinite loops
 
+  useEffect(() => {
+    if (!params.tab) {
+      return;
+    }
+
+    const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+    if (!tabParam) {
+      return;
+    }
+
+    const normalizedTab = tabParam.toLowerCase();
+    const tabMap: Record<string, string> = {
+      invitations: 'Invitations',
+      plan: 'Plan',
+      completed: 'Completed',
+    };
+
+    const targetTab = tabMap[normalizedTab];
+    if (targetTab) {
+      setActiveTab(targetTab);
+
+      setTimeout(() => {
+        router.replace('/plans');
+      }, 300);
+    }
+  }, [params.tab, router]);
+
   // Handle pull-to-refresh
   const handleRefresh = async () => {
     if (!user?.id) return;

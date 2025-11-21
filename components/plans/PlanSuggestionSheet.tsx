@@ -66,6 +66,7 @@ export default function PlanSuggestionSheet({
   
   const [planTitle, setPlanTitle] = useState(prefilledTitle || '');
   const [description, setDescription] = useState(prefilledDescription || '');
+  const [currentSelectedFriends, setCurrentSelectedFriends] = useState<Friend[]>(selectedFriends);
   const [showAddMoreModal, setShowAddMoreModal] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -119,6 +120,7 @@ export default function PlanSuggestionSheet({
       setTimeout(() => {
         setPlanTitle(prefilledTitle || '');
         setDescription(prefilledDescription || '');
+        setCurrentSelectedFriends(selectedFriends);
       }, 0);
       
       Animated.timing(slideAnim, {
@@ -127,12 +129,13 @@ export default function PlanSuggestionSheet({
         useNativeDriver: true,
       }).start();
     }
-  }, [visible, slideAnim, prefilledTitle, prefilledDescription]);
+  }, [visible, slideAnim, prefilledTitle, prefilledDescription, selectedFriends]);
 
   const resetStates = () => {
     setTimeout(() => {
       setPlanTitle('');
       setDescription('');
+      setCurrentSelectedFriends([]);
     }, 0);
   };
   
@@ -151,7 +154,7 @@ export default function PlanSuggestionSheet({
         date: 'Today, 7:00 PM', // This would be set by the user in a real app
         location: 'To be determined', // This would be set by the user in a real app
         maxParticipants: null,
-        invitedFriends: selectedFriends.map(friend => friend.id)
+        invitedFriends: currentSelectedFriends.map(friend => friend.id)
       };
       
       // Create the plan via API
@@ -171,9 +174,10 @@ export default function PlanSuggestionSheet({
       }).start(() => {
         onClose();
         
-        // Navigate to plans tab with immediate effect
+        // Navigate to correct plans tab based on plan type
         setTimeout(() => {
-          router.push('/plans?newPlan=true');
+          const targetTab = isAnonymous ? 'invitations' : 'plan';
+          router.push(`/plans?tab=${targetTab}&newPlan=true`);
         }, 100); // Small delay to ensure sheet is closed
       });
       
@@ -278,11 +282,11 @@ export default function PlanSuggestionSheet({
                     />
 
                     {/* Selected Friends Section */}
-                    {selectedFriends.length > 0 && (
+                    {currentSelectedFriends.length > 0 && (
                       <View style={styles.invitedFriendsContainer}>
                         <View style={styles.invitedFriendsHeader}>
                           <Text style={styles.invitedFriendsLabel}>
-                            Inviting ({selectedFriends.length})
+                            Inviting ({currentSelectedFriends.length})
                           </Text>
                           {onAddMoreFriends && (
                             <TouchableOpacity
@@ -295,10 +299,10 @@ export default function PlanSuggestionSheet({
                           )}
                         </View>
                         <View style={styles.friendsList}>
-                          {selectedFriends.map((friend, index) => (
+                          {currentSelectedFriends.map((friend, index) => (
                             <View key={friend.id} style={[
                               styles.friendItem,
-                              index === selectedFriends.length - 1 && styles.friendItemLast
+                              index === currentSelectedFriends.length - 1 && styles.friendItemLast
                             ]}>
                               <View style={styles.friendAvatarContainer}>
                                 <Image
@@ -316,10 +320,13 @@ export default function PlanSuggestionSheet({
                               <TouchableOpacity
                                 style={styles.removeButton}
                                 onPress={() => {
-                                  const updatedFriends = selectedFriends.filter(f => f.id !== friend.id);
-                                  if (onFriendsUpdated) {
-                                    onFriendsUpdated(updatedFriends);
-                                  }
+                                  setCurrentSelectedFriends((prev) => {
+                                    const updatedFriends = prev.filter(f => f.id !== friend.id);
+                                    if (onFriendsUpdated) {
+                                      onFriendsUpdated(updatedFriends);
+                                    }
+                                    return updatedFriends;
+                                  });
                                 }}
                               >
                                 <X size={16} color={Colors.light.secondaryText} />
@@ -359,9 +366,23 @@ export default function PlanSuggestionSheet({
                 visible={showAddMoreModal}
                 onClose={() => setShowAddMoreModal(false)}
                 availableFriends={availableFriends}
-                alreadyInvited={selectedFriends}
+                alreadyInvited={currentSelectedFriends}
                 onAddFriends={(friendIds) => {
-                  onAddMoreFriends(friendIds);
+                  if (friendIds.length > 0) {
+                    setCurrentSelectedFriends((prev) => {
+                      const existingIds = new Set(prev.map(friend => friend.id));
+                      const newlySelected = availableFriends.filter(
+                        friend => friendIds.includes(friend.id) && !existingIds.has(friend.id)
+                      );
+                      if (newlySelected.length > 0) {
+                        const updatedFriends = [...prev, ...newlySelected];
+                        onFriendsUpdated?.(updatedFriends);
+                        return updatedFriends;
+                      }
+                      return prev;
+                    });
+                  }
+                  onAddMoreFriends?.(friendIds);
                   setShowAddMoreModal(false);
                 }}
               />

@@ -164,13 +164,25 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
 
   // Convert plan participants to the format expected by PlanSuggestionSheet
   const getSelectedFriendsData = () => {
+    const currentUserId = user?.id;
+
     return latestPlan.participants
-      .filter(p => p.id !== 'current') // Exclude current user
-      .map(participant => ({
+      .filter((participant) => {
+        if (participant.id === 'current') {
+          return false;
+        }
+
+        if (currentUserId && participant.id === currentUserId) {
+          return false;
+        }
+
+        return true;
+      })
+      .map((participant) => ({
         id: participant.id,
         name: participant.name,
-        avatar: participant.avatar,
-        status: 'online' as const, // Assume they're available for simplicity
+        avatar: participant.avatar || '',
+        status: 'available' as const,
         activity: '',
         lastActive: '',
         lastSeen: ''
