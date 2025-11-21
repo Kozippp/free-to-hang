@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
-import { Users, Check, X, Eye, HelpCircle } from 'lucide-react-native';
+import { Users, Check, X, Eye } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan, ParticipantStatus } from '@/store/plansStore';
 
@@ -8,21 +8,31 @@ interface CompletedPlanCardProps {
   plan: Plan;
   onPress: (plan: Plan) => void;
   userAttended?: boolean | null; // null = not answered, true = attended, false = didn't attend
-  currentUserId?: string;
 }
 
-export default function CompletedPlanCard({ plan, onPress, userAttended, currentUserId }: CompletedPlanCardProps) {
+export default function CompletedPlanCard({ plan, onPress, userAttended }: CompletedPlanCardProps) {
   // Get participants who actually joined (going status)
   const joinedParticipants = plan.participants.filter(p => p.status === 'going');
-  const currentUserParticipant = plan.participants.find(participant => {
-    if (participant.id === 'current') {
-      return true;
+
+  const currentUserParticipant = plan.participants.find(participant => participant.id === 'current');
+
+  const resolveUserStatus = (): ParticipantStatus => {
+    if (currentUserParticipant?.status) {
+      return currentUserParticipant.status;
     }
-    if (currentUserId) {
-      return participant.id === currentUserId;
+
+    if (userAttended === true) {
+      return 'going';
     }
-    return false;
-  });
+
+    if (userAttended === false) {
+      return 'declined';
+    }
+
+    return 'pending';
+  };
+
+  const userStatus = resolveUserStatus();
   
   // Format creation date to short format
   const formatDate = (createdAt: string) => {
@@ -44,63 +54,27 @@ export default function CompletedPlanCard({ plan, onPress, userAttended, current
     }
   };
 
-  const getStatusIndicatorConfig = (
-    status?: ParticipantStatus,
-    attendanceValue?: boolean | null
-  ) => {
-    switch (status) {
-      case 'going':
-        return {
-          containerStyle: styles.acceptedIndicator,
-          content: <Check size={12} color="white" />
-        };
-      case 'maybe':
-        return {
-          containerStyle: styles.maybeIndicator,
-          content: <Text style={styles.statusSymbol}>?</Text>
-        };
-      case 'conditional':
-        return {
-          containerStyle: styles.conditionalIndicator,
-          content: <Eye size={12} color="white" />
-        };
-      case 'pending':
-        return {
-          containerStyle: styles.pendingIndicator,
-          content: (
-            <View style={styles.pendingEye}>
-              <View style={styles.pendingPupil} />
-            </View>
-          )
-        };
-      case 'declined':
-        return {
-          containerStyle: styles.declinedIndicator,
-          content: <X size={12} color="white" />
-        };
-      default:
-        if (attendanceValue === true) {
-          return {
-            containerStyle: styles.acceptedIndicator,
-            content: <Check size={12} color="white" />
-          };
-        }
-        if (attendanceValue === false) {
-          return {
-            containerStyle: styles.declinedIndicator,
-            content: <X size={12} color="white" />
-          };
-        }
-        return {
-          containerStyle: styles.unknownIndicator,
-          content: <HelpCircle size={12} color="white" />
-        };
-    }
-  };
-
-  const { containerStyle, content } = getStatusIndicatorConfig(
-    currentUserParticipant?.status,
-    userAttended
+  const renderStatusIndicator = () => (
+    <View
+      style={[
+        styles.statusIndicator,
+        userStatus === 'going' && styles.acceptedIndicator,
+        userStatus === 'maybe' && styles.maybeIndicator,
+        userStatus === 'conditional' && styles.conditionalIndicator,
+        userStatus === 'pending' && styles.pendingIndicator,
+        userStatus === 'declined' && styles.declinedIndicator,
+      ]}
+    >
+      {userStatus === 'going' && <Check size={10} color="white" />}
+      {userStatus === 'maybe' && <Text style={styles.questionMark}>?</Text>}
+      {userStatus === 'conditional' && <Eye size={10} color="white" />}
+      {userStatus === 'pending' && (
+        <View style={styles.eyeIcon}>
+          <View style={styles.eyePupil} />
+        </View>
+      )}
+      {userStatus === 'declined' && <X size={10} color="white" />}
+    </View>
   );
 
   return (
@@ -113,22 +87,20 @@ export default function CompletedPlanCard({ plan, onPress, userAttended, current
         onPress={() => onPress(plan)}
         activeOpacity={0.7}
       >
-        {/* Date Row */}
-        <View style={styles.dateRow}>
+        {/* Status and Date Row */}
+        <View style={styles.statusRow}>
+          <View style={styles.statusIcon}>
+            {renderStatusIndicator()}
+          </View>
           <Text style={styles.dateText}>
             {formatDate(plan.createdAt)}
           </Text>
         </View>
-
-        {/* Title with status indicator */}
-        <View style={styles.titleRow}>
-          <View style={[styles.statusIndicator, containerStyle]}>
-            {content}
-          </View>
-          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
-            {plan.title}
-          </Text>
-        </View>
+        
+        {/* Plan Title */}
+        <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+          {plan.title}
+        </Text>
         
         {/* Participants Info */}
         <View style={styles.participantsRow}>
@@ -177,15 +149,13 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
   },
-  dateRow: {
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
+  statusIcon: {
+    marginRight: 8,
   },
   statusIndicator: {
     width: 20,
@@ -193,10 +163,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     borderColor: Colors.light.background,
+    backgroundColor: Colors.light.border,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
-    backgroundColor: Colors.light.border,
   },
   acceptedIndicator: {
     backgroundColor: Colors.light.onlineGreen,
@@ -213,15 +182,12 @@ const styles = StyleSheet.create({
   declinedIndicator: {
     backgroundColor: Colors.light.destructive,
   },
-  unknownIndicator: {
-    backgroundColor: Colors.light.border,
-  },
-  statusSymbol: {
+  questionMark: {
     color: 'white',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
   },
-  pendingEye: {
+  eyeIcon: {
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -229,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  pendingPupil: {
+  eyePupil: {
     width: 4,
     height: 4,
     borderRadius: 2,
@@ -244,7 +210,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-    flex: 1,
+    marginBottom: 8,
   },
   participantsRow: {
     flexDirection: 'row',
