@@ -29,6 +29,7 @@ import PlanSuggestionSheet from './PlanSuggestionSheet';
 import useChatStore from '@/store/chatStore';
 import useHangStore from '@/store/hangStore';
 import usePlansStore from '@/store/plansStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CompletedPlanDetailViewProps {
   plan: Plan;
@@ -48,11 +49,17 @@ type FriendSelection = {
 
 export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpdate }: CompletedPlanDetailViewProps) {
   const { getUnreadCount } = useChatStore();
-  const { user, friends } = useHangStore();
+  const { user: hangUser, friends } = useHangStore();
+  const { user: authUser } = useAuth();
   const { completedPlans } = usePlansStore();
   const [activeTab, setActiveTab] = useState('Details');
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
+
+  if (!authUser) {
+    console.log('🔒 CompletedPlanDetailView: No authenticated user found, returning null');
+    return null;
+  }
   
   // Get the latest plan data from store to reflect attendance updates
   const latestPlan = completedPlans.find(p => p.id === plan.id) || plan;
@@ -174,7 +181,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
 
   // Convert plan participants to the format expected by PlanSuggestionSheet
   const getSelectedFriendsData = useCallback((): FriendSelection[] => {
-    const currentUserId = user?.id;
+    const currentUserId = hangUser?.id;
 
     return latestPlan.participants
       .filter((participant) => {
@@ -197,7 +204,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
         lastActive: '',
         lastSeen: ''
       }));
-  }, [latestPlan, user?.id]);
+  }, [latestPlan, hangUser?.id]);
 
   const [recreatedPlanFriends, setRecreatedPlanFriends] = useState<FriendSelection[]>(() => getSelectedFriendsData());
 
@@ -541,7 +548,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
           >
             <ChatView 
               plan={latestPlan} 
-              currentUserId="current" 
+              currentUserId={authUser.id} 
               disableKeyboardAvoidance={true}
             />
           </KeyboardAvoidingView>
