@@ -1,0 +1,157 @@
+🚨 URGENT: CRITICAL FIXES REQUIRED
+
+You are GPT Codex, the engineer for Free to Hang.
+
+═══════════════════════════════════════════════════════════════════
+
+📋 YOUR IMMEDIATE MISSION:
+
+Read and implement ALL fixes in: docs/NOTIFICATIONS_CRITICAL_FIXES.md
+
+═══════════════════════════════════════════════════════════════════
+
+⚡ PRIORITY ORDER (DO IN THIS SEQUENCE):
+
+1. 🔴 FIX HANG CHANNEL BUG (5 minutes) - MOST CRITICAL
+   - File: store/hangStore.ts
+   - Problem: Listening to wrong table ('users' instead of 'user_status')
+   - This is causing infinite error loops and blocking chain effect
+   - MUST FIX FIRST
+
+2. 🟡 DEPLOY DATABASE SCHEMA (10 minutes)
+   - Run: scripts/notifications-schema.sql in Supabase SQL Editor
+   - Verify tables exist: notifications, push_tokens, notification_preferences
+   - Check user_status.last_active column added
+
+3. 🟡 ADD EXPO PROJECT ID (5 minutes)
+   - Update app.json with real Expo project ID
+   - Update utils/pushNotifications.ts with same ID
+   - Run 'npx eas init' if needed
+
+4. 🟢 INSTALL DEPENDENCIES (6 minutes)
+   - Backend: npm install expo-server-sdk node-cron
+   - Frontend: npx expo install expo-notifications expo-device
+
+5. ✅ TEST EVERYTHING (20 minutes)
+   - Follow testing checklist in the doc
+   - Verify hang channel shows "SUBSCRIBED" not "CHANNEL_ERROR"
+   - Test each notification type
+
+═══════════════════════════════════════════════════════════════════
+
+📖 COMPLETE INSTRUCTIONS:
+
+Open: docs/NOTIFICATIONS_CRITICAL_FIXES.md
+
+This document contains:
+- Detailed explanation of each bug
+- Exact code changes needed
+- Step-by-step fix instructions
+- Verification steps
+- Testing checklist
+
+═══════════════════════════════════════════════════════════════════
+
+⚠️ CRITICAL NOTES:
+
+1. THE HANG CHANNEL BUG IS CAUSING LOG SPAM
+   - You'll see repeated "CHANNEL_ERROR" messages
+   - Fix #1 will stop this immediately
+   - This is blocking all status-based notifications
+
+2. DO NOT SKIP ANY FIXES
+   - All 5 fixes are required for notification system to work
+   - They depend on each other
+
+3. TEST ON PHYSICAL DEVICE
+   - Push notifications only work on real iPhone/Android
+   - Not in simulator or Expo Go web
+
+4. COMMIT AFTER EACH FIX
+   - Commit fix #1 separately
+   - Commit fixes #2-4 together
+   - Makes rollback easier if needed
+
+═══════════════════════════════════════════════════════════════════
+
+✅ SUCCESS CRITERIA:
+
+You'll know you're done when:
+
+□ Hang channel logs show "SUBSCRIBED" (not "CHANNEL_ERROR")
+□ No more error spam in console
+□ Database tables verified to exist
+□ Expo project ID configured
+□ All dependencies installed
+□ App builds without errors
+□ Notifications appear when testing
+□ Push notifications work on physical device
+□ Chain effect triggers (friend online → notifications sent)
+
+═══════════════════════════════════════════════════════════════════
+
+🔍 VERIFICATION COMMANDS:
+
+After each fix, verify:
+
+# After Fix #1 (Hang Channel)
+- Launch app
+- Check logs: should see "✅ Hang channel SUBSCRIBED"
+- Should NOT see "❌ Hang status channel error"
+
+# After Fix #2 (Database)
+- Run in Supabase SQL Editor:
+  SELECT table_name FROM information_schema.tables 
+  WHERE table_name IN ('notifications', 'push_tokens', 'notification_preferences');
+- Should return 3 rows
+
+# After Fix #3 (Expo ID)
+- Check app.json has real project ID (not placeholder)
+- Check utils/pushNotifications.ts has same ID
+
+# After Fix #4-5 (Dependencies)
+- Check backend/package.json includes expo-server-sdk, node-cron
+- Check package.json includes expo-notifications, expo-device
+
+═══════════════════════════════════════════════════════════════════
+
+⏱️ TIME ESTIMATE:
+
+- Fix #1: 5 minutes
+- Fix #2: 10 minutes  
+- Fix #3: 5 minutes
+- Fix #4-5: 6 minutes
+- Testing: 20 minutes
+━━━━━━━━━━━━━━━━━━━
+TOTAL: ~45 minutes
+
+═══════════════════════════════════════════════════════════════════
+
+🚀 START HERE:
+
+1. Read docs/NOTIFICATIONS_CRITICAL_FIXES.md completely
+2. Implement fixes in priority order (1 → 2 → 3 → 4 → 5)
+3. Verify each fix before moving to next
+4. Test complete flow at the end
+5. Report back with results
+
+═══════════════════════════════════════════════════════════════════
+
+📞 IF YOU GET STUCK:
+
+1. Check the "IF SOMETHING STILL FAILS" section in the doc
+2. Export relevant logs (app console, Railway, Supabase)
+3. Report exact error message and which fix you're on
+4. Don't skip ahead - fixes must be done in order
+
+═══════════════════════════════════════════════════════════════════
+
+LET'S FIX THIS! 🔧
+
+Start with Fix #1 (hang channel bug) - it's the most critical and will
+immediately stop the error spam you're seeing in logs.
+
+The document has all the code you need. Just copy-paste and verify.
+
+Good luck! 🎯
+
