@@ -1776,21 +1776,31 @@ router.post('/:id/invite', requireAuth, async (req, res) => {
     // Check current participation status for selected users
     const { data: existingParticipants } = await supabase
       .from('plan_participants')
-      .select('user_id, status')
+      .select('user_id, status, response')
       .eq('plan_id', id)
       .in('user_id', userIds);
+    
+    const normalizeStatus = (participant = {}) => {
+      const statusValue = participant.status || participant.response || '';
+      return typeof statusValue === 'string' ? statusValue.toLowerCase() : '';
+    };
 
     const reactivatingUserIds =
       existingParticipants
-        ?.filter(p => p.status === 'declined')
+        ?.filter(p => normalizeStatus(p) === 'declined' || normalizeStatus(p) === 'not_going')
         .map(p => p.user_id) || [];
 
     const alreadyActiveUserIds =
       existingParticipants
-        ?.filter(p => p.status !== 'declined')
+        ?.filter(p => {
+          const status = normalizeStatus(p);
+          return status && status !== 'declined' && status !== 'not_going';
+        })
         .map(p => p.user_id) || [];
 
-    const newUserIds = userIds.filter(uid => !alreadyActiveUserIds.includes(uid));
+    const newUserIds = userIds.filter(uid =>
+      !alreadyActiveUserIds.includes(uid) && !reactivatingUserIds.includes(uid)
+    );
 
     if (newUserIds.length === 0 && reactivatingUserIds.length === 0) {
       return res.status(400).json({ error: 'All selected users are already in the plan' });
@@ -1802,6 +1812,7 @@ router.post('/:id/invite', requireAuth, async (req, res) => {
         .from('plan_participants')
         .update({
           status: 'pending',
+          response: 'pending',
           updated_at: new Date().toISOString()
         })
         .eq('plan_id', id)
