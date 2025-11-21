@@ -143,6 +143,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.secondaryText,
     marginLeft: 4,
+    flexShrink: 1,
+    maxWidth: '88%',
   },
   toggleContainer: {
     marginLeft: 'auto',
