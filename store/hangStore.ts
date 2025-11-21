@@ -64,6 +64,7 @@ const getDefaultAvatar = (name?: string, userId?: string) => {
 // Add at the top of the file after imports
 let refreshInterval: ReturnType<typeof setInterval> | null = null;
 let statusChannel: any = null;
+let isStartingRealtime = false;
 let hangRestartTimeout: ReturnType<typeof setTimeout> | null = null;
 let hangRetryAttempts = 0;
 const HANG_RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
@@ -423,6 +424,14 @@ const useHangStore = create<HangState>()(
       },
 
       startRealTimeUpdates: () => {
+        // Guard against parallel starts
+        if (isStartingRealtime) {
+          console.log('⏸️ Hang real-time already starting - skipping');
+          return;
+        }
+        
+        isStartingRealtime = true;
+        
         // Clear any existing subscriptions
         if (refreshInterval) {
           clearInterval(refreshInterval);
@@ -477,6 +486,13 @@ const useHangStore = create<HangState>()(
           .subscribe((status) => {
             handleHangChannelStatus(status);
           });
+        
+        // Release lock after channel setup
+        setTimeout(() => {
+          isStartingRealtime = false;
+          console.log('✅ Hang real-time start completed');
+        }, 1000);
+        
         startHangHealthCheck();
         
         // More frequent polling for better real-time feel (every 10 seconds)
@@ -486,6 +502,8 @@ const useHangStore = create<HangState>()(
       },
 
       stopRealTimeUpdates: () => {
+        isStartingRealtime = false; // Release lock
+        
         if (refreshInterval) {
           clearInterval(refreshInterval);
           refreshInterval = null;
@@ -577,10 +595,12 @@ function startHangHealthCheck() {
         `⚠️ Hang health check warning (state: ${channelState ?? 'null'}, failures: ${failedChecks})`
       );
 
-      if (failedChecks >= 2) {
+      if (failedChecks >= 2 && !isStartingRealtime) {
         console.log('🔄 Hang health check triggering restart...');
         useHangStore.getState().startRealTimeUpdates();
         failedChecks = 0;
+      } else if (isStartingRealtime) {
+        console.log('⏸️ Health check skipping restart - already in progress');
       }
     } else if (failedChecks > 0) {
       console.log('✅ Hang real-time subscription healthy again');
