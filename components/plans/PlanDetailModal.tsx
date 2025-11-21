@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { MAX_PLAN_TITLE_LENGTH } from '@/constants/limits';
 import { Plan, ParticipantStatus } from '@/store/plansStore';
 import PlanDetailView from './PlanDetailView';
 import CompletedPlanDetailView from './CompletedPlanDetailView';
@@ -37,7 +38,9 @@ export default function PlanDetailModal({
 }: PlanDetailModalProps) {
   const { width } = Dimensions.get('window');
   const slideAnim = useRef(new Animated.Value(width)).current;
-  const [headerTitle, setHeaderTitle] = useState(plan?.title ?? '');
+  const [headerTitle, setHeaderTitle] = useState(
+    plan?.title?.slice(0, MAX_PLAN_TITLE_LENGTH) ?? ''
+  );
   const [canEditHeaderTitle, setCanEditHeaderTitle] = useState(false);
   const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
   const headerInputRef = useRef<TextInput | null>(null);
@@ -69,7 +72,7 @@ export default function PlanDetailModal({
   
   React.useEffect(() => {
     if (plan) {
-      setHeaderTitle(plan.title);
+      setHeaderTitle(plan.title?.slice(0, MAX_PLAN_TITLE_LENGTH) ?? '');
       setIsEditingHeaderTitle(false);
     }
   }, [plan?.id, plan?.title]);
@@ -88,7 +91,7 @@ export default function PlanDetailModal({
   };
 
   const handleHeaderTitleChange = (text: string) => {
-    setHeaderTitle(text);
+    setHeaderTitle(text.slice(0, MAX_PLAN_TITLE_LENGTH));
   };
 
   const handleHeaderTitleSave = () => {
@@ -146,18 +149,33 @@ export default function PlanDetailModal({
               activeOpacity={canEditHeaderTitle ? 0.7 : 1}
             >
               {isEditingHeaderTitle ? (
-                <TextInput
-                  ref={headerInputRef}
-                  style={styles.headerTitleInput}
-                  value={headerTitle}
-                  onChangeText={handleHeaderTitleChange}
-                  placeholder="Enter plan title"
-                  autoFocus
-                  onBlur={handleHeaderTitleSave}
-                  onSubmitEditing={handleHeaderTitleSave}
-                  returnKeyType="done"
-                  blurOnSubmit
-                />
+                <View style={styles.headerInputContainer}>
+                  <TextInput
+                    ref={headerInputRef}
+                    style={styles.headerTitleInput}
+                    value={headerTitle}
+                    onChangeText={handleHeaderTitleChange}
+                    placeholder="Enter plan title"
+                    autoFocus
+                    onBlur={handleHeaderTitleSave}
+                    onSubmitEditing={handleHeaderTitleSave}
+                    returnKeyType="done"
+                    blurOnSubmit
+                    maxLength={MAX_PLAN_TITLE_LENGTH}
+                    multiline
+                    numberOfLines={2}
+                    textAlignVertical="top"
+                  />
+                  <Text
+                    style={[
+                      styles.headerCharCount,
+                      headerTitle.length >= MAX_PLAN_TITLE_LENGTH && styles.headerCharCountLimit
+                    ]}
+                    pointerEvents="none"
+                  >
+                    {headerTitle.length}/{MAX_PLAN_TITLE_LENGTH}
+                  </Text>
+                </View>
               ) : (
                 <Text 
                   style={styles.headerTitle} 
@@ -234,7 +252,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.text,
     flex: 1,
-    paddingVertical: 0,
+    paddingVertical: 8,
     paddingHorizontal: 0,
+    paddingRight: 80,
+    minHeight: 60,
+  },
+  headerInputContainer: {
+    position: 'relative',
+  },
+  headerCharCount: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    fontSize: 12,
+    color: Colors.light.secondaryText,
+  },
+  headerCharCountLimit: {
+    color: Colors.light.secondary,
+    fontWeight: '600',
   },
 });

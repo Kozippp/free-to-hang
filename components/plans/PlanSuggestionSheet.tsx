@@ -18,13 +18,12 @@ import {
   FlatList,
 } from 'react-native';
 import Colors from '@/constants/colors';
+import { MAX_PLAN_TITLE_LENGTH } from '@/constants/limits';
 import { X, Plus, Check } from 'lucide-react-native';
 import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
 import { useRouter } from 'expo-router';
 import AddMoreFriendsModal from './AddMoreFriendsModal';
-
-const MAX_PLAN_TITLE_LENGTH = 50;
 
 interface Friend {
   id: string;
@@ -275,8 +274,18 @@ export default function PlanSuggestionSheet({
                         placeholder="Movie night? Chill in the park?"
                         placeholderTextColor={Colors.light.secondaryText}
                         maxLength={MAX_PLAN_TITLE_LENGTH}
+                        multiline
+                        numberOfLines={2}
+                        textAlignVertical="top"
+                        blurOnSubmit={false}
                       />
-                      <Text style={styles.charCount}>
+                      <Text
+                        style={[
+                          styles.charCount,
+                          planTitle.length >= MAX_PLAN_TITLE_LENGTH && styles.charCountLimit
+                        ]}
+                        pointerEvents="none"
+                      >
                         {planTitle.length}/{MAX_PLAN_TITLE_LENGTH}
                       </Text>
                     </View>
@@ -507,6 +516,8 @@ const styles = StyleSheet.create({
   inputWithCounter: {
     paddingRight: 80,
     marginBottom: 0,
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
   charCount: {
     position: 'absolute',
@@ -514,6 +525,10 @@ const styles = StyleSheet.create({
     top: 12,
     fontSize: 12,
     color: Colors.light.secondaryText,
+  },
+  charCountLimit: {
+    color: Colors.light.secondary,
+    fontWeight: '600',
   },
   textArea: {
     minHeight: 100,

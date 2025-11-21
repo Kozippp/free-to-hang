@@ -13,9 +13,8 @@ import {
 } from 'react-native';
 import { activities } from '@/constants/mockData';
 import Colors from '@/constants/colors';
+import { MAX_ACTIVITY_LENGTH } from '@/constants/limits';
 import { X } from 'lucide-react-native';
-
-const MAX_ACTIVITY_LENGTH = 50;
 
 interface ActivityModalProps {
   visible: boolean;
@@ -96,7 +95,13 @@ export default function ActivityModal({
                 autoFocus={false} // Don't auto-focus the keyboard
                 maxLength={MAX_ACTIVITY_LENGTH}
               />
-              <Text style={styles.charCount}>
+              <Text
+                style={[
+                  styles.charCount,
+                  activity.length >= MAX_ACTIVITY_LENGTH && styles.charCountLimit
+                ]}
+                pointerEvents="none"
+              >
                 {activity.length}/{MAX_ACTIVITY_LENGTH}
               </Text>
             </View>
@@ -200,6 +205,10 @@ const styles = StyleSheet.create({
     top: 50 / 2 - 8,
     fontSize: 12,
     color: Colors.light.secondaryText,
+  },
+  charCountLimit: {
+    color: Colors.light.secondary,
+    fontWeight: '600',
   },
   suggestionsTitle: {
     fontSize: 16,
