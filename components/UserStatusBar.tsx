@@ -41,7 +41,11 @@ export default function UserStatusBar({
           {activity ? (
             <View style={styles.activityContainer}>
               <MapPin size={14} color={Colors.light.secondaryText} />
-              <Text style={styles.activity}>
+              <Text 
+                style={styles.activity}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {activity}
               </Text>
             </View>

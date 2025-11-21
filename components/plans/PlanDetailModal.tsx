@@ -45,7 +45,6 @@ export default function PlanDetailModal({
   const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
   const headerInputRef = useRef<TextInput | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
-  const [headerInputHeight, setHeaderInputHeight] = useState(0);
   
   React.useEffect(() => {
     if (visible) {
@@ -153,12 +152,7 @@ export default function PlanDetailModal({
                 <View style={styles.headerInputContainer}>
                   <TextInput
                     ref={headerInputRef}
-                    style={[
-                      styles.headerTitleInput,
-                      {
-                        height: Math.max(48, Math.min(140, headerInputHeight || 0)),
-                      },
-                    ]}
+                    style={styles.headerTitleInput}
                     value={headerTitle}
                     onChangeText={handleHeaderTitleChange}
                     placeholder="Enter plan title"
@@ -168,12 +162,8 @@ export default function PlanDetailModal({
                     returnKeyType="done"
                     blurOnSubmit
                     maxLength={MAX_PLAN_TITLE_LENGTH}
-                    multiline
-                    numberOfLines={2}
-                    textAlignVertical="top"
-                    onContentSizeChange={(event) =>
-                      setHeaderInputHeight(event.nativeEvent.contentSize.height)
-                    }
+                    multiline={false}
+                    numberOfLines={1}
                   />
                   <Text
                     style={[
