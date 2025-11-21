@@ -133,7 +133,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
   React.useEffect(() => {
     onEditPermissionChange?.(canEditPlan);
-  }, [canEditPlan, onEditPermissionChange]);
+  }, [canEditPlan, latestPlan, onEditPermissionChange]);
   
   // Swipe gesture state
   const { width } = Dimensions.get('window');

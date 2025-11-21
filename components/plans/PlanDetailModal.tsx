@@ -68,7 +68,6 @@ export default function PlanDetailModal({
     if (plan) {
       setHeaderTitle(plan.title);
       setIsEditingHeaderTitle(false);
-      setCanEditHeaderTitle(false);
     }
   }, [plan?.id, plan?.title]);
 
