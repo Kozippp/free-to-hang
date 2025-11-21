@@ -42,8 +42,10 @@ export default function InviteFriendsModal({
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Get IDs of users already in the plan
-  const existingUserIds = plan.participants.map(p => p.id);
+  // Get IDs of users already active in the plan (exclude declined so they can be re-invited)
+  const existingUserIds = plan.participants
+    .filter(participant => participant.status !== 'declined')
+    .map(p => p.id);
 
   // Map friends data to FriendUser format for display
   const allFriends: FriendUser[] = friends.map(friend => ({

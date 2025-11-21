@@ -7,6 +7,7 @@ interface PlanParticipantsProps {
   acceptedParticipants: Participant[];
   maybeParticipants: Participant[];
   pendingParticipants: Participant[];
+  declinedParticipants: Participant[];
   onInvite: () => void;
   canInvite: boolean;
   isInYesGang: boolean;
@@ -16,6 +17,7 @@ export default function PlanParticipants({
   acceptedParticipants,
   maybeParticipants,
   pendingParticipants,
+  declinedParticipants,
   onInvite,
   canInvite,
   isInYesGang
@@ -32,6 +34,7 @@ export default function PlanParticipants({
               participant.status === 'maybe' && styles.maybeIndicator,
               participant.status === 'conditional' && styles.conditionalIndicator,
               participant.status === 'pending' && styles.pendingIndicator,
+              participant.status === 'declined' && styles.declinedIndicator,
             ]}>
               {participant.status === 'going' && (
                 <Check size={10} color="white" />
@@ -47,12 +50,20 @@ export default function PlanParticipants({
                   <View style={styles.eyePupil} />
                 </View>
               )}
+              {participant.status === 'declined' && (
+                <X size={10} color="white" />
+              )}
             </View>
           </View>
           <Text style={styles.participantName}>
             {participant.name}{participant.id === 'current' ? ' (you)' : ''}
           </Text>
         </View>
+        {participant.status === 'declined' && (
+          <View style={styles.declinedBadge}>
+            <Text style={styles.declinedBadgeText}>Can't come</Text>
+          </View>
+        )}
       </View>
     );
   };
@@ -80,6 +91,13 @@ export default function PlanParticipants({
           <View style={styles.participantGroup}>
             <Text style={styles.groupTitle}>Not Responded ({pendingParticipants.length})</Text>
             {pendingParticipants.map(renderParticipant)}
+          </View>
+        )}
+
+        {declinedParticipants.length > 0 && (
+          <View style={styles.participantGroup}>
+            <Text style={styles.groupTitle}>Can't come ({declinedParticipants.length})</Text>
+            {declinedParticipants.map(renderParticipant)}
           </View>
         )}
       </View>
@@ -173,6 +191,9 @@ const styles = StyleSheet.create({
   pendingIndicator: {
     backgroundColor: Colors.light.offlineGray,
   },
+  declinedIndicator: {
+    backgroundColor: Colors.light.destructive,
+  },
   questionMark: {
     color: 'white',
     fontSize: 10,
@@ -195,6 +216,17 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: 14,
     color: Colors.light.text,
+  },
+  declinedBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: `${Colors.light.destructive}15`,
+  },
+  declinedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.destructive,
   },
   invitationsSection: {
     marginBottom: 16,
