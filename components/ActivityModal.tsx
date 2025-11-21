@@ -31,6 +31,7 @@ export default function ActivityModal({
 }: ActivityModalProps) {
   const [activity, setActivity] = useState(initialActivity.slice(0, MAX_ACTIVITY_LENGTH));
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
+  const [inputHeight, setInputHeight] = useState(60);
 
   const handleActivityChange = (text: string) => {
     setActivity(text.slice(0, MAX_ACTIVITY_LENGTH));
@@ -50,6 +51,7 @@ export default function ActivityModal({
     // Reset state
     setActivity('');
     setSelectedActivities([]);
+    setInputHeight(60);
   };
 
   const handleActivitySelect = (activityName: string) => {
@@ -87,13 +89,23 @@ export default function ActivityModal({
             
             <View style={styles.inputContainer}>
               <TextInput
-                style={[styles.input, styles.inputWithCounter]}
+                style={[
+                  styles.input,
+                  styles.inputWithCounter,
+                  { height: Math.min(140, Math.max(60, inputHeight)) }
+                ]}
                 value={activity}
                 onChangeText={handleActivityChange}
                 placeholder="E.g., Coffee, Movie night..."
                 placeholderTextColor={Colors.light.secondaryText}
                 autoFocus={false} // Don't auto-focus the keyboard
                 maxLength={MAX_ACTIVITY_LENGTH}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                onContentSizeChange={(event) => 
+                  setInputHeight(event.nativeEvent.contentSize.height)
+                }
               />
               <Text
                 style={[
@@ -183,7 +195,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   input: {
-    height: 50,
     borderWidth: 1,
     borderColor: Colors.light.border,
     borderRadius: 10,
@@ -192,6 +203,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     backgroundColor: Colors.light.cardBackground,
     color: Colors.light.text,
+    minHeight: 60,
   },
   inputContainer: {
     position: 'relative',
@@ -202,7 +214,7 @@ const styles = StyleSheet.create({
   charCount: {
     position: 'absolute',
     right: 12,
-    top: 50 / 2 - 8,
+    bottom: 12,
     fontSize: 12,
     color: Colors.light.secondaryText,
   },
