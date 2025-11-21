@@ -235,8 +235,9 @@ const lastPlanRefreshCallTimes: Record<string, number> = {};
 const MIN_TIME_BETWEEN_PLAN_CALLS = 500;
 
 // Reconnection tracking
-const MAX_CHANNEL_RETRIES = 5;
-const RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
+const MAX_CHANNEL_RETRIES = 3;
+const RETRY_DELAYS_MS = [2000, 5000, 10000, 30000, 60000];
+const PLANS_HEALTH_CHECK_INTERVAL = 60000; // 60s
 const retryAttempts: Record<string, number> = {};
 
 const usePlansStore = create<PlansState>((set, get) => ({
@@ -1361,8 +1362,10 @@ function createChannelWithRetry(
       const attempt = retryAttempts[channelName] || 0;
 
       if (attempt < MAX_CHANNEL_RETRIES) {
-        const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
-        console.log(`🔄 Retrying ${channelName} in ${delay}ms (attempt ${attempt + 1}/${MAX_CHANNEL_RETRIES})`);
+        const baseDelay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
+        const jitter = Math.random() * 1000;
+        const delay = baseDelay + jitter;
+        console.log(`🔄 Retrying ${channelName} in ${delay.toFixed(0)}ms (attempt ${attempt + 1}/${MAX_CHANNEL_RETRIES})`);
 
         retryAttempts[channelName] = attempt + 1;
         state.setChannelRetryAttempt(channelName, attempt + 1);
@@ -1419,7 +1422,7 @@ function startPlansHealthCheck(userId: string) {
       console.log('✅ Plans channels recovered after health check warnings');
       failedChecks = 0;
     }
-  }, 30000);
+  }, PLANS_HEALTH_CHECK_INTERVAL);
 }
 
 function stopPlansHealthCheck() {

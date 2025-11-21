@@ -67,8 +67,9 @@ let statusChannel: any = null;
 let isStartingRealtime = false;
 let hangRestartTimeout: ReturnType<typeof setTimeout> | null = null;
 let hangRetryAttempts = 0;
-const HANG_RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
-const MAX_HANG_RETRIES = 5;
+const HANG_RETRY_DELAYS_MS = [2000, 5000, 10000, 30000, 60000];
+const MAX_HANG_RETRIES = 3;
+const HANG_HEALTH_CHECK_INTERVAL = 60000; // 60s
 let hangHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 // Create the store with persistence
@@ -582,7 +583,9 @@ function scheduleHangRealtimeRestart() {
     return;
   }
 
-  const delay = HANG_RETRY_DELAYS_MS[Math.min(hangRetryAttempts, HANG_RETRY_DELAYS_MS.length - 1)];
+  const baseDelay = HANG_RETRY_DELAYS_MS[Math.min(hangRetryAttempts, HANG_RETRY_DELAYS_MS.length - 1)];
+  const jitter = Math.random() * 1000;
+  const delay = baseDelay + jitter;
   hangRetryAttempts += 1;
 
   if (hangRestartTimeout) {
@@ -628,7 +631,7 @@ function startHangHealthCheck() {
       console.log('✅ Hang real-time subscription healthy again');
       failedChecks = 0;
     }
-  }, 30000);
+  }, HANG_HEALTH_CHECK_INTERVAL);
 }
 
 function stopHangHealthCheck() {

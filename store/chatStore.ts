@@ -132,8 +132,9 @@ const getAuthToken = async () => {
   return session?.access_token;
 };
 
-const MAX_CHAT_CHANNEL_RETRIES = 5;
-const CHAT_RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
+const MAX_CHAT_CHANNEL_RETRIES = 3;
+const CHAT_RETRY_DELAYS_MS = [2000, 5000, 10000, 30000, 60000];
+const CHAT_HEALTH_CHECK_INTERVAL = 60000; // 60s
 const chatRetryAttempts: Record<string, number> = {};
 const chatRestartTimeouts: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
 const desiredChatSubscriptions = new Set<string>();
@@ -1017,7 +1018,9 @@ function scheduleChatRestart(planId: string) {
     return;
   }
 
-  const delay = CHAT_RETRY_DELAYS_MS[Math.min(attempts, CHAT_RETRY_DELAYS_MS.length - 1)];
+  const baseDelay = CHAT_RETRY_DELAYS_MS[Math.min(attempts, CHAT_RETRY_DELAYS_MS.length - 1)];
+  const jitter = Math.random() * 1000;
+  const delay = baseDelay + jitter;
   chatRetryAttempts[planId] = attempts + 1;
 
   clearChatRestart(planId);
@@ -1054,7 +1057,7 @@ function ensureChatHealthCheckRunning() {
   }
 
   console.log('💓 Starting chat health check system...');
-  chatHealthCheckInterval = setInterval(runChatHealthCheck, 30000);
+  chatHealthCheckInterval = setInterval(runChatHealthCheck, CHAT_HEALTH_CHECK_INTERVAL);
 }
 
 function runChatHealthCheck() {

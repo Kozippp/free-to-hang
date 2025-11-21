@@ -56,8 +56,9 @@ let isStartingRealTime = false;
 let isSubscribed = false;
 let friendRestartTimeout: ReturnType<typeof setTimeout> | null = null;
 let friendRetryAttempts = 0;
-const FRIEND_RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
-const MAX_FRIEND_RETRIES = 5;
+const FRIEND_RETRY_DELAYS_MS = [2000, 5000, 10000, 30000, 60000];
+const MAX_FRIEND_RETRIES = 3;
+const FRIEND_HEALTH_CHECK_INTERVAL = 60000; // 60s
 let friendHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 // Throttling for real-time updates
@@ -687,8 +688,10 @@ function scheduleFriendRealtimeRestart() {
     return;
   }
 
-  const delay =
+  const baseDelay =
     FRIEND_RETRY_DELAYS_MS[Math.min(friendRetryAttempts, FRIEND_RETRY_DELAYS_MS.length - 1)];
+  const jitter = Math.random() * 1000;
+  const delay = baseDelay + jitter;
   const attemptNumber = friendRetryAttempts + 1;
   friendRetryAttempts = attemptNumber;
 
@@ -742,7 +745,7 @@ function startFriendHealthCheck() {
       console.log('✅ Friend real-time subscription healthy again');
       failedChecks = 0;
     }
-  }, 30000);
+  }, FRIEND_HEALTH_CHECK_INTERVAL);
 }
 
 function stopFriendHealthCheck() {
