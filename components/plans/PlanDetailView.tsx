@@ -74,7 +74,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     deletePoll,
     invitations,
     activePlans,
-    loadPlans
+    loadPlans,
+    loadPlan
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   const { getUnreadCount } = useChatStore();
@@ -490,20 +491,25 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     try {
       console.log('👥 Inviting users directly:', { friendIds, friendNames });
 
-      // Directly invite users (no voting)
-      await plansService.inviteUsers(latestPlan.id, friendIds);
+      // Close modal immediately to provide instant feedback
+      setShowInviteModal(false);
 
-      console.log('✅ Users invited successfully');
+      // Directly invite users (no voting) - this returns the updated plan
+      const updatedPlan = await plansService.inviteUsers(latestPlan.id, friendIds);
+
+      console.log('✅ Users invited successfully, received updated plan');
+      
+      // Immediately reload the specific plan to show updated participant list
+      // This ensures the UI is in sync with the backend
+      console.log('🔄 Reloading plan data to show updated participants...');
+      await loadPlan(latestPlan.id, user?.id);
+      console.log('✅ Plan data reloaded successfully');
       
       Alert.alert(
         'Friends Invited!',
         `${friendIds.length} friend${friendIds.length > 1 ? 's have' : ' has'} been invited to the plan.`,
         [{ text: 'OK' }]
       );
-      
-      setShowInviteModal(false);
-
-      // Real-time subscription will handle updating the store
     } catch (error) {
       console.error('❌ Error inviting users:', error);
 
