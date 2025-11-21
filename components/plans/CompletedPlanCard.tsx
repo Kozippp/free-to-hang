@@ -113,20 +113,22 @@ export default function CompletedPlanCard({ plan, onPress, userAttended, current
         onPress={() => onPress(plan)}
         activeOpacity={0.7}
       >
-        {/* Status and Date Row */}
-        <View style={styles.statusRow}>
-          <View style={[styles.statusIndicator, containerStyle]}>
-            {content}
-          </View>
+        {/* Date Row */}
+        <View style={styles.dateRow}>
           <Text style={styles.dateText}>
             {formatDate(plan.createdAt)}
           </Text>
         </View>
-        
-        {/* Plan Title */}
-        <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
-          {plan.title}
-        </Text>
+
+        {/* Title with status indicator */}
+        <View style={styles.titleRow}>
+          <View style={[styles.statusIndicator, containerStyle]}>
+            {content}
+          </View>
+          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+            {plan.title}
+          </Text>
+        </View>
         
         {/* Participants Info */}
         <View style={styles.participantsRow}>
@@ -175,7 +177,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
   },
-  statusRow: {
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
@@ -237,7 +244,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 8,
+    flex: 1,
   },
   participantsRow: {
     flexDirection: 'row',
