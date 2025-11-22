@@ -79,7 +79,7 @@ function RootLayoutNav() {
   }, [unreadCount]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={styles.gestureRoot}>
       <Stack
         screenOptions={{
           headerBackTitle: "Back",
@@ -103,6 +103,9 @@ function RootLayoutNav() {
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   loadingOverlay: {
     position: 'absolute',
     top: 0,
