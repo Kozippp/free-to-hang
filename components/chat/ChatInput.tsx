@@ -10,7 +10,8 @@ import {
   Image,
   Dimensions,
   Animated,
-  Platform
+  Platform,
+  Keyboard
 } from 'react-native';
 import { 
   Send, 
@@ -22,6 +23,7 @@ import {
 import Colors from '@/constants/colors';
 import useChatStore from '@/store/chatStore';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ChatInputProps {
   planId: string;
@@ -42,15 +44,30 @@ export default function ChatInput({
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showImageConfirmation, setShowImageConfirmation] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   
   // TextInput ref for auto-focusing on reply
   const textInputRef = useRef<TextInput>(null);
+  const insets = useSafeAreaInsets();
   
   // Get current reply state
   const replyingTo = getReplyingTo(planId);
   
   // Animations
   const sendButtonAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Auto-focus when replying
   useEffect(() => {
@@ -185,8 +202,10 @@ export default function ChatInput({
     );
   };
 
+  const safeBottomInset = isKeyboardVisible ? 0 : insets.bottom;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: safeBottomInset }]}>
       {/* Reply Preview */}
       {renderReplyPreview()}
       

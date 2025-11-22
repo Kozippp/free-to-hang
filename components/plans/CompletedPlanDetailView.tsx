@@ -439,7 +439,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
           <KeyboardAvoidingView 
             style={styles.chatKeyboardView}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+            keyboardVerticalOffset={0}
           >
             <ChatView 
               plan={latestPlan} 
