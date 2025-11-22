@@ -263,6 +263,7 @@ router.post('/:planId/messages', requireAuth, async (req, res) => {
     const { planId } = req.params;
     const { type, content, imageUrl, voiceUrl, voiceDuration, replyToMessageId } = req.body;
     const userId = req.user.id;
+    const senderId = userId;
     
     console.log(`💬 Sending message to plan ${planId} from user ${userId}`);
     
@@ -331,51 +332,67 @@ router.post('/:planId/messages', requireAuth, async (req, res) => {
     const fullMessage = await getMessageWithDetails(message.id);
 
     try {
-      const [{ data: plan }] = await Promise.all([
+      const [planResult, participantsResult, senderProfileResult] = await Promise.all([
+        supabase.from('plans').select('title').eq('id', planId).single(),
         supabase
-          .from('plans')
-          .select('title')
-          .eq('id', planId)
-          .single()
+          .from('plan_participants')
+          .select('user_id')
+          .eq('plan_id', planId)
+          .neq('user_id', senderId),
+        supabase.from('users').select('name').eq('id', senderId).single()
       ]);
 
-      const { data: participants } = await supabase
-        .from('plan_participants')
-        .select('user_id')
-        .eq('plan_id', planId)
-        .neq('user_id', senderId);
+      if (planResult.error) {
+        console.error('❌ Failed to fetch plan for chat notification:', planResult.error);
+      }
+      if (participantsResult.error) {
+        console.error('❌ Failed to fetch participants for chat notification:', participantsResult.error);
+      }
+      if (senderProfileResult.error) {
+        console.error('❌ Failed to fetch sender profile for chat notification:', senderProfileResult.error);
+      }
 
-      const { data: senderProfile } = await supabase
-        .from('users')
-        .select('name')
-        .eq('id', senderId)
-        .single();
+      const planTitle = planResult?.data?.title || 'Plan chat';
+      const participants = participantsResult?.data || [];
+      const senderProfile = senderProfileResult?.data;
 
-      const preview = (() => {
-        if (type === 'text') {
-          return (content || '').trim().slice(0, 140) || 'Sent a message';
-        }
-        if (type === 'image') return 'Sent a photo';
-        if (type === 'voice') return 'Sent a voice message';
-        return 'New activity in chat';
-      })();
+      if (!participants.length) {
+        console.log('ℹ️ No other participants to notify for chat message', { planId, senderId });
+      } else {
+        const preview = (() => {
+          if (type === 'text') {
+            return (content || '').trim().substring(0, 100) || 'Sent a message';
+          }
+          if (type === 'image') return 'Sent a photo';
+          if (type === 'voice') return 'Sent a voice message';
+          return 'New activity in chat';
+        })();
 
-      const template = NotificationTemplates.chat_message(
-        plan?.title || 'Plan chat',
-        senderProfile?.name || 'Someone',
-        preview
-      );
+        const template = NotificationTemplates.chat_message(
+          planTitle,
+          senderProfile?.name || 'Someone',
+          preview
+        );
 
-      await Promise.all(
-        (participants || []).map(({ user_id }) =>
-          notifyUser({
-            userId: user_id,
-            ...template,
-            data: { plan_id: planId, message_id: message.id },
-            triggeredBy: senderId
+        await Promise.all(
+          participants.map(async ({ user_id }) => {
+            try {
+              await notifyUser({
+                userId: user_id,
+                ...template,
+                data: { plan_id: planId, message_id: message.id, screen: 'Chat' },
+                triggeredBy: senderId
+              });
+              console.log(`✅ Chat notification sent to user ${user_id} for plan ${planId}`);
+            } catch (notifyError) {
+              console.error(
+                `❌ Failed to notify user ${user_id} about chat message ${message.id}:`,
+                notifyError
+              );
+            }
           })
-        )
-      );
+        );
+      }
     } catch (notifyError) {
       console.error('❌ Failed to send chat notifications:', notifyError);
     }

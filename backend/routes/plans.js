@@ -145,29 +145,44 @@ const getPlanTitle = async (planId) => {
   return data?.title || 'Plan';
 };
 
-const sendPlanInviteNotifications = async (planId, inviterId, invitedUserIds) => {
+const sendPlanInviteNotifications = async (planId, inviterId, invitedUserIds = []) => {
   if (!invitedUserIds || invitedUserIds.length === 0) return;
 
-  const [planTitle, inviter] = await Promise.all([
-    getPlanTitle(planId),
-    supabase.from('users').select('name').eq('id', inviterId).single()
-  ]);
-
-  const template = NotificationTemplates.plan_invite(
-    planTitle,
-    inviter.data?.name || 'Someone'
+  const uniqueInvitees = [...new Set(invitedUserIds)].filter(
+    (userId) => userId && userId !== inviterId
   );
 
-  await Promise.all(
-    invitedUserIds.map((userId) =>
-      notifyUser({
-        userId,
-        ...template,
-        data: { plan_id: planId },
-        triggeredBy: inviterId
-      })
-    )
-  );
+  if (uniqueInvitees.length === 0) return;
+
+  try {
+    const [planTitle, inviterResponse] = await Promise.all([
+      getPlanTitle(planId),
+      supabase.from('users').select('name').eq('id', inviterId).single()
+    ]);
+
+    if (inviterResponse.error) {
+      console.error('❌ Failed to fetch inviter profile for notifications:', inviterResponse.error);
+    }
+
+    const inviterName = inviterResponse?.data?.name || 'Someone';
+
+    for (const userId of uniqueInvitees) {
+      try {
+        const template = NotificationTemplates.plan_invite(planTitle, inviterName);
+        await notifyUser({
+          userId,
+          ...template,
+          data: { plan_id: planId, screen: 'PlanDetail' },
+          triggeredBy: inviterId
+        });
+        console.log(`✅ Notified user ${userId} about plan ${planId}`);
+      } catch (notifyError) {
+        console.error(`❌ Failed to notify user ${userId} about plan ${planId}:`, notifyError);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed preparing plan invite notifications:', { planId, inviterId, error });
+  }
 };
 
 const sendParticipantJoinedNotifications = async (planId, participantId) => {
@@ -1142,6 +1157,11 @@ router.post('/', requireAuth, async (req, res) => {
         }
       } else {
         console.log('✅ Successfully added', invitedFriends.length, 'participants');
+      }
+      try {
+        await sendPlanInviteNotifications(plan.id, userId, invitedFriends);
+      } catch (notifyError) {
+        console.error('❌ Failed to send invite notifications after plan creation:', notifyError);
       }
     } else {
       console.log('ℹ️ No invited friends to add');
