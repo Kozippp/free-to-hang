@@ -1,0 +1,400 @@
+🔔 CODEX - PUSH NOTIFICATIONS DEBUGGING & FIX
+
+You are GPT Codex, the engineer for Free to Hang.
+
+═══════════════════════════════════════════════════════════════════
+
+📋 SITUATION:
+
+User tested push notifications in iOS SIMULATORS but they didn't work.
+
+ROOT CAUSE IDENTIFIED:
+1. 🔴 iOS simulators CANNOT receive push notifications (Apple limitation)
+2. 🟡 Backend routes may be missing notification integration
+3. 🟡 Need to verify what's actually integrated
+
+═══════════════════════════════════════════════════════════════════
+
+📖 YOUR MISSION:
+
+Read: docs/NOTIFICATIONS_PUSH_TROUBLESHOOTING.md
+
+Then complete these verification and fix tasks:
+
+═══════════════════════════════════════════════════════════════════
+
+✅ TASK 1: VERIFY BACKEND INTEGRATION
+
+Check file: backend/routes/plans.js
+
+Look for:
+- Is notificationService imported?
+- Are notification calls present when plan created?
+- Are notifications sent when users invited?
+
+Report findings with specific line numbers.
+
+═══════════════════════════════════════════════════════════════════
+
+🔧 TASK 2: ADD MISSING NOTIFICATION INTEGRATION
+
+If notifications are NOT integrated in backend/routes/plans.js:
+
+ADD THIS IMPORT at top of file:
+```javascript
+const { notifyUser, NotificationTemplates } = require('../services/notificationService');
+```
+
+FIND the route that creates plans (POST /api/plans or similar)
+
+AFTER plan is created and participants invited, ADD:
+```javascript
+// Notify invited users
+if (invitedUserIds && invitedUserIds.length > 0) {
+  // Get creator info
+  const { data: creator } = await supabase
+    .from('users')
+    .select('name')
+    .eq('id', req.user.id)
+    .single();
+
+  // Notify each invited user
+  for (const inviteeId of invitedUserIds) {
+    if (inviteeId !== req.user.id) {
+      try {
+        const template = NotificationTemplates.plan_invite(
+          plan.title,
+          creator?.name || 'Someone'
+        );
+        
+        await notifyUser({
+          userId: inviteeId,
+          ...template,
+          data: { 
+            plan_id: plan.id,
+            screen: 'PlanDetail'
+          },
+          triggeredBy: req.user.id
+        });
+        
+        console.log(`✅ Notification sent to user: ${inviteeId}`);
+      } catch (error) {
+        console.error(`❌ Failed to notify user ${inviteeId}:`, error);
+        // Don't fail the request if notification fails
+      }
+    }
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+
+✅ TASK 3: CHECK CHAT NOTIFICATIONS
+
+Check file: backend/routes/chat.js
+
+Verify notifications are sent when message posted.
+
+Expected code:
+```javascript
+// When message created, notify plan participants
+const { data: participants } = await supabase
+  .from('plan_participants')
+  .select('user_id')
+  .eq('plan_id', planId)
+  .neq('user_id', senderId);
+
+// Get sender and plan info
+const { data: sender } = await supabase
+  .from('users')
+  .select('name')
+  .eq('id', senderId)
+  .single();
+
+const { data: plan } = await supabase
+  .from('plans')
+  .select('title')
+  .eq('id', planId)
+  .single();
+
+// Notify each participant
+for (const participant of participants || []) {
+  const template = NotificationTemplates.chat_message(
+    plan.title,
+    sender.name,
+    content.substring(0, 100)
+  );
+  
+  await notifyUser({
+    userId: participant.user_id,
+    ...template,
+    data: { 
+      plan_id: planId,
+      message_id: message.id,
+      screen: 'Chat'
+    },
+    triggeredBy: senderId
+  });
+}
+```
+
+If NOT present, add it.
+
+═══════════════════════════════════════════════════════════════════
+
+✅ TASK 4: CHECK FRIENDS NOTIFICATIONS
+
+Check file: backend/routes/friends.js
+
+Verify notifications sent for:
+1. Friend request sent
+2. Friend request accepted
+
+Expected code when friend request sent:
+```javascript
+const template = NotificationTemplates.friend_request(requester.name);
+await notifyUser({
+  userId: friendId,
+  ...template,
+  data: { 
+    user_id: requesterId,
+    screen: 'Profile'
+  },
+  triggeredBy: requesterId
+});
+```
+
+Expected code when friend request accepted:
+```javascript
+const template = NotificationTemplates.friend_accepted(accepter.name);
+await notifyUser({
+  userId: requesterId,
+  ...template,
+  data: { 
+    user_id: accepterId,
+    screen: 'Profile'
+  },
+  triggeredBy: accepterId
+});
+```
+
+If NOT present, add them.
+
+═══════════════════════════════════════════════════════════════════
+
+✅ TASK 5: VERIFY NOTIFICATION SERVICE EXISTS
+
+Check file: backend/services/notificationService.js
+
+Verify these functions exist:
+- notifyUser()
+- NotificationTemplates object with all templates
+
+If file missing or incomplete:
+- Reference docs/NOTIFICATIONS_SYSTEM_IMPLEMENTATION_GUIDE.md
+- Implement complete notification service
+
+═══════════════════════════════════════════════════════════════════
+
+✅ TASK 6: TEST IN-APP NOTIFICATIONS (Simulator)
+
+Even though push won't work in simulator, in-app notifications should.
+
+Test flow:
+1. User A logs in (simulator)
+2. User B logs in (different simulator or same)
+3. User B creates plan
+4. User B invites User A
+5. User A should see notification in Notifications tab
+
+Check database:
+```sql
+SELECT * FROM notifications 
+WHERE user_id = 'user-a-id'
+ORDER BY created_at DESC;
+```
+
+Should see notification record.
+
+═══════════════════════════════════════════════════════════════════
+
+📊 TASK 7: CREATE STATUS REPORT
+
+After completing tasks, create file:
+docs/NOTIFICATIONS_BACKEND_INTEGRATION_STATUS.md
+
+Include:
+1. What was missing (if anything)
+2. What was added
+3. Where notification calls were added (file:line)
+4. Test results (in-app notifications)
+5. Reminder about physical device requirement for push
+
+═══════════════════════════════════════════════════════════════════
+
+⚠️ IMPORTANT NOTES:
+
+1. SIMULATORS CANNOT RECEIVE PUSH NOTIFICATIONS
+   - This is Apple limitation
+   - Not a bug in our code
+   - Physical iPhone required for push testing
+
+2. IN-APP NOTIFICATIONS SHOULD WORK
+   - Database record created
+   - Shows in Notifications tab
+   - Badge count updates
+   - This CAN be tested in simulator
+
+3. DON'T BREAK EXISTING FUNCTIONALITY
+   - Wrap notification calls in try-catch
+   - Log errors but don't fail requests
+   - Notifications should be "nice to have" not "must have"
+
+4. BACKEND LOGS ARE KEY
+   - Log when notification created
+   - Log when push sent (or skipped)
+   - Log any errors
+
+═══════════════════════════════════════════════════════════════════
+
+🧪 VERIFICATION CHECKLIST:
+
+After your fixes:
+
+□ notificationService imported in plans.js
+□ Notifications sent when plan created
+□ Notifications sent when users invited
+□ Notifications sent on chat message
+□ Notifications sent on friend request
+□ Notifications sent on friend accept
+□ Try-catch around all notification calls
+□ Logging added for debugging
+□ Test: Create plan → notification in DB
+□ Test: Invite user → notification in Notifications tab
+□ Test: Send message → notification created
+□ Status report created
+
+═══════════════════════════════════════════════════════════════════
+
+🎯 SUCCESS CRITERIA:
+
+**In Simulator (what we can test now):**
+1. Create plan → notification appears in Notifications tab ✅
+2. Notification record exists in database ✅
+3. Badge count increases ✅
+4. Tapping notification navigates correctly ✅
+
+**On Physical Device (later):**
+1. Everything above PLUS
+2. Push notification received when app closed 🔔
+3. Push sound/vibration works 🔊
+4. Lock screen notification appears 📱
+
+═══════════════════════════════════════════════════════════════════
+
+📝 EXAMPLE INTEGRATION:
+
+Here's what good integration looks like in backend/routes/plans.js:
+
+```javascript
+const express = require('express');
+const router = express.Router();
+const verifyToken = require('../middleware/verifyToken');
+const supabase = global.supabase;
+const { notifyUser, NotificationTemplates } = require('../services/notificationService');
+
+router.post('/', verifyToken, async (req, res) => {
+  try {
+    const { title, description, date, location, invitedFriends } = req.body;
+    const creatorId = req.user.id;
+
+    // Create plan
+    const { data: plan, error: planError } = await supabase
+      .from('plans')
+      .insert({
+        title,
+        description,
+        date,
+        location,
+        creator_id: creatorId,
+        status: 'active'
+      })
+      .select()
+      .single();
+
+    if (planError) throw planError;
+
+    // Add participants
+    if (invitedFriends && invitedFriends.length > 0) {
+      const participants = invitedFriends.map(friendId => ({
+        plan_id: plan.id,
+        user_id: friendId,
+        status: 'pending'
+      }));
+
+      const { error: participantsError } = await supabase
+        .from('plan_participants')
+        .insert(participants);
+
+      if (participantsError) throw participantsError;
+
+      // 🔔 SEND NOTIFICATIONS TO INVITED USERS
+      const { data: creator } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', creatorId)
+        .single();
+
+      for (const friendId of invitedFriends) {
+        try {
+          const template = NotificationTemplates.plan_invite(
+            plan.title,
+            creator?.name || 'Someone'
+          );
+          
+          await notifyUser({
+            userId: friendId,
+            ...template,
+            data: { 
+              plan_id: plan.id,
+              screen: 'PlanDetail'
+            },
+            triggeredBy: creatorId
+          });
+          
+          console.log(`✅ Notified user ${friendId} about plan invite`);
+        } catch (notifError) {
+          console.error(`❌ Failed to notify ${friendId}:`, notifError.message);
+          // Don't fail the whole request
+        }
+      }
+    }
+
+    res.status(201).json({ plan });
+  } catch (error) {
+    console.error('Error creating plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;
+```
+
+═══════════════════════════════════════════════════════════════════
+
+🚀 START HERE:
+
+1. Read docs/NOTIFICATIONS_PUSH_TROUBLESHOOTING.md
+2. Check backend/routes/plans.js for notification calls
+3. Add missing integration if needed
+4. Test in-app notifications
+5. Create status report
+6. Commit changes
+
+═══════════════════════════════════════════════════════════════════
+
+Good luck! Remember: simulators can't receive push, but in-app 
+notifications SHOULD work. Focus on getting in-app working first.
+
+After you complete, report back with your status document! 🎯
+
