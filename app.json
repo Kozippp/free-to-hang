@@ -21,7 +21,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to help you find nearby friends and suggest meeting places.",
         "NSCameraUsageDescription": "This app uses camera to take profile pictures.",
-        "NSPhotoLibraryUsageDescription": "This app uses photo library to select profile pictures."
+        "NSPhotoLibraryUsageDescription": "This app uses photo library to select profile pictures.",
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {

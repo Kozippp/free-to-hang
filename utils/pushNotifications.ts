@@ -24,12 +24,17 @@ const resolveProjectId = () => {
 };
 
 export async function registerForPushNotifications(userId: string) {
+  console.log('🔔 Starting push notification registration for user:', userId);
+  
   if (!Device.isDevice) {
     console.log('⚠️ Push notifications require physical device');
     return null;
   }
 
+  console.log('✅ Running on physical device');
+
   if (Platform.OS === 'android') {
+    console.log('📱 Setting up Android notification channel');
     await Notifications.setNotificationChannelAsync('default', {
       name: 'default',
       importance: Notifications.AndroidImportance.MAX,
@@ -38,26 +43,38 @@ export async function registerForPushNotifications(userId: string) {
     });
   }
 
+  console.log('📋 Checking notification permissions...');
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  console.log('Current permission status:', existingStatus);
   let finalStatus = existingStatus;
 
   if (existingStatus !== 'granted') {
+    console.log('🔐 Requesting notification permissions...');
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
+    console.log('New permission status:', finalStatus);
   }
 
   if (finalStatus !== 'granted') {
+    console.log('❌ Notification permissions denied');
     Alert.alert('Notifications disabled', 'Enable push notifications in settings to stay updated.');
     return null;
   }
 
+  console.log('✅ Notification permissions granted');
+
   const projectId = resolveProjectId();
+  console.log('🆔 Using Expo project ID:', projectId);
+  
+  console.log('🎟️ Getting Expo push token...');
   const tokenResponse = await Notifications.getExpoPushTokenAsync(
     projectId ? { projectId } : undefined
   );
   const token = tokenResponse.data;
+  console.log('🔔 Push token received:', token);
 
   try {
+    console.log('💾 Saving push token to database...');
     const { error } = await supabase
       .from('push_tokens')
       .upsert(
@@ -71,10 +88,20 @@ export async function registerForPushNotifications(userId: string) {
         { onConflict: 'user_id,expo_push_token' }
       );
 
-    if (error) throw error;
-    console.log('✅ Push token saved');
+    if (error) {
+      console.error('❌ Database error:', error);
+      throw error;
+    }
+    console.log('✅ Push token saved to database successfully');
+    console.log('📊 Token details:', {
+      userId,
+      token: token.substring(0, 30) + '...',
+      deviceType: Platform.OS,
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
     console.error('❌ Failed to save push token:', error);
+    Alert.alert('Warning', 'Failed to register for push notifications. You may not receive notifications.');
   }
 
   return token;

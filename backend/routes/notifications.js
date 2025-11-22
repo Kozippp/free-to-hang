@@ -133,5 +133,94 @@ router.patch('/preferences', verifyToken, async (req, res) => {
   }
 });
 
+// 🧪 TEST ENDPOINT: Check push token status
+router.get('/debug/tokens', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data: tokens, error } = await supabase
+      .from('push_tokens')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    res.json({ 
+      userId,
+      tokens: tokens || [],
+      count: tokens?.length || 0,
+      hasActiveTokens: tokens?.some(t => t.active) || false
+    });
+  } catch (error) {
+    console.error('❌ Error fetching debug tokens:', error);
+    res.status(500).json({ error: 'Failed to fetch debug tokens' });
+  }
+});
+
+// 🧪 TEST ENDPOINT: Send test push notification
+router.post('/test-push', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { title = 'Test Notification', body = 'This is a test message' } = req.body;
+
+    console.log('🧪 Sending test push notification to user:', userId);
+
+    const { sendPushNotification } = require('../services/notificationService');
+    
+    await sendPushNotification({
+      userId,
+      title,
+      body,
+      data: { test: true, screen: 'Home' }
+    });
+
+    console.log('✅ Test push notification sent');
+    
+    res.json({ 
+      success: true,
+      message: 'Test push notification sent. Check your device in 5-10 seconds.'
+    });
+  } catch (error) {
+    console.error('❌ Error sending test push:', error);
+    res.status(500).json({ 
+      error: 'Failed to send test push',
+      details: error.message 
+    });
+  }
+});
+
+// 🧪 TEST ENDPOINT: Send test notification to any user (for testing between devices)
+router.post('/test-push/:targetUserId', verifyToken, async (req, res) => {
+  try {
+    const senderId = req.user.id;
+    const targetUserId = req.params.targetUserId;
+    const { title = 'Test Notification', body = 'This is a test from another user' } = req.body;
+
+    console.log(`🧪 User ${senderId} sending test push to ${targetUserId}`);
+
+    const { sendPushNotification } = require('../services/notificationService');
+    
+    await sendPushNotification({
+      userId: targetUserId,
+      title,
+      body,
+      data: { test: true, screen: 'Home', from: senderId }
+    });
+
+    console.log('✅ Test push notification sent to target user');
+    
+    res.json({ 
+      success: true,
+      message: `Test push notification sent to user ${targetUserId}`
+    });
+  } catch (error) {
+    console.error('❌ Error sending test push:', error);
+    res.status(500).json({ 
+      error: 'Failed to send test push',
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router;
 
