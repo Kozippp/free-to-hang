@@ -5,6 +5,8 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { supabase } from '@/lib/supabase';
 
+const EXPO_PROJECT_ID = '18a79a9c-af0a-4fb5-a752-3831e49d89ba';
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -15,7 +17,9 @@ Notifications.setNotificationHandler({
 
 const resolveProjectId = () => {
   const easProjectId =
-    Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? '';
+    Constants?.expoConfig?.extra?.eas?.projectId ??
+    Constants?.easConfig?.projectId ??
+    EXPO_PROJECT_ID;
   return easProjectId;
 };
 
