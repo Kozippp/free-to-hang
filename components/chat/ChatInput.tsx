@@ -11,7 +11,8 @@ import {
   Dimensions,
   Animated,
   Platform,
-  Keyboard
+  Keyboard,
+  LayoutChangeEvent
 } from 'react-native';
 import { 
   Send, 
@@ -30,6 +31,7 @@ interface ChatInputProps {
   currentUserId: string;
   currentUserName: string;
   currentUserAvatar: string;
+  onHeightChange?: (height: number) => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -38,7 +40,8 @@ export default function ChatInput({
   planId,
   currentUserId,
   currentUserName,
-  currentUserAvatar
+  currentUserAvatar,
+  onHeightChange,
 }: ChatInputProps) {
   const { sendMessage, getReplyingTo, setReplyingTo } = useChatStore();
   const [message, setMessage] = useState('');
@@ -49,6 +52,7 @@ export default function ChatInput({
   // TextInput ref for auto-focusing on reply
   const textInputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
+  const lastMeasuredHeight = useRef(0);
   
   // Get current reply state
   const replyingTo = getReplyingTo(planId);
@@ -204,8 +208,19 @@ export default function ChatInput({
 
   const safeBottomInset = isKeyboardVisible ? 0 : insets.bottom;
 
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { height } = event.nativeEvent.layout;
+    if (Math.abs(height - lastMeasuredHeight.current) > 2) {
+      lastMeasuredHeight.current = height;
+      onHeightChange?.(height);
+    }
+  };
+
   return (
-    <View style={[styles.container, { paddingBottom: safeBottomInset }]}>
+    <View 
+      style={[styles.container, { paddingBottom: safeBottomInset }]}
+      onLayout={handleLayout}
+    >
       {/* Reply Preview */}
       {renderReplyPreview()}
       

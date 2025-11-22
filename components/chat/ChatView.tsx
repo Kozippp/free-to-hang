@@ -3,13 +3,12 @@ import {
   StyleSheet,
   View,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Text,
   Animated,
-  PanResponder,
   Dimensions,
-  TouchableOpacity
+  TouchableOpacity,
+  Keyboard
 } from 'react-native';
 import Colors from '@/constants/colors';
 import useChatStore from '@/store/chatStore';
@@ -42,11 +41,45 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [previousMessageCount, setPreviousMessageCount] = useState(0);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [chatInputHeight, setChatInputHeight] = useState(0);
   const highlightAnim = useRef(new Animated.Value(1)).current;
 
   const planMessages = messages[plan.id] || [];
   const isLoading = loading[plan.id] || false;
   const insets = useSafeAreaInsets();
+  useEffect(() => {
+    if (disableKeyboardAvoidance) return;
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const handleKeyboardShow = (event: any) => {
+      const height = event?.endCoordinates?.height ?? 0;
+      const normalizedHeight = Math.max(0, height - insets.bottom);
+      setKeyboardOffset(normalizedHeight);
+      setIsKeyboardVisible(true);
+
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      });
+    };
+
+    const handleKeyboardHide = () => {
+      setKeyboardOffset(0);
+      setIsKeyboardVisible(false);
+    };
+
+    const showSub = Keyboard.addListener(showEvent, handleKeyboardShow);
+    const hideSub = Keyboard.addListener(hideEvent, handleKeyboardHide);
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [disableKeyboardAvoidance, insets.bottom]);
+
 
   // Check authentication status
   useEffect(() => {
@@ -296,6 +329,21 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     }
   }, [planMessages, highlightAnim]);
 
+  const handleInputHeightChange = useCallback((height: number) => {
+    setChatInputHeight((prev) => {
+      if (Math.abs(prev - height) < 2) {
+        return prev;
+      }
+      return height;
+    });
+  }, []);
+
+  const computedKeyboardOffset = disableKeyboardAvoidance ? 0 : keyboardOffset;
+  const fallbackInputHeight = 96;
+  const effectiveInputHeight = chatInputHeight || fallbackInputHeight;
+  const listBottomPadding = effectiveInputHeight + 24 + computedKeyboardOffset;
+  const scrollButtonBottom = effectiveInputHeight + computedKeyboardOffset + 20;
+
   const renderContent = () => (
     <>
       <FlatList
@@ -304,7 +352,10 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         style={styles.messagesList}
-        contentContainerStyle={styles.messagesContainer}
+        contentContainerStyle={[
+          styles.messagesContainer,
+          { paddingBottom: listBottomPadding }
+        ]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -329,7 +380,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
       />
       
       {showScrollToBottom && (
-        <Animated.View style={styles.scrollToBottomButton}>
+        <Animated.View style={[styles.scrollToBottomButton, { bottom: scrollButtonBottom }]}>
           <TouchableOpacity onPress={scrollToBottom}>
             <View style={styles.scrollToBottomInner}>
               <Text style={styles.scrollToBottomText}>↓</Text>
@@ -338,31 +389,22 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         </Animated.View>
       )}
       
-      <ChatInput
-        planId={plan.id}
-        currentUserId={currentUserId}
-        currentUserName={currentUserName}
-        currentUserAvatar={currentUserAvatar}
-      />
+      <View style={[styles.chatInputWrapper, { marginBottom: computedKeyboardOffset }]}>
+        <ChatInput
+          planId={plan.id}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
+          currentUserAvatar={currentUserAvatar}
+          onHeightChange={handleInputHeightChange}
+        />
+      </View>
     </>
   );
 
-  if (disableKeyboardAvoidance) {
-    return (
-      <View style={styles.container}>
-        {renderContent()}
-      </View>
-    );
-  }
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={insets.bottom}
-    >
+    <View style={styles.container}>
       {renderContent()}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -417,5 +459,8 @@ const styles = StyleSheet.create({
   scrollToBottomText: {
     fontSize: 16,
     color: Colors.light.text,
+  },
+  chatInputWrapper: {
+    backgroundColor: Colors.light.background,
   },
 }); 
