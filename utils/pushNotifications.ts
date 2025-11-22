@@ -66,13 +66,27 @@ export async function registerForPushNotifications(userId: string) {
   const projectId = resolveProjectId();
   console.log('🆔 Using Expo project ID:', projectId);
   
-  console.log('🎟️ Getting Expo push token...');
-  const tokenResponse = await Notifications.getExpoPushTokenAsync(
-    projectId ? { projectId } : undefined
-  );
-  const token = tokenResponse.data;
-  console.log('🔔 Push token received:', token);
+  // STEP 1: Get the push token (with proper error handling)
+  let token: string;
+  try {
+    console.log('🎟️ Getting Expo push token...');
+    const tokenResponse = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
+    token = tokenResponse.data;
+    console.log('🔔 Push token received:', token);
+  } catch (error) {
+    console.error('❌ Failed to get Expo push token:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    console.error('Project ID used:', projectId);
+    Alert.alert(
+      'Push Notification Error',
+      'Failed to get push notification token. Please check your internet connection and try again.'
+    );
+    return null;
+  }
 
+  // STEP 2: Save token to database (separate try-catch)
   try {
     console.log('💾 Saving push token to database...');
     const { error } = await supabase
