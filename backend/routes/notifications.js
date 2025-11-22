@@ -222,5 +222,38 @@ router.post('/test-push/:targetUserId', verifyToken, async (req, res) => {
   }
 });
 
+// 🧪 SIMPLE TEST ENDPOINT: No auth required (REMOVE IN PRODUCTION!)
+router.post('/simple-test-push/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const { title = 'Simple Test', body = 'Testing without authentication' } = req.body;
+
+    console.log(`🧪 Simple test: sending push to user ${userId}`);
+
+    const { sendPushNotification } = require('../services/notificationService');
+    
+    await sendPushNotification({
+      userId,
+      title,
+      body,
+      data: { test: true, screen: 'Home' }
+    });
+
+    console.log('✅ Simple test notification sent');
+    
+    res.json({ 
+      success: true,
+      message: `Test push notification sent to user ${userId}`,
+      note: '⚠️ This endpoint should be removed in production!'
+    });
+  } catch (error) {
+    console.error('❌ Error in simple test:', error);
+    res.status(500).json({ 
+      error: 'Failed to send test push',
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router;
 
