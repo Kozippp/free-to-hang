@@ -12,7 +12,6 @@ import {
   Platform,
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Dimensions
 } from 'react-native';
@@ -1052,17 +1051,12 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       )}
       
           {activeTab === 'Chat' && (
-            <KeyboardAvoidingView
-              style={styles.chatContainer}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={0}
-            >
+            <View style={styles.chatContainer}>
               <ChatView
                 plan={latestPlan}
                 currentUserId={user.id}
-                disableKeyboardAvoidance={true}
               />
-            </KeyboardAvoidingView>
+            </View>
           )}
         </Animated.View>
       </PanGestureHandler>

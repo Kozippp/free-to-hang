@@ -17,6 +17,7 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { Plan } from '@/store/plansStore';
 import { supabase } from '@/lib/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ChatViewProps {
   plan: Plan;
@@ -45,6 +46,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
 
   const planMessages = messages[plan.id] || [];
   const isLoading = loading[plan.id] || false;
+  const insets = useSafeAreaInsets();
 
   // Check authentication status
   useEffect(() => {
@@ -294,8 +296,8 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     }
   }, [planMessages, highlightAnim]);
 
-  return (
-    <View style={styles.container}>
+  const renderContent = () => (
+    <>
       <FlatList
         ref={flatListRef}
         data={planMessages}
@@ -342,7 +344,25 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         currentUserName={currentUserName}
         currentUserAvatar={currentUserAvatar}
       />
-    </View>
+    </>
+  );
+
+  if (disableKeyboardAvoidance) {
+    return (
+      <View style={styles.container}>
+        {renderContent()}
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={insets.bottom}
+    >
+      {renderContent()}
+    </KeyboardAvoidingView>
   );
 }
 

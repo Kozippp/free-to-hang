@@ -6,8 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Platform,
-  KeyboardAvoidingView
+  Platform
 } from 'react-native';
 import { 
   Clock, 
@@ -436,17 +435,10 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
       
       {activeTab === 'Chat' && (
         <View style={styles.chatContainer}>
-          <KeyboardAvoidingView 
-            style={styles.chatKeyboardView}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={0}
-          >
-            <ChatView 
-              plan={latestPlan} 
-              currentUserId={authUser.id} 
-              disableKeyboardAvoidance={true}
-            />
-          </KeyboardAvoidingView>
+          <ChatView 
+            plan={latestPlan} 
+            currentUserId={authUser.id} 
+          />
         </View>
       )}
       
@@ -660,9 +652,6 @@ const styles = StyleSheet.create({
     // No marginRight needed since text has marginLeft
   },
   chatContainer: {
-    flex: 1,
-  },
-  chatKeyboardView: {
     flex: 1,
   },
   planDateFooter: {
