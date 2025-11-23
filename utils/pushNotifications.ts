@@ -26,12 +26,13 @@ const resolveProjectId = () => {
 export async function registerForPushNotifications(userId: string) {
   console.log('🔔 Starting push notification registration for user:', userId);
   
-  if (!Device.isDevice) {
-    console.log('⚠️ Push notifications require physical device');
-    return null;
-  }
+  // NOTE: Temporarily disabled for emulator testing
+  // if (!Device.isDevice) {
+  //   console.log('⚠️ Push notifications require physical device');
+  //   return null;
+  // }
 
-  console.log('✅ Running on physical device');
+  console.log('✅ Attempting registration (emulator mode enabled)');
 
   if (Platform.OS === 'android') {
     console.log('📱 Setting up Android notification channel');
