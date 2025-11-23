@@ -21,7 +21,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "googleServicesFile": "./google-services.json",
-      "package": "com.freetohang.app"
+      "package": "com.freetohang.app",
+      "permissions": []
     },
     "web": {
       "output": "static",
