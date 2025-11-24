@@ -67,24 +67,48 @@ export async function registerForPushNotifications(userId: string) {
   const projectId = resolveProjectId();
   console.log('🆔 Using Expo project ID:', projectId);
   
-  // STEP 1: Get the push token (with proper error handling)
+  // STEP 1: Get the push token (with proper error handling and retry logic)
   let token: string;
-  try {
-    console.log('🎟️ Getting Expo push token...');
-    const tokenResponse = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
-    );
-    token = tokenResponse.data;
-    console.log('🔔 Push token received:', token);
-  } catch (error) {
-    console.error('❌ Failed to get Expo push token:', error);
-    console.error('Error details:', JSON.stringify(error, null, 2));
-    console.error('Project ID used:', projectId);
-    Alert.alert(
-      'Push Notification Error',
-      'Failed to get push notification token. Please check your internet connection and try again.'
-    );
-    return null;
+  const maxRetries = 3;
+  const retryDelay = 2000; // 2 seconds
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🎟️ Getting Expo push token (attempt ${attempt}/${maxRetries})...`);
+      const tokenResponse = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined
+      );
+      token = tokenResponse.data;
+      console.log('🔔 Push token received:', token);
+      break; // Success, exit the retry loop
+    } catch (error: any) {
+      console.error(`❌ Failed to get Expo push token (attempt ${attempt}/${maxRetries}):`, error);
+      console.error('Error details:', {
+        code: error?.code,
+        message: error?.message
+      });
+      console.error('Project ID used:', projectId);
+      
+      // Check if error is transient (503 Service Unavailable)
+      const isTransient = error?.code === 'ERR_NOTIFICATIONS_SERVER_ERROR' || 
+                          error?.message?.includes('503') ||
+                          error?.message?.includes('SERVICE_UNAVAILABLE');
+      
+      if (attempt < maxRetries && isTransient) {
+        console.log(`⏳ Expo server temporarily unavailable. Retrying in ${retryDelay/1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        continue;
+      }
+      
+      // If we've exhausted retries or it's not a transient error
+      Alert.alert(
+        'Push Notification Error',
+        isTransient 
+          ? 'Expo notification server is temporarily unavailable. Please try again in a few moments.'
+          : 'Failed to get push notification token. Please check your internet connection and try again.'
+      );
+      return null;
+    }
   }
 
   // STEP 2: Save token to database (separate try-catch)
