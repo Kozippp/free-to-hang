@@ -1,4 +1,4 @@
-package com.freetohang
+package com.freetohang.app
 
 import android.os.Build
 import android.os.Bundle

@@ -19,6 +19,9 @@ yarn-error.log*
 setup-demo.js
 demo-setup.js
 
+# Firebase Admin SDK credentials - NEVER COMMIT THESE
+*-firebase-adminsdk-*.json
+
 # Expo
 .expo/
 dist/
