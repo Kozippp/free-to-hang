@@ -21,7 +21,7 @@ demo-setup.js
 
 # Firebase Admin SDK credentials - NEVER COMMIT THESE
 *-firebase-adminsdk-*.json
-google-services.json
+
 
 # Expo
 .expo/

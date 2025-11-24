@@ -393,7 +393,7 @@ Backend                    Expo API                  Apple APNs              iPh
    │    title: "Test",        │                          │                     │
    │    body: "Hello"}        │                          │                     │
    │                          │                          │                     │
-   │                          │ 3. Kontrolli credentials │                     │
+   │                          │ 3.  credKontrollientials │                     │
    │                          ├─────────────────────────►│                     │
    │                          │    (APNs Key)            │                     │
    │                          │                          │                     │
