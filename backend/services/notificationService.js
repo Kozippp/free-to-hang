@@ -48,7 +48,12 @@ async function createNotification({ userId, type, title, body, data = {}, trigge
 }
 
 async function sendPushNotification({ userId, title, body, data = {} }) {
-  if (!supabase) return;
+  console.log('🔔 sendPushNotification called:', { userId, title, body, data });
+  
+  if (!supabase) {
+    console.error('❌ Supabase client not available');
+    return;
+  }
 
   const { data: tokens, error: tokenError } = await supabase
     .from('push_tokens')
@@ -65,6 +70,8 @@ async function sendPushNotification({ userId, title, body, data = {} }) {
     console.log('ℹ️ No push tokens found for user:', userId);
     return;
   }
+  
+  console.log('✅ Found', tokens.length, 'push tokens for user:', userId);
 
   const { data: prefs } = await supabase
     .from('notification_preferences')
@@ -106,12 +113,16 @@ async function sendPushNotification({ userId, title, body, data = {} }) {
     })
     .filter(Boolean);
 
+  console.log('📤 Preparing to send', messages.length, 'push notifications');
+  
   const chunks = expo.chunkPushNotifications(messages);
   for (const chunk of chunks) {
     try {
-      await expo.sendPushNotificationsAsync(chunk);
+      const tickets = await expo.sendPushNotificationsAsync(chunk);
+      console.log('✅ Push notification sent successfully, tickets:', tickets);
     } catch (error) {
       console.error('❌ Error sending push notification chunk:', error);
+      console.error('Error details:', error.message, error.stack);
     }
   }
 }
@@ -125,6 +136,8 @@ async function notifyUser({
   triggeredBy = null,
   sendPush = true
 }) {
+  console.log('📢 notifyUser called:', { userId, type, title, sendPush });
+  
   try {
     const notification = await createNotification({
       userId,
@@ -134,12 +147,19 @@ async function notifyUser({
       data,
       triggeredBy
     });
+    
+    console.log('✅ Notification created in DB:', notification.id);
 
     if (sendPush) {
       const isActive = await checkIfUserActive(userId);
+      console.log('🔍 User activity check:', { userId, isActive });
+      
       if (!isActive) {
         const prefsAllow = await shouldSendForCategory(userId, type);
+        console.log('🔍 Category preferences check:', { userId, type, prefsAllow });
+        
         if (prefsAllow) {
+          console.log('✅ Sending push notification to user:', userId);
           await sendPushNotification({
             userId,
             title,
@@ -150,8 +170,10 @@ async function notifyUser({
           console.log(`ℹ️ Notification type ${type} disabled for user ${userId}`);
         }
       } else {
-        console.log(`ℹ️ User ${userId} active recently, skipping push`);
+        console.log(`ℹ️ User ${userId} active recently (last <2min), skipping push`);
       }
+    } else {
+      console.log(`ℹ️ sendPush=false, not sending push notification to user ${userId}`);
     }
 
     return notification;
