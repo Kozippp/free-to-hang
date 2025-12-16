@@ -61,7 +61,7 @@ interface ChannelStatus {
   lastError: string | null;
 }
 
-type PlansChannelName = 'plans' | 'plan_updates';
+type PlansChannelName = 'plan_updates';
 
 interface SubscriptionMetrics {
   totalConnections: number;
@@ -152,7 +152,6 @@ interface PlansState {
     lastCheckTime: string | null;
     retryAttempts: Record<string, number>;
     channels: {
-      plans: ChannelStatus;
       plan_updates: ChannelStatus;
     };
   };
@@ -232,7 +231,7 @@ interface PlansState {
 }
 
 // Global variables for real-time subscriptions
-let plansChannel: any = null;
+// NOTE: Consolidated to single channel - plan_updates handles all notifications including new plans
 let updatesChannel: any = null;
 
 // Debouncing map for per-plan refresh control
@@ -259,7 +258,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
     lastCheckTime: null,
     retryAttempts: {},
     channels: {
-      plans: { state: null, lastError: null },
       plan_updates: { state: null, lastError: null }
     }
   },
@@ -312,7 +310,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
       channels: state.subscriptionStatus.channels,
       metrics: subscriptionMetrics,
       activeChannels: {
-        plans: !!plansChannel,
         updates: !!updatesChannel
       },
       timestamp: new Date().toISOString()
@@ -1117,9 +1114,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
       return;
     }
     
-    // If channels exist but status is not subscribed, clean them up
-    if (plansChannel || updatesChannel) {
-      console.log('⚠️ Found orphaned channels - cleaning up');
+    // If channel exists but status is not subscribed, clean it up
+    if (updatesChannel) {
+      console.log('⚠️ Found orphaned channel - cleaning up');
       await stopAllRealtimeChannels();
     }
 
@@ -1136,30 +1133,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
       console.log('📊 Loading initial plans data...');
       await get().loadPlans(userId);
 
-      // 0. PLANS CHANNEL - Listen for new plans (main table INSERT events)
-      plansChannel = createChannelWithRetry(
-        'plans',
-        `plans_channel_${userId}_${Date.now()}`,
-        (channel) =>
-          channel.on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'plans'
-            },
-            (payload: any) => {
-              console.log('🆕 New plan INSERT event:', payload);
-              handlePlansInsert(payload, userId);
-            }
-          ),
-        () => {
-          plansChannel = null;
-        },
-        userId
-      );
-
-      // 1. PLAN UPDATES CHANNEL - The main notification system
+      // CONSOLIDATED: Single channel for all plan notifications
+      // plan_updates table receives all events including plan_created, participant changes, polls, etc.
       updatesChannel = createChannelWithRetry(
         'plan_updates',
         `plan_updates_channel_${userId}_${Date.now()}`,
@@ -1184,13 +1159,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       startPlansHealthCheck(userId);
 
-      // Wait a moment for all subscriptions to establish
+      // Wait a moment for subscription to establish
       setTimeout(() => {
         usePlansStore.getState().setSubscriptionActive(true);
-        console.log('✅ Plans real-time subscriptions started successfully!');
-        console.log('🔥 Listening for:');
-        console.log('  🆕 plans - new plan INSERT events');
-        console.log('  📢 plan_updates - main notification system');
+        console.log('✅ Plans real-time subscription started successfully!');
+        console.log('🔥 Listening for: plan_updates (all notifications)');
       }, 1000);
 
     } catch (error) {
@@ -1212,15 +1185,15 @@ const usePlansStore = create<PlansState>((set, get) => ({
   },
 
   checkAndRestartSubscriptions: async (userId: string) => {
-    console.log('🔍 Checking plans real-time subscriptions status...');
+    console.log('🔍 Checking plans real-time subscription status...');
 
-    // If already subscribed and all channels exist, no need to restart
-    if (get().subscriptionStatus.isSubscribed && plansChannel && updatesChannel) {
-      console.log('✅ All plans real-time subscriptions are active');
+    // If already subscribed and channel exists, no need to restart
+    if (get().subscriptionStatus.isSubscribed && updatesChannel) {
+      console.log('✅ Plans real-time subscription is active');
       return;
     }
 
-    console.log('🔄 Plans subscriptions missing or failed - restarting...');
+    console.log('🔄 Plans subscription missing or failed - restarting...');
 
     // Clear any pending timeouts
     clearAllPlanRefreshTimeouts();
@@ -1234,27 +1207,18 @@ const usePlansStore = create<PlansState>((set, get) => ({
   }
 }));
 
-// Helper function to stop all realtime channels
+// Helper function to stop realtime channel
 async function stopAllRealtimeChannels() {
-  const channelEntries: Array<[string, any]> = [
-    ['plans', plansChannel],
-    ['plan_updates', updatesChannel],
-  ];
-
-  for (const [name, channel] of channelEntries) {
-    if (!channel) continue;
-
+  if (updatesChannel) {
     try {
-      await supabase.removeChannel(channel);
-      console.log(`🛑 Stopped ${name} channel`);
+      await supabase.removeChannel(updatesChannel);
+      console.log('🛑 Stopped plan_updates channel');
     } catch (error) {
-      console.error(`❌ Error stopping ${name} channel:`, error);
+      console.error('❌ Error stopping plan_updates channel:', error);
     }
-
-    usePlansStore.getState().updateChannelStatus(name as PlansChannelName, 'disconnected');
+    usePlansStore.getState().updateChannelStatus('plan_updates', 'disconnected');
   }
 
-  plansChannel = null;
   updatesChannel = null;
   Object.keys(retryAttempts).forEach((key) => {
     retryAttempts[key] = 0;
@@ -1405,7 +1369,6 @@ function startPlansHealthCheck(userId: string) {
     // Health check runs silently unless there are issues
     usePlansStore.getState().recordHealthCheck();
     const channelsStatus = [
-      { name: 'plans', state: plansChannel?.state },
       { name: 'plan_updates', state: updatesChannel?.state },
     ];
 
@@ -1439,32 +1402,7 @@ function stopPlansHealthCheck() {
   }
 }
 
-// Handle plans table INSERT events
-function handlePlansInsert(payload: any, currentUserId: string) {
-  const { eventType, new: newRecord, old: oldRecord } = payload;
-
-  console.log('📋 Processing plans INSERT event:', {
-    eventType,
-    planId: newRecord?.id,
-    title: newRecord?.title,
-    creatorId: newRecord?.creator_id,
-    currentUserId
-  });
-
-  if (eventType === 'INSERT' && newRecord) {
-    console.log('🎯 New plan inserted - refreshing plans data');
-
-    // Reload plans data to include the new plan
-    const { loadPlans } = usePlansStore.getState();
-    loadPlans(currentUserId).then(() => {
-      console.log('✅ Plans refreshed after new plan INSERT');
-    }).catch(error => {
-      console.error('❌ Error refreshing plans after INSERT:', error);
-    });
-  }
-}
-
-// Handle plan update notifications - MAIN NOTIFICATION SYSTEM
+// Handle plan update notifications - CONSOLIDATED NOTIFICATION SYSTEM
 function handlePlanUpdateNotification(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
 
@@ -1487,8 +1425,14 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
 
     // Handle different types of plan updates with per-plan debouncing
     if (updateType === 'plan_created') {
-      console.log('🎯 New plan created - immediate refresh needed');
-      schedulePlanRefresh(planId, currentUserId, 0, updateType);
+      console.log('🎯 New plan created - loading full plans list');
+      // For new plans, we need to load all plans to ensure the new plan appears in the correct list
+      usePlansStore.getState().loadPlans(currentUserId).then(() => {
+        console.log('✅ Plans list refreshed after new plan creation');
+      }).catch(error => {
+        console.error('❌ Error refreshing plans after creation:', error);
+      });
+      return; // Skip schedulePlanRefresh since we're doing full reload
     } else if (
       updateType === 'participant_joined' ||
       updateType === 'participant_status_changed' ||

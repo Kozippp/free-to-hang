@@ -23,7 +23,7 @@ export default function PlansScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const { user } = useAuth();
-  const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, startRealTimeUpdates, stopRealTimeUpdates, checkAndRestartSubscriptions } = usePlansStore();
+  const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -35,17 +35,12 @@ export default function PlansScreen() {
   // DISABLED: const dropInAnimation = useRef(new Animated.Value(-100)).current;
 
   // Load plans from API when component mounts
+  // NOTE: Realtime subscriptions are now managed globally by realtimeManager
   useEffect(() => {
     if (user?.id) {
       console.log('🔄 Loading plans for user:', user.id);
-      console.log('🔄 User object:', { id: user.id, email: user.email });
       loadPlans(user.id);
-      startRealTimeUpdates(user.id);
     }
-    
-    return () => {
-      stopRealTimeUpdates();
-    };
   }, [user?.id]); // Only depend on user.id to avoid infinite loops
 
   useEffect(() => {

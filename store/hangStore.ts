@@ -493,10 +493,8 @@ const useHangStore = create<HangState>()(
         
         startHangHealthCheck();
         
-        // More frequent polling for better real-time feel (every 10 seconds)
-        refreshInterval = setInterval(() => {
-          get().loadFriends();
-        }, 10000);
+        // NOTE: Removed 10s polling - realtime subscription should be sufficient
+        // If realtime fails, health check will restart it automatically
       },
 
       stopRealTimeUpdates: async () => {

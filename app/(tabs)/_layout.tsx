@@ -5,81 +5,38 @@ import Colors from "@/constants/colors";
 import { StatusBar } from "expo-status-bar";
 import { View, Text } from "react-native";
 import usePlansStore from "@/store/plansStore";
-import useHangStore from "@/store/hangStore";
-import useFriendsStore from "@/store/friendsStore";
-import useChatStore from "@/store/chatStore";
 import useNotificationsStore from "@/store/notificationsStore";
 import { useAuth } from "@/contexts/AuthContext";
+import { initializeRealtimeManager, stopRealtimeManager } from "@/utils/realtimeManager";
 
 export default function TabLayout() {
   const { user } = useAuth();
   const { invitations } = usePlansStore();
+  const { unreadCount } = useNotificationsStore();
   const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
-  
-  // Real-time management for both hang and friends
-  const { startRealTimeUpdates: startHangRealtime, stopRealTimeUpdates: stopHangRealtime } = useHangStore();
-  const { startRealTimeUpdates: startFriendsRealtime, stopRealTimeUpdates: stopFriendsRealtime } = useFriendsStore();
-  const {
-    unreadCount,
-    fetchNotifications,
-    startRealTimeUpdates: startNotificationsRealtime,
-    stopRealTimeUpdates: stopNotificationsRealtime
-  } = useNotificationsStore();
   
   // Check for unread invitations
   useEffect(() => {
-    const unreadCount = invitations.filter(plan => !plan.isRead).length;
-    setHasUnreadInvitations(unreadCount > 0);
+    const count = invitations.filter(plan => !plan.isRead).length;
+    setHasUnreadInvitations(count > 0);
   }, [invitations]);
 
-  // Start both hang and friends real-time systems - only when user is authenticated
+  // Initialize global realtime manager when user is authenticated
   useEffect(() => {
-    let isMounted = true;
-    
-    const startRealtime = async () => {
-      if (!isMounted || !user) {
-        console.log('⏸️ Skipping realtime start - no authenticated user');
-        return;
-      }
-      
-      console.log('🚀 Starting global realtime systems...');
-
-      // Start hang realtime system globally
-      startHangRealtime();
-      if (user?.id) {
-        fetchNotifications(user.id);
-        startNotificationsRealtime(user.id);
-      }
-      // Friends realtime starts individually in profile tab to avoid duplication
-    };
-    
-    if (user) {
-      startRealtime();
+    if (!user?.id) {
+      console.log('⏸️ No authenticated user - skipping realtime initialization');
+      return;
     }
+    
+    console.log('🚀 Initializing global realtime manager...');
+    initializeRealtimeManager(user.id);
     
     // Cleanup when layout unmounts or user signs out
     return () => {
-      if (!isMounted) return; // Prevent double cleanup
-      isMounted = false;
-      console.log('⏹️ Tab layout cleanup');
-      
-      stopHangRealtime();
-      stopFriendsRealtime();
-      stopNotificationsRealtime();
-      
-      // Stop plans realtime
-      const plansStore = usePlansStore.getState();
-      plansStore.stopRealTimeUpdates();
-      
-      // Cleanup all chat subscriptions
-      const chatStore = useChatStore.getState();
-      const chatPlanIds = Object.keys(chatStore.subscriptions || {});
-      console.log(`🧹 Cleaning up ${chatPlanIds.length} chat subscriptions`);
-      chatPlanIds.forEach(planId => {
-        chatStore.unsubscribeFromChat(planId, { preserveDesired: false });
-      });
+      console.log('⏹️ Tab layout cleanup - stopping realtime manager');
+      stopRealtimeManager();
     };
-  }, [user]); // Add user as dependency
+  }, [user?.id]);
   
   return (
     <>
