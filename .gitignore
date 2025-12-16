@@ -20,7 +20,14 @@ setup-demo.js
 demo-setup.js
 
 # Firebase Admin SDK credentials - NEVER COMMIT THESE
+# Matches any Firebase Admin SDK service account JSON in any folder
 *-firebase-adminsdk-*.json
+
+# Firebase client configs - NEVER COMMIT THESE
+# This pattern applies recursively (all folders), including:
+# - google-services.json
+# - Free-to-hang/google-services.json
+# - android/app/google-services.json
 google-services.json
 
 # Expo
@@ -70,4 +77,3 @@ yarn-error.*
 *.tsbuildinfo
 .vercel
 .env
-free-to-hang-73c55958d623.json
