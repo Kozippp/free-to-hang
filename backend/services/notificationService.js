@@ -215,7 +215,11 @@ async function checkIfUserActive(userId) {
   const lastActive = new Date(data.last_active);
   const now = new Date();
   const diffMinutes = (now.getTime() - lastActive.getTime()) / 1000 / 60;
-  return diffMinutes < 2;
+  
+  // User is considered active if they were in app within last 6 seconds (0.1 min)
+  // This ensures notifications are sent immediately after app is closed
+  const ACTIVE_THRESHOLD_MINUTES = 0.1;
+  return diffMinutes < ACTIVE_THRESHOLD_MINUTES;
 }
 
 function isInQuietHours(currentTime, startTime, endTime) {

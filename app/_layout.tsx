@@ -61,8 +61,8 @@ function RootLayoutNav() {
       return;
     }
 
-    // Push notifications disabled until Apple Developer Account is set up
-    // registerForPushNotifications(user.id);
+    // Register for push notifications with Apple Developer Account
+    registerForPushNotifications(user.id);
     updateLastActive(user.id);
 
     const interval = setInterval(() => {
@@ -74,10 +74,10 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
-    // Badge count disabled until push notifications are enabled
-    // Notifications.setBadgeCountAsync(unreadCount).catch((error) =>
-    //   console.error('❌ Failed to set badge count:', error)
-    // );
+    // Update badge count with unread notifications
+    Notifications.setBadgeCountAsync(unreadCount).catch((error) =>
+      console.error('❌ Failed to set badge count:', error)
+    );
   }, [unreadCount]);
 
   return (
