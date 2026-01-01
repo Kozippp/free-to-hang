@@ -24,14 +24,81 @@ const resolveProjectId = () => {
 };
 
 export async function registerForPushNotifications(userId: string) {
-  console.log('🔔 Push notifications disabled (waiting for Apple Developer Account)');
-  console.log('ℹ️ User ID:', userId);
-  // TODO: Enable when Apple Developer Account is set up
-  // This will require:
-  // 1. Paid Apple Developer Account
-  // 2. APNs key/certificate
-  // 3. Update app.json with proper credentials
-  return null;
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token for push notification!');
+      return null;
+    }
+
+    console.log('✅ Notification permissions granted');
+
+    const projectId = resolveProjectId();
+    console.log('🆔 Using Expo project ID:', projectId);
+    
+    // STEP 1: Get the push token (with proper error handling)
+    let token: string;
+    try {
+      console.log('🎟️ Getting Expo push token...');
+      const tokenResponse = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined
+      );
+      token = tokenResponse.data;
+      console.log('🔔 Push token received:', token);
+    } catch (error) {
+      console.error('❌ Failed to get Expo push token:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      console.error('Project ID used:', projectId);
+      // Alert only if relevant to user action, otherwise silent fail or log
+      return null;
+    }
+
+    // STEP 2: Save token to database (separate try-catch)
+    try {
+      console.log('💾 Saving push token to database...');
+      const { error } = await supabase
+        .from('push_tokens')
+        .upsert(
+          {
+            user_id: userId,
+            expo_push_token: token,
+            device_type: Platform.OS,
+            active: true,
+            last_used_at: new Date().toISOString()
+          },
+          { onConflict: 'user_id,expo_push_token' }
+        );
+
+      if (error) {
+        console.error('❌ Database error:', error);
+        throw error;
+      }
+      console.log('✅ Push token saved to database successfully');
+    } catch (error) {
+      console.error('❌ Failed to save push token:', error);
+    }
+
+    return token;
+  } else {
+    console.log('Must use physical device for Push Notifications');
+    return null;
+  }
 }
 
 export function useNotificationObserver(
@@ -66,4 +133,3 @@ export async function updateLastActive(userId: string) {
     console.error('❌ Failed to update last active timestamp:', error);
   }
 }
-

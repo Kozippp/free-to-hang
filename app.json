@@ -67,8 +67,7 @@
           "color": "#111827",
           "sounds": []
         }
-      ],
-      "@react-native-firebase/app"
+      ]
     ],
     "scheme": "freetohang",
     "notification": {
