@@ -371,6 +371,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         windowSize={10}
         initialNumToRender={20}
         inverted={true}
+        keyboardDismissMode="on-drag"
         onScrollToIndexFailed={(info) => {
           // Fallback: try to scroll after a short delay
           setTimeout(() => {
