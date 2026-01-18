@@ -136,14 +136,6 @@ const getAuthToken = async () => {
   return session?.access_token;
 };
 
-const MAX_CHAT_CHANNEL_RETRIES = 3;
-const CHAT_RETRY_DELAYS_MS = [2000, 5000, 10000, 30000, 60000];
-const CHAT_HEALTH_CHECK_INTERVAL = 60000; // 60s
-const chatRetryAttempts: Record<string, number> = {};
-const chatRestartTimeouts: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
-const desiredChatSubscriptions = new Set<string>();
-let chatHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
-const chatHealthFailures: Record<string, number> = {};
 
 const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
@@ -551,9 +543,16 @@ const useChatStore = create<ChatState>((set, get) => ({
       );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Failed to mark messages as read:', errorData);
-        throw new Error('Failed to mark messages as read');
+        const errorText = await response.text();
+        // Ignore foreign key violations (message not yet in DB due to sync lag)
+        if (response.status === 500 && errorText.includes('foreign key constraint')) {
+           console.log(`⏳ Message ${targetMessage.id} not yet in DB, skipping server read receipt`);
+           return;
+        }
+        
+        console.error('Failed to mark messages as read:', response.status, errorText);
+        // Don't throw to avoid disrupting UI for background sync issue
+        return;
       }
 
       const result = await response.json();
@@ -693,22 +692,21 @@ const useChatStore = create<ChatState>((set, get) => ({
   // ============================================
   subscribeToChat: (planId: string) => {
     const state = get();
+    const existingChannel = state.subscriptions[planId];
     
-    // Guard: Check if already subscribed
-    if (state.subscriptions[planId]) {
-      const existingChannel = state.subscriptions[planId];
-      const channelState = existingChannel?.state;
-      
-      if (channelState === 'joined') {
+    if (existingChannel) {
+      if (existingChannel.state === 'joined') {
         console.log(`✅ Already subscribed: ${planId}`);
         return;
       }
+      
+      console.log(`🧹 Cleaning up existing channel for ${planId} (state: ${existingChannel.state})`);
+      set(state => {
+        const { [planId]: _, ...rest } = state.subscriptions;
+        return { subscriptions: rest };
+      });
+      supabase.removeChannel(existingChannel);
     }
-    
-    desiredChatSubscriptions.add(planId);
-    clearChatRestart(planId);
-    chatRetryAttempts[planId] = 0;
-    ensureChatHealthCheckRunning();
     
     console.log(`📡 Subscribing to chat ${planId}`);
     
@@ -904,7 +902,7 @@ const useChatStore = create<ChatState>((set, get) => ({
   // ============================================
   // UNSUBSCRIBE FROM CHAT
   // ============================================
-  unsubscribeFromChat: (planId: string, options?: { preserveDesired?: boolean }) => {
+  unsubscribeFromChat: (planId: string) => {
     const state = get();
     const channel = state.subscriptions[planId];
     
@@ -917,13 +915,6 @@ const useChatStore = create<ChatState>((set, get) => ({
         return { subscriptions: remainingSubscriptions };
       });
     }
-    
-    if (!options?.preserveDesired) {
-      desiredChatSubscriptions.delete(planId);
-    }
-    clearChatRestart(planId);
-    delete chatRetryAttempts[planId];
-    stopChatHealthCheckIfIdle();
   },
   
   // ============================================
@@ -1022,135 +1013,28 @@ const useChatStore = create<ChatState>((set, get) => ({
 function handleChatChannelStatus(planId: string, status: string) {
   console.log(`📡 Chat subscription status for ${planId}:`, status);
 
-  // Ignore state changes to prevent unnecessary restarts
-  if (status === 'CHANNEL_STATE_CHANGE') {
-    return;
-  }
-
   if (status === 'SUBSCRIBED') {
-    chatRetryAttempts[planId] = 0;
-    clearChatRestart(planId);
-    return;
-  }
-
-  if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
-    // If we already have a restart scheduled for this plan, ignore duplicate error status
-    if (chatRestartTimeouts[planId]) {
-      console.log(`⏸️ Restart already scheduled for ${planId}, ignoring ${status}`);
-      return;
-    }
-
-    if (status === 'CHANNEL_ERROR') {
-      console.log(`❌ Chat channel error for plan ${planId}`);
-    } else if (status === 'CLOSED') {
-      console.log(`🔒 Chat channel closed for plan ${planId}`);
-    } else {
-      console.log(`⏰ Chat channel timed out for plan ${planId}`);
-    }
-
-    // Check if still desired before restarting
-    if (!desiredChatSubscriptions.has(planId)) {
-      console.log(`⚠️ Skipping restart - no longer desired: ${planId}`);
-      return;
-    }
-
-    // Don't call unsubscribe here - it triggers CLOSED again causing a loop
-    // Just schedule a restart, which will create a fresh channel
-    scheduleChatRestart(planId);
-  }
-}
-
-function scheduleChatRestart(planId: string) {
-  if (!desiredChatSubscriptions.has(planId)) {
-    return;
-  }
-
-  const attempts = chatRetryAttempts[planId] || 0;
-  if (attempts >= MAX_CHAT_CHANNEL_RETRIES) {
-    console.error(`❌ Chat channel for plan ${planId} failed after maximum retries`);
-    return;
-  }
-
-  const baseDelay = CHAT_RETRY_DELAYS_MS[Math.min(attempts, CHAT_RETRY_DELAYS_MS.length - 1)];
-  const jitter = Math.random() * 1000;
-  const delay = baseDelay + jitter;
-  chatRetryAttempts[planId] = attempts + 1;
-
-  clearChatRestart(planId);
-
-  console.log(
-    `🔄 Scheduling chat channel restart for plan ${planId} in ${delay}ms (attempt ${chatRetryAttempts[planId]}/${MAX_CHAT_CHANNEL_RETRIES})`
-  );
-
-  chatRestartTimeouts[planId] = setTimeout(() => {
-    delete chatRestartTimeouts[planId];
-
-    if (!desiredChatSubscriptions.has(planId)) {
-      console.log(`⚠️ Cancelled chat restart for plan ${planId} - no longer desired`);
-      return;
-    }
-
-    console.log(`♻️ Attempting to restart chat subscription for plan ${planId}`);
-    useChatStore.getState().subscribeToChat(planId);
-  }, delay);
-}
-
-function clearChatRestart(planId: string) {
-  const timeout = chatRestartTimeouts[planId];
-  if (timeout) {
-    clearTimeout(timeout);
-  }
-
-  delete chatRestartTimeouts[planId];
-}
-
-function ensureChatHealthCheckRunning() {
-  if (chatHealthCheckInterval) {
-    return;
-  }
-
-  console.log('💓 Starting chat health check system...');
-  chatHealthCheckInterval = setInterval(runChatHealthCheck, CHAT_HEALTH_CHECK_INTERVAL);
-}
-
-function runChatHealthCheck() {
-  const { subscriptions } = useChatStore.getState();
-  const planIds = Object.keys(subscriptions);
-
-  if (planIds.length === 0) {
-    stopChatHealthCheckIfIdle();
-    return;
-  }
-
-  planIds.forEach((planId) => {
-    const channel = subscriptions[planId];
-    const channelState = channel?.state;
-
-    if (channelState !== 'joined') {
-      chatHealthFailures[planId] = (chatHealthFailures[planId] || 0) + 1;
-      console.log(
-        `⚠️ Chat health check warning for plan ${planId} (state: ${channelState ?? 'null'}, failures: ${chatHealthFailures[planId]})`
-      );
-
-      if (chatHealthFailures[planId] >= 2) {
-        console.log(`🔄 Chat health check restarting subscription for plan ${planId}`);
-        useChatStore.getState().unsubscribeFromChat(planId, { preserveDesired: true });
-        scheduleChatRestart(planId);
-        chatHealthFailures[planId] = 0;
+    console.log(`✅ Chat connected: ${planId}`);
+    // Fix: Fetch messages on reconnect to fill any gaps (messages missed while disconnected)
+    useChatStore.getState().fetchMessages(planId);
+  } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+    // Only attempt reconnect if we still want this subscription (it's in the store)
+    // The Supabase client handles many transient errors, but if we get a terminal state,
+    // we can try a clean re-subscription after a delay.
+    
+    // We use a timeout to avoid rapid loops.
+    // If the channel was removed from the store (unsubscribed) during this time,
+    // we won't reconnect.
+    setTimeout(() => {
+      const store = useChatStore.getState();
+      const currentChannel = store.subscriptions[planId];
+      
+      if (currentChannel) {
+         console.log(`🔄 Attempting to reconnect chat ${planId} after ${status}...`);
+         // Calling subscribeToChat will clean up the old one and start fresh
+         store.subscribeToChat(planId);
       }
-    } else if (chatHealthFailures[planId]) {
-      // Silently reset failure count when healthy again
-      chatHealthFailures[planId] = 0;
-    }
-  });
-}
-
-function stopChatHealthCheckIfIdle() {
-  const { subscriptions } = useChatStore.getState();
-  if (chatHealthCheckInterval && Object.keys(subscriptions).length === 0) {
-    clearInterval(chatHealthCheckInterval);
-    chatHealthCheckInterval = null;
-    console.log('💓 Chat health check stopped - no active chat subscriptions');
+    }, 5000);
   }
 }
 
