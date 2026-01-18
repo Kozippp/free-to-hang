@@ -502,9 +502,23 @@ export default function ChatMessage({
     }
 
     if (message.type === 'image') {
+      const radiusStyle: any = {};
+      
+      if (isOwnMessage) {
+        radiusStyle.borderTopRightRadius = isFirstInGroup ? 18 : 4;
+        radiusStyle.borderBottomRightRadius = isLastInGroup ? 18 : 4;
+        radiusStyle.borderTopLeftRadius = 18;
+        radiusStyle.borderBottomLeftRadius = 18;
+      } else {
+        radiusStyle.borderTopLeftRadius = isFirstInGroup ? 18 : 4;
+        radiusStyle.borderBottomLeftRadius = isLastInGroup ? 18 : 4;
+        radiusStyle.borderTopRightRadius = 18;
+        radiusStyle.borderBottomRightRadius = 18;
+      }
+
       return (
         <TouchableOpacity 
-          style={styles.imageContainer} 
+          style={[styles.imageContainer, radiusStyle]} 
           onPress={openImageViewer}
           activeOpacity={0.9}
         >
@@ -1033,11 +1047,9 @@ const styles = StyleSheet.create({
     color: 'rgba(0,0,0,0.5)',
   },
   messageImage: {
-    maxWidth: 280,
-    minWidth: 200,
-    aspectRatio: 3/4,
-    borderRadius: 16,
-    marginVertical: 2,
+    width: 240,
+    height: 320,
+    backgroundColor: '#e1e1e1',
   },
   imageMessageContainer: {
     maxWidth: '100%',
@@ -1338,9 +1350,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   imageContainer: {
-    borderRadius: 12,
     overflow: 'hidden',
-    maxWidth: 280,
+    backgroundColor: '#f0f0f0',
   },
   readStatusContainer: {
     flexDirection: 'row',
