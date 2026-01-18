@@ -503,7 +503,11 @@ export default function ChatMessage({
 
     if (message.type === 'image') {
       return (
-        <TouchableOpacity style={styles.imageContainer}>
+        <TouchableOpacity 
+          style={styles.imageContainer} 
+          onPress={openImageViewer}
+          activeOpacity={0.9}
+        >
           <Image 
             source={{ uri: message.imageUrl }} 
             style={styles.messageImage}
@@ -1030,9 +1034,8 @@ const styles = StyleSheet.create({
   },
   messageImage: {
     maxWidth: 280,
-    maxHeight: 350,
     minWidth: 200,
-    minHeight: 150,
+    aspectRatio: 3/4,
     borderRadius: 16,
     marginVertical: 2,
   },
@@ -1337,8 +1340,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     borderRadius: 12,
     overflow: 'hidden',
-    maxWidth: 200,
-    maxHeight: 200,
+    maxWidth: 280,
   },
   readStatusContainer: {
     flexDirection: 'row',

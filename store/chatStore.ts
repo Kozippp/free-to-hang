@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { API_CONFIG } from '@/constants/config';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { generateUUID } from '@/utils/idGenerator';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 
 export interface ChatMessage {
   id: string;
@@ -85,6 +87,7 @@ interface ChatState {
   updateMessageInStore: (planId: string, messageId: string, updates: Partial<ChatMessage>) => void;
   removeMessageFromStore: (planId: string, messageId: string) => void;
   updateReadReceipt: (planId: string, userId: string, receipt: ReadReceipt) => void;
+  uploadImage: (uri: string, planId: string) => Promise<string | null>;
 }
 
 // Helper function to transform backend message to ChatMessage
@@ -923,6 +926,45 @@ const useChatStore = create<ChatState>((set, get) => ({
     stopChatHealthCheckIfIdle();
   },
   
+  // ============================================
+  // UPLOAD IMAGE
+  // ============================================
+  uploadImage: async (uri: string, planId: string) => {
+    try {
+      const ext = uri.substring(uri.lastIndexOf('.') + 1);
+      const fileName = `${planId}/${generateUUID()}.${ext}`;
+      
+      console.log('📸 Uploading image:', fileName);
+      
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      
+      const { data, error } = await supabase.storage
+        .from('chat-images')
+        .upload(fileName, decode(base64), {
+          contentType: `image/${ext}`,
+          upsert: false
+        });
+        
+      if (error) {
+        console.error('❌ Upload error:', error);
+        throw error;
+      }
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat-images')
+        .getPublicUrl(fileName);
+        
+      console.log('✅ Image uploaded successfully:', publicUrl);
+      return publicUrl;
+      
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return null;
+    }
+  },
+
   // ============================================
   // HELPER ACTIONS
   // ============================================

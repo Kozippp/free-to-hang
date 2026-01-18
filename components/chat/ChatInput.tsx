@@ -12,7 +12,8 @@ import {
   Animated,
   Platform,
   Keyboard,
-  LayoutChangeEvent
+  LayoutChangeEvent,
+  ActivityIndicator
 } from 'react-native';
 import { 
   Send, 
@@ -23,8 +24,9 @@ import {
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import useChatStore from '@/store/chatStore';
-import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { BlurView } from 'expo-blur';
 
 interface ChatInputProps {
   planId: string;
@@ -43,11 +45,12 @@ export default function ChatInput({
   currentUserAvatar,
   onHeightChange,
 }: ChatInputProps) {
-  const { sendMessage, getReplyingTo, setReplyingTo } = useChatStore();
+  const { sendMessage, getReplyingTo, setReplyingTo, uploadImage } = useChatStore();
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showImageConfirmation, setShowImageConfirmation] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
   // TextInput ref for auto-focusing on reply
   const textInputRef = useRef<TextInput>(null);
@@ -122,15 +125,10 @@ export default function ChatInput({
     });
 
     if (!result.canceled && result.assets[0]) {
-      sendMessage(planId, {
-        planId,
-        userId: currentUserId,
-        userName: currentUserName,
-        userAvatar: currentUserAvatar,
-        type: 'image',
-        content: '',
-        imageUrl: result.assets[0].uri,
-      });
+      // For camera, send immediately (or show confirmation if preferred)
+      // Showing confirmation to be consistent with gallery
+      setSelectedImage(result.assets[0].uri);
+      setShowImageConfirmation(true);
     }
   };
 
@@ -153,20 +151,31 @@ export default function ChatInput({
     }
   };
 
-  const handleSendImage = () => {
+  const handleSendImage = async () => {
     if (selectedImage) {
-      sendMessage(planId, {
-        planId,
-        userId: currentUserId,
-        userName: currentUserName,
-        userAvatar: currentUserAvatar,
-        type: 'image',
-        content: '',
-        imageUrl: selectedImage,
-      });
+      setIsUploading(true);
+      
+      const publicUrl = await uploadImage(selectedImage, planId);
+      
+      if (publicUrl) {
+        sendMessage(planId, {
+          planId,
+          userId: currentUserId,
+          userName: currentUserName,
+          userAvatar: currentUserAvatar,
+          type: 'image',
+          content: '',
+          imageUrl: publicUrl,
+        });
+        
+        setSelectedImage(null);
+        setShowImageConfirmation(false);
+      } else {
+        Alert.alert('Upload Failed', 'Failed to upload image. Please try again.');
+      }
+      
+      setIsUploading(false);
     }
-    setSelectedImage(null);
-    setShowImageConfirmation(false);
   };
 
   const handleCancelImage = () => {
@@ -286,6 +295,8 @@ export default function ChatInput({
         onRequestClose={handleCancelImage}
       >
         <View style={styles.modalOverlay}>
+          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+          
           <View style={styles.imagePreviewContainer}>
             {selectedImage && (
               <Image 
@@ -304,10 +315,15 @@ export default function ChatInput({
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={styles.sendImageButton}
+                style={[styles.sendImageButton, isUploading && styles.disabledButton]}
                 onPress={handleSendImage}
+                disabled={isUploading}
               >
-                <Text style={styles.sendImageText}>Send Photo</Text>
+                {isUploading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.sendImageText}>Send Photo</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -415,20 +431,24 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   imagePreviewContainer: {
     width: SCREEN_WIDTH - 40,
-    maxHeight: '80%',
-    backgroundColor: Colors.light.background,
-    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   imagePreview: {
     width: '100%',
     height: 300,
+    backgroundColor: '#F0F0F0',
   },
   imageActionsContainer: {
     flexDirection: 'row',
@@ -437,26 +457,29 @@ const styles = StyleSheet.create({
   },
   cancelImageButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
-    backgroundColor: Colors.light.cardBackground,
-    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 16,
   },
   cancelImageText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.secondaryText,
+    color: Colors.light.text,
   },
   sendImageButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     backgroundColor: Colors.light.primary,
-    borderRadius: 8,
+    borderRadius: 16,
   },
   sendImageText: {
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
 }); 
