@@ -62,7 +62,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
       setIsKeyboardVisible(true);
 
       requestAnimationFrame(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       });
     };
 
@@ -143,7 +143,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     if (planMessages.length > previousMessageCount && previousMessageCount > 0) {
       // New messages were added (not initial load) - scroll to bottom instantly
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
       }, 50);
     }
 
@@ -195,15 +195,21 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     }
   };
 
+  const invertedMessages = [...planMessages].reverse();
+
   const renderMessage = ({ item, index }: { item: any; index: number }) => {
     const isOwnMessage = item.userId === currentUserId;
-    const previousMessage = index > 0 ? planMessages[index - 1] : null;
-    const nextMessage = index < planMessages.length - 1 ? planMessages[index + 1] : null;
+    // In inverted list:
+    // previousMessage (older) is at index + 1
+    // nextMessage (newer) is at index - 1
+    const previousMessage = index < invertedMessages.length - 1 ? invertedMessages[index + 1] : null;
+    const nextMessage = index > 0 ? invertedMessages[index - 1] : null;
+    
     const showDateSeparator = shouldShowDateSeparator(item, previousMessage);
     const isHighlighted = highlightedMessageId === item.id;
     
-    // Check if this is the last message in the entire chat
-    const isLastMessage = index === planMessages.length - 1;
+    // Check if this is the last message in the entire chat (visually at the bottom, so index 0)
+    const isLastMessage = index === 0;
     
     // SEGMENT-BASED AVATAR LOGIC (Variant 1)
     // A segment starts when:
@@ -284,17 +290,18 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   };
 
   const handleScroll = (event: any) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const isNearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 100;
-    setShowScrollToBottom(!isNearBottom);
+    const { contentOffset } = event.nativeEvent;
+    // In inverted list, y=0 is the bottom
+    const isAtBottom = contentOffset.y < 100;
+    setShowScrollToBottom(!isAtBottom);
   };
 
   const scrollToBottom = () => {
-    flatListRef.current?.scrollToEnd({ animated: true });
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
   };
 
   const scrollToMessage = useCallback((messageId: string) => {
-    const messageIndex = planMessages.findIndex(msg => msg.id === messageId);
+    const messageIndex = invertedMessages.findIndex(msg => msg.id === messageId);
     if (messageIndex !== -1 && flatListRef.current) {
       // Scroll to message
       flatListRef.current.scrollToIndex({
@@ -327,7 +334,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         });
       }, 300);
     }
-  }, [planMessages, highlightAnim]);
+  }, [invertedMessages, highlightAnim]);
 
   const handleInputHeightChange = useCallback((height: number) => {
     setChatInputHeight((prev) => {
@@ -348,7 +355,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     <>
       <FlatList
         ref={flatListRef}
-        data={planMessages}
+        data={invertedMessages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         style={styles.messagesList}
@@ -363,12 +370,11 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
         maxToRenderPerBatch={10}
         windowSize={10}
         initialNumToRender={20}
-        initialScrollIndex={Math.max(0, planMessages.length - 1)}
-        inverted={false}
+        inverted={true}
         onScrollToIndexFailed={(info) => {
           // Fallback: try to scroll after a short delay
           setTimeout(() => {
-            if (flatListRef.current && info.index < planMessages.length) {
+            if (flatListRef.current && info.index < invertedMessages.length) {
               flatListRef.current.scrollToIndex({
                 index: info.index,
                 animated: true,
