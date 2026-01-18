@@ -156,7 +156,8 @@ export default function ChatMessage({
     const readUsers: ReadReceipt[] = [];
 
     Object.values(planReadReceipts).forEach((receipt: ReadReceipt) => {
-      // Show read status for all users including current user
+      // Show read status for other users only (exclude current user)
+      if (receipt.userId === currentUserId) return;
 
       // A user has read up to this message if their lastReadMessageId matches this message
       const hasReadThisMessage = receipt.lastReadMessageId === message.id;
@@ -520,6 +521,8 @@ export default function ChatMessage({
         <TouchableOpacity 
           style={[styles.imageContainer, radiusStyle]} 
           onPress={openImageViewer}
+          onLongPress={handleLongPress}
+          delayLongPress={200}
           activeOpacity={0.9}
         >
           <Image 
@@ -715,15 +718,13 @@ export default function ChatMessage({
                       }
                     ]}
                   >
-                    <TouchableWithoutFeedback onLongPress={handleLongPress}>
-                      <View
-                        ref={messageRef}
-                        style={styles.imageMessageWrapper}
-                        onLayout={onMessageLayout}
-                      >
-                        {renderMessageContent()}
-                      </View>
-                    </TouchableWithoutFeedback>
+                    <View
+                      ref={messageRef}
+                      style={styles.imageMessageWrapper}
+                      onLayout={onMessageLayout}
+                    >
+                      {renderMessageContent()}
+                    </View>
                   </Animated.View>
                 </PanGestureHandler>
               </View>
