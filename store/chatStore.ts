@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import { API_CONFIG } from '@/constants/config';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { generateUUID } from '@/utils/idGenerator';
 
 export interface ChatMessage {
   id: string;
@@ -258,11 +259,12 @@ const useChatStore = create<ChatState>((set, get) => ({
         const state = get();
         const replyingToMessage = state.replyingTo[planId];
         
-      // Create temporary message for optimistic update
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // Generate stable ID for production quality (prevents duplicates)
+      const messageId = generateUUID();
+      
       const tempMessage: ChatMessage = {
           ...messageData,
-        id: tempId,
+        id: messageId,
           timestamp: Date.now(),
           reactions: {},
           isRead: false,
@@ -287,11 +289,11 @@ const useChatStore = create<ChatState>((set, get) => ({
       const token = await getAuthToken();
       if (!token) {
         console.error('No auth token available');
-        // Remove temp message
+        // Remove message if auth failed
         set(state => ({
           messages: {
             ...state.messages,
-            [planId]: state.messages[planId].filter(m => m.id !== tempId)
+            [planId]: state.messages[planId].filter(m => m.id !== messageId)
           }
         }));
         return;
@@ -306,6 +308,7 @@ const useChatStore = create<ChatState>((set, get) => ({
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
+            id: messageId,
             type: messageData.type,
             content: messageData.content,
             imageUrl: messageData.imageUrl,
@@ -323,12 +326,12 @@ const useChatStore = create<ChatState>((set, get) => ({
       const result = await response.json();
       const realMessage = transformMessage(result.data);
       
-      // Replace temp message with real one
+      // Update with server data (e.g. timestamp) but keep same ID
       set(state => ({
         messages: {
           ...state.messages,
           [planId]: state.messages[planId].map(m =>
-            m.id === tempId ? realMessage : m
+            m.id === messageId ? realMessage : m
           )
         },
         // Clear reply state

@@ -261,7 +261,7 @@ router.get('/:planId/messages', requireAuth, async (req, res) => {
 router.post('/:planId/messages', requireAuth, async (req, res) => {
   try {
     const { planId } = req.params;
-    const { type, content, imageUrl, voiceUrl, voiceDuration, replyToMessageId } = req.body;
+    const { id, type, content, imageUrl, voiceUrl, voiceDuration, replyToMessageId } = req.body;
     const userId = req.user.id;
     const senderId = userId;
     
@@ -303,6 +303,7 @@ router.post('/:planId/messages', requireAuth, async (req, res) => {
     
     // Create message
     const messageData = {
+      id: id || undefined, // Use provided ID if available
       plan_id: planId,
       user_id: userId,
       type,
