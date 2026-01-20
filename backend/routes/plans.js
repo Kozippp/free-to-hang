@@ -1603,8 +1603,10 @@ router.post('/:id/respond', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to update response' });
     }
 
-    // Notify plan update
-    await notifyPlanUpdate(id, 'participant_joined', userId);
+    // EXPERIMENTAL: Disabled old notification system to test new direct DB listener
+    // The new system listens directly to plan_participants table changes (instant!)
+    // await notifyPlanUpdate(id, 'participant_joined', userId);
+    console.log('🧪 TESTING: Skipping plan_updates notification - relying on direct DB listener');
 
     if ((statusMapping[status] || status) === 'going') {
       try {
