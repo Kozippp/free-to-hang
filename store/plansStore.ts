@@ -372,7 +372,10 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const userStatus = currentUser?.status || 'pending';
 
       if (plan.status === 'completed') {
-        completedPlans.push(plan);
+        // Show in completed unless the user explicitly declined
+        if (userStatus !== 'declined') {
+          completedPlans.push(plan);
+        }
       } else if (userStatus === 'going' || userStatus === 'maybe' || userStatus === 'conditional') {
         activePlans.push(plan);
       } else if (userStatus === 'pending') {
@@ -1347,7 +1350,7 @@ function createChannelWithRetry(
           usePlansStore.getState().checkAndRestartSubscriptions(userId);
         }, delay);
       } else {
-        console.error(`❌ ${channelName} failed after ${MAX_CHANNEL_RETRIES} attempts - giving up`);
+        console.warn(`❌ ${channelName} failed after ${MAX_CHANNEL_RETRIES} attempts - giving up`);
         subscriptionMetrics.failedReconnects += 1;
         logSubscriptionMetrics();
       }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity, RefreshControl, AppState } from 'react-native';
+import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity, RefreshControl, AppState, TextInput } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -21,6 +21,7 @@ export default function PlansScreen() {
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   // DISABLED: const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const { user } = useAuth();
   const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
@@ -240,7 +241,22 @@ export default function PlansScreen() {
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    // Reset search query when switching tabs
+    if (tab !== 'Completed') {
+      setSearchQuery('');
+    }
   };
+
+  // Filter completed plans based on search query
+  const filteredCompletedPlans = completedPlans.filter(plan => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      plan.title.toLowerCase().includes(query) ||
+      plan.description.toLowerCase().includes(query) ||
+      plan.location?.toLowerCase().includes(query)
+    );
+  });
 
   const onGestureEvent = Animated.event(
     [{ nativeEvent: { translationX: translateX } }],
@@ -406,32 +422,43 @@ export default function PlansScreen() {
             )}
             
             {activeTab === 'Completed' && (
-              <FlatList
-                data={completedPlans}
-                renderItem={({ item }) => (
-                  <CompletedPlanCard
-                    plan={item}
-                    onPress={handlePlanPress}
-                    userAttended={item.attendanceRecord?.['current']}
+              <View style={styles.completedContainer}>
+                <View style={styles.searchContainer}>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search completed plans..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholderTextColor={Colors.light.secondaryText}
                   />
-                )}
-                keyExtractor={(item) => `completedPlans-${item.id}`}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={renderEmptyState}
-                ListFooterComponent={() => (
-                  completedPlans.length > 0 ? (
-                    <View style={styles.finalSeparator} />
-                  ) : null
-                )}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={isRefreshing || isLoading}
-                    onRefresh={handleRefresh}
-                    colors={[Colors.light.primary]}
-                    tintColor={Colors.light.primary}
-                  />
-                }
-              />
+                </View>
+                <FlatList
+                  data={filteredCompletedPlans}
+                  renderItem={({ item }) => (
+                    <CompletedPlanCard
+                      plan={item}
+                      onPress={handlePlanPress}
+                      userAttended={item.attendanceRecord?.['current']}
+                    />
+                  )}
+                  keyExtractor={(item) => `completedPlans-${item.id}`}
+                  contentContainerStyle={styles.listContent}
+                  ListEmptyComponent={renderEmptyState}
+                  ListFooterComponent={() => (
+                    filteredCompletedPlans.length > 0 ? (
+                      <View style={styles.finalSeparator} />
+                    ) : null
+                  )}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={isRefreshing || isLoading}
+                      onRefresh={handleRefresh}
+                      colors={[Colors.light.primary]}
+                      tintColor={Colors.light.primary}
+                    />
+                  }
+                />
+              </View>
             )}
           </Animated.View>
         </PanGestureHandler>
@@ -442,7 +469,7 @@ export default function PlansScreen() {
             visible={modalVisible}
             plan={selectedPlan}
             onClose={handleCloseModal}
-            onRespond={activeTab === 'Completed' ? () => {} : handleRespondToPlan}
+            onRespond={activeTab === 'Completed' ? async () => {} : handleRespondToPlan}
             isCompleted={activeTab === 'Completed'}
             onAttendanceUpdate={activeTab === 'Completed' ? updateAttendance : undefined}
           />
@@ -502,5 +529,23 @@ const styles = StyleSheet.create({
   finalSeparator: {
     height: 1,
     backgroundColor: '#EEEEEE',
+  },
+  completedContainer: {
+    flex: 1,
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.background,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  searchInput: {
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    fontSize: 16,
+    color: Colors.light.text,
   },
 });
