@@ -1887,20 +1887,24 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to update vote' });
     }
 
-    // Add new votes
-    const voteInserts = optionIds.map(optionId => ({
-      poll_id: pollId,
-      option_id: optionId,
-      user_id: userId
-    }));
+    // Add new votes (only if there are any)
+    if (optionIds.length > 0) {
+      const voteInserts = optionIds.map(optionId => ({
+        poll_id: pollId,
+        option_id: optionId,
+        user_id: userId
+      }));
 
-    const { error: voteError } = await supabase
-      .from('plan_poll_votes')
-      .insert(voteInserts);
+      const { error: voteError } = await supabase
+        .from('plan_poll_votes')
+        .insert(voteInserts);
 
-    if (voteError) {
-      console.error('Error adding votes:', voteError);
-      return res.status(500).json({ error: 'Failed to add vote' });
+      if (voteError) {
+        console.error('Error adding votes:', voteError);
+        return res.status(500).json({ error: 'Failed to add vote' });
+      }
+    } else {
+      console.log('✅ Unvote successful - no new votes to insert');
     }
 
     // EXPERIMENTAL: Disabled old notification system to test new direct DB listener
