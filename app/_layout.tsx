@@ -13,6 +13,7 @@ import Colors from "@/constants/colors";
 import { registerForPushNotifications, updateLastActive } from "@/utils/pushNotifications";
 import { pruneAvatarCache } from "@/utils/avatarCache";
 import useNotificationsStore from "@/store/notificationsStore";
+import useUnseenStore from "@/store/unseenStore";
 import { useRouter } from "expo-router";
 import { handleNotificationNavigation } from "@/utils/navigationHelper";
 
@@ -58,6 +59,8 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const { loading, user } = useAuth();
   const unreadCount = useNotificationsStore(state => state.unreadCount);
+  const totalUnseen = useUnseenStore(state => state.totalUnseen);
+  const fetchUnseenCounts = useUnseenStore(state => state.fetchUnseenCounts);
   const router = useRouter();
   const [notificationResponse, setNotificationResponse] = useState<Notifications.NotificationResponse | null>(null);
 
@@ -137,12 +140,26 @@ function RootLayoutNav() {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+    fetchUnseenCounts();
+
+    const interval = setInterval(() => {
+      fetchUnseenCounts();
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [fetchUnseenCounts, user?.id]);
+
+  useEffect(() => {
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
     // Update badge count with unread notifications
-    Notifications.setBadgeCountAsync(unreadCount).catch((error) =>
+    const badgeCount = totalUnseen > 0 ? totalUnseen : unreadCount;
+    Notifications.setBadgeCountAsync(badgeCount).catch((error) =>
       console.error('❌ Failed to set badge count:', error)
     );
-  }, [unreadCount]);
+  }, [totalUnseen, unreadCount]);
 
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>

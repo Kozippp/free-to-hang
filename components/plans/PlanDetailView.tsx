@@ -45,6 +45,7 @@ import PollDisplay from './PollDisplay';
 import ChatView from '../chat/ChatView';
 import usePlansStore from '@/store/plansStore';
 import useChatStore from '@/store/chatStore';
+import useUnseenStore from '@/store/unseenStore';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { plansService } from '@/lib/plans-service';
@@ -58,9 +59,10 @@ interface PlanDetailViewProps {
   onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => Promise<void>;
   editedTitle?: string;
   onEditPermissionChange?: (canEdit: boolean) => void;
+  initialTab?: string;
 }
 
-export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, onEditPermissionChange }: PlanDetailViewProps) {
+export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, onEditPermissionChange, initialTab }: PlanDetailViewProps) {
   const { user } = useAuth();
   const { 
     markAsRead, 
@@ -78,6 +80,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   const { getUnreadCount } = useChatStore();
+  const { markControlPanelSeen } = useUnseenStore();
   const router = useRouter();
   
   // Early return if user is not authenticated
@@ -89,20 +92,20 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   // Get the latest plan data from store
   const latestPlan = [...invitations, ...activePlans].find(p => p.id === plan.id) || plan;
   
-  const [activeTab, setActiveTab] = useState('Control Panel');
+  const [activeTab, setActiveTab] = useState(initialTab || 'Control Panel');
   const [description, setDescription] = useState(plan.description);
   const [editingDescription, setEditingDescription] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
   const displayTitle = editedTitle ?? plan.title;
   
-  // Response confirmation states
-  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
-  const [confirmationMessage, setConfirmationMessage] = useState('');
-  const [pendingResponse, setPendingResponse] = useState<{
-    status: ParticipantStatus;
-    conditionalFriends?: string[];
-  } | null>(null);
+  // Confirmation states removed
+  // const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  // const [confirmationMessage, setConfirmationMessage] = useState('');
+  // const [pendingResponse, setPendingResponse] = useState<{
+  //   status: ParticipantStatus;
+  //   conditionalFriends?: string[];
+  // } | null>(null);
   
   // Poll states
   const [showPollCreator, setShowPollCreator] = useState(false);
@@ -114,6 +117,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [isPollLoading, setIsPollLoading] = useState(false);
   const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
+  const hasMarkedControlPanelRef = useRef(false);
 
   
   // Decline animation states
@@ -134,6 +138,18 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   React.useEffect(() => {
     onEditPermissionChange?.(canEditPlan);
   }, [canEditPlan, latestPlan, onEditPermissionChange]);
+
+  React.useEffect(() => {
+    hasMarkedControlPanelRef.current = false;
+  }, [plan.id]);
+
+  React.useEffect(() => {
+    if (activeTab !== 'Control Panel' || hasMarkedControlPanelRef.current) {
+      return;
+    }
+    hasMarkedControlPanelRef.current = true;
+    void markControlPanelSeen(plan.id);
+  }, [activeTab, markControlPanelSeen, plan.id]);
   
   // Swipe gesture state
   const { width } = Dimensions.get('window');
@@ -534,10 +550,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   };
   
   const handleStatusChange = async (status: ParticipantStatus, conditionalFriends?: string[]) => {
-    // Always close any existing confirmation modal first
-    setShowConfirmationModal(false);
-    setPendingResponse(null);
-
     // Check if this is a first-time response (user is currently pending)
     const isFirstTimeResponse = currentUserStatus === 'pending';
     
@@ -598,77 +610,17 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       return; // Exit early for decline
     }
 
-    // Handle going, maybe, conditional responses
-    if (status === 'going' || status === 'maybe' || status === 'conditional') {
-      if (isFirstTimeResponse) {
-        // FIRST-TIME RESPONSE: Show confirmation modal and navigate to Plans tab
-        setPendingResponse({ status, conditionalFriends });
-
-        // Set the status text for display
-        let statusText = '';
-        switch (status) {
-          case 'going':
-            statusText = 'Going';
-            break;
-          case 'maybe':
-            statusText = 'Maybe';
-            break;
-          case 'conditional':
-            statusText = 'If';
-            break;
-        }
-
-        setConfirmationMessage(statusText);
-        setShowConfirmationModal(true);
-      } else {
-        // STATUS CHANGE: Apply immediately without any alerts
-        try {
-          await onRespond(plan.id, status, conditionalFriends);
-        } catch (error) {
-          console.error('Error changing status:', error);
-          Alert.alert('Error', 'Failed to update status. Please try again.');
-        }
-      }
-    } else {
-      // For all other status changes, pass through directly
-      try {
-        await onRespond(plan.id, status, conditionalFriends);
-      } catch (error) {
-        console.error('Error updating status:', error);
-        Alert.alert('Error', 'Failed to update status. Please try again.');
-      }
+    // Handle going, maybe, conditional responses - INSTANT UPDATE without modal
+    try {
+      await onRespond(plan.id, status, conditionalFriends);
+    } catch (error) {
+      console.error('Error changing status:', error);
+      Alert.alert('Error', 'Failed to update status. Please try again.');
     }
   };
   
-  // Handle confirmation modal completion
-  const handleConfirmationComplete = async () => {
-    if (pendingResponse) {
-      try {
-        // Apply the response
-        await onRespond(plan.id, pendingResponse.status, pendingResponse.conditionalFriends);
-        
-        // Close confirmation modal
-        setShowConfirmationModal(false);
-        setPendingResponse(null);
-        
-        // Close the plan detail modal
-        onClose();
-        
-        // Navigate to Plans tab with highlighting parameter
-        router.replace({
-          pathname: '/plans',
-          params: { highlightPlan: plan.id }
-        });
-      } catch (error) {
-        console.error('Error confirming response:', error);
-        Alert.alert('Error', 'Failed to update status. Please try again.');
-        
-        // Don't close modal on error
-        setShowConfirmationModal(false);
-        setPendingResponse(null);
-      }
-    }
-  };
+  // Handle confirmation modal completion - REMOVED
+  // const handleConfirmationComplete = async () => { ... }
   
   // Helper function to get user votes for a poll
   const getUserVotesForPoll = (pollId: string): string[] => {
@@ -1099,29 +1051,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         onCreateInvitationPoll={handleInviteUsers}
         plan={latestPlan}
       />
-      
-      {/* Response Confirmation Modal */}
-      <Modal
-        visible={showConfirmationModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleConfirmationComplete}
-      >
-        <View style={styles.confirmationOverlay}>
-          <View style={styles.confirmationModal}>
-            <Check size={36} color={Colors.light.onlineGreen} style={styles.confirmationIcon} />
-            <Text style={styles.confirmationTitle}>Your status is set to</Text>
-            <Text style={styles.confirmationStatus}>{confirmationMessage}</Text>
-            <Text style={styles.confirmationSubtext}>You can find this plan in the Plans tab.</Text>
-            <TouchableOpacity
-              style={styles.confirmationButton}
-              onPress={handleConfirmationComplete}
-            >
-              <Text style={styles.confirmationButtonText}>Go to Plans</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
       </View>
     </TouchableWithoutFeedback>
   );

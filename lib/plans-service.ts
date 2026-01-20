@@ -63,6 +63,11 @@ export interface Plan {
   updatedAt: string;
 }
 
+export interface UnseenCountsResponse {
+  plans: Record<string, { chat: number; control: number; total: number }>;
+  totalUnseen: number;
+}
+
 export interface CreatePlanData {
   title: string;
   description: string;
@@ -178,6 +183,29 @@ class PlansService {
       return plan;
     } catch (error) {
       console.error('❌ Error fetching plan details:', error);
+      throw error;
+    }
+  }
+
+  // Get unified unseen counts for plans (chat + control panel)
+  async getUnseenCounts(): Promise<UnseenCountsResponse> {
+    try {
+      const result = await this.apiRequest('/plans/unseen-counts');
+      return result.data || { plans: {}, totalUnseen: 0 };
+    } catch (error) {
+      console.error('❌ Error fetching unseen counts:', error);
+      throw error;
+    }
+  }
+
+  // Mark control panel updates as seen for a plan
+  async markControlPanelSeen(planId: string): Promise<void> {
+    try {
+      await this.apiRequest(`/plans/${planId}/control-panel/seen`, {
+        method: 'POST'
+      });
+    } catch (error) {
+      console.error('❌ Error marking control panel seen:', error);
       throw error;
     }
   }

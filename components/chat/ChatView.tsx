@@ -17,6 +17,8 @@ import ChatInput from './ChatInput';
 import { Plan } from '@/store/plansStore';
 import { supabase } from '@/lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { setActivePlanId } from '@/utils/pushNotifications';
+import useUnseenStore from '@/store/unseenStore';
 
 interface ChatViewProps {
   plan: Plan;
@@ -36,6 +38,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     unsubscribeFromChat,
     loading
   } = useChatStore();
+  const { fetchUnseenCounts } = useUnseenStore();
   const flatListRef = useRef<FlatList>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -45,6 +48,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [chatInputHeight, setChatInputHeight] = useState(0);
   const highlightAnim = useRef(new Animated.Value(1)).current;
+  const hasSyncedUnseenRef = useRef(false);
 
   const planMessages = messages[plan.id] || [];
   const isLoading = loading[plan.id] || false;
@@ -80,6 +84,18 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     };
   }, [disableKeyboardAvoidance, insets.bottom]);
 
+  useEffect(() => {
+    hasSyncedUnseenRef.current = false;
+  }, [plan.id]);
+
+  // Set active chat plan for push notification handling
+  useEffect(() => {
+    setActivePlanId(plan.id);
+    
+    return () => {
+      setActivePlanId(null);
+    };
+  }, [plan.id]);
 
   // Check authentication status
   useEffect(() => {
@@ -135,6 +151,10 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     if (isAuthenticated && planMessages.length > 0) {
       console.log(`📖 Marking messages as read for plan ${plan.id}, user ${currentUserId}`);
       markMessagesAsRead(plan.id, currentUserId);
+      if (!hasSyncedUnseenRef.current) {
+        hasSyncedUnseenRef.current = true;
+        void fetchUnseenCounts();
+      }
     }
   }, [plan.id, currentUserId, isAuthenticated, markMessagesAsRead, planMessages.length]);
 

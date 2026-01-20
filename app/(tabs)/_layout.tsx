@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { View, Text } from "react-native";
 import usePlansStore from "@/store/plansStore";
 import useNotificationsStore from "@/store/notificationsStore";
+import useUnseenStore from "@/store/unseenStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { initializeRealtimeManager, stopRealtimeManager } from "@/utils/realtimeManager";
 
@@ -13,7 +14,9 @@ export default function TabLayout() {
   const { user } = useAuth();
   const { invitations } = usePlansStore();
   const { unreadCount } = useNotificationsStore();
+  const totalUnseen = useUnseenStore(state => state.totalUnseen);
   const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
+  const notificationsBadge = Math.max(unreadCount, totalUnseen);
   
   // Check for unread invitations
   useEffect(() => {
@@ -108,7 +111,7 @@ export default function TabLayout() {
             tabBarIcon: ({ color, size }) => (
               <View>
                 <Bell size={size} color={color} />
-                {unreadCount > 0 && (
+                {notificationsBadge > 0 && (
                   <View
                     style={{
                       position: 'absolute',
@@ -123,13 +126,13 @@ export default function TabLayout() {
                     }}
                   >
                     <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
+                      {notificationsBadge > 9 ? '9+' : notificationsBadge}
                     </Text>
                   </View>
                 )}
               </View>
             ),
-            tabBarBadge: unreadCount > 0 ? unreadCount : undefined
+            tabBarBadge: notificationsBadge > 0 ? notificationsBadge : undefined
           }}
         />
         <Tabs.Screen

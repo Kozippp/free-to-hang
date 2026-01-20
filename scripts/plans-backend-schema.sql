@@ -53,6 +53,14 @@ CREATE TABLE plan_updates (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Plan update read receipts (control panel unseen tracking)
+CREATE TABLE plan_update_read_receipts (
+  plan_id UUID REFERENCES plans(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  last_read_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  PRIMARY KEY (plan_id, user_id)
+);
+
 -- Add indexes for performance
 CREATE INDEX idx_plan_polls_plan_id ON plan_polls(plan_id);
 CREATE INDEX idx_plan_polls_expires_at ON plan_polls(expires_at) WHERE expires_at IS NOT NULL;
@@ -62,6 +70,7 @@ CREATE INDEX idx_poll_votes_user_id ON poll_votes(user_id);
 CREATE INDEX idx_plan_attendance_plan_id ON plan_attendance(plan_id);
 CREATE INDEX idx_plan_updates_plan_id ON plan_updates(plan_id);
 CREATE INDEX idx_plan_updates_created_at ON plan_updates(created_at);
+CREATE INDEX idx_plan_update_reads_user_id ON plan_update_read_receipts(user_id);
 
 -- RLS Policies for new tables
 
@@ -150,12 +159,36 @@ CREATE POLICY "Users can view plan updates" ON plan_updates FOR SELECT USING (
   )
 );
 
+-- Plan update read receipts
+ALTER TABLE plan_update_read_receipts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their plan update receipts" ON plan_update_read_receipts
+FOR SELECT USING (
+  auth.uid() = user_id AND
+  plan_id IN (
+    SELECT id FROM plans WHERE 
+    creator_id = auth.uid() OR 
+    id IN (SELECT plan_id FROM plan_participants WHERE user_id = auth.uid())
+  )
+);
+
+CREATE POLICY "Users can manage their plan update receipts" ON plan_update_read_receipts
+FOR ALL USING (
+  auth.uid() = user_id AND
+  plan_id IN (
+    SELECT id FROM plans WHERE 
+    creator_id = auth.uid() OR 
+    id IN (SELECT plan_id FROM plan_participants WHERE user_id = auth.uid())
+  )
+);
+
 -- Service role policies for backend operations
 CREATE POLICY "Service role can manage all plan data" ON plan_polls FOR ALL USING (auth.uid() IS NULL);
 CREATE POLICY "Service role can manage all poll options" ON poll_options FOR ALL USING (auth.uid() IS NULL);
 CREATE POLICY "Service role can manage all poll votes" ON poll_votes FOR ALL USING (auth.uid() IS NULL);
 CREATE POLICY "Service role can manage all attendance" ON plan_attendance FOR ALL USING (auth.uid() IS NULL);
 CREATE POLICY "Service role can manage all plan updates" ON plan_updates FOR ALL USING (auth.uid() IS NULL);
+CREATE POLICY "Service role can manage all plan update receipts" ON plan_update_read_receipts FOR ALL USING (auth.uid() IS NULL);
 
 -- Database functions for complex logic
 

@@ -73,6 +73,50 @@ const requireAuth = async (req, res, next) => {
   next();
 };
 
+const isUserInPlan = async (userId, planId) => {
+  const { data: plan, error: planError } = await supabase
+    .from('plans')
+    .select('id, creator_id')
+    .eq('id', planId)
+    .single();
+
+  if (planError || !plan) {
+    return false;
+  }
+
+  if (plan.creator_id === userId) {
+    return true;
+  }
+
+  const { data: participant } = await supabase
+    .from('plan_participants')
+    .select('id')
+    .eq('plan_id', planId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return !!participant;
+};
+
+const getUserPlanIds = async (userId) => {
+  const [{ data: ownedPlans, error: ownedError }, { data: participantPlans, error: participantError }] =
+    await Promise.all([
+      supabase.from('plans').select('id').eq('creator_id', userId),
+      supabase.from('plan_participants').select('plan_id').eq('user_id', userId)
+    ]);
+
+  if (ownedError || participantError) {
+    throw new Error('Failed to fetch user plans');
+  }
+
+  const planIds = new Set([
+    ...(ownedPlans || []).map((plan) => plan.id),
+    ...(participantPlans || []).map((plan) => plan.plan_id)
+  ]);
+
+  return Array.from(planIds).filter(Boolean);
+};
+
 // Helper function to notify plan updates
 const notifyPlanUpdate = async (planId, updateType, triggeredBy, metadata = {}) => {
   try {
@@ -1032,6 +1076,138 @@ router.get('/test-realtime', async (req, res) => {
   } catch (error) {
     console.error('❌ Error in test-realtime:', error);
     res.status(500).json({ error: 'Real-time test failed', details: error.message });
+  }
+});
+
+// GET /plans/unseen-counts - Get per-plan unseen counts (chat + control panel)
+router.get('/unseen-counts', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const planIds = await getUserPlanIds(userId);
+
+    if (!planIds.length) {
+      return res.json({ success: true, data: { plans: {}, totalUnseen: 0 } });
+    }
+
+    const [{ data: chatReceipts }, { data: controlReceipts }] = await Promise.all([
+      supabase
+        .from('chat_read_receipts')
+        .select('plan_id, last_read_at')
+        .eq('user_id', userId)
+        .in('plan_id', planIds),
+      supabase
+        .from('plan_update_read_receipts')
+        .select('plan_id, last_read_at')
+        .eq('user_id', userId)
+        .in('plan_id', planIds)
+    ]);
+
+    const chatReceiptMap = new Map(
+      (chatReceipts || []).map((receipt) => [receipt.plan_id, receipt.last_read_at])
+    );
+    const controlReceiptMap = new Map(
+      (controlReceipts || []).map((receipt) => [receipt.plan_id, receipt.last_read_at])
+    );
+
+    const results = await Promise.all(
+      planIds.map(async (planId) => {
+        try {
+          const lastChatReadAt = chatReceiptMap.get(planId);
+          const lastControlReadAt = controlReceiptMap.get(planId);
+
+          let chatQuery = supabase
+            .from('chat_messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('plan_id', planId)
+            .eq('deleted', false)
+            .neq('user_id', userId);
+
+          if (lastChatReadAt) {
+            chatQuery = chatQuery.gt('created_at', lastChatReadAt);
+          }
+
+          let controlQuery = supabase
+            .from('plan_updates')
+            .select('id', { count: 'exact', head: true })
+            .eq('plan_id', planId)
+            .or(`triggered_by.is.null,triggered_by.neq.${userId}`);
+
+          if (lastControlReadAt) {
+            controlQuery = controlQuery.gt('created_at', lastControlReadAt);
+          }
+
+          const [{ count: chatCount, error: chatError }, { count: controlCount, error: controlError }] =
+            await Promise.all([chatQuery, controlQuery]);
+
+          if (chatError || controlError) {
+            console.error('❌ Error fetching unseen counts:', { planId, chatError, controlError });
+          }
+
+          const chatUnseen = chatCount || 0;
+          const controlUnseen = controlCount || 0;
+          return {
+            planId,
+            chatUnseen,
+            controlUnseen,
+            totalUnseen: chatUnseen + controlUnseen
+          };
+        } catch (error) {
+          console.error('❌ Error computing unseen counts for plan:', planId, error);
+          return { planId, chatUnseen: 0, controlUnseen: 0, totalUnseen: 0 };
+        }
+      })
+    );
+
+    const plans = results.reduce((acc, item) => {
+      acc[item.planId] = {
+        chat: item.chatUnseen,
+        control: item.controlUnseen,
+        total: item.totalUnseen
+      };
+      return acc;
+    }, {});
+
+    const totalUnseen = results.reduce((sum, item) => sum + item.totalUnseen, 0);
+
+    res.json({ success: true, data: { plans, totalUnseen } });
+  } catch (error) {
+    console.error('❌ Error in GET /plans/unseen-counts:', error);
+    res.status(500).json({ error: 'Failed to fetch unseen counts' });
+  }
+});
+
+// POST /plans/:id/control-panel/seen - Mark control panel updates as seen
+router.post('/:id/control-panel/seen', requireAuth, async (req, res) => {
+  try {
+    const planId = req.params.id;
+    const userId = req.user.id;
+
+    const isParticipant = await isUserInPlan(userId, planId);
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'Not authorized to access this plan' });
+    }
+
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('plan_update_read_receipts')
+      .upsert(
+        {
+          plan_id: planId,
+          user_id: userId,
+          last_read_at: now
+        },
+        { onConflict: 'plan_id,user_id' }
+      );
+
+    if (error) {
+      console.error('❌ Error updating plan update read receipt:', error);
+      return res.status(500).json({ error: 'Failed to mark control panel as seen' });
+    }
+
+    res.json({ success: true, data: { planId, lastReadAt: now } });
+  } catch (error) {
+    console.error('❌ Error in POST /plans/:id/control-panel/seen:', error);
+    res.status(500).json({ error: 'Failed to mark control panel as seen' });
   }
 });
 
