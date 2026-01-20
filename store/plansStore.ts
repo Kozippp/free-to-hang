@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { plansService } from '@/lib/plans-service';
 import { supabase } from '@/lib/supabase';
 import { prefetchAvatars } from '@/utils/avatarCache';
+import useUnseenStore from './unseenStore';
 
 export type ParticipantStatus = 'pending' | 'going' | 'maybe' | 'conditional' | 'declined';
 
@@ -1467,6 +1468,10 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
       }).catch(error => {
         console.error('❌ Error refreshing plans after creation:', error);
       });
+      
+      // Also fetch unseen counts to show badge for new plan
+      useUnseenStore.getState().fetchUnseenCounts();
+      
       return; // Skip schedulePlanRefresh since we're doing full reload
     } else if (
       updateType === 'participant_joined' ||
@@ -1475,9 +1480,13 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     ) {
       console.log('👥 Participant activity detected - scheduling refresh');
       schedulePlanRefresh(planId, currentUserId, 1500, updateType);
+      // Participant changes affect Control Panel badge
+      useUnseenStore.getState().fetchUnseenCounts();
     } else if (updateType === 'poll_voted') {
       console.log('🗳️ Poll vote detected - scheduling faster refresh');
       schedulePlanRefresh(planId, currentUserId, 1000, updateType);
+      // Poll votes affect Control Panel badge
+      useUnseenStore.getState().fetchUnseenCounts();
     } else if (
       updateType === 'invitation_poll_voted' ||
       updateType === 'invitation_poll_created' ||
@@ -1485,6 +1494,8 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     ) {
       console.log('🗳️ Invitation poll activity - scheduling quick refresh');
       schedulePlanRefresh(planId, currentUserId, 750, updateType);
+      // Invitation polls affect Control Panel badge
+      useUnseenStore.getState().fetchUnseenCounts();
     } else if (
       updateType === 'poll_created' ||
       updateType === 'poll_option_added' ||
@@ -1492,9 +1503,19 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     ) {
       console.log('📊 Poll structure change - scheduling refresh');
       schedulePlanRefresh(planId, currentUserId, 1200, updateType);
+      // Poll changes affect Control Panel badge
+      useUnseenStore.getState().fetchUnseenCounts();
+    } else if (updateType === 'new_message') {
+      console.log('💬 New message detected - updating unseen counts');
+      // New messages affect Chat badge - immediate update needed
+      useUnseenStore.getState().fetchUnseenCounts();
+      // No need to refresh the whole plan for just a chat message unless it updates lastUpdatedAt
+      schedulePlanRefresh(planId, currentUserId, 2000, updateType);
     } else {
       console.log(`🔄 Other update type (${updateType}) - scheduling default refresh`);
       schedulePlanRefresh(planId, currentUserId, 1000, updateType);
+      // Catch-all: update unseen counts for any other relevant updates
+      useUnseenStore.getState().fetchUnseenCounts();
     }
   }
 }
