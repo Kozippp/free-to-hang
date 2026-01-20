@@ -248,7 +248,7 @@ const MIN_TIME_BETWEEN_PLAN_CALLS = 500;
 // Reconnection tracking
 const MAX_CHANNEL_RETRIES = 3;
 const RETRY_DELAYS_MS = [2000, 5000, 10000, 30000, 60000];
-const PLANS_HEALTH_CHECK_INTERVAL = 60000; // 60s
+const PLANS_HEALTH_CHECK_INTERVAL = 15000; // 15s (was 60s - too slow for silent failures)
 const retryAttempts: Record<string, number> = {};
 
 const usePlansStore = create<PlansState>((set, get) => ({
@@ -1491,6 +1491,7 @@ function startPlansHealthCheck(userId: string) {
     usePlansStore.getState().recordHealthCheck();
     const channelsStatus = [
       { name: 'plan_updates', state: updatesChannel?.state },
+      { name: 'participants', state: participantsChannel?.state },
     ];
 
     const allHealthy = channelsStatus.every((channel) => channel.state === 'joined');
@@ -1503,8 +1504,8 @@ function startPlansHealthCheck(userId: string) {
           .join(', ')}`
       );
 
-      if (failedChecks >= 2) {
-        console.log('🔄 Multiple failed health checks - restarting subscriptions...');
+      if (failedChecks >= 1) {
+        console.log('🔄 Failed health check - restarting subscriptions immediately...');
         usePlansStore.getState().checkAndRestartSubscriptions(userId);
         failedChecks = 0;
       }
