@@ -164,7 +164,7 @@ async function notifyUser({
             userId,
             title,
             body,
-            data: { ...data, notification_id: notification.id }
+            data: { ...data, notification_id: notification.id, type }
           });
         } else {
           console.log(`ℹ️ Notification type ${type} disabled for user ${userId}`);
