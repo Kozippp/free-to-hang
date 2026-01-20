@@ -236,6 +236,8 @@ interface PlansState {
 // Global variables for real-time subscriptions
 // NOTE: Consolidated to single channel - plan_updates handles all notifications including new plans
 let updatesChannel: any = null;
+// NEW: Direct DB table listener for participant status (chat-style)
+let participantsChannel: any = null;
 
 // Debouncing map for per-plan refresh control
 const planRefreshTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -1232,6 +1234,39 @@ const usePlansStore = create<PlansState>((set, get) => ({
         userId
       );
 
+      // NEW: Direct DB listener for participant status changes (chat-style, instant!)
+      console.log('🎯 Starting direct participant status listener...');
+      participantsChannel = supabase
+        .channel(`plan_participants_${userId}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'plan_participants'
+          },
+          async (payload: any) => {
+            console.log('👥 Direct participant update received:', payload);
+            handleDirectParticipantUpdate(payload, userId);
+          }
+        )
+        .subscribe((status: string) => {
+          console.log('📡 Participants channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Direct participant listener connected!');
+          } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+            console.log('❌ Participants channel disconnected:', status);
+            // Simple retry like chat does (no MAX_RETRIES!)
+            setTimeout(() => {
+              if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
+                console.log('🔄 Retrying participants channel...');
+                participantsChannel = null;
+                usePlansStore.getState().checkAndRestartSubscriptions(userId);
+              }
+            }, 5000);
+          }
+        });
+
       startPlansHealthCheck(userId);
 
       // Wait a moment for subscription to establish
@@ -1294,7 +1329,18 @@ async function stopAllRealtimeChannels() {
     usePlansStore.getState().updateChannelStatus('plan_updates', 'disconnected');
   }
 
+  // NEW: Stop participants channel
+  if (participantsChannel) {
+    try {
+      await supabase.removeChannel(participantsChannel);
+      console.log('🛑 Stopped participants channel');
+    } catch (error) {
+      console.error('❌ Error stopping participants channel:', error);
+    }
+  }
+
   updatesChannel = null;
+  participantsChannel = null;
   Object.keys(retryAttempts).forEach((key) => {
     retryAttempts[key] = 0;
   });
@@ -1590,6 +1636,53 @@ function logSubscriptionMetrics() {
     ...subscriptionMetrics,
     uptime
   });
+}
+
+// NEW: Direct participant update handler (chat-style, instant!)
+function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
+  const { new: newData, old: oldData } = payload;
+  
+  if (!newData || !newData.plan_id || !newData.user_id) {
+    console.warn('⚠️ Invalid participant update payload:', payload);
+    return;
+  }
+
+  const planId = newData.plan_id;
+  const userId = newData.user_id;
+  const newStatus = newData.status;
+  const oldStatus = oldData?.status;
+
+  console.log(`👥 INSTANT participant update: Plan ${planId}, User ${userId}: ${oldStatus} → ${newStatus}`);
+
+  // Update store directly (no API call needed!)
+  const store = usePlansStore.getState();
+  const plan = store.plans[planId];
+
+  if (!plan) {
+    console.log('⚠️ Plan not in store yet, will be loaded via plan_updates notification');
+    return;
+  }
+
+  // Update participant status in the plan
+  const updatedParticipants = plan.participants.map(p => 
+    p.id === userId 
+      ? { ...p, status: newStatus as ParticipantStatus }
+      : p
+  );
+
+  const updatedPlan: Plan = {
+    ...plan,
+    participants: updatedParticipants,
+    lastUpdatedAt: new Date().toISOString()
+  };
+
+  // Update store (instant, like chat!)
+  store.updatePlan(planId, updatedPlan);
+
+  console.log(`✅ INSTANT update complete! Status changed to: ${newStatus}`);
+  
+  // Update unseen counts
+  useUnseenStore.getState().fetchUnseenCounts();
 }
 
 export default usePlansStore;
