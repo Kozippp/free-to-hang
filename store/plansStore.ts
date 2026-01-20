@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useRouter } from 'expo-router';
 import { plansService } from '@/lib/plans-service';
 import { supabase } from '@/lib/supabase';
+import { prefetchAvatars } from '@/utils/avatarCache';
 
 export type ParticipantStatus = 'pending' | 'going' | 'maybe' | 'conditional' | 'declined';
 
@@ -336,6 +337,17 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       // Recalculate computed arrays
       get().recalculatePlanArrays();
+
+      const avatarTargets = [
+        ...transformedPlan.participants.map((participant) => ({
+          userId: participant.id,
+          avatarUrl: participant.avatar
+        })),
+        ...(transformedPlan.creator
+          ? [{ userId: transformedPlan.creator.id, avatarUrl: transformedPlan.creator.avatar }]
+          : [])
+      ];
+      void prefetchAvatars(avatarTargets);
 
       console.log('✅ Single plan updated in store:', planId);
     } catch (error) {

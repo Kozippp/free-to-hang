@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import { relationshipService, RelationshipStatus, Friend, FriendRequest } from '@/lib/relationship-service';
+import { prefetchAvatars } from '@/utils/avatarCache';
 
 interface User {
   id: string;
@@ -241,6 +242,12 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       console.log('🔍 Searching users:', query);
       const users = await relationshipService.searchUsers(query);
       set({ searchResults: users });
+      void prefetchAvatars(
+        users.map(user => ({
+          userId: user.id,
+          avatarUrl: user.avatar_url
+        }))
+      );
       console.log('✅ Search completed, found:', users.length, 'users');
     } catch (error) {
       console.error('❌ Error searching users:', error);
@@ -454,6 +461,12 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       console.log('👥 Loading friends...');
       const friends = await relationshipService.getFriends();
       set({ friends });
+      void prefetchAvatars(
+        friends.map(friend => ({
+          userId: friend.friend_id,
+          avatarUrl: friend.friend_avatar_url
+        }))
+      );
       lastLoadTimes['friends'] = Date.now();
       console.log('✅ Friends loaded:', friends.length);
     } catch (error) {
@@ -476,6 +489,12 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       console.log('📥 Loading incoming requests...');
       const requests = await relationshipService.getIncomingRequests();
       set({ incomingRequests: requests });
+      void prefetchAvatars(
+        requests.map(request => ({
+          userId: request.sender_id,
+          avatarUrl: request.sender_avatar_url
+        }))
+      );
       lastLoadTimes['incoming'] = Date.now();
       console.log('✅ Incoming requests loaded:', requests.length);
     } catch (error) {
@@ -497,6 +516,12 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
       console.log('📤 Loading outgoing requests...');
       const requests = await relationshipService.getOutgoingRequests();
       set({ outgoingRequests: requests });
+      void prefetchAvatars(
+        requests.map(request => ({
+          userId: request.receiver_id,
+          avatarUrl: request.receiver_avatar_url
+        }))
+      );
       lastLoadTimes['outgoing'] = Date.now();
       console.log('✅ Outgoing requests loaded:', requests.length);
     } catch (error) {

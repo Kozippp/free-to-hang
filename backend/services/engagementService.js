@@ -32,7 +32,7 @@ async function handleFriendStatusChange(userId, isAvailable) {
 
   const { data: user, error: userError } = await supabase
     .from('users')
-    .select('name')
+    .select('name, avatar_url')
     .eq('id', userId)
     .maybeSingle();
 
@@ -41,14 +41,22 @@ async function handleFriendStatusChange(userId, isAvailable) {
     return;
   }
 
-  const template = NotificationTemplates.status_change_online(user.name);
+  const actorName = user.name;
+  const actorAvatar = user.avatar_url || null;
+  const template = NotificationTemplates.status_change_online(actorName);
 
   await Promise.all(
     friendIds.map((friendId) =>
       notifyUser({
         userId: friendId,
         ...template,
-        data: { user_id: userId },
+        data: {
+          user_id: userId,
+          actorId: userId,
+          actorName,
+          actorAvatarUrl: actorAvatar,
+          imageUrl: actorAvatar
+        },
         triggeredBy: userId
       }).catch((error) => {
         console.error('❌ Failed to send chain notification:', error?.message);

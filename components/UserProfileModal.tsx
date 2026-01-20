@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   Modal,
   Alert,
   ActivityIndicator,
@@ -18,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import useFriendsStore from '@/store/friendsStore';
 import { relationshipService, RelationshipStatus } from '@/lib/relationship-service';
+import CachedAvatar from '@/components/CachedAvatar';
 
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -380,8 +380,10 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
                 {/* Header with Avatar and Basic Info */}
                 <View style={styles.header}>
                   <View style={styles.avatarContainer}>
-                    <Image
-                      source={{ uri: user.avatar_url || generateDefaultAvatar(user.name, user.id) }}
+                    <CachedAvatar
+                      userId={user.id}
+                      uri={user.avatar_url}
+                      fallbackUri={generateDefaultAvatar(user.name, user.id)}
                       style={styles.avatar}
                     />
                     {user.status && (

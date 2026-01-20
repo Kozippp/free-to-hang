@@ -340,7 +340,7 @@ router.post('/:planId/messages', requireAuth, async (req, res) => {
           .select('user_id')
           .eq('plan_id', planId)
           .neq('user_id', senderId),
-        supabase.from('users').select('name').eq('id', senderId).single()
+        supabase.from('users').select('name, avatar_url').eq('id', senderId).single()
       ]);
 
       if (planResult.error) {
@@ -381,7 +381,17 @@ router.post('/:planId/messages', requireAuth, async (req, res) => {
               await notifyUser({
                 userId: user_id,
                 ...template,
-                data: { plan_id: planId, message_id: message.id, screen: 'Chat' },
+                data: {
+                  plan_id: planId,
+                  planName: planTitle,
+                  roomName: planTitle,
+                  message_id: message.id,
+                  screen: 'Chat',
+                  actorId: senderId,
+                  actorName: senderProfile?.name || 'Someone',
+                  actorAvatarUrl: senderProfile?.avatar_url,
+                  imageUrl: senderProfile?.avatar_url
+                },
                 triggeredBy: senderId
               });
               console.log(`✅ Chat notification sent to user ${user_id} for plan ${planId}`);

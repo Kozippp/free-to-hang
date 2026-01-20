@@ -157,7 +157,7 @@ const sendPlanInviteNotifications = async (planId, inviterId, invitedUserIds = [
   try {
     const [planTitle, inviterResponse] = await Promise.all([
       getPlanTitle(planId),
-      supabase.from('users').select('name').eq('id', inviterId).single()
+      supabase.from('users').select('name, avatar_url').eq('id', inviterId).single()
     ]);
 
     if (inviterResponse.error) {
@@ -165,6 +165,7 @@ const sendPlanInviteNotifications = async (planId, inviterId, invitedUserIds = [
     }
 
     const inviterName = inviterResponse?.data?.name || 'Someone';
+    const inviterAvatar = inviterResponse?.data?.avatar_url || null;
 
     for (const userId of uniqueInvitees) {
       try {
@@ -172,7 +173,15 @@ const sendPlanInviteNotifications = async (planId, inviterId, invitedUserIds = [
         await notifyUser({
           userId,
           ...template,
-          data: { plan_id: planId, screen: 'PlanDetail' },
+          data: {
+            plan_id: planId,
+            planName: planTitle,
+            screen: 'PlanDetail',
+            actorId: inviterId,
+            actorName: inviterName,
+            actorAvatarUrl: inviterAvatar,
+            imageUrl: inviterAvatar
+          },
           triggeredBy: inviterId
         });
         console.log(`✅ Notified user ${userId} about plan ${planId}`);
@@ -192,23 +201,29 @@ const sendParticipantJoinedNotifications = async (planId, participantId) => {
       .select('user_id')
       .eq('plan_id', planId)
       .neq('user_id', participantId),
-    supabase.from('users').select('name').eq('id', participantId).single(),
+    supabase.from('users').select('name, avatar_url').eq('id', participantId).single(),
     getPlanTitle(planId)
   ]);
 
   if (!participants || participants.length === 0) return;
 
-  const template = NotificationTemplates.plan_participant_joined(
-    planTitle,
-    user?.name || 'A friend'
-  );
+  const participantName = user?.name || 'A friend';
+  const participantAvatar = user?.avatar_url || null;
+  const template = NotificationTemplates.plan_participant_joined(planTitle, participantName);
 
   await Promise.all(
     participants.map(({ user_id }) =>
       notifyUser({
         userId: user_id,
         ...template,
-        data: { plan_id: planId },
+        data: {
+          plan_id: planId,
+          planName: planTitle,
+          actorId: participantId,
+          actorName: participantName,
+          actorAvatarUrl: participantAvatar,
+          imageUrl: participantAvatar
+        },
         triggeredBy: participantId
       })
     )
@@ -216,17 +231,20 @@ const sendParticipantJoinedNotifications = async (planId, participantId) => {
 };
 
 const sendPollCreatedNotifications = async (planId, pollId, question, creatorId) => {
-  const [{ data: participants }, planTitle] = await Promise.all([
+  const [{ data: participants }, planTitle, { data: creatorProfile }] = await Promise.all([
     supabase
       .from('plan_participants')
       .select('user_id')
       .eq('plan_id', planId)
       .neq('user_id', creatorId),
-    getPlanTitle(planId)
+    getPlanTitle(planId),
+    supabase.from('users').select('name, avatar_url').eq('id', creatorId).single()
   ]);
 
   if (!participants || participants.length === 0) return;
 
+  const creatorName = creatorProfile?.name || 'Someone';
+  const creatorAvatar = creatorProfile?.avatar_url || null;
   const template = NotificationTemplates.poll_created(planTitle, question);
 
   await Promise.all(
@@ -234,7 +252,15 @@ const sendPollCreatedNotifications = async (planId, pollId, question, creatorId)
       notifyUser({
         userId: user_id,
         ...template,
-        data: { plan_id: planId, poll_id: pollId },
+        data: {
+          plan_id: planId,
+          planName: planTitle,
+          poll_id: pollId,
+          actorId: creatorId,
+          actorName: creatorName,
+          actorAvatarUrl: creatorAvatar,
+          imageUrl: creatorAvatar
+        },
         triggeredBy: creatorId
       })
     )
@@ -281,18 +307,23 @@ const maybeNotifyPollWinner = async (planId, pollId, triggeredByUserId) => {
     return;
   }
 
-  const [{ data: option }, planTitle, { data: participants }] = await Promise.all([
+  const [
+    { data: option },
+    planTitle,
+    { data: participants },
+    { data: triggeredByProfile }
+  ] = await Promise.all([
     supabase.from('plan_poll_options').select('option_text').eq('id', winnerOptionId).single(),
     getPlanTitle(planId),
-    supabase.from('plan_participants').select('user_id').eq('plan_id', planId)
+    supabase.from('plan_participants').select('user_id').eq('plan_id', planId),
+    supabase.from('users').select('name, avatar_url').eq('id', triggeredByUserId).single()
   ]);
 
   if (!participants || participants.length === 0) return;
 
-  const template = NotificationTemplates.poll_winner(
-    planTitle,
-    option?.option_text || 'Winning option'
-  );
+  const actorName = triggeredByProfile?.name || 'Someone';
+  const actorAvatar = triggeredByProfile?.avatar_url || null;
+  const template = NotificationTemplates.poll_winner(planTitle, option?.option_text || 'Winning option');
 
   // Filter out the user who triggered the win (they don't need a notification)
   const participantsToNotify = participants.filter(p => p.user_id !== triggeredByUserId);
@@ -302,7 +333,16 @@ const maybeNotifyPollWinner = async (planId, pollId, triggeredByUserId) => {
       notifyUser({
         userId: user_id,
         ...template,
-        data: { plan_id: planId, poll_id: pollId, option_id: winnerOptionId },
+        data: {
+          plan_id: planId,
+          planName: planTitle,
+          poll_id: pollId,
+          option_id: winnerOptionId,
+          actorId: triggeredByUserId,
+          actorName,
+          actorAvatarUrl: actorAvatar,
+          imageUrl: actorAvatar
+        },
         triggeredBy: triggeredByUserId
       })
     )

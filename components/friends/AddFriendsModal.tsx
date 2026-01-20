@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  Image,
   Alert,
   Modal,
   SafeAreaView,
@@ -23,6 +22,7 @@ import { generateDefaultAvatar } from '@/constants/defaultImages';
 import * as Contacts from 'expo-contacts';
 import useFriendsStore from '@/store/friendsStore';
 import UserProfileModal from '@/components/UserProfileModal';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface User {
   id: string;
@@ -419,9 +419,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
         style={styles.userItem}
         onPress={() => handleUserPress(item)}
       >
-        <Image 
-          source={{ uri: item.avatar_url || generateDefaultAvatar(item.name, item.id) }} 
-          style={styles.avatar} 
+        <CachedAvatar
+          userId={item.id}
+          uri={item.avatar_url}
+          fallbackUri={generateDefaultAvatar(item.name, item.id)}
+          style={styles.avatar}
         />
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{item.name}</Text>

@@ -24,6 +24,8 @@ import {
   X
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import CachedAvatar from '@/components/CachedAvatar';
+import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { ChatMessage as ChatMessageType, ReadReceipt } from '@/store/chatStore';
 import useChatStore from '@/store/chatStore';
 
@@ -612,9 +614,11 @@ export default function ChatMessage({
     return (
       <View style={styles.readStatusContainer}>
         {readUsers.map((receipt, index) => (
-          <Image
+          <CachedAvatar
             key={`read-${message.id}-${receipt.userId}`}
-            source={{ uri: receipt.user.avatar_url || 'https://via.placeholder.com/20x20' }}
+            userId={receipt.userId}
+            uri={receipt.user.avatar_url}
+            fallbackUri={generateDefaultAvatar(receipt.user.name || 'User', receipt.userId)}
             style={[
               styles.readStatusAvatar,
               { marginLeft: index > 0 ? 2 : 0 } // Closer spacing between avatars
@@ -682,8 +686,10 @@ export default function ChatMessage({
           ]}
         >
           {!isOwnMessage && showAvatar && (
-            <Image 
-              source={{ uri: message.userAvatar }} 
+            <CachedAvatar
+              userId={message.userId}
+              uri={message.userAvatar}
+              fallbackUri={generateDefaultAvatar(message.userName, message.userId)}
               style={styles.avatar}
             />
           )}

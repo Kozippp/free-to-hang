@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { NotificationSender } from '@/store/notificationsStore';
 import { Calendar, Bell } from 'lucide-react-native';
+import { generateDefaultAvatar } from '@/constants/defaultImages';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface Props {
   actors: NotificationSender[];
@@ -29,15 +31,18 @@ export default function NotificationAvatarStack({ actors, type, onPress }: Props
   if (safeActors.length === 1) {
     const actor = safeActors[0];
     const actorName = actor?.name?.trim() || 'User';
+    const fallbackUri = generateDefaultAvatar(actorName, actor?.id);
     return (
       <TouchableOpacity 
         style={styles.container} 
         onPress={() => onPress && onPress(actor)}
         activeOpacity={0.8}
       >
-        <Image 
-          source={{ uri: actor.avatar_url || `https://ui-avatars.com/api/?name=${actorName}&background=random` }} 
-          style={styles.avatarLarge} 
+        <CachedAvatar
+          userId={actor?.id}
+          uri={actor?.avatar_url}
+          fallbackUri={fallbackUri}
+          style={styles.avatarLarge}
         />
       </TouchableOpacity>
     );
@@ -49,22 +54,28 @@ export default function NotificationAvatarStack({ actors, type, onPress }: Props
 
   return (
     <View style={[styles.container, { width: 50, height: 50, marginRight: 8 }]}>
-      {displayActors.map((actor, index) => (
-        <TouchableOpacity
-          key={actor.id}
-          activeOpacity={0.9}
-          onPress={() => onPress && onPress(actor)}
-          style={[
-            styles.stackedAvatarContainer,
-            index === 0 ? styles.stackBottom : styles.stackTop
-          ]}
-        >
-          <Image
-            source={{ uri: actor.avatar_url || `https://ui-avatars.com/api/?name=${actor.name || 'User'}&background=random` }}
-            style={styles.avatarSmall}
-          />
-        </TouchableOpacity>
-      ))}
+      {displayActors.map((actor, index) => {
+        const actorName = actor?.name?.trim() || 'User';
+        const fallbackUri = generateDefaultAvatar(actorName, actor?.id);
+        return (
+          <TouchableOpacity
+            key={actor.id}
+            activeOpacity={0.9}
+            onPress={() => onPress && onPress(actor)}
+            style={[
+              styles.stackedAvatarContainer,
+              index === 0 ? styles.stackBottom : styles.stackTop
+            ]}
+          >
+            <CachedAvatar
+              userId={actor?.id}
+              uri={actor?.avatar_url}
+              fallbackUri={fallbackUri}
+              style={styles.avatarSmall}
+            />
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }

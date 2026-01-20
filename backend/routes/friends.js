@@ -52,15 +52,24 @@ router.post('/request', verifyToken, async (req, res) => {
     try {
       const { data: senderProfile } = await supabase
         .from('users')
-        .select('name')
+        .select('name, avatar_url')
         .eq('id', senderId)
         .single();
 
-      const template = NotificationTemplates.friend_request(senderProfile?.name || 'Someone');
+      const senderName = senderProfile?.name || 'Someone';
+      const senderAvatar = senderProfile?.avatar_url || null;
+      const template = NotificationTemplates.friend_request(senderName);
       await notifyUser({
         userId: receiver_id,
         ...template,
-        data: { user_id: senderId, request_id: data.id },
+        data: {
+          user_id: senderId,
+          request_id: data.id,
+          actorId: senderId,
+          actorName: senderName,
+          actorAvatarUrl: senderAvatar,
+          imageUrl: senderAvatar
+        },
         triggeredBy: senderId
       });
     } catch (notifyError) {
@@ -161,15 +170,24 @@ router.post('/request/accept', verifyToken, async (req, res) => {
     try {
       const { data: receiverProfile } = await supabase
         .from('users')
-        .select('name')
+        .select('name, avatar_url')
         .eq('id', userId)
         .single();
 
-      const template = NotificationTemplates.friend_accepted(receiverProfile?.name || 'Your friend');
+      const receiverName = receiverProfile?.name || 'Your friend';
+      const receiverAvatar = receiverProfile?.avatar_url || null;
+      const template = NotificationTemplates.friend_accepted(receiverName);
       await notifyUser({
         userId: data.sender_id,
         ...template,
-        data: { user_id: userId, request_id },
+        data: {
+          user_id: userId,
+          request_id,
+          actorId: userId,
+          actorName: receiverName,
+          actorAvatarUrl: receiverAvatar,
+          imageUrl: receiverAvatar
+        },
         triggeredBy: userId
       });
     } catch (notifyError) {

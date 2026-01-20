@@ -91,10 +91,23 @@ export function groupNotifications(notifications: NotificationRecord[]): Notific
     }
 
     // Add actor if exists and unique
-    if (notification.sender?.id) {
-      const exists = group.actors.some(a => a.id === notification.sender?.id);
+    const dataActorId = data.actorId || data.actor_id || data.user_id;
+    const dataActorName = data.actorName || data.actor_name;
+    const dataActorAvatar = data.actorAvatarUrl || data.actor_avatar_url;
+    const fallbackSender = dataActorId
+      ? {
+          id: dataActorId,
+          name: dataActorName || null,
+          username: null,
+          avatar_url: dataActorAvatar || null
+        }
+      : null;
+
+    const senderToUse = notification.sender?.id ? notification.sender : fallbackSender;
+    if (senderToUse?.id) {
+      const exists = group.actors.some(a => a.id === senderToUse?.id);
       if (!exists) {
-        group.actors.push(notification.sender);
+        group.actors.push(senderToUse);
       }
     }
   });
@@ -130,7 +143,11 @@ function generateGroupTitle(group: NotificationGroup): string {
     // But data.roomName might be missing.
     // If grouped, we can assume they are from the same room.
     // We can try to extract plan name from notification title regex if needed, or fallback to 'Chat'.
-    let roomName = group.items[0]?.data?.roomName;
+    let roomName =
+      group.items[0]?.data?.roomName ||
+      group.items[0]?.data?.room_name ||
+      group.items[0]?.data?.planName ||
+      group.items[0]?.data?.plan_name;
     
     if (!roomName) {
         // Try to parse from title "💬 Sender in PlanName"
@@ -159,7 +176,10 @@ function generateGroupTitle(group: NotificationGroup): string {
 
   if (group.type === 'plan_activity') {
     // Try to get plan name
-    let planName = group.items[0]?.data?.planName;
+    let planName =
+      group.items[0]?.data?.planName ||
+      group.items[0]?.data?.plan_name ||
+      group.items[0]?.data?.planTitle;
     if (!planName) {
          // Try to parse? Usually not in title for updates.
          // Let's fallback to "Plan" but we really want the name.
@@ -193,7 +213,11 @@ function generateGroupTitle(group: NotificationGroup): string {
   }
 
   if (group.type === 'plan_invite') {
-    const planName = group.items[0]?.data?.planName || 'a plan';
+    const planName =
+      group.items[0]?.data?.planName ||
+      group.items[0]?.data?.plan_name ||
+      group.items[0]?.data?.planTitle ||
+      'a plan';
     // Title usually "Inviter invited you to Plan"
     const body = group.items[0]?.body || '';
     const match = body.match(/invited you to (.+)$/);

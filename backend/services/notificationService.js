@@ -47,6 +47,9 @@ async function createNotification({ userId, type, title, body, data = {}, trigge
   return notification;
 }
 
+const resolveImageUrl = (data = {}) =>
+  data.imageUrl || data.image_url || data.actorAvatarUrl || data.actor_avatar_url || null;
+
 async function sendPushNotification({ userId, title, body, data = {} }) {
   console.log('🔔 sendPushNotification called:', { userId, title, body, data });
   
@@ -95,6 +98,7 @@ async function sendPushNotification({ userId, title, body, data = {} }) {
     }
   }
 
+  const imageUrl = resolveImageUrl(data);
   const messages = tokens
     .map(({ expo_push_token }) => {
       if (!Expo.isExpoPushToken(expo_push_token)) {
@@ -108,6 +112,7 @@ async function sendPushNotification({ userId, title, body, data = {} }) {
         title,
         body,
         data,
+        image: imageUrl || undefined,
         priority: 'high'
       };
     })
@@ -139,12 +144,19 @@ async function notifyUser({
   console.log('📢 notifyUser called:', { userId, type, title, sendPush });
   
   try {
+    const imageUrl = resolveImageUrl(data);
+    const payloadData = {
+      ...data,
+      notification_title: title,
+      notification_body: body,
+      ...(imageUrl ? { imageUrl } : {})
+    };
     const notification = await createNotification({
       userId,
       type,
       title,
       body,
-      data,
+      data: payloadData,
       triggeredBy
     });
     
@@ -164,7 +176,7 @@ async function notifyUser({
             userId,
             title,
             body,
-            data: { ...data, notification_id: notification.id, type }
+            data: { ...payloadData, notification_id: notification.id, type }
           });
         } else {
           console.log(`ℹ️ Notification type ${type} disabled for user ${userId}`);
