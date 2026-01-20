@@ -11,6 +11,7 @@ interface UnseenState {
   plans: Record<string, PlanUnseenCounts>;
   totalUnseen: number;
   loading: boolean;
+  pendingRefetch: boolean;
   fetchUnseenCounts: () => Promise<void>;
   markControlPanelSeen: (planId: string) => Promise<void>;
   markChatSeen: (planId: string) => void;
@@ -21,8 +22,20 @@ const useUnseenStore = create<UnseenState>((set, get) => ({
   plans: {},
   totalUnseen: 0,
   loading: false,
+  pendingRefetch: false,
 
   fetchUnseenCounts: async () => {
+    const state = get();
+    if (state.loading) {
+      // If already loading, mark that we need another fetch after this one
+      // This prevents parallel requests but ensures we eventually get the latest data
+      if (!state.pendingRefetch) {
+        console.log('⏳ Unseen counts fetch already in progress, queuing refetch');
+        set({ pendingRefetch: true });
+      }
+      return;
+    }
+
     set({ loading: true });
     try {
       const result = await plansService.getUnseenCounts();
@@ -31,9 +44,23 @@ const useUnseenStore = create<UnseenState>((set, get) => ({
         totalUnseen: result.totalUnseen || 0,
         loading: false
       });
+      
+      // If a refetch was requested while we were loading, trigger it now
+      if (get().pendingRefetch) {
+        console.log('🔄 Processing queued unseen counts refetch');
+        set({ pendingRefetch: false });
+        // Small delay to let UI breathe
+        setTimeout(() => get().fetchUnseenCounts(), 100);
+      }
     } catch (error) {
       console.error('❌ Failed to fetch unseen counts:', error);
       set({ loading: false });
+      
+      // If pending refetch, retry after a delay
+      if (get().pendingRefetch) {
+        set({ pendingRefetch: false });
+        setTimeout(() => get().fetchUnseenCounts(), 2000);
+      }
     }
   },
 
@@ -74,7 +101,7 @@ const useUnseenStore = create<UnseenState>((set, get) => ({
     }
   },
 
-  clear: () => set({ plans: {}, totalUnseen: 0, loading: false })
+  clear: () => set({ plans: {}, totalUnseen: 0, loading: false, pendingRefetch: false })
 }));
 
 export default useUnseenStore;

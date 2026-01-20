@@ -5,6 +5,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { generateUUID } from '@/utils/idGenerator';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
+import useUnseenStore from './unseenStore';
 
 export interface ChatMessage {
   id: string;
@@ -852,6 +853,11 @@ const useChatStore = create<ChatState>((set, get) => ({
 
             get().updateReadReceipt(planId, payload.new.user_id, receipt);
             console.log(`⚡ Real-time read receipt updated for ${userData.name}`);
+            
+            // If the read receipt is for the current user, update unseen counts
+            // This handles the case where the user reads messages on another device
+            // We can't easily check current user ID here without store access, but fetching counts is cheap enough
+            useUnseenStore.getState().fetchUnseenCounts();
           }
         }
       )
@@ -883,6 +889,9 @@ const useChatStore = create<ChatState>((set, get) => ({
 
             get().updateReadReceipt(planId, payload.new.user_id, receipt);
             console.log(`⚡ Real-time read receipt updated for ${userData.name}`);
+            
+            // If the read receipt is for the current user, update unseen counts
+            useUnseenStore.getState().fetchUnseenCounts();
           }
         }
       )

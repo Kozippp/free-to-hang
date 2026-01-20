@@ -1109,54 +1109,65 @@ router.get('/unseen-counts', requireAuth, async (req, res) => {
       (controlReceipts || []).map((receipt) => [receipt.plan_id, receipt.last_read_at])
     );
 
-    const results = await Promise.all(
-      planIds.map(async (planId) => {
-        try {
-          const lastChatReadAt = chatReceiptMap.get(planId);
-          const lastControlReadAt = controlReceiptMap.get(planId);
+    // Process plans in chunks to avoid overwhelming the database
+    // Batch size of 5 means max 10 concurrent DB queries (5 plans * 2 queries each)
+    const chunkSize = 5;
+    const results = [];
 
-          let chatQuery = supabase
-            .from('chat_messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('plan_id', planId)
-            .eq('deleted', false)
-            .neq('user_id', userId);
+    for (let i = 0; i < planIds.length; i += chunkSize) {
+      const chunk = planIds.slice(i, i + chunkSize);
+      
+      const chunkResults = await Promise.all(
+        chunk.map(async (planId) => {
+          try {
+            const lastChatReadAt = chatReceiptMap.get(planId);
+            const lastControlReadAt = controlReceiptMap.get(planId);
 
-          if (lastChatReadAt) {
-            chatQuery = chatQuery.gt('created_at', lastChatReadAt);
+            let chatQuery = supabase
+              .from('chat_messages')
+              .select('id', { count: 'exact', head: true })
+              .eq('plan_id', planId)
+              .eq('deleted', false)
+              .neq('user_id', userId);
+
+            if (lastChatReadAt) {
+              chatQuery = chatQuery.gt('created_at', lastChatReadAt);
+            }
+
+            let controlQuery = supabase
+              .from('plan_updates')
+              .select('id', { count: 'exact', head: true })
+              .eq('plan_id', planId)
+              .or(`triggered_by.is.null,triggered_by.neq.${userId}`);
+
+            if (lastControlReadAt) {
+              controlQuery = controlQuery.gt('created_at', lastControlReadAt);
+            }
+
+            const [{ count: chatCount, error: chatError }, { count: controlCount, error: controlError }] =
+              await Promise.all([chatQuery, controlQuery]);
+
+            if (chatError || controlError) {
+              console.error('❌ Error fetching unseen counts:', { planId, chatError, controlError });
+            }
+
+            const chatUnseen = chatCount || 0;
+            const controlUnseen = controlCount || 0;
+            return {
+              planId,
+              chatUnseen,
+              controlUnseen,
+              totalUnseen: chatUnseen + controlUnseen
+            };
+          } catch (error) {
+            console.error('❌ Error computing unseen counts for plan:', planId, error);
+            return { planId, chatUnseen: 0, controlUnseen: 0, totalUnseen: 0 };
           }
-
-          let controlQuery = supabase
-            .from('plan_updates')
-            .select('id', { count: 'exact', head: true })
-            .eq('plan_id', planId)
-            .or(`triggered_by.is.null,triggered_by.neq.${userId}`);
-
-          if (lastControlReadAt) {
-            controlQuery = controlQuery.gt('created_at', lastControlReadAt);
-          }
-
-          const [{ count: chatCount, error: chatError }, { count: controlCount, error: controlError }] =
-            await Promise.all([chatQuery, controlQuery]);
-
-          if (chatError || controlError) {
-            console.error('❌ Error fetching unseen counts:', { planId, chatError, controlError });
-          }
-
-          const chatUnseen = chatCount || 0;
-          const controlUnseen = controlCount || 0;
-          return {
-            planId,
-            chatUnseen,
-            controlUnseen,
-            totalUnseen: chatUnseen + controlUnseen
-          };
-        } catch (error) {
-          console.error('❌ Error computing unseen counts for plan:', planId, error);
-          return { planId, chatUnseen: 0, controlUnseen: 0, totalUnseen: 0 };
-        }
-      })
-    );
+        })
+      );
+      
+      results.push(...chunkResults);
+    }
 
     const plans = results.reduce((acc, item) => {
       acc[item.planId] = {
