@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { NotificationGroup } from '@/utils/notificationGrouper';
 import NotificationAvatarStack from './NotificationAvatarStack';
 import { formatTimeAgo } from '@/utils/time';
 import { NotificationSender } from '@/store/notificationsStore';
+import useFriendsStore from '@/store/friendsStore';
+import usePlansStore from '@/store/plansStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   group: NotificationGroup;
@@ -12,9 +15,75 @@ interface Props {
   onAction?: (action: 'accept' | 'decline' | 'delete' | 'join', group: NotificationGroup) => void;
 }
 
+type ActionStatus = 'pending' | 'accepted' | 'declined' | 'joined' | 'deleted' | null;
+
 export default function NotificationGroupItem({ group, onPress, onAvatarPress, onAction }: Props) {
   const isActionable = group.type === 'friend_request' || group.type === 'plan_invite';
   const isUnread = !group.isRead;
+  
+  // Store hooks for real-time status checking
+  const { friends, incomingRequests } = useFriendsStore();
+  const { plans } = usePlansStore();
+  const { user } = useAuth();
+
+  // Local state for immediate UI feedback
+  const [status, setStatus] = useState<ActionStatus>('pending');
+
+  // Sync with global store state
+  useEffect(() => {
+    if (!isActionable) return;
+
+    const notification = group.items[0];
+    const data = notification?.data || {};
+
+    if (group.type === 'friend_request') {
+      // Check friend request status
+      const requestId = data.requestId || data.request_id || notification.data?.id;
+      // Also check by sender ID as fallback/confirmation
+      const senderId = group.actors[0]?.id;
+
+      // Check if user is already a friend (using friend_id from store)
+      const isAlreadyFriend = senderId && friends.some(f => f.friend_id === senderId);
+      
+      // Check if request is still incoming
+      const hasIncomingRequest = requestId 
+        ? incomingRequests.some(r => r.request_id === requestId || r.id === requestId)
+        : (senderId && incomingRequests.some(r => r.sender_id === senderId));
+
+      if (isAlreadyFriend) {
+        setStatus('accepted');
+      } else if (!hasIncomingRequest) {
+        // If not a friend and no incoming request, assume handled (declined/deleted)
+        // But only change if we are currently pending to avoid overriding optimistic updates inappropriately
+        // However, if we load the component and it's already handled, we want to show that.
+        // We'll trust the store: if not friend and not incoming -> handled.
+        // We default to 'declined' or generic handled state if we don't know exactly what happened,
+        // but since 'pending' shows buttons, we want to move away from it.
+        if (status === 'pending') {
+             // If we just loaded and data is ready, set to declined/deleted
+             setStatus('declined'); 
+        }
+      } else {
+        setStatus('pending');
+      }
+
+    } else if (group.type === 'plan_invite') {
+      const planId = group.contextId;
+      if (planId && plans[planId]) {
+        const plan = plans[planId];
+        const myParticipant = plan.participants.find(p => p.id === 'current' || p.id === user?.id);
+        
+        if (myParticipant) {
+          if (myParticipant.status === 'going') setStatus('joined');
+          else if (myParticipant.status === 'declined') setStatus('declined');
+          else if (myParticipant.status === 'pending') setStatus('pending');
+          // For maybe/conditional we might still want to show buttons or a specific status, 
+          // but for now let's treat them as pending or create new statuses if needed.
+          // The prompt specifically mentioned "Join" -> "going".
+        }
+      }
+    }
+  }, [group, friends, incomingRequests, plans, isActionable, user?.id]);
 
   const handleAction = (action: 'accept' | 'decline' | 'delete' | 'join') => {
     if ((action === 'decline' || action === 'delete') && onAction) {
@@ -28,11 +97,18 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
           { 
             text: action === 'decline' ? 'Decline' : 'Delete', 
             style: 'destructive', 
-            onPress: () => onAction(action, group) 
+            onPress: () => {
+              // Optimistic update
+              setStatus(action === 'decline' ? 'declined' : 'deleted');
+              onAction(action, group);
+            }
           }
         ]
       );
     } else if (onAction) {
+      // Optimistic update
+      if (action === 'accept') setStatus('accepted');
+      if (action === 'join') setStatus('joined');
       onAction(action, group);
     }
   };
@@ -66,6 +142,36 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
     );
   };
 
+  const renderStatusText = () => {
+    let text = '';
+    let color = '#6b7280'; // gray-500
+
+    switch (status) {
+      case 'accepted':
+        text = 'Friend request accepted';
+        color = '#059669'; // green-600
+        break;
+      case 'joined':
+        text = 'Status set to "going"';
+        color = '#059669'; // green-600
+        break;
+      case 'declined':
+        text = 'Invitation declined';
+        break;
+      case 'deleted':
+        text = 'Request removed';
+        break;
+      default:
+        return null;
+    }
+
+    return (
+      <View style={styles.statusContainer}>
+        <Text style={[styles.statusText, { color }]}>{text}</Text>
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, isUnread && styles.unreadContainer]}>
       {/* Avatar Section */}
@@ -90,38 +196,44 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
 
         {/* Actions Section */}
         {isActionable && (
-          <View style={styles.actionsContainer}>
-            {group.type === 'friend_request' ? (
-              <>
-                <TouchableOpacity 
-                  style={[styles.button, styles.primaryButton]} 
-                  onPress={() => handleAction('accept')}
-                >
-                  <Text style={styles.primaryButtonText}>Confirm</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.button, styles.secondaryButton]} 
-                  onPress={() => handleAction('delete')}
-                >
-                  <Text style={styles.secondaryButtonText}>Delete</Text>
-                </TouchableOpacity>
-              </>
+          <View style={styles.actionsWrapper}>
+            {status === 'pending' ? (
+              <View style={styles.actionsContainer}>
+                {group.type === 'friend_request' ? (
+                  <>
+                    <TouchableOpacity 
+                      style={[styles.button, styles.primaryButton]} 
+                      onPress={() => handleAction('accept')}
+                    >
+                      <Text style={styles.primaryButtonText}>Confirm</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.button, styles.secondaryButton]} 
+                      onPress={() => handleAction('delete')}
+                    >
+                      <Text style={styles.secondaryButtonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  // Plan Invite
+                  <>
+                    <TouchableOpacity 
+                      style={[styles.button, styles.primaryButton]} 
+                      onPress={() => handleAction('join')}
+                    >
+                      <Text style={styles.primaryButtonText}>Join</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.button, styles.secondaryButton]} 
+                      onPress={() => handleAction('decline')}
+                    >
+                      <Text style={styles.secondaryButtonText}>Decline</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
             ) : (
-              // Plan Invite
-              <>
-                <TouchableOpacity 
-                  style={[styles.button, styles.primaryButton]} 
-                  onPress={() => handleAction('join')}
-                >
-                  <Text style={styles.primaryButtonText}>Join</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.button, styles.secondaryButton]} 
-                  onPress={() => handleAction('decline')}
-                >
-                  <Text style={styles.secondaryButtonText}>Decline</Text>
-                </TouchableOpacity>
-              </>
+              renderStatusText()
             )}
           </View>
         )}
@@ -175,9 +287,18 @@ const styles = StyleSheet.create({
     color: '#8e8e8e', // Lighter gray for time
     marginTop: 2,
   },
+  actionsWrapper: {
+    marginTop: 8,
+  },
   actionsContainer: {
     flexDirection: 'row',
-    marginTop: 8,
+  },
+  statusContainer: {
+    paddingVertical: 4,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   button: {
     paddingVertical: 6,
