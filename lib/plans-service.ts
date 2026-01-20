@@ -319,18 +319,50 @@ class PlansService {
     }
   }
 
-  // Vote on poll
-  async voteOnPoll(planId: string, pollId: string, optionIds: string[]): Promise<Plan> {
+  // Vote on poll - DIRECT DB WRITE (like chat!)
+  async voteOnPoll(planId: string, pollId: string, optionIds: string[]): Promise<void> {
     try {
       console.log('🗳️ Voting on poll:', pollId, 'options:', optionIds);
-      await this.apiRequest(`/plans/${planId}/polls/${pollId}/vote`, {
-        method: 'POST',
-        body: JSON.stringify({ optionIds })
-      });
-      console.log('✅ Vote submitted successfully');
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
-      // Return updated plan with the new vote
-      return await this.getPlan(planId);
+      // 1. DELETE existing votes for this user + poll
+      const { error: deleteError } = await supabase
+        .from('plan_poll_votes')
+        .delete()
+        .eq('poll_id', pollId)
+        .eq('user_id', user.id);
+
+      if (deleteError) {
+        console.error('❌ Error deleting old votes:', deleteError);
+        throw deleteError;
+      }
+
+      // 2. INSERT new votes (only if there are any)
+      if (optionIds.length > 0) {
+        const voteInserts = optionIds.map(optionId => ({
+          poll_id: pollId,
+          option_id: optionId,
+          user_id: user.id
+        }));
+
+        const { error: insertError } = await supabase
+          .from('plan_poll_votes')
+          .insert(voteInserts);
+
+        if (insertError) {
+          console.error('❌ Error inserting new votes:', insertError);
+          throw insertError;
+        }
+        console.log('✅ Vote submitted successfully (direct DB)');
+      } else {
+        console.log('✅ Unvoted successfully (direct DB)');
+      }
+
+      // 3. Real-time listener will update store automatically!
+      // No need to return anything - fire and forget like chat messages
+      console.log('✅ Vote operation complete - waiting for realtime update');
     } catch (error) {
       console.error('❌ Error voting on poll:', error);
       throw error;

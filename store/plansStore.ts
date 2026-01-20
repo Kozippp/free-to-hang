@@ -212,7 +212,6 @@ interface PlansState {
   // Poll actions - These are now handled via API calls
   // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => void;
-  voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => void;
   voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => void;
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => void;
   removePollOption: (planId: string, pollId: string, optionId: string) => void;
@@ -831,12 +830,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
     // This function is kept for backward compatibility but should not be used
     // Polls are now created via API calls
     console.warn('⚠️ addPoll should not be called directly. Use API instead.');
-  },
-  
-  voteOnPoll: (planId: string, pollId: string, optionIds: string[], userId: string) => {
-    // This function is kept for backward compatibility but should not be used
-    // Poll votes are now submitted via API calls
-    console.warn('⚠️ voteOnPoll should not be called directly. Use API instead.');
   },
   
   voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => {

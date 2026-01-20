@@ -67,7 +67,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const { 
     markAsRead, 
     addPoll, 
-    voteOnPoll, 
     voteOnPollOptimistic,
     updatePollOption, 
     removePollOption, 
