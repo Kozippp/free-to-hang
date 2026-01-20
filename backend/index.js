@@ -211,30 +211,26 @@ app.post('/api/setup-plans', async (req, res) => {
   }
 });
 
-// Import routes after setting up supabase (with error handling)
-try {
-  const userRoutes = require('./routes/user');
-  const friendsRoutes = require('./routes/friends');
-  const plansRoutes = require('./routes/plans');
-  const pollsRoutes = require('./routes/polls');
-  const storageRoutes = require('./routes/storage');
-  const chatRoutes = require('./routes/chat');
-  const notificationRoutes = require('./routes/notifications');
+// Import routes after setting up supabase
+// NOTE: We removed try-catch to ensure server crashes if routes are broken (better for debugging in Railway)
+const userRoutes = require('./routes/user');
+const friendsRoutes = require('./routes/friends');
+const plansRoutes = require('./routes/plans');
+const pollsRoutes = require('./routes/polls');
+const storageRoutes = require('./routes/storage');
+const chatRoutes = require('./routes/chat');
+const notificationRoutes = require('./routes/notifications');
 
-  // API routes
-  app.use('/api/user', userRoutes);
-  app.use('/api/friends', friendsRoutes);
-  app.use('/api/plans', plansRoutes);
-  app.use('/api/polls', pollsRoutes);
-  app.use('/api/storage', storageRoutes);
-  app.use('/api/chat', chatRoutes);
-  app.use('/api/notifications', notificationRoutes);
+// API routes
+app.use('/api/user', userRoutes);
+app.use('/api/friends', friendsRoutes);
+app.use('/api/plans', plansRoutes);
+app.use('/api/polls', pollsRoutes);
+app.use('/api/storage', storageRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/notifications', notificationRoutes);
 
-  console.log('✅ Routes loaded successfully');
-} catch (error) {
-  console.error('❌ Failed to load routes:', error.message);
-  console.log('🚨 Server will start but API routes will not be available');
-}
+console.log('✅ Routes loaded successfully');
 
 // Start plan scheduler if supabase is available
 if (supabase) {
