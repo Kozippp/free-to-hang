@@ -88,7 +88,7 @@ export function groupNotifications(notifications: NotificationRecord[]): Notific
     }
 
     // Add actor if exists and unique
-    if (notification.sender) {
+    if (notification.sender?.id) {
       const exists = group.actors.some(a => a.id === notification.sender?.id);
       if (!exists) {
         group.actors.push(notification.sender);
@@ -104,12 +104,17 @@ export function groupNotifications(notifications: NotificationRecord[]): Notific
   });
 }
 
+function resolveActorName(actor?: NotificationSender, fallback = 'Someone'): string {
+  const name = actor?.name?.trim();
+  return name && name.length > 0 ? name : fallback;
+}
+
 function generateGroupTitle(group: NotificationGroup): string {
   const actors = group.actors;
   const count = group.count;
   // If we have actors, use the first one's name. If not, try to parse from body/title if desperate, but 'Someone' is safer default.
   // Ideally RLS fix will ensure actors are present.
-  const firstActorName = actors[0]?.name || 'Someone';
+  const firstActorName = resolveActorName(actors[0]);
   
   if (group.type === 'chat_message') {
     // Attempt to get room name from notification title usually "Sender in PlanName"
@@ -136,9 +141,9 @@ function generateGroupTitle(group: NotificationGroup): string {
       return `**${firstActorName}** sent ${count} new messages in **${roomName}**`;
     }
     if (actors.length === 2) {
-      return `**${actors[0].name}** and **${actors[1].name}** sent messages in **${roomName}**`;
+      return `**${resolveActorName(actors[0])}** and **${resolveActorName(actors[1])}** sent messages in **${roomName}**`;
     }
-    return `**${actors[0].name}**, **${actors[1].name}** and ${actors.length - 2} others sent messages in **${roomName}**`;
+    return `**${resolveActorName(actors[0])}**, **${resolveActorName(actors[1])}** and ${actors.length - 2} others sent messages in **${roomName}**`;
   }
 
   if (group.type === 'plan_activity') {
@@ -159,10 +164,10 @@ function generateGroupTitle(group: NotificationGroup): string {
     
     if (joinCount === count) {
        if (count === 1) return `**${firstActorName}** joined **${planName}**`;
-       if (actors.length === 2) return `**${actors[0].name}** and **${actors[1].name}** joined **${planName}**`;
+       if (actors.length === 2) return `**${resolveActorName(actors[0])}** and **${resolveActorName(actors[1])}** joined **${planName}**`;
        // If actors are missing but count is > 1 (e.g. system join?), fallback
        if (actors.length === 0) return `${count} people joined **${planName}**`;
-       return `**${actors[0].name}** and ${count - 1} others joined **${planName}**`;
+       return `**${resolveActorName(actors[0])}** and ${count - 1} others joined **${planName}**`;
     }
 
     // Mixed activity or other updates

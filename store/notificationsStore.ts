@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
+export type NotificationSender = {
+  id: string;
+  name: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+};
+
 interface NotificationRecord {
   id: string;
   user_id: string;
@@ -13,6 +20,7 @@ interface NotificationRecord {
   read_at: string | null;
   triggered_by: string | null;
   created_at: string;
+  sender?: NotificationSender | null;
 }
 
 interface NotificationsState {
@@ -56,7 +64,7 @@ const useNotificationsStore = create<NotificationsState>((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select('*, sender:triggered_by (id, name, username, avatar_url)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -214,20 +222,44 @@ const useNotificationsStore = create<NotificationsState>((set, get) => ({
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload) => {
           console.log('🔔 New notification received:', payload.new);
-          set((state) => ({
-            notifications: [payload.new as NotificationRecord, ...state.notifications].slice(0, 100)
-          }));
-          get().updateUnreadCount();
+          void (async () => {
+            const baseNotification = payload.new as NotificationRecord;
+            let enrichedNotification = baseNotification;
+
+            if (!baseNotification.sender && baseNotification.triggered_by) {
+              const { data: senderData, error } = await supabase
+                .from('users')
+                .select('id, name, username, avatar_url')
+                .eq('id', baseNotification.triggered_by)
+                .single();
+
+              if (!error && senderData) {
+                enrichedNotification = { ...baseNotification, sender: senderData };
+              }
+            }
+
+            set((state) => ({
+              notifications: [enrichedNotification, ...state.notifications].slice(0, 100)
+            }));
+            get().updateUnreadCount();
+          })();
         }
       )
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload) => {
+          const updatedNotification = payload.new as NotificationRecord;
           set((state) => ({
-            notifications: state.notifications.map((notification) =>
-              notification.id === payload.new.id ? (payload.new as NotificationRecord) : notification
-            )
+            notifications: state.notifications.map((notification) => {
+              if (notification.id !== updatedNotification.id) {
+                return notification;
+              }
+              return {
+                ...updatedNotification,
+                sender: updatedNotification.sender ?? notification.sender ?? null
+              };
+            })
           }));
           get().updateUnreadCount();
         }

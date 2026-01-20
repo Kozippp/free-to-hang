@@ -10,8 +10,10 @@ interface Props {
 }
 
 export default function NotificationAvatarStack({ actors, type, onPress }: Props) {
+  const safeActors = Array.isArray(actors) ? actors.filter(Boolean) : [];
+
   // If no actors (system notification), show icon
-  if (!actors || actors.length === 0) {
+  if (safeActors.length === 0) {
     return (
       <View style={[styles.container, styles.iconContainer]}>
         {type.includes('plan') ? (
@@ -24,8 +26,9 @@ export default function NotificationAvatarStack({ actors, type, onPress }: Props
   }
 
   // Single actor
-  if (actors.length === 1) {
-    const actor = actors[0];
+  if (safeActors.length === 1) {
+    const actor = safeActors[0];
+    const actorName = actor?.name?.trim() || 'User';
     return (
       <TouchableOpacity 
         style={styles.container} 
@@ -33,7 +36,7 @@ export default function NotificationAvatarStack({ actors, type, onPress }: Props
         activeOpacity={0.8}
       >
         <Image 
-          source={{ uri: actor.avatar_url || `https://ui-avatars.com/api/?name=${actor.name}&background=random` }} 
+          source={{ uri: actor.avatar_url || `https://ui-avatars.com/api/?name=${actorName}&background=random` }} 
           style={styles.avatarLarge} 
         />
       </TouchableOpacity>
@@ -42,7 +45,7 @@ export default function NotificationAvatarStack({ actors, type, onPress }: Props
 
   // Multiple actors (Stack)
   // Show max 2 avatars stacked
-  const displayActors = actors.slice(0, 2);
+  const displayActors = safeActors.slice(0, 2);
 
   return (
     <View style={[styles.container, { width: 50, height: 50, marginRight: 8 }]}>
@@ -57,7 +60,7 @@ export default function NotificationAvatarStack({ actors, type, onPress }: Props
           ]}
         >
           <Image
-            source={{ uri: actor.avatar_url || `https://ui-avatars.com/api/?name=${actor.name}&background=random` }}
+            source={{ uri: actor.avatar_url || `https://ui-avatars.com/api/?name=${actor.name || 'User'}&background=random` }}
             style={styles.avatarSmall}
           />
         </TouchableOpacity>
