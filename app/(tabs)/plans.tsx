@@ -251,10 +251,15 @@ export default function PlansScreen() {
   const filteredCompletedPlans = completedPlans.filter(plan => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
+    
+    const title = plan.title ? plan.title.toLowerCase() : '';
+    const description = plan.description ? plan.description.toLowerCase() : '';
+    const location = plan.location ? plan.location.toLowerCase() : '';
+    
     return (
-      plan.title.toLowerCase().includes(query) ||
-      plan.description.toLowerCase().includes(query) ||
-      plan.location?.toLowerCase().includes(query)
+      title.includes(query) ||
+      description.includes(query) ||
+      location.includes(query)
     );
   });
 
