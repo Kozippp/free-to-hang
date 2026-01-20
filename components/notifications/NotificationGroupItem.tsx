@@ -15,7 +15,7 @@ interface Props {
   onAction?: (action: 'accept' | 'decline' | 'delete' | 'join', group: NotificationGroup) => void;
 }
 
-type ActionStatus = 'pending' | 'accepted' | 'declined' | 'joined' | 'deleted' | null;
+type ActionStatus = 'pending' | 'accepted' | 'declined' | 'joined' | 'deleted' | 'maybe' | 'conditional' | null;
 
 export default function NotificationGroupItem({ group, onPress, onAvatarPress, onAction }: Props) {
   const isActionable = group.type === 'friend_request' || group.type === 'plan_invite';
@@ -54,13 +54,7 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
         setStatus('accepted');
       } else if (!hasIncomingRequest) {
         // If not a friend and no incoming request, assume handled (declined/deleted)
-        // But only change if we are currently pending to avoid overriding optimistic updates inappropriately
-        // However, if we load the component and it's already handled, we want to show that.
-        // We'll trust the store: if not friend and not incoming -> handled.
-        // We default to 'declined' or generic handled state if we don't know exactly what happened,
-        // but since 'pending' shows buttons, we want to move away from it.
         if (status === 'pending') {
-             // If we just loaded and data is ready, set to declined/deleted
              setStatus('declined'); 
         }
       } else {
@@ -76,10 +70,9 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
         if (myParticipant) {
           if (myParticipant.status === 'going') setStatus('joined');
           else if (myParticipant.status === 'declined') setStatus('declined');
+          else if (myParticipant.status === 'maybe') setStatus('maybe');
+          else if (myParticipant.status === 'conditional') setStatus('conditional');
           else if (myParticipant.status === 'pending') setStatus('pending');
-          // For maybe/conditional we might still want to show buttons or a specific status, 
-          // but for now let's treat them as pending or create new statuses if needed.
-          // The prompt specifically mentioned "Join" -> "going".
         }
       }
     }
@@ -154,6 +147,14 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
       case 'joined':
         text = 'Status set to "going"';
         color = '#059669'; // green-600
+        break;
+      case 'maybe':
+        text = 'Status set to "maybe"';
+        color = '#d97706'; // amber-600
+        break;
+      case 'conditional':
+        text = 'Status set to "conditional"';
+        color = '#d97706'; // amber-600
         break;
       case 'declined':
         text = 'Invitation declined';
