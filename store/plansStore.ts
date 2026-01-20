@@ -1773,12 +1773,12 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   let updatedPoll: Poll;
   
   if (eventType === 'INSERT') {
-    // Add vote to option
+    // Add vote to option (prevent duplicates)
     updatedPoll = {
       ...poll,
       options: poll.options.map(opt => 
         opt.id === optionId
-          ? { ...opt, votes: [...opt.votes, userId] }
+          ? { ...opt, votes: opt.votes.includes(userId) ? opt.votes : [...opt.votes, userId] }
           : opt
       )
     };
