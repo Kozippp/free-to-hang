@@ -236,8 +236,9 @@ interface PlansState {
 // Global variables for real-time subscriptions
 // NOTE: Consolidated to single channel - plan_updates handles all notifications including new plans
 let updatesChannel: any = null;
-// NEW: Direct DB table listener for participant status (chat-style)
+// NEW: Direct DB table listeners (chat-style, instant!)
 let participantsChannel: any = null;
+let pollVotesChannel: any = null;
 
 // Debouncing map for per-plan refresh control
 const planRefreshTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -1267,6 +1268,39 @@ const usePlansStore = create<PlansState>((set, get) => ({
           }
         });
 
+      // NEW: Direct DB listener for poll votes (chat-style, instant!)
+      console.log('🗳️ Starting direct poll votes listener...');
+      pollVotesChannel = supabase
+        .channel(`plan_poll_votes_${userId}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'plan_poll_votes'
+          },
+          async (payload: any) => {
+            console.log('🗳️ Direct poll vote received:', payload);
+            handleDirectPollVoteUpdate(payload, userId);
+          }
+        )
+        .subscribe((status: string) => {
+          console.log('📡 Poll votes channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Direct poll votes listener connected!');
+          } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+            console.log('❌ Poll votes channel disconnected:', status);
+            // Simple retry like chat does (no MAX_RETRIES!)
+            setTimeout(() => {
+              if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
+                console.log('🔄 Retrying poll votes channel...');
+                pollVotesChannel = null;
+                usePlansStore.getState().checkAndRestartSubscriptions(userId);
+              }
+            }, 5000);
+          }
+        });
+
       startPlansHealthCheck(userId);
 
       // Wait a moment for subscription to establish
@@ -1329,7 +1363,7 @@ async function stopAllRealtimeChannels() {
     usePlansStore.getState().updateChannelStatus('plan_updates', 'disconnected');
   }
 
-  // NEW: Stop participants channel
+  // NEW: Stop direct DB listeners
   if (participantsChannel) {
     try {
       await supabase.removeChannel(participantsChannel);
@@ -1339,8 +1373,18 @@ async function stopAllRealtimeChannels() {
     }
   }
 
+  if (pollVotesChannel) {
+    try {
+      await supabase.removeChannel(pollVotesChannel);
+      console.log('🛑 Stopped poll votes channel');
+    } catch (error) {
+      console.error('❌ Error stopping poll votes channel:', error);
+    }
+  }
+
   updatesChannel = null;
   participantsChannel = null;
+  pollVotesChannel = null;
   Object.keys(retryAttempts).forEach((key) => {
     retryAttempts[key] = 0;
   });
@@ -1492,6 +1536,7 @@ function startPlansHealthCheck(userId: string) {
     const channelsStatus = [
       { name: 'plan_updates', state: updatesChannel?.state },
       { name: 'participants', state: participantsChannel?.state },
+      { name: 'poll_votes', state: pollVotesChannel?.state },
     ];
 
     const allHealthy = channelsStatus.every((channel) => channel.state === 'joined');
@@ -1681,6 +1726,104 @@ function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
   store.updatePlan(planId, updatedPlan);
 
   console.log(`✅ INSTANT update complete! Status changed to: ${newStatus}`);
+  
+  // Update unseen counts
+  useUnseenStore.getState().fetchUnseenCounts();
+}
+
+// NEW: Direct poll vote update handler (chat-style, instant!)
+function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
+  const eventType = payload.eventType;
+  const newVote = payload.new;
+  const oldVote = payload.old;
+  
+  console.log(`🗳️ Processing poll vote ${eventType}:`, { newVote, oldVote });
+
+  // Get poll_id and plan_id from the vote
+  const pollId = newVote?.poll_id || oldVote?.poll_id;
+  const userId = newVote?.user_id || oldVote?.user_id;
+  const optionId = newVote?.option_id || oldVote?.option_id;
+
+  if (!pollId || !userId) {
+    console.warn('⚠️ Invalid poll vote payload:', payload);
+    return;
+  }
+
+  // Need to get planId from poll - fetch from store
+  const store = usePlansStore.getState();
+  const allPlans = Object.values(store.plans);
+  
+  // Find plan that contains this poll
+  const plan = allPlans.find(p => p.polls?.some(poll => poll.id === pollId));
+  
+  if (!plan) {
+    console.log('⚠️ Plan with poll not in store yet');
+    return;
+  }
+
+  const poll = plan.polls?.find(p => p.id === pollId);
+  if (!poll) {
+    console.log('⚠️ Poll not found in plan');
+    return;
+  }
+
+  console.log(`🗳️ INSTANT poll vote update for poll ${pollId} in plan ${plan.id}`);
+
+  // Update poll votes based on event type
+  let updatedPoll: Poll;
+  
+  if (eventType === 'INSERT') {
+    // Add vote to option
+    updatedPoll = {
+      ...poll,
+      options: poll.options.map(opt => 
+        opt.id === optionId
+          ? { ...opt, votes: [...opt.votes, userId] }
+          : opt
+      )
+    };
+  } else if (eventType === 'DELETE') {
+    // Remove vote from option
+    updatedPoll = {
+      ...poll,
+      options: poll.options.map(opt => 
+        opt.id === optionId
+          ? { ...opt, votes: opt.votes.filter(v => v !== userId) }
+          : opt
+      )
+    };
+  } else if (eventType === 'UPDATE') {
+    // User changed their vote - remove from old, add to new
+    const oldOptionId = oldVote?.option_id;
+    updatedPoll = {
+      ...poll,
+      options: poll.options.map(opt => {
+        if (opt.id === oldOptionId) {
+          // Remove from old option
+          return { ...opt, votes: opt.votes.filter(v => v !== userId) };
+        } else if (opt.id === optionId) {
+          // Add to new option
+          return { ...opt, votes: [...opt.votes.filter(v => v !== userId), userId] };
+        }
+        return opt;
+      })
+    };
+  } else {
+    console.warn('⚠️ Unknown event type:', eventType);
+    return;
+  }
+
+  // Update plan with new poll
+  const updatedPlan: Plan = {
+    ...plan,
+    polls: plan.polls?.map(p => p.id === pollId ? updatedPoll : p),
+    lastUpdatedAt: new Date().toISOString()
+  };
+
+  // Update store (instant, like chat!)
+  store.updatePlan(plan.id, updatedPlan);
+
+  console.log(`✅ INSTANT poll vote update complete! User ${userId} vote on option ${optionId}`);
   
   // Update unseen counts
   useUnseenStore.getState().fetchUnseenCounts();

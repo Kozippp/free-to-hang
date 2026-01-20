@@ -1903,9 +1903,10 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to add vote' });
     }
 
-    // Check if this vote creates a winner (simplified logic)
-    // Just notify that someone voted - poll winner logic can be implemented later
-    await notifyPlanUpdate(id, 'poll_voted', userId, { poll_id: pollId });
+    // EXPERIMENTAL: Disabled old notification system to test new direct DB listener
+    // The new system listens directly to plan_poll_votes table changes (instant!)
+    // await notifyPlanUpdate(id, 'poll_voted', userId, { poll_id: pollId });
+    console.log('🧪 TESTING: Skipping plan_updates notification - relying on direct DB listener');
 
     try {
       await maybeNotifyPollWinner(id, pollId, userId);
