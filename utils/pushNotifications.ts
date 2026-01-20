@@ -7,13 +7,41 @@ import { supabase } from '@/lib/supabase';
 
 const EXPO_PROJECT_ID = '18a79a9c-af0a-4fb5-a752-3831e49d89ba';
 
+const resolveNotificationPlanId = (data: Record<string, any> | undefined) => {
+  if (!data) return null;
+  const planId = data.plan_id ?? data.planId;
+  return typeof planId === 'string' ? planId : null;
+};
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true
-  })
+  handleNotification: async (notification) => {
+    // Check if we are currently viewing the chat for this notification
+    const data = notification.request.content.data as Record<string, any> | undefined;
+    const notificationPlanId = resolveNotificationPlanId(data);
+
+    if (currentActivePlanId && notificationPlanId === currentActivePlanId) {
+      console.log(`🔕 Suppressing notification for active chat: ${notificationPlanId}`);
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      };
+    }
+
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true
+    };
+  }
 });
+
+let currentActivePlanId: string | null = null;
+
+export const setActivePlanId = (planId: string | null) => {
+  currentActivePlanId = planId;
+  console.log(`📱 Active chat plan set to: ${planId}`);
+};
 
 const resolveProjectId = () => {
   const easProjectId =

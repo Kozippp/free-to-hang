@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Alert, Animated, Image } from 'react-native';
 import { CheckCircle, HelpCircle, Eye, X } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { ParticipantStatus, Participant } from '@/store/plansStore';
 import ConditionalFriendsModal from './ConditionalFriendsModal';
@@ -12,13 +13,88 @@ interface PlanUserStatusProps {
   currentUserId: string;
 }
 
+interface AnimatedStatusButtonProps {
+  status: ParticipantStatus;
+  currentStatus: ParticipantStatus;
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+  backgroundColor: string;
+  borderColor: string;
+  textColor: string;
+  onPress: () => void;
+}
+
+const AnimatedStatusButton = ({ 
+  status, 
+  currentStatus, 
+  label, 
+  icon, 
+  color,
+  backgroundColor,
+  borderColor,
+  textColor,
+  onPress 
+}: AnimatedStatusButtonProps) => {
+  const [scaleAnim] = useState(new Animated.Value(1));
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.9,
+        duration: 100,
+        useNativeDriver: true
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 4,
+        tension: 100,
+        useNativeDriver: true
+      })
+    ]).start();
+
+    onPress();
+  };
+
+  const isSelected = currentStatus === status;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={handlePress}
+      style={{ flex: 1 }}
+    >
+      <Animated.View
+        style={[
+          styles.statusButton,
+          {
+            backgroundColor,
+            borderColor,
+            borderWidth: 2,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
+      >
+        {icon}
+        <Text style={[
+          styles.statusText,
+          { color: textColor, fontWeight: isSelected ? '600' : '500' }
+        ]}>
+          {label}
+        </Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
 export default function PlanUserStatus({ 
   currentStatus, 
   onStatusChange, 
   participants, 
   currentUserId 
 }: PlanUserStatusProps) {
-  const [statusAnimation] = useState(new Animated.Value(1));
   const [showConditionalModal, setShowConditionalModal] = useState(false);
 
   const handleStatusChange = (newStatus: ParticipantStatus) => {
@@ -39,7 +115,7 @@ export default function PlanUserStatus({
               if (newStatus === 'conditional') {
                 setShowConditionalModal(true);
               } else {
-                animateAndChangeStatus(newStatus);
+                onStatusChange(newStatus);
               }
             }
           }
@@ -57,7 +133,7 @@ export default function PlanUserStatus({
           {
             text: 'Decline',
             style: 'destructive',
-            onPress: () => animateAndChangeStatus(newStatus)
+            onPress: () => onStatusChange(newStatus)
           }
         ]
       );
@@ -66,34 +142,13 @@ export default function PlanUserStatus({
       setShowConditionalModal(true);
     } else {
       // For all other status changes (maybe->going, maybe->if, if->going, if->maybe), just change directly
-      animateAndChangeStatus(newStatus);
+      onStatusChange(newStatus);
     }
-  };
-
-  const animateAndChangeStatus = (newStatus: ParticipantStatus, conditionalFriends?: string[]) => {
-    // Simple, smooth, and satisfying animation
-    Animated.timing(statusAnimation, {
-      toValue: 0.95,
-      duration: 100,
-      useNativeDriver: true
-    }).start(() => {
-      // Change status immediately after the press feedback
-      onStatusChange(newStatus, conditionalFriends);
-
-      // Smooth bounce back
-      Animated.spring(statusAnimation, {
-        toValue: 1,
-        tension: 400,
-        friction: 10,
-        useNativeDriver: true
-      }).start();
-    });
   };
 
   const handleConditionalConfirm = (selectedFriendIds: string[]) => {
     // ALWAYS set as conditional - even with empty friends array
-    // This is the foolproof logic: "If..." button always means conditional status
-    animateAndChangeStatus('conditional', selectedFriendIds);
+    onStatusChange('conditional', selectedFriendIds);
   };
 
   const currentUser = participants.find(p => p.id === currentUserId);
@@ -138,95 +193,64 @@ export default function PlanUserStatus({
     }
   };
 
+  const goingStyle = getStatusStyle('going');
+  const maybeStyle = getStatusStyle('maybe');
+  const conditionalStyle = getStatusStyle('conditional');
+  const declinedStyle = getStatusStyle('declined');
+
   return (
     <>
-      <Animated.View style={[styles.container, { transform: [{ scale: statusAnimation }] }]}>
+      <View style={styles.container}>
         <Text style={styles.title}>Your Status</Text>
         
         <View style={styles.statusButtons}>
-          <TouchableOpacity
-            style={[
-              styles.statusButton,
-              {
-                backgroundColor: getStatusStyle('going').backgroundColor,
-                borderColor: getStatusStyle('going').borderColor,
-                borderWidth: 2,
-              }
-            ]}
+          <AnimatedStatusButton
+            status="going"
+            currentStatus={currentStatus}
+            label="Going"
+            icon={<CheckCircle size={20} color={goingStyle.iconColor} />}
+            color={goingStyle.iconColor}
+            backgroundColor={goingStyle.backgroundColor}
+            borderColor={goingStyle.borderColor}
+            textColor={goingStyle.textColor}
             onPress={() => handleStatusChange('going')}
-            activeOpacity={0.8}
-          >
-            <CheckCircle size={20} color={getStatusStyle('going').iconColor} />
-            <Text style={[
-              styles.statusText,
-              { color: getStatusStyle('going').textColor, fontWeight: currentStatus === 'going' ? '600' : '500' }
-            ]}>
-              Going
-            </Text>
-          </TouchableOpacity>
+          />
 
-          <TouchableOpacity
-            style={[
-              styles.statusButton,
-              {
-                backgroundColor: getStatusStyle('maybe').backgroundColor,
-                borderColor: getStatusStyle('maybe').borderColor,
-                borderWidth: 2,
-              }
-            ]}
+          <AnimatedStatusButton
+            status="maybe"
+            currentStatus={currentStatus}
+            label="Maybe"
+            icon={<HelpCircle size={20} color={maybeStyle.iconColor} />}
+            color={maybeStyle.iconColor}
+            backgroundColor={maybeStyle.backgroundColor}
+            borderColor={maybeStyle.borderColor}
+            textColor={maybeStyle.textColor}
             onPress={() => handleStatusChange('maybe')}
-            activeOpacity={0.8}
-          >
-            <HelpCircle size={20} color={getStatusStyle('maybe').iconColor} />
-            <Text style={[
-              styles.statusText,
-              { color: getStatusStyle('maybe').textColor, fontWeight: currentStatus === 'maybe' ? '600' : '500' }
-            ]}>
-              Maybe
-            </Text>
-          </TouchableOpacity>
+          />
 
-          <TouchableOpacity
-            style={[
-              styles.statusButton,
-              {
-                backgroundColor: getStatusStyle('conditional').backgroundColor,
-                borderColor: getStatusStyle('conditional').borderColor,
-                borderWidth: 2,
-              }
-            ]}
+          <AnimatedStatusButton
+            status="conditional"
+            currentStatus={currentStatus}
+            label="If..."
+            icon={<Eye size={20} color={conditionalStyle.iconColor} />}
+            color={conditionalStyle.iconColor}
+            backgroundColor={conditionalStyle.backgroundColor}
+            borderColor={conditionalStyle.borderColor}
+            textColor={conditionalStyle.textColor}
             onPress={() => handleStatusChange('conditional')}
-            activeOpacity={0.8}
-          >
-            <Eye size={20} color={getStatusStyle('conditional').iconColor} />
-            <Text style={[
-              styles.statusText,
-              { color: getStatusStyle('conditional').textColor, fontWeight: currentStatus === 'conditional' ? '600' : '500' }
-            ]}>
-              If...
-            </Text>
-          </TouchableOpacity>
+          />
 
-          <TouchableOpacity
-            style={[
-              styles.statusButton,
-              {
-                backgroundColor: getStatusStyle('declined').backgroundColor,
-                borderColor: getStatusStyle('declined').borderColor,
-                borderWidth: 2,
-              }
-            ]}
+          <AnimatedStatusButton
+            status="declined"
+            currentStatus={currentStatus}
+            label="Can't go"
+            icon={<X size={20} color={declinedStyle.iconColor} />}
+            color={declinedStyle.iconColor}
+            backgroundColor={declinedStyle.backgroundColor}
+            borderColor={declinedStyle.borderColor}
+            textColor={declinedStyle.textColor}
             onPress={() => handleStatusChange('declined')}
-            activeOpacity={0.8}
-          >
-            <X size={20} color={getStatusStyle('declined').iconColor} />
-            <Text style={[
-              styles.statusText,
-              { color: getStatusStyle('declined').textColor, fontWeight: currentStatus === 'declined' ? '600' : '500' }
-            ]}>
-              Can't go
-            </Text>
-          </TouchableOpacity>
+          />
         </View>
 
         {/* Show conditional terms clearly if user has conditional status */}
@@ -268,7 +292,7 @@ export default function PlanUserStatus({
             </Text>
           </View>
         )}
-      </Animated.View>
+      </View>
 
       <ConditionalFriendsModal
         visible={showConditionalModal}

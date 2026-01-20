@@ -20,7 +20,12 @@ export interface NotificationGroup {
   unreadCount: number;
 }
 
-export function groupNotifications(notifications: NotificationRecord[]): NotificationGroup[] {
+type PlanUnseenMap = Record<string, { chat: number; control: number; total: number }>;
+
+export function groupNotifications(
+  notifications: NotificationRecord[],
+  unseenByPlan?: PlanUnseenMap
+): NotificationGroup[] {
   const groups: Record<string, NotificationGroup> = {};
   const order: string[] = []; // To preserve order based on latest notification
 
@@ -115,6 +120,17 @@ export function groupNotifications(notifications: NotificationRecord[]): Notific
   // Finalize groups (generate titles)
   return order.map(groupId => {
     const group = groups[groupId];
+    if (unseenByPlan && group.contextId) {
+      if (group.type === 'chat_message') {
+        const chatUnseen = unseenByPlan[group.contextId]?.chat ?? 0;
+        group.unreadCount = chatUnseen;
+        group.isRead = chatUnseen === 0;
+      } else if (group.type === 'plan_activity') {
+        const controlUnseen = unseenByPlan[group.contextId]?.control ?? 0;
+        group.unreadCount = controlUnseen;
+        group.isRead = controlUnseen === 0;
+      }
+    }
     group.title = generateGroupTitle(group);
     return group;
   });

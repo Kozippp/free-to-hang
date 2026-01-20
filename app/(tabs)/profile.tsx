@@ -38,7 +38,7 @@ import {
   Check,
   User
 } from 'lucide-react-native';
-import { Stack } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { 
   Friend, 
@@ -61,6 +61,7 @@ import { formatFriendLastAvailable } from '@/utils/time';
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
   const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
+  const params = useLocalSearchParams();
   
   // Use real friends store for friend requests and relationships
   const {
@@ -171,6 +172,13 @@ export default function ProfileScreen() {
 
     setAllFriends(friendsFromStore);
   }, [friends, offlineFriends, storeFriends]);
+
+  // Handle tab navigation from params
+  useEffect(() => {
+    if (params.tab === 'requests') {
+      setActiveTab('requests');
+    }
+  }, [params.tab]);
   
   // Modal states
   const [showSettings, setShowSettings] = useState(false);

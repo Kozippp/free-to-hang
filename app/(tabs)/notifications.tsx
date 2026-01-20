@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Bell } from 'lucide-react-native';
 import useNotificationsStore, { NotificationSender } from '@/store/notificationsStore';
+import useUnseenStore from '@/store/unseenStore';
 import useFriendsStore from '@/store/friendsStore';
 import usePlansStore from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,6 +20,8 @@ import { groupNotifications, NotificationGroup } from '@/utils/notificationGroup
 import NotificationGroupItem from '@/components/notifications/NotificationGroupItem';
 import UserProfileModal from '@/components/UserProfileModal';
 import Colors from '@/constants/colors';
+import { supabase } from '@/lib/supabase';
+import { API_CONFIG } from '@/constants/config';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -33,6 +36,7 @@ export default function NotificationsScreen() {
     startRealTimeUpdates,
     stopRealTimeUpdates
   } = useNotificationsStore();
+  const { plans: unseenPlans, fetchUnseenCounts, markControlPanelSeen, markChatSeen } = useUnseenStore();
   
   const { acceptFriendRequest, declineFriendRequest, cancelFriendRequest } = useFriendsStore();
   const { respondToPlan } = usePlansStore();
@@ -44,6 +48,7 @@ export default function NotificationsScreen() {
     if (user?.id) {
       fetchNotifications(user.id);
       startRealTimeUpdates(user.id);
+      fetchUnseenCounts();
     }
 
     return () => {
@@ -53,8 +58,8 @@ export default function NotificationsScreen() {
 
   // Group notifications
   const groupedNotifications = useMemo(() => {
-    return groupNotifications(notifications);
-  }, [notifications]);
+    return groupNotifications(notifications, unseenPlans);
+  }, [notifications, unseenPlans]);
 
   // Create sections (New vs Earlier)
   const sections = useMemo(() => {
@@ -149,13 +154,50 @@ export default function NotificationsScreen() {
     }
   };
 
+  const handleMarkAllRead = async () => {
+    if (!user?.id) return;
+    await markAllAsRead(user.id);
+
+    const planIds = Object.keys(unseenPlans);
+    if (planIds.length === 0) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const headers = token ? {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    } : {
+      'Content-Type': 'application/json'
+    };
+
+    await Promise.all(
+      planIds.map(async (planId) => {
+        markChatSeen(planId);
+        await markControlPanelSeen(planId);
+
+        if (!token) return;
+        try {
+          await fetch(`${API_CONFIG.BASE_URL}/chat/${planId}/read`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({})
+          });
+        } catch (error) {
+          console.error('❌ Failed to mark chat as read:', error);
+        }
+      })
+    );
+
+    fetchUnseenCounts();
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Notifications</Text>
         {/* Only show Mark all read if there are unread items */}
         {notifications.some(n => !n.read) && (
-             <TouchableOpacity onPress={() => user?.id && markAllAsRead(user.id)}>
+             <TouchableOpacity onPress={handleMarkAllRead}>
              <Text style={styles.markAll}>Mark all read</Text>
            </TouchableOpacity>
         )}

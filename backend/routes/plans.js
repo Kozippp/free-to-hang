@@ -1110,11 +1110,16 @@ router.get('/unseen-counts', requireAuth, async (req, res) => {
     );
 
     // Process plans in chunks to avoid overwhelming the database
-    // Batch size of 5 means max 10 concurrent DB queries (5 plans * 2 queries each)
-    const chunkSize = 5;
+    // Batch size of 2 means max 4 concurrent DB queries
+    // Added delay between chunks to let event loop breathe
+    const chunkSize = 2;
     const results = [];
 
     for (let i = 0; i < planIds.length; i += chunkSize) {
+      if (i > 0) {
+        // Small delay between chunks
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
       const chunk = planIds.slice(i, i + chunkSize);
       
       const chunkResults = await Promise.all(

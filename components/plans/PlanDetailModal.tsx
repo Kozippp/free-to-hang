@@ -30,6 +30,7 @@ interface PlanDetailModalProps {
   onRespond: (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => Promise<void>;
   isCompleted?: boolean;
   onAttendanceUpdate?: (planId: string, userId: string, attended: boolean) => void;
+  initialTab?: string;
 }
 
 export default function PlanDetailModal({
@@ -38,7 +39,8 @@ export default function PlanDetailModal({
   onClose,
   onRespond,
   isCompleted,
-  onAttendanceUpdate
+  onAttendanceUpdate,
+  initialTab
 }: PlanDetailModalProps) {
   const { width } = Dimensions.get('window');
   const slideAnim = useRef(new Animated.Value(width)).current;
@@ -256,6 +258,7 @@ export default function PlanDetailModal({
               onRespond={onRespond} 
               editedTitle={headerTitle}
               onEditPermissionChange={setCanEditHeaderTitle}
+              initialTab={initialTab}
             />
           )}
         </SafeAreaView>

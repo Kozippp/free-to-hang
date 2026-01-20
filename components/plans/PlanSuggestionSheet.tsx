@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   PanResponder,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import Colors from '@/constants/colors';
 import { MAX_PLAN_TITLE_LENGTH } from '@/constants/limits';
@@ -61,14 +62,16 @@ export default function PlanSuggestionSheet({
   prefilledTitle,
   prefilledDescription,
 }: PlanSuggestionSheetProps) {
-  const { user, clearSelectedFriends } = useHangStore();
-  const { createPlan } = usePlansStore();
+  const user = useHangStore(state => state.user);
+  const clearSelectedFriends = useHangStore(state => state.clearSelectedFriends);
+  const createPlan = usePlansStore(state => state.createPlan);
   const router = useRouter();
   
   const [planTitle, setPlanTitle] = useState(prefilledTitle?.slice(0, MAX_PLAN_TITLE_LENGTH) || '');
   const [description, setDescription] = useState(prefilledDescription || '');
   const [currentSelectedFriends, setCurrentSelectedFriends] = useState<Friend[]>(selectedFriends);
   const [showAddMoreModal, setShowAddMoreModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
@@ -134,7 +137,7 @@ export default function PlanSuggestionSheet({
         useNativeDriver: true,
       }).start();
     }
-  }, [visible, slideAnim, prefilledTitle, prefilledDescription, selectedFriends]);
+  }, [visible, slideAnim]);
 
   const resetStates = () => {
     setTimeout(() => {
@@ -150,7 +153,11 @@ export default function PlanSuggestionSheet({
   });
   
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     try {
+      setIsSubmitting(true);
+      
       // Create plan data for API
       const planData = {
         title: planTitle.trim(),
@@ -183,11 +190,13 @@ export default function PlanSuggestionSheet({
         setTimeout(() => {
           const targetTab = isAnonymous ? 'invitations' : 'plan';
           router.push(`/plans?tab=${targetTab}&newPlan=true`);
+          setIsSubmitting(false); // Reset state after everything is done
         }, 100); // Small delay to ensure sheet is closed
       });
       
     } catch (error) {
       console.error('❌ Error creating plan:', error);
+      setIsSubmitting(false); // Reset submitting state on error
       // You might want to show an error message to the user here
     }
   };
@@ -364,14 +373,18 @@ export default function PlanSuggestionSheet({
                         style={[
                           styles.submitButton,
                           isAnonymous ? styles.anonymousButton : null,
-                          !planTitle ? styles.disabledButton : null
+                          (!planTitle || isSubmitting) ? styles.disabledButton : null
                         ]}
                         onPress={handleSubmit}
-                        disabled={!planTitle}
+                        disabled={!planTitle || isSubmitting}
                       >
-                        <Text style={styles.submitButtonText}>
-                          {isAnonymous ? 'Suggest Anonymously' : 'Suggest Plan'}
-                        </Text>
+                        {isSubmitting ? (
+                          <ActivityIndicator color="white" size="small" />
+                        ) : (
+                          <Text style={styles.submitButtonText}>
+                            {isAnonymous ? 'Suggest Anonymously' : 'Suggest Plan'}
+                          </Text>
+                        )}
                       </TouchableOpacity>
                     </View>
 

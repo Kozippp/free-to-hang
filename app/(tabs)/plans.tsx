@@ -20,6 +20,7 @@ export default function PlansScreen() {
   // DISABLED: const [showSuccessModal, setShowSuccessModal] = useState(false);
   // DISABLED: const [newPlanTitle, setNewPlanTitle] = useState('');
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
+  const [modalTab, setModalTab] = useState<string | undefined>(undefined);
   // DISABLED: const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,24 +150,52 @@ export default function PlansScreen() {
   useEffect(() => {
     if (params.highlightPlan) {
       const planId = typeof params.highlightPlan === 'string' ? params.highlightPlan : params.highlightPlan[0];
+      const initialTab = params.modalTab ? (typeof params.modalTab === 'string' ? params.modalTab : params.modalTab[0]) : undefined;
 
-      // Set active tab to Plan since user responded to invitation
-      setActiveTab('Plan');
+      // Set active tab to Plan (unless it's completed)
+      // Check if plan is in active plans first
+      const isActivePlan = [...invitations, ...activePlans].some(p => p.id === planId);
+      const isCompletedPlan = completedPlans.some(p => p.id === planId);
+      
+      if (isActivePlan) {
+        setActiveTab('Plan');
+      } else if (isCompletedPlan) {
+        setActiveTab('Completed');
+      } else {
+        // If we don't know where it is yet (loading), default to Plan but logic below will handle opening
+        setActiveTab('Plan');
+      }
 
-      // DISABLED: Set highlighted plan
-      // setHighlightedPlanId(planId);
+      // Try to find the plan in loaded plans
+      const allPlans = [...invitations, ...activePlans, ...completedPlans];
+      const foundPlan = allPlans.find(p => p.id === planId);
 
-      // DISABLED: Start highlighting animation
-      // setTimeout(() => {
-      //   startNewPlanAnimation();
-      // }, 200);
+      if (foundPlan) {
+        setSelectedPlan(foundPlan);
+        setModalTab(initialTab);
+        setModalVisible(true);
+        
+        // Mark as read when opened
+        if (!foundPlan.isRead) {
+          markAsRead(foundPlan.id);
+        }
+        
+        // Mark updates as read when plan is opened
+        if (foundPlan.hasUnreadUpdates) {
+          markUpdatesAsRead(foundPlan.id);
+        }
 
-      // Clear the parameter after handling
-      setTimeout(() => {
-        router.replace('/plans');
-      }, 500);
+        // Clear the parameter after handling
+        router.setParams({ highlightPlan: '', modalTab: '' });
+      } else {
+         // If plan not found yet, it might be loading. 
+         // We rely on the useEffect below that watches [invitations, activePlans, completedPlans] 
+         // to open it once loaded if we store the ID somewhere.
+         // But for now, let's just log it.
+         console.log('⚠️ Plan to highlight not found in current store state:', planId);
+      }
     }
-  }, [params.highlightPlan, router]);
+  }, [params.highlightPlan, params.modalTab, invitations, activePlans, completedPlans, router]);
 
   // Check for completed plans periodically
   useEffect(() => {
@@ -322,10 +351,17 @@ export default function PlansScreen() {
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedPlan(null);
+    setModalTab(undefined);
   };
   
   const handleRespondToPlan = async (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
     await respondToPlan(planId, response, conditionalFriends);
+    
+    // If user accepts an invitation (going), switch to Plan tab automatically
+    // This ensures that when they close the modal, they land on the Plan tab where their plan now is
+    if (activeTab === 'Invitations' && response === 'going') {
+      setActiveTab('Plan');
+    }
   };
   
   const renderEmptyState = () => (
@@ -489,6 +525,7 @@ export default function PlansScreen() {
             onRespond={activeTab === 'Completed' ? async () => {} : handleRespondToPlan}
             isCompleted={activeTab === 'Completed'}
             onAttendanceUpdate={activeTab === 'Completed' ? updateAttendance : undefined}
+            initialTab={modalTab}
           />
         )}
         
