@@ -895,41 +895,61 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       const plansToComplete: Plan[] = [];
       const remainingActivePlans: Plan[] = [];
+      const remainingInvitations: Plan[] = [];
       
-      state.activePlans.forEach(plan => {
-        const planCreatedAt = new Date(plan.createdAt);
-        
-        // Plan should be completed if created before the cutoff time
-        if (planCreatedAt < cutoffTime) {
-          // Only include the plan in completed if the current user is a participant
-          const currentUser = plan.participants.find(p => userIdCandidates.has(p.id));
-          if (currentUser) {
-            const attendanceRecord = plan.participants.reduce((record: Record<string, boolean>, participant) => {
-              if (participant.status === 'going') {
-                record[participant.id] = true;
-              } else if (participant.status === 'declined') {
-                record[participant.id] = false;
-              }
-              return record;
-            }, { ...(plan.attendanceRecord || {}) });
+      // Helper function to process plans
+      const processPlanList = (planList: Plan[], remainingList: Plan[]) => {
+        planList.forEach(plan => {
+          const planCreatedAt = new Date(plan.createdAt);
+          
+          // Plan should be completed if created before the cutoff time
+          if (planCreatedAt < cutoffTime) {
+            // Only include the plan in completed if the current user is a participant
+            const currentUser = plan.participants.find(p => userIdCandidates.has(p.id));
+            if (currentUser) {
+              // Create attendance record based on status
+              const attendanceRecord = plan.participants.reduce((record: Record<string, boolean>, participant) => {
+                if (participant.status === 'going') {
+                  record[participant.id] = true;
+                } else if (participant.status === 'declined') {
+                  record[participant.id] = false;
+                }
+                return record;
+              }, { ...(plan.attendanceRecord || {}) });
 
-            const completedPlan = {
-              ...plan,
-              participants: plan.participants,
-              attendanceRecord,
-            };
-            
-            plansToComplete.push(completedPlan);
+              const completedPlan = {
+                ...plan,
+                participants: plan.participants,
+                attendanceRecord,
+                status: 'completed' as const
+              };
+              
+              // Only add if not declined by user
+              const userStatus = currentUser.status || 'pending';
+              if (userStatus !== 'declined') {
+                plansToComplete.push(completedPlan);
+              }
+            }
+          } else {
+            remainingList.push(plan);
           }
-        } else {
-          remainingActivePlans.push(plan);
-        }
-      });
+        });
+      };
+
+      // Process active plans
+      processPlanList(state.activePlans, remainingActivePlans);
       
+      // Process invitations (pending plans)
+      processPlanList(state.invitations, remainingInvitations);
+      
+      // Avoid duplicates when merging with existing completed plans
+      const existingIds = new Set(state.completedPlans.map(p => p.id));
+      const uniqueNewCompletedPlans = plansToComplete.filter(p => !existingIds.has(p.id));
+
       return {
-        invitations: state.invitations,
+        invitations: remainingInvitations,
         activePlans: remainingActivePlans,
-        completedPlans: [...plansToComplete, ...state.completedPlans]
+        completedPlans: [...uniqueNewCompletedPlans, ...state.completedPlans]
       };
     });
   },

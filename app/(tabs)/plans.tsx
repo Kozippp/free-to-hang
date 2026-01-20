@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity, RefreshControl, AppState, TextInput } from 'react-native';
+import { XCircle } from 'lucide-react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -247,6 +248,10 @@ export default function PlansScreen() {
     }
   };
 
+  const handleClearSearch = () => {
+    setSearchQuery('');
+  };
+
   // Filter completed plans based on search query
   const filteredCompletedPlans = completedPlans.filter(plan => {
     if (!searchQuery) return true;
@@ -429,16 +434,23 @@ export default function PlansScreen() {
             {activeTab === 'Completed' && (
               <View style={styles.completedContainer}>
                 <View style={styles.searchContainer}>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search completed plans..."
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholderTextColor={Colors.light.secondaryText}
-                  />
+                  <View style={styles.searchInputContainer}>
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Search completed plans..."
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      placeholderTextColor={Colors.light.secondaryText}
+                    />
+                    {searchQuery.length > 0 && (
+                      <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
+                        <XCircle size={18} color={Colors.light.secondaryText} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
                 <FlatList
-                  data={filteredCompletedPlans}
+                  data={getSortedPlans(filteredCompletedPlans)}
                   renderItem={({ item }) => (
                     <CompletedPlanCard
                       plan={item}
@@ -545,12 +557,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
   },
-  searchInput: {
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+  },
+  searchInput: {
+    flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 8,
     fontSize: 16,
     color: Colors.light.text,
+  },
+  clearButton: {
+    padding: 10,
   },
 });
