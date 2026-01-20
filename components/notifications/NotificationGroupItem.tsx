@@ -37,22 +37,32 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
     }
   };
 
-  // Simple parser for bold text (**text**)
+  // Advanced parser for bold text (**text**) and newlines
   const renderText = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
+    // Split by newline first to handle lines
+    const lines = text.split('\n');
+    
     return (
-      <Text style={styles.bodyText} numberOfLines={2}>
-        {parts.map((part, index) => {
-          if (part.startsWith('**') && part.endsWith('**')) {
-            return (
-              <Text key={index} style={styles.boldText}>
-                {part.slice(2, -2)}
-              </Text>
-            );
-          }
-          return <Text key={index}>{part}</Text>;
+      <View>
+        {lines.map((line, lineIndex) => {
+          // Split by bold markers
+          const parts = line.split(/(\*\*.*?\*\*)/g);
+          return (
+            <Text key={lineIndex} style={styles.bodyText} numberOfLines={2}>
+              {parts.map((part, index) => {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                  return (
+                    <Text key={index} style={styles.boldText}>
+                      {part.slice(2, -2)}
+                    </Text>
+                  );
+                }
+                return <Text key={index}>{part}</Text>;
+              })}
+            </Text>
+          );
         })}
-      </Text>
+      </View>
     );
   };
 
@@ -123,8 +133,6 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
            <View style={styles.unreadDot} />
         </View>
       )}
-      
-      {/* Plan Image or Context Icon could go here for non-actionable items if desired */}
     </View>
   );
 }

@@ -32,7 +32,8 @@ export function groupNotifications(notifications: NotificationRecord[]): Notific
 
     // Determine Group ID and Type
     if (notification.type === 'chat_message') {
-      const roomId = data.roomId || data.room_id;
+      // Chat messages usually have plan_id in our system
+      const roomId = data.roomId || data.room_id || data.plan_id || data.planId;
       if (roomId) {
         groupId = `chat_${roomId}`;
         groupType = 'chat_message';
@@ -106,45 +107,82 @@ export function groupNotifications(notifications: NotificationRecord[]): Notific
 function generateGroupTitle(group: NotificationGroup): string {
   const actors = group.actors;
   const count = group.count;
+  // If we have actors, use the first one's name. If not, try to parse from body/title if desperate, but 'Someone' is safer default.
+  // Ideally RLS fix will ensure actors are present.
   const firstActorName = actors[0]?.name || 'Someone';
   
   if (group.type === 'chat_message') {
-    const roomName = group.items[0]?.data?.roomName || 'Chat';
+    // Attempt to get room name from notification title usually "Sender in PlanName"
+    // But data.roomName might be missing.
+    // If grouped, we can assume they are from the same room.
+    // We can try to extract plan name from notification title regex if needed, or fallback to 'Chat'.
+    let roomName = group.items[0]?.data?.roomName;
+    
+    if (!roomName) {
+        // Try to parse from title "💬 Sender in PlanName"
+        const title = group.items[0]?.title || '';
+        const match = title.match(/ in (.+)$/);
+        if (match) {
+            roomName = match[1];
+        } else {
+            roomName = 'the group';
+        }
+    }
+
     if (count === 1) {
-      return `**${firstActorName}** saatis sõnumi grupis **${roomName}**`;
+      return `**${firstActorName}** sent a message in **${roomName}**`;
     }
     if (actors.length === 1) {
-      return `**${firstActorName}** saatis ${count} uut sõnumit grupis **${roomName}**`;
+      return `**${firstActorName}** sent ${count} new messages in **${roomName}**`;
     }
     if (actors.length === 2) {
-      return `**${actors[0].name}** ja **${actors[1].name}** saatsid sõnumeid grupis **${roomName}**`;
+      return `**${actors[0].name}** and **${actors[1].name}** sent messages in **${roomName}**`;
     }
-    return `**${actors[0].name}**, **${actors[1].name}** ja ${actors.length - 2} teist saatsid sõnumeid grupis **${roomName}**`;
+    return `**${actors[0].name}**, **${actors[1].name}** and ${actors.length - 2} others sent messages in **${roomName}**`;
   }
 
   if (group.type === 'plan_activity') {
-    const planName = group.items[0]?.data?.planName || 'Plan';
+    // Try to get plan name
+    let planName = group.items[0]?.data?.planName;
+    if (!planName) {
+         // Try to parse? Usually not in title for updates.
+         // Let's fallback to "Plan" but we really want the name.
+         // Maybe we can infer from body if it says "in PlanName".
+         const body = group.items[0]?.body || '';
+         const match = body.match(/ in "(.+)"$/) || body.match(/ in (.+)$/);
+         if (match) planName = match[1];
+         else planName = 'Plan';
+    }
     
     // Check if mostly joins
     const joinCount = group.items.filter(i => i.type === 'plan_participant_joined').length;
     
     if (joinCount === count) {
-       if (count === 1) return `**${firstActorName}** liitus plaaniga **${planName}**`;
-       if (actors.length === 2) return `**${actors[0].name}** ja **${actors[1].name}** liitusid plaaniga **${planName}**`;
-       return `**${actors[0].name}** ja ${count - 1} teist liitusid plaaniga **${planName}**`;
+       if (count === 1) return `**${firstActorName}** joined **${planName}**`;
+       if (actors.length === 2) return `**${actors[0].name}** and **${actors[1].name}** joined **${planName}**`;
+       // If actors are missing but count is > 1 (e.g. system join?), fallback
+       if (actors.length === 0) return `${count} people joined **${planName}**`;
+       return `**${actors[0].name}** and ${count - 1} others joined **${planName}**`;
     }
 
-    // Mixed activity
-    return `**${planName}**: ${count} uut teavitust (pollid, liitumised)`;
+    // Mixed activity or other updates
+    // Requested format: "**Plan Name**\nX new notifications"
+    // We use a special separator that UI can handle or just newline
+    return `**${planName}**\n${count} new notifications`;
   }
 
   if (group.type === 'friend_request') {
-    return `**${firstActorName}** saatis sulle sõbrakutse`;
+    return `**${firstActorName}** sent you a friend request`;
   }
 
   if (group.type === 'plan_invite') {
-    const planName = group.items[0]?.data?.planName || 'Plan';
-    return `**${firstActorName}** kutsus sind plaaniga **${planName}** liituma`;
+    const planName = group.items[0]?.data?.planName || 'a plan';
+    // Title usually "Inviter invited you to Plan"
+    const body = group.items[0]?.body || '';
+    const match = body.match(/invited you to (.+)$/);
+    const resolvedPlanName = match ? match[1] : planName;
+    
+    return `**${firstActorName}** invited you to join **${resolvedPlanName}**`;
   }
 
   // Fallback
