@@ -17,6 +17,7 @@ export interface NotificationGroup {
   actors: NotificationSender[];
   contextId?: string; // planId or roomId
   count: number;
+  unreadCount: number;
 }
 
 export function groupNotifications(notifications: NotificationRecord[]): NotificationGroup[] {
@@ -68,7 +69,8 @@ export function groupNotifications(notifications: NotificationRecord[]): Notific
         title: '',
         actors: [],
         contextId,
-        count: 0
+        count: 0,
+        unreadCount: 0
       };
       order.push(groupId);
     }
@@ -81,6 +83,7 @@ export function groupNotifications(notifications: NotificationRecord[]): Notific
     // Update group properties
     if (!notification.read) {
       group.isRead = false;
+      group.unreadCount++;
     }
     // Keep the latest date
     if (new Date(notification.created_at) > new Date(group.lastCreated)) {
@@ -111,7 +114,13 @@ function resolveActorName(actor?: NotificationSender, fallback = 'Someone'): str
 
 function generateGroupTitle(group: NotificationGroup): string {
   const actors = group.actors;
-  const count = group.count;
+  const unreadCount = group.unreadCount;
+  const totalCount = group.count;
+  
+  // Use unread count if there are unread items, otherwise use total count
+  const displayCount = unreadCount > 0 ? unreadCount : totalCount;
+  const isNew = unreadCount > 0;
+  
   // If we have actors, use the first one's name. If not, try to parse from body/title if desperate, but 'Someone' is safer default.
   // Ideally RLS fix will ensure actors are present.
   const firstActorName = resolveActorName(actors[0]);
@@ -134,11 +143,13 @@ function generateGroupTitle(group: NotificationGroup): string {
         }
     }
 
-    if (count === 1) {
+    const messageWord = isNew ? 'new messages' : 'messages';
+
+    if (displayCount === 1) {
       return `**${firstActorName}** sent a message in **${roomName}**`;
     }
     if (actors.length === 1) {
-      return `**${firstActorName}** sent ${count} new messages in **${roomName}**`;
+      return `**${firstActorName}** sent ${displayCount} ${messageWord} in **${roomName}**`;
     }
     if (actors.length === 2) {
       return `**${resolveActorName(actors[0])}** and **${resolveActorName(actors[1])}** sent messages in **${roomName}**`;
@@ -162,18 +173,19 @@ function generateGroupTitle(group: NotificationGroup): string {
     // Check if mostly joins
     const joinCount = group.items.filter(i => i.type === 'plan_participant_joined').length;
     
-    if (joinCount === count) {
-       if (count === 1) return `**${firstActorName}** joined **${planName}**`;
+    if (joinCount === group.items.length) {
+       if (displayCount === 1) return `**${firstActorName}** joined **${planName}**`;
        if (actors.length === 2) return `**${resolveActorName(actors[0])}** and **${resolveActorName(actors[1])}** joined **${planName}**`;
        // If actors are missing but count is > 1 (e.g. system join?), fallback
-       if (actors.length === 0) return `${count} people joined **${planName}**`;
-       return `**${resolveActorName(actors[0])}** and ${count - 1} others joined **${planName}**`;
+       if (actors.length === 0) return `${displayCount} people joined **${planName}**`;
+       return `**${resolveActorName(actors[0])}** and ${displayCount - 1} others joined **${planName}**`;
     }
 
     // Mixed activity or other updates
     // Requested format: "**Plan Name**\nX new notifications"
     // We use a special separator that UI can handle or just newline
-    return `**${planName}**\n${count} new notifications`;
+    const suffix = isNew ? 'new notifications' : 'notifications';
+    return `**${planName}**\n${displayCount} ${suffix}`;
   }
 
   if (group.type === 'friend_request') {
