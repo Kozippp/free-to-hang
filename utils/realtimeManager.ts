@@ -4,6 +4,7 @@ import useFriendsStore from '@/store/friendsStore';
 import useHangStore from '@/store/hangStore';
 import useChatStore from '@/store/chatStore';
 import useNotificationsStore from '@/store/notificationsStore';
+import useUnseenStore from '@/store/unseenStore';
 
 /**
  * Global Realtime Manager
@@ -131,6 +132,10 @@ function startAllSubscriptions(userId: string) {
   notificationsStore.fetchNotifications(userId);
   notificationsStore.startRealTimeUpdates(userId);
 
+  // Unseen counts
+  const unseenStore = useUnseenStore.getState();
+  unseenStore.fetchUnseenCounts();
+
   console.log('✅ All realtime subscriptions started');
 }
 
@@ -180,6 +185,9 @@ function checkAndRestartAllSubscriptions(userId: string) {
   const notificationsStore = useNotificationsStore.getState();
   notificationsStore.checkAndRestartSubscription(userId);
 
+  // Unseen counts - re-fetch to ensure accuracy
+  useUnseenStore.getState().fetchUnseenCounts();
+
   // Hang store and Friends store don't have dedicated check methods,
   // but their health checks will handle reconnection automatically
 
@@ -199,12 +207,14 @@ export async function forceRefreshAllData(userId: string) {
   const hangStore = useHangStore.getState();
   const friendsStore = useFriendsStore.getState();
   const notificationsStore = useNotificationsStore.getState();
+  const unseenStore = useUnseenStore.getState();
 
   await Promise.all([
     plansStore.loadPlans(userId),
     hangStore.loadFriends(),
     friendsStore.forceRefresh(),
     notificationsStore.fetchNotifications(userId),
+    unseenStore.fetchUnseenCounts(),
   ]);
 
   console.log('✅ All data refreshed');

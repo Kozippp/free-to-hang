@@ -44,7 +44,7 @@ import PollVoting from './PollVoting';
 import PollDisplay from './PollDisplay';
 import ChatView from '../chat/ChatView';
 import usePlansStore from '@/store/plansStore';
-import useChatStore from '@/store/chatStore';
+// import useChatStore from '@/store/chatStore';
 import useUnseenStore from '@/store/unseenStore';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -79,8 +79,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     loadPlan
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
-  const { getUnreadCount } = useChatStore();
-  const { markControlPanelSeen } = useUnseenStore();
+  // const { getUnreadCount } = useChatStore();
+  const { markControlPanelSeen, markChatSeen, plans: unseenPlans } = useUnseenStore();
   const router = useRouter();
   
   // Early return if user is not authenticated
@@ -144,12 +144,13 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   }, [plan.id]);
 
   React.useEffect(() => {
-    if (activeTab !== 'Control Panel' || hasMarkedControlPanelRef.current) {
-      return;
+    if (activeTab === 'Control Panel' && !hasMarkedControlPanelRef.current) {
+      hasMarkedControlPanelRef.current = true;
+      void markControlPanelSeen(plan.id);
+    } else if (activeTab === 'Chat') {
+      markChatSeen(plan.id);
     }
-    hasMarkedControlPanelRef.current = true;
-    void markControlPanelSeen(plan.id);
-  }, [activeTab, markControlPanelSeen, plan.id]);
+  }, [activeTab, markControlPanelSeen, markChatSeen, plan.id]);
   
   // Swipe gesture state
   const { width } = Dimensions.get('window');
@@ -675,8 +676,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     };
   };
   
-  // Get unread message count for this plan
-  const unreadCount = getUnreadCount(latestPlan.id, user.id);
+  // Get unseen counts for this plan
+  const planUnseen = unseenPlans[latestPlan.id] || { chat: 0, control: 0 };
 
   // Helper function to handle poll voting with multiple selections
   const handlePollVote = async (pollId: string, optionId: string) => {
@@ -798,7 +799,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       <PlanTabs 
         activeTab={activeTab} 
         onTabChange={handleTabChange}
-        unreadCount={unreadCount}
+        controlBadge={planUnseen.control}
+        chatBadge={planUnseen.chat}
       />
       
       <PanGestureHandler

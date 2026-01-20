@@ -13,6 +13,7 @@ interface UnseenState {
   loading: boolean;
   fetchUnseenCounts: () => Promise<void>;
   markControlPanelSeen: (planId: string) => Promise<void>;
+  markChatSeen: (planId: string) => void;
   clear: () => void;
 }
 
@@ -47,7 +48,8 @@ const useUnseenStore = create<UnseenState>((set, get) => ({
       await plansService.markControlPanelSeen(planId);
     } catch (error) {
       console.error('❌ Failed to mark control panel seen:', error);
-      return;
+      // We don't return here because we want to perform the optimistic update anyway
+      // to clear the badge for the user
     }
 
     const previous = get().plans[planId];
@@ -58,6 +60,17 @@ const useUnseenStore = create<UnseenState>((set, get) => ({
       set({ plans: updatedPlans, totalUnseen });
     } else {
       await get().fetchUnseenCounts();
+    }
+  },
+
+  markChatSeen: (planId: string) => {
+    if (!planId) return;
+    const previous = get().plans[planId];
+    if (previous && previous.chat > 0) {
+      const updatedPlan = { ...previous, chat: 0, total: previous.control };
+      const updatedPlans = { ...get().plans, [planId]: updatedPlan };
+      const totalUnseen = Object.values(updatedPlans).reduce((sum, item) => sum + item.total, 0);
+      set({ plans: updatedPlans, totalUnseen });
     }
   },
 

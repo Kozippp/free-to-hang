@@ -5,11 +5,12 @@ import Colors from '@/constants/colors';
 interface PlanTabsProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  unreadCount?: number;
+  controlBadge?: number;
+  chatBadge?: number;
   customTabs?: string[];
 }
 
-export default function PlanTabs({ activeTab, onTabChange, unreadCount = 0, customTabs }: PlanTabsProps) {
+export default function PlanTabs({ activeTab, onTabChange, controlBadge = 0, chatBadge = 0, customTabs }: PlanTabsProps) {
   const tabs = customTabs || ['Control Panel', 'Chat'];
   
   return (
@@ -33,10 +34,18 @@ export default function PlanTabs({ activeTab, onTabChange, unreadCount = 0, cust
               {tab}
             </Text>
             
-            {tab === 'Chat' && unreadCount > 0 && (
+            {tab === 'Chat' && chatBadge > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
+                  {chatBadge > 99 ? '99+' : chatBadge}
+                </Text>
+              </View>
+            )}
+
+            {tab === 'Control Panel' && controlBadge > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {controlBadge > 99 ? '99+' : controlBadge}
                 </Text>
               </View>
             )}
