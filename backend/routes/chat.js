@@ -327,6 +327,12 @@ router.post('/:planId/messages', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to send message', details: error.message });
     }
     
+    // Update plan's updated_at timestamp to bubble it to the top
+    await supabase
+      .from('plans')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', planId);
+    
     console.log(`✅ Message created: ${message.id}`);
     
     // Get message with full details

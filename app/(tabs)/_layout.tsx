@@ -14,9 +14,9 @@ export default function TabLayout() {
   const { user } = useAuth();
   const { invitations } = usePlansStore();
   const { unreadCount } = useNotificationsStore();
-  const totalUnseen = useUnseenStore(state => state.totalUnseen);
   const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
-  const notificationsBadge = Math.max(unreadCount, totalUnseen);
+  // Sync badge with the actual notifications list count
+  const notificationsBadge = unreadCount;
   
   // Check for unread invitations
   useEffect(() => {

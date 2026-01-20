@@ -26,9 +26,13 @@ export default function PlansScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   
   const { user } = useAuth();
-  const { invitations, activePlans, completedPlans, isLoading, loadPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
+  const { invitations, activePlans, completedPlans, isLoading, loadPlans, loadCompletedPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
+  
+  const [completedOffset, setCompletedOffset] = useState(0);
+  const [hasMoreCompleted, setHasMoreCompleted] = useState(true);
+  const [isLoadingCompleted, setIsLoadingCompleted] = useState(false);
   
   const tabs = ['Invitations', 'Plan', 'Completed'];
   const screenWidth = Dimensions.get('window').width;
@@ -80,7 +84,19 @@ export default function PlansScreen() {
     setIsRefreshing(true);
     try {
       console.log('🔄 Manual refresh triggered');
-      await loadPlans(user.id);
+      
+      if (activeTab === 'Completed') {
+        // Reset pagination and reload first page for completed plans
+        setCompletedOffset(0);
+        setHasMoreCompleted(true);
+        const limit = 15;
+        const count = await usePlansStore.getState().loadCompletedPlans(user.id, limit, 0);
+        setCompletedOffset(limit);
+        setHasMoreCompleted(count === limit);
+      } else {
+        // For active/invitations, load active plans
+        await loadPlans(user.id);
+      }
     } catch (error) {
       console.error('❌ Error during manual refresh:', error);
     } finally {
@@ -274,6 +290,32 @@ export default function PlansScreen() {
     // Reset search query when switching tabs
     if (tab !== 'Completed') {
       setSearchQuery('');
+    }
+  };
+
+  // Load completed plans when switching to Completed tab
+  useEffect(() => {
+    if (activeTab === 'Completed' && completedPlans.length === 0 && hasMoreCompleted && user?.id) {
+      loadMoreCompleted();
+    }
+  }, [activeTab, user?.id]);
+
+  const loadMoreCompleted = async () => {
+    if (isLoadingCompleted || !hasMoreCompleted || !user?.id) return;
+    
+    try {
+      setIsLoadingCompleted(true);
+      console.log('📚 Loading more completed plans...');
+      const limit = 15;
+      // Use the store function directly to get the count
+      const count = await usePlansStore.getState().loadCompletedPlans(user.id, limit, completedOffset);
+      
+      setCompletedOffset(prev => prev + limit);
+      setHasMoreCompleted(count === limit);
+    } catch (error) {
+      console.error('❌ Error loading more completed plans:', error);
+    } finally {
+      setIsLoadingCompleted(false);
     }
   };
 
@@ -510,6 +552,18 @@ export default function PlansScreen() {
                       tintColor={Colors.light.primary}
                     />
                   }
+                  onEndReached={loadMoreCompleted}
+                  onEndReachedThreshold={0.5}
+                  ListFooterComponent={() => (
+                    <View>
+                      {filteredCompletedPlans.length > 0 && <View style={styles.finalSeparator} />}
+                      {isLoadingCompleted && (
+                        <View style={{ padding: 20, alignItems: 'center' }}>
+                          <Text style={{ color: Colors.light.secondaryText }}>Loading more...</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                 />
               </View>
             )}

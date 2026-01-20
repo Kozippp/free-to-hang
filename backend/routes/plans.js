@@ -759,87 +759,120 @@ const processConditionalDependencies = async (planId) => {
   }
 };
 
-// GET /plans - Get user's plans
+// GET /plans - Get user's plans with pagination
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const { status = 'all' } = req.query;
+    const { status = 'all', limit, offset, page } = req.query;
     const userId = req.user.id;
 
-    console.log('🔍 Fetching plans for user:', userId, 'with status:', status);
-    console.log('🔍 Request headers:', JSON.stringify(req.headers, null, 2));
-    console.log('🔍 Request query:', JSON.stringify(req.query, null, 2));
+    console.log('🔍 Fetching plans for user:', userId);
+    console.log('🔍 Params:', { status, limit, offset, page });
 
-    // Use service role but with explicit user filtering to avoid RLS recursion
-    // Get plans where user is creator
+    // Handle pagination parameters
+    // Default limit 50 to prevent massive loads
+    let limitVal = parseInt(limit) || 50; 
+    let offsetVal = parseInt(offset) || 0;
+    if (page) {
+      offsetVal = (parseInt(page) - 1) * limitVal;
+    }
+    
+    // For active plans, we can be more generous as there are fewer of them
+    if (status === 'active' && !limit) {
+      limitVal = 100;
+    }
+
+    // 1. Get ALL plan IDs and sorting metadata (updated_at) first
+    // This is efficient because we only fetch minimal data
+    
+    // Creator plans query
     let creatorQuery = supabase
       .from('plans')
-      .select('*')
-      .eq('creator_id', userId)
-      .order('created_at', { ascending: false });
-
+      .select('id, updated_at, created_at, status')
+      .eq('creator_id', userId);
+      
     if (status !== 'all') {
       creatorQuery = creatorQuery.eq('status', status);
     }
-
-    const { data: creatorPlans, error: creatorError } = await creatorQuery;
-
-    if (creatorError) {
-      console.error('❌ Error fetching creator plans:', creatorError);
-      console.error('❌ Creator query details:', { userId, status, query: creatorQuery });
-      return res.status(500).json({ error: 'Failed to fetch plans' });
-    }
-
-    // Get plan IDs where user is participant
-    const { data: participantRecords, error: participantError } = await supabase
+    
+    // Participant plans query
+    // First get plan_ids from participants table
+    const { data: participationData, error: participationError } = await supabase
       .from('plan_participants')
       .select('plan_id')
       .eq('user_id', userId);
-
-    if (participantError) {
-      console.error('Error fetching participant records:', participantError);
+      
+    if (participationError) {
+      console.error('Error fetching participation:', participationError);
       return res.status(500).json({ error: 'Failed to fetch plans' });
     }
-
-    // Get plans where user is participant (but not creator)
-    let participantPlans = [];
-    if (participantRecords.length > 0) {
-      const participantPlanIds = participantRecords.map(p => p.plan_id);
+    
+    const participantPlanIds = (participationData || []).map(p => p.plan_id);
+    
+    let participantQuery = supabase
+      .from('plans')
+      .select('id, updated_at, created_at, status')
+      .in('id', participantPlanIds)
+      .neq('creator_id', userId); // Avoid duplicates (if user is both creator and participant)
       
-      let participantQuery = supabase
-        .from('plans')
-        .select('*')
-        .in('id', participantPlanIds)
-        .neq('creator_id', userId) // Exclude plans where user is also creator
-        .order('created_at', { ascending: false });
-
-      if (status !== 'all') {
-        participantQuery = participantQuery.eq('status', status);
-      }
-
-      const { data: participantPlansData, error: participantPlansError } = await participantQuery;
-
-      if (participantPlansError) {
-        console.error('Error fetching participant plans:', participantPlansError);
-        return res.status(500).json({ error: 'Failed to fetch plans' });
-      }
-
-      participantPlans = participantPlansData || [];
+    if (status !== 'all') {
+      participantQuery = participantQuery.eq('status', status);
     }
 
-    // Combine and deduplicate plans
-    const allPlans = [...(creatorPlans || []), ...participantPlans];
-    const plans = allPlans.filter((plan, index, self) => 
-      index === self.findIndex(p => p.id === plan.id)
-    );
-
-    console.log('✅ Found plans:', plans.length);
-
-    if (!plans || plans.length === 0) {
+    // Execute metadata queries in parallel
+    const [creatorResult, participantResult] = await Promise.all([
+      creatorQuery,
+      participantQuery
+    ]);
+    
+    if (creatorResult.error) {
+      console.error('Error fetching creator plans:', creatorResult.error);
+      return res.status(500).json({ error: 'Failed to fetch plans' });
+    }
+    if (participantResult.error) {
+      console.error('Error fetching participant plans:', participantResult.error);
+      return res.status(500).json({ error: 'Failed to fetch plans' });
+    }
+    
+    // Combine results
+    const allPlansMeta = [...(creatorResult.data || []), ...(participantResult.data || [])];
+    
+    // Sort by updated_at (or created_at) descending - newest activity first
+    allPlansMeta.sort((a, b) => {
+      const timeA = new Date(a.updated_at || a.created_at).getTime();
+      const timeB = new Date(b.updated_at || b.created_at).getTime();
+      return timeB - timeA;
+    });
+    
+    // Apply pagination in memory (since we combined two sources)
+    const paginatedMeta = allPlansMeta.slice(offsetVal, offsetVal + limitVal);
+    const planIds = paginatedMeta.map(p => p.id);
+    
+    console.log(`✅ Found ${allPlansMeta.length} total plans, returning ${planIds.length} (offset: ${offsetVal})`);
+    
+    if (planIds.length === 0) {
       return res.json([]);
     }
+    
+    // 2. Fetch FULL plan details for the paginated slice
+    // We need to fetch the plan rows again to get title, description etc.
+    // Note: We fetch order by id, but we'll re-sort them later to match our meta sort
+    const { data: plansData, error: plansError } = await supabase
+      .from('plans')
+      .select('*')
+      .in('id', planIds);
+      
+    if (plansError) {
+      console.error('Error fetching plan details:', plansError);
+      return res.status(500).json({ error: 'Failed to fetch plan details' });
+    }
+    
+    // Re-order plans to match the sorted IDs
+    const plans = planIds
+      .map(id => plansData.find(p => p.id === id))
+      .filter(Boolean);
 
-    // Get participants for all plans
-    const planIds = plans.map(p => p.id);
+    // 3. Fetch related data (participants, polls, etc.) for these specific plans
+    // This reuses the existing efficient logic but scoped to the paginated plans
     const { data: allParticipants, error: participantsError } = await supabase
       .from('plan_participants')
       .select('*')

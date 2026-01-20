@@ -161,11 +161,15 @@ class PlansService {
     }
   }
 
-  // Get all user's plans
-  async getPlans(status: 'all' | 'active' | 'completed' | 'cancelled' = 'all'): Promise<Plan[]> {
+  // Get all user's plans with optional pagination
+  async getPlans(status: 'all' | 'active' | 'completed' | 'cancelled' = 'all', limit?: number, offset?: number): Promise<Plan[]> {
     try {
-      console.log('📋 Fetching plans with status:', status);
-      const plans = await this.apiRequest(`/plans?status=${status}`);
+      console.log('📋 Fetching plans with status:', status, 'limit:', limit, 'offset:', offset);
+      let query = `/plans?status=${status}`;
+      if (limit !== undefined) query += `&limit=${limit}`;
+      if (offset !== undefined) query += `&offset=${offset}`;
+      
+      const plans = await this.apiRequest(query);
       console.log('✅ Plans fetched successfully:', plans.length);
       return plans;
     } catch (error) {

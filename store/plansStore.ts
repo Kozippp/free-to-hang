@@ -160,6 +160,7 @@ interface PlansState {
 
   // API Actions
   loadPlans: (userId?: string) => Promise<void>;
+  loadCompletedPlans: (userId?: string, limit?: number, offset?: number) => Promise<number>; // Returns count
   loadPlan: (planId: string, userId?: string) => Promise<void>; // Load single plan
   updatePlan: (planId: string, plan: Plan) => void; // Update single plan
   createPlan: (planData: any) => Promise<void>;
@@ -406,36 +407,74 @@ const usePlansStore = create<PlansState>((set, get) => ({
     });
   },
 
-  // Load plans from API
+  // Load active plans from API (default on start)
   loadPlans: async (userId?: string) => {
     try {
       set({ isLoading: true });
-      console.log('📋 Loading plans from API...');
+      console.log('📋 Loading active plans from API...');
 
-      const plans = await plansService.getPlans();
-      console.log('✅ Plans loaded from API:', plans.length);
+      // Load only active plans initially for performance
+      const plans = await plansService.getPlans('active');
+      console.log('✅ Active plans loaded from API:', plans.length);
 
       const currentUserId = userId || get().currentUserId || 'unknown';
 
-      // Update plans object
-      const plansObject: Record<string, Plan> = {};
+      // Update plans object - MERGE with existing plans to keep completed plans if loaded
+      const newPlansObject: Record<string, Plan> = {};
       plans.forEach(plan => {
         const transformedPlan = transformPlanForStore(plan, currentUserId);
-        plansObject[plan.id] = transformedPlan;
+        newPlansObject[plan.id] = transformedPlan;
       });
 
-      set({
-        plans: plansObject,
+      set(state => ({
+        plans: {
+          ...state.plans,
+          ...newPlansObject
+        },
         isLoading: false
-      });
+      }));
 
       // Recalculate computed arrays
       get().recalculatePlanArrays();
+      
+      // Also fetch unseen counts
+      useUnseenStore.getState().fetchUnseenCounts();
 
     } catch (error) {
-      console.error('❌ Error loading plans:', error);
+      console.error('❌ Error loading active plans:', error);
       set({ isLoading: false });
-      // Keep existing data on error
+    }
+  },
+
+  // Load completed plans with pagination
+  loadCompletedPlans: async (userId?: string, limit = 15, offset = 0) => {
+    try {
+      console.log(`📋 Loading completed plans (limit: ${limit}, offset: ${offset})...`);
+
+      const plans = await plansService.getPlans('completed', limit, offset);
+      console.log('✅ Completed plans loaded:', plans.length);
+
+      const currentUserId = userId || get().currentUserId || 'unknown';
+
+      const newPlansObject: Record<string, Plan> = {};
+      plans.forEach(plan => {
+        const transformedPlan = transformPlanForStore(plan, currentUserId);
+        newPlansObject[plan.id] = transformedPlan;
+      });
+
+      set(state => ({
+        plans: {
+          ...state.plans,
+          ...newPlansObject
+        }
+      }));
+
+      get().recalculatePlanArrays();
+      
+      return plans.length; // Return count to determine if hasMore
+    } catch (error) {
+      console.error('❌ Error loading completed plans:', error);
+      return 0;
     }
   },
   
@@ -1461,19 +1500,34 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
 
     // Handle different types of plan updates with per-plan debouncing
     if (updateType === 'plan_created') {
-      console.log('🎯 New plan created - loading full plans list');
-      // For new plans, we need to load all plans to ensure the new plan appears in the correct list
-      usePlansStore.getState().loadPlans(currentUserId).then(() => {
-        console.log('✅ Plans list refreshed after new plan creation');
+      console.log('🎯 New plan created - loading single plan');
+      // Load ONLY the new plan, not everything
+      usePlansStore.getState().loadPlan(planId, currentUserId).then(() => {
+        console.log('✅ New plan loaded and added to list');
+        // Fetch unseen counts to show badge
+        useUnseenStore.getState().fetchUnseenCounts();
       }).catch(error => {
-        console.error('❌ Error refreshing plans after creation:', error);
+        console.error('❌ Error loading new plan:', error);
       });
       
-      // Also fetch unseen counts to show badge for new plan
-      useUnseenStore.getState().fetchUnseenCounts();
-      
-      return; // Skip schedulePlanRefresh since we're doing full reload
-    } else if (
+      return; 
+    }
+
+    // Check if plan exists in store
+    const planExists = !!usePlansStore.getState().plans[planId];
+    
+    // If plan doesn't exist in memory but we got an update (e.g. new message in old plan),
+    // we should load it so it appears in the list (bubbled to top)
+    if (!planExists) {
+      console.log('👻 Update for missing plan detected - reviving plan:', planId);
+      usePlansStore.getState().loadPlan(planId, currentUserId).then(() => {
+        console.log('✅ Missing plan revived');
+        useUnseenStore.getState().fetchUnseenCounts();
+      });
+      return;
+    }
+
+    if (
       updateType === 'participant_joined' ||
       updateType === 'participant_status_changed' ||
       updateType === 'participant_invited'
