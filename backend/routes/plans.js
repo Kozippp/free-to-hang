@@ -241,7 +241,7 @@ const sendPollCreatedNotifications = async (planId, pollId, question, creatorId)
   );
 };
 
-const maybeNotifyPollWinner = async (planId, pollId) => {
+const maybeNotifyPollWinner = async (planId, pollId, triggeredByUserId) => {
   const { data: votes, error: votesError } = await supabase
     .from('plan_poll_votes')
     .select('option_id')
@@ -294,12 +294,16 @@ const maybeNotifyPollWinner = async (planId, pollId) => {
     option?.option_text || 'Winning option'
   );
 
+  // Filter out the user who triggered the win (they don't need a notification)
+  const participantsToNotify = participants.filter(p => p.user_id !== triggeredByUserId);
+
   await Promise.all(
-    participants.map(({ user_id }) =>
+    participantsToNotify.map(({ user_id }) =>
       notifyUser({
         userId: user_id,
         ...template,
-        data: { plan_id: planId, poll_id: pollId, option_id: winnerOptionId }
+        data: { plan_id: planId, poll_id: pollId, option_id: winnerOptionId },
+        triggeredBy: triggeredByUserId
       })
     )
   );
@@ -1637,7 +1641,7 @@ router.post('/:id/polls/:pollId/vote', requireAuth, async (req, res) => {
     await notifyPlanUpdate(id, 'poll_voted', userId, { poll_id: pollId });
 
     try {
-      await maybeNotifyPollWinner(id, pollId);
+      await maybeNotifyPollWinner(id, pollId, userId);
     } catch (notifyError) {
       console.error('❌ Failed to send poll winner notification:', notifyError);
     }
