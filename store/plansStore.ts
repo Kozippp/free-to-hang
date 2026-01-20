@@ -1738,7 +1738,7 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   const optionId = newVote?.option_id || oldVote?.option_id;
 
   if (!pollId || !userId) {
-    console.warn('⚠️ Invalid poll vote payload:', payload);
+    console.warn('⚠️ Invalid poll vote payload (missing poll_id or user_id):', payload);
     return;
   }
 
