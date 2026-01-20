@@ -1,52 +1,24 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  FlatList,
+  SectionList,
   RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  Bell,
-  Calendar,
-  CheckCircle2,
-  MessageCircle,
-  TrendingUp,
-  UserPlus,
-  Users,
-  X
-} from 'lucide-react-native';
-import useNotificationsStore from '@/store/notificationsStore';
+import { Bell } from 'lucide-react-native';
+import useNotificationsStore, { NotificationSender } from '@/store/notificationsStore';
+import useFriendsStore from '@/store/friendsStore';
+import usePlansStore from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatTimeAgo } from '@/utils/time';
-
-const iconForType = (type: string, color: string) => {
-  switch (type) {
-    case 'plan_invite':
-    case 'plan_update':
-    case 'plan_participant_joined':
-      return <Calendar size={22} color={color} />;
-    case 'chat_message':
-      return <MessageCircle size={22} color={color} />;
-    case 'poll_created':
-    case 'poll_ended':
-    case 'poll_winner':
-      return <CheckCircle2 size={22} color={color} />;
-    case 'friend_request':
-    case 'friend_accepted':
-      return <UserPlus size={22} color={color} />;
-    case 'status_change':
-      return <Users size={22} color={color} />;
-    case 'engagement_friends_online':
-    case 'engagement_comeback':
-      return <TrendingUp size={22} color={color} />;
-    default:
-      return <Bell size={22} color={color} />;
-  }
-};
+import { handleNotificationNavigation } from '@/utils/navigationHelper';
+import { groupNotifications, NotificationGroup } from '@/utils/notificationGrouper';
+import NotificationGroupItem from '@/components/notifications/NotificationGroupItem';
+import UserProfileModal from '@/components/UserProfileModal';
+import Colors from '@/constants/colors';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -61,6 +33,12 @@ export default function NotificationsScreen() {
     startRealTimeUpdates,
     stopRealTimeUpdates
   } = useNotificationsStore();
+  
+  const { acceptFriendRequest, declineFriendRequest, cancelFriendRequest } = useFriendsStore();
+  const { respondToPlan } = usePlansStore();
+
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -73,126 +51,155 @@ export default function NotificationsScreen() {
     };
   }, [user?.id, fetchNotifications, startRealTimeUpdates, stopRealTimeUpdates]);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((notification) => !notification.read).length,
-    [notifications]
-  );
+  // Group notifications
+  const groupedNotifications = useMemo(() => {
+    return groupNotifications(notifications);
+  }, [notifications]);
 
-  const handleNotificationNavigation = (notification: any) => {
-    const { type, data } = notification;
-    if (!data) return;
+  // Create sections (New vs Earlier)
+  const sections = useMemo(() => {
+    const newGroups = groupedNotifications.filter(g => !g.isRead);
+    const earlierGroups = groupedNotifications.filter(g => g.isRead);
+    
+    const result = [];
+    if (newGroups.length > 0) {
+      result.push({ title: 'New', data: newGroups });
+    }
+    if (earlierGroups.length > 0) {
+      result.push({ title: 'Earlier', data: earlierGroups });
+    }
+    return result;
+  }, [groupedNotifications]);
 
-    if (
-      [
-        'plan_invite',
-        'plan_update',
-        'plan_participant_joined',
-        'poll_created',
-        'poll_ended',
-        'poll_winner'
-      ].includes(type)
-    ) {
-      if (data.plan_id) {
-        router.push({
-          pathname: '/plans',
-          params: { highlightPlan: data.plan_id, tab: 'plan' }
-        });
-      } else {
-        router.push('/plans');
+  const handleGroupPress = async (group: NotificationGroup) => {
+    // Mark all items in group as read
+    const unreadItems = group.items.filter(i => !i.read);
+    unreadItems.forEach(item => {
+      markAsRead(item.id);
+    });
+
+    // Navigate using the latest notification (or context)
+    const latestItem = group.items[group.items.length - 1]; // items are in insertion order in grouper? check logic
+    // Actually items in grouper are just pushed. The order in array depends on logic.
+    // In grouper we process input array. If input is sorted, items might be sorted.
+    // Let's use the first item as it likely contains the needed data
+    
+    handleNotificationNavigation(latestItem, router);
+  };
+
+  const handleAvatarPress = (user: NotificationSender) => {
+    setSelectedUserId(user.id);
+    setShowProfileModal(true);
+  };
+
+  const handleAction = async (action: 'accept' | 'decline' | 'delete' | 'join', group: NotificationGroup) => {
+    const notification = group.items[0]; // Assuming actionable groups have 1 main notification or context
+    const data = notification.data || {};
+
+    try {
+      if (group.type === 'friend_request') {
+        const requestId = data.requestId || data.request_id || notification.data?.id; 
+        // We need the actual friend request ID, which might be different from notification ID.
+        // Usually notification data contains related object IDs.
+        
+        // If we don't have requestId in data, we might be in trouble.
+        // Let's assume data has request_id or we use logic from friendsStore.
+        
+        // Fallback: If no request_id in data, maybe notification ID maps to it? Unlikely.
+        // Assuming backend sends request_id in payload data.
+        
+        if (!requestId) {
+            console.error('No request ID found in notification data', notification);
+            Alert.alert('Error', 'Cannot process request (missing ID)');
+            return;
+        }
+
+        if (action === 'accept') {
+          await acceptFriendRequest(requestId);
+        } else if (action === 'delete') {
+          await declineFriendRequest(requestId);
+        }
+        
+        // Mark notification as read and maybe delete it?
+        await markAsRead(notification.id);
+        
+      } else if (group.type === 'plan_invite') {
+        const planId = group.contextId;
+        if (!planId) return;
+
+        if (action === 'join') {
+          await respondToPlan(planId, 'going');
+        } else if (action === 'decline') {
+          await respondToPlan(planId, 'declined');
+        }
+        
+        await markAsRead(notification.id);
       }
-      return;
-    }
-
-    if (type === 'chat_message' && data.plan_id) {
-      router.push({
-        pathname: '/plans',
-        params: { highlightPlan: data.plan_id, tab: 'plan' }
-      });
-      return;
-    }
-
-    if (type === 'friend_request' || type === 'friend_accepted') {
-      router.push('/profile');
-      return;
-    }
-
-    if (type === 'status_change' || type === 'engagement_friends_online') {
-      router.push('/');
-      return;
-    }
-
-    if (type === 'engagement_comeback') {
-      router.push('/plans');
-      return;
+    } catch (error) {
+        console.error('Action failed:', error);
+        Alert.alert('Error', 'Action failed. Please try again.');
     }
   };
 
-  const handlePress = async (notification: any) => {
-    if (!notification.read) {
-      await markAsRead(notification.id);
+  const handleDeleteGroup = (groupId: string) => {
+    // Delete all notifications in this group
+    const group = groupedNotifications.find(g => g.id === groupId);
+    if (group) {
+        group.items.forEach(item => deleteNotification(item.id));
     }
-    handleNotificationNavigation(notification);
   };
-
-  const handleDelete = (notificationId: string) => {
-    Alert.alert(
-      'Delete notification',
-      'Are you sure you want to delete this notification?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteNotification(notificationId) }
-      ]
-    );
-  };
-
-  const renderItem = ({ item }: { item: any }) => (
-    <View style={[styles.card, !item.read && styles.unreadCard]}>
-      <TouchableOpacity style={styles.cardContent} onPress={() => handlePress(item)}>
-        <View style={styles.iconContainer}>{iconForType(item.type, '#4a5568')}</View>
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.body}>{item.body}</Text>
-          <Text style={styles.time}>{formatTimeAgo(item.created_at)}</Text>
-        </View>
-        {!item.read && <View style={styles.unreadDot} />}
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(item.id)}>
-        <X size={18} color="#9ca3af" />
-      </TouchableOpacity>
-    </View>
-  );
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Notifications</Text>
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={() => user?.id && markAllAsRead(user.id)}>
-            <Text style={styles.markAll}>Mark all read</Text>
-          </TouchableOpacity>
+        {/* Only show Mark all read if there are unread items */}
+        {notifications.some(n => !n.read) && (
+             <TouchableOpacity onPress={() => user?.id && markAllAsRead(user.id)}>
+             <Text style={styles.markAll}>Mark all read</Text>
+           </TouchableOpacity>
         )}
       </View>
 
-      <FlatList
-        data={notifications}
-        renderItem={renderItem}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <NotificationGroupItem 
+            group={item}
+            onPress={handleGroupPress}
+            onAvatarPress={handleAvatarPress}
+            onAction={handleAction}
+          />
+        )}
+        renderSectionHeader={({ section: { title } }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderText}>{title}</Text>
+          </View>
+        )}
         refreshControl={
           <RefreshControl
             refreshing={loading}
             onRefresh={() => user?.id && fetchNotifications(user.id)}
           />
         }
-        contentContainerStyle={notifications.length === 0 ? styles.emptyList : undefined}
+        contentContainerStyle={sections.length === 0 ? styles.emptyList : undefined}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Bell size={48} color="#cbd5f5" />
             <Text style={styles.emptyTitle}>No notifications yet</Text>
             <Text style={styles.emptyBody}>
-              You will see plan invites, chat updates and friend activity here.
+              Activity from your plans and friends will appear here.
             </Text>
           </View>
         }
+        stickySectionHeadersEnabled={false}
+      />
+      
+      <UserProfileModal
+        visible={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        userId={selectedUserId}
       />
     </View>
   );
@@ -221,54 +228,15 @@ const styles = StyleSheet.create({
     color: '#2563eb',
     fontWeight: '600'
   },
-  card: {
-    flexDirection: 'row',
+  sectionHeader: {
     paddingHorizontal: 20,
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    backgroundColor: '#fff'
+    paddingVertical: 12,
+    backgroundColor: '#fff',
   },
-  unreadCard: {
-    backgroundColor: '#f8fbff'
-  },
-  cardContent: {
-    flex: 1,
-    flexDirection: 'row'
-  },
-  iconContainer: {
-    marginRight: 12,
-    marginTop: 4
-  },
-  textContainer: {
-    flex: 1
-  },
-  title: {
+  sectionHeaderText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4
-  },
-  body: {
-    fontSize: 14,
-    color: '#4b5563',
-    marginBottom: 6
-  },
-  time: {
-    fontSize: 12,
-    color: '#9ca3af'
-  },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#2563eb',
-    marginLeft: 8,
-    marginTop: 8
-  },
-  deleteButton: {
-    justifyContent: 'center',
-    paddingLeft: 16
+    fontWeight: '700',
+    color: '#111827',
   },
   emptyList: {
     flexGrow: 1
@@ -292,4 +260,3 @@ const styles = StyleSheet.create({
     marginTop: 8
   }
 });
-
