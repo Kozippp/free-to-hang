@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -74,13 +74,41 @@ export default function PollDisplay({
   });
 
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
+  
+  // Track which options we've optimistically updated to avoid race conditions
+  const optimisticVotesRef = useRef<Set<string>>(new Set());
 
   // Sync local state with props when they change
   React.useEffect(() => {
     setLocalOptions(options);
-    setLocalUserVotes(userVotes);
+    
+    // Only sync userVotes if we didn't just make an optimistic update
+    // Clear optimistic votes after sync
+    const currentOptimisticVotes = optimisticVotesRef.current;
+    
+    setLocalUserVotes(currentUserVotes => {
+      // If no optimistic votes, just use the new props
+      if (currentOptimisticVotes.size === 0) {
+        return userVotes;
+      }
+      
+      // If we have optimistic votes and voting is complete, sync with server
+      const hasVotingInProgress = Array.from(currentOptimisticVotes).some(
+        optionId => votingInProgress[`${pollId}-${optionId}`]
+      );
+      
+      if (!hasVotingInProgress) {
+        // Voting completed, clear optimistic votes and sync
+        optimisticVotesRef.current = new Set();
+        return userVotes;
+      }
+      
+      // Voting still in progress, keep current votes
+      return currentUserVotes;
+    });
+    
     setLocalTotalVotes(totalVotes);
-  }, [options, userVotes, totalVotes]);
+  }, [options, userVotes, totalVotes, votingInProgress, pollId]);
 
   // Initialize vote counts on first render
   React.useEffect(() => {
@@ -130,6 +158,20 @@ export default function PollDisplay({
       );
       return;
     }
+
+    // Mark this as an optimistic update
+    optimisticVotesRef.current.add(optionId);
+
+    // Optimistic UI update - toggle vote immediately
+    setLocalUserVotes(currentVotes => {
+      if (currentVotes.includes(optionId)) {
+        // Remove vote
+        return currentVotes.filter(id => id !== optionId);
+      } else {
+        // Add vote
+        return [...currentVotes, optionId];
+      }
+    });
 
     // Animate the selection only if animation value exists
     // Single bounce animation on click
