@@ -65,6 +65,9 @@ export default function PollDisplay({
     return [...options].sort((a, b) => b.votes - a.votes);
   });
   
+  const [localUserVotes, setLocalUserVotes] = useState<string[]>(userVotes);
+  const [localTotalVotes, setLocalTotalVotes] = useState<number>(totalVotes);
+
   // Reset local state if pollId changes (effectively a new poll instance)
   React.useEffect(() => {
     setLocalOptions([...options].sort((a, b) => b.votes - a.votes));
