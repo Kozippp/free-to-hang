@@ -243,6 +243,9 @@ let planPollsChannel: any = null;
 // Debouncing map for per-plan refresh control
 const planRefreshTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
 let plansHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+// Track last optimistic updates to avoid duplicate realtime animations
+const lastOptimisticUpdate: Record<string, { timestamp: number; userId: string; optionIds: string[] }> = {};
 const lastPlanRefreshCallTimes: Record<string, number> = {};
 const MIN_TIME_BETWEEN_PLAN_CALLS = 500;
 
@@ -836,6 +839,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => {
     console.log('🚀 Optimistic vote update:', { planId, pollId, optionIds, userId });
+    
+    // Track this optimistic update to avoid duplicate realtime updates
+    lastOptimisticUpdate[pollId] = {
+      timestamp: Date.now(),
+      userId,
+      optionIds: [...optionIds].sort() // Sort for consistent comparison
+    };
     
     set((state) => {
       // Find the plan in all plan arrays
@@ -1806,6 +1816,28 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   }
 
   console.log(`🗳️ INSTANT poll vote update for poll ${pollId} in plan ${plan.id}`);
+
+  // Check if this is a duplicate of a recent optimistic update (within 2 seconds)
+  const lastOptimistic = lastOptimisticUpdate[pollId];
+  if (lastOptimistic && userId === currentUserId) {
+    const timeSinceOptimistic = Date.now() - lastOptimistic.timestamp;
+    
+    if (timeSinceOptimistic < 2000) {
+      // Check if the vote state matches the optimistic update
+      const currentUserVotes = poll.options
+        .filter(opt => opt.votes.includes(userId))
+        .map(opt => opt.id)
+        .sort();
+      
+      const optimisticVotes = lastOptimistic.optionIds;
+      
+      // If votes match, skip this realtime update (it's a duplicate of optimistic)
+      if (JSON.stringify(currentUserVotes) === JSON.stringify(optimisticVotes)) {
+        console.log(`⏭️ Skipping duplicate realtime update (matches optimistic update from ${timeSinceOptimistic}ms ago)`);
+        return;
+      }
+    }
+  }
 
   // Update poll votes based on event type
   let updatedPoll: Poll;

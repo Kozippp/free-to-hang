@@ -91,6 +91,10 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
   const displayTitle = editedTitle ?? plan.title;
   
+  // Poll voting state - prevent race conditions
+  const [votingInProgress, setVotingInProgress] = useState<Record<string, boolean>>({});
+  const voteTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
+  
   // Confirmation states removed
   // const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   // const [confirmationMessage, setConfirmationMessage] = useState('');
@@ -673,7 +677,16 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
   // Helper function to handle poll voting with multiple selections
   const handlePollVote = async (pollId: string, optionId: string) => {
+    // Prevent multiple simultaneous votes on the same poll (race condition protection)
+    if (votingInProgress[pollId]) {
+      console.log('⏳ Vote already in progress for poll:', pollId);
+      return;
+    }
+
     try {
+      // Mark voting as in progress for this poll
+      setVotingInProgress(prev => ({ ...prev, [pollId]: true }));
+
       const currentVotes = getUserVotesForPoll(pollId);
       let newVotes: string[];
 
@@ -690,12 +703,15 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       voteOnPollOptimistic(plan.id, pollId, newVotes, user.id);
 
       // Use API to vote on poll
-      console.log('🗳️ Voting on poll via API:', { pollId, newVotes });
+      console.log('🗳️ Voting on poll via edge function:', { pollId, newVotes });
       await plansService.voteOnPoll(plan.id, pollId, newVotes);
-      console.log('✅ Vote submitted successfully via API');
+      console.log('✅ Vote submitted successfully via edge function');
 
       // Real-time subscription will handle updating the store
       // No need to manually reload plans
+      
+      // Add a small delay before allowing next vote to prevent race conditions
+      await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
       console.error('❌ Error voting on poll:', error);
 
@@ -720,6 +736,15 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         errorMessage,
         [{ text: 'OK', style: 'default' }]
       );
+    } finally {
+      // Clear voting in progress state after a delay
+      setTimeout(() => {
+        setVotingInProgress(prev => {
+          const updated = { ...prev };
+          delete updated[pollId];
+          return updated;
+        });
+      }, 500);
     }
   };
 
@@ -865,7 +890,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
                     isRealTimeUpdate={realTimeUpdates.has(whenPoll.id)}
-                    isLoading={loadingPollId === whenPoll.id}
+                    isLoading={loadingPollId === whenPoll.id || votingInProgress[whenPoll.id]}
+                    loadingText={votingInProgress[whenPoll.id] ? "Submitting vote..." : "Updating poll..."}
                   />
                 </View>
               ) : isInYesGang ? (
@@ -905,7 +931,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
                     isRealTimeUpdate={realTimeUpdates.has(wherePoll.id)}
-                    isLoading={loadingPollId === wherePoll.id}
+                    isLoading={loadingPollId === wherePoll.id || votingInProgress[wherePoll.id]}
+                    loadingText={votingInProgress[wherePoll.id] ? "Submitting vote..." : "Updating poll..."}
                   />
                 </View>
               ) : isInYesGang ? (
@@ -941,8 +968,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                     totalGoingParticipants={acceptedParticipants.length}
                     onDelete={() => handleDeletePoll(poll.id)}
                     isRealTimeUpdate={realTimeUpdates.has(poll.id)}
-                    isLoading={loadingPollId === poll.id || deletingPollId === poll.id}
-                    loadingText={deletingPollId === poll.id ? "Deleting poll..." : "Updating poll..."}
+                    isLoading={loadingPollId === poll.id || deletingPollId === poll.id || votingInProgress[poll.id]}
+                    loadingText={deletingPollId === poll.id ? "Deleting poll..." : votingInProgress[poll.id] ? "Submitting vote..." : "Updating poll..."}
                   />
                 </View>
               ))}
