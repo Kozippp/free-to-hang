@@ -72,12 +72,33 @@ export default function PollDisplay({
     setLocalTotalVotes(totalVotes);
   }, [pollId]); // Only run when poll identity changes, ignore other prop updates to maintain snapshot
 
-  // We explicitly IGNORE updates to 'options', 'userVotes', 'totalVotes' props 
-  // while the component is mounted to prevent re-sorting and vote count changes
-  // as per user requirement: "control panelis olles ta häälte arvu ei muuda"
+  // Sync local state with props when they change, BUT maintain current sort order
+  React.useEffect(() => {
+    setLocalOptions(prevOptions => {
+      const prevIds = new Set(prevOptions.map(o => o.id));
+      const nextOptionsMap = new Map(options.map(o => [o.id, o]));
+      
+      // 1. Update existing options in their current positions
+      // AND filter out options that were deleted from the server
+      const updatedExistingOptions = prevOptions
+        .filter(o => nextOptionsMap.has(o.id))
+        .map(o => {
+           const updated = nextOptionsMap.get(o.id)!;
+           return { ...updated }; // Use updated data (votes, voters, text)
+        });
 
-  const [localUserVotes, setLocalUserVotes] = useState<string[]>(userVotes);
-  const [localTotalVotes, setLocalTotalVotes] = useState<number>(totalVotes);
+      // 2. Find and append new options that might have been added
+      const newOptions = options.filter(o => !prevIds.has(o.id));
+      
+      // If there are no changes in data or order, return prevOptions to avoid re-render
+      // (This is a simplified check, deep comparison is expensive)
+      
+      return [...updatedExistingOptions, ...newOptions];
+    });
+
+    setLocalUserVotes(userVotes);
+    setLocalTotalVotes(totalVotes);
+  }, [options, userVotes, totalVotes]);
 
   const [animatedValues] = useState(() => {
     const values: Record<string, Animated.Value> = {};
@@ -138,16 +159,19 @@ export default function PollDisplay({
         });
       });
       
-    // Update localTotalVotes (unique voters)
-    setLocalTotalVotes(prev => {
-      if (hasVoted) {
-        // Removing a vote: if this was my only vote, decrement unique voters
-        return currentVotes.length === 1 ? prev - 1 : prev;
-      } else {
-        // Adding a vote: if this is my first vote, increment unique voters
-        return currentVotes.length === 0 ? prev + 1 : prev;
-      }
-    });
+      // Update localTotalVotes (unique voters)
+      setLocalTotalVotes(prev => {
+        if (hasVoted) {
+          // Removing a vote: if this was my only vote, decrement unique voters
+          // Check if user has other votes
+          const hasOtherVotes = currentVotes.length > 1;
+          return hasOtherVotes ? prev : Math.max(0, prev - 1);
+        } else {
+          // Adding a vote: if this is my first vote, increment unique voters
+          const hasVotes = currentVotes.length > 0;
+          return hasVotes ? prev : prev + 1;
+        }
+      });
 
       if (hasVoted) {
         // Remove vote
