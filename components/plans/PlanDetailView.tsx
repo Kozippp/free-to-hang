@@ -49,7 +49,6 @@ import useUnseenStore from '@/store/unseenStore';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { plansService } from '@/lib/plans-service';
-import { supabase } from '@/lib/supabase';
 
 const noop = () => {};
 
@@ -65,13 +64,7 @@ interface PlanDetailViewProps {
 export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, onEditPermissionChange, initialTab }: PlanDetailViewProps) {
   const { user } = useAuth();
   const { 
-    markAsRead, 
-    addPoll, 
     voteOnPollOptimistic,
-    updatePollOption, 
-    removePollOption, 
-    addPollOption, 
-    deletePoll,
     invitations,
     activePlans,
     loadPlans,

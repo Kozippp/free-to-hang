@@ -238,6 +238,7 @@ let updatesChannel: any = null;
 // NEW: Direct DB table listeners (chat-style, instant!)
 let participantsChannel: any = null;
 let pollVotesChannel: any = null;
+let planPollsChannel: any = null;
 
 // Debouncing map for per-plan refresh control
 const planRefreshTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -315,6 +316,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       channels: state.subscriptionStatus.channels,
       metrics: subscriptionMetrics,
       activeChannels: {
+        plans: !!planPollsChannel,
         updates: !!updatesChannel
       },
       timestamp: new Date().toISOString()
@@ -1294,6 +1296,38 @@ const usePlansStore = create<PlansState>((set, get) => ({
           }
         });
 
+      // NEW: Direct DB listener for poll structure changes (create/edit/delete)
+      console.log('📊 Starting direct polls listener...');
+      planPollsChannel = supabase
+        .channel(`plan_polls_${userId}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'plan_polls'
+          },
+          async (payload: any) => {
+            console.log('📊 Direct poll structure update received:', payload);
+            handleDirectPollStructureUpdate(payload, userId);
+          }
+        )
+        .subscribe((status: string) => {
+          console.log('📡 Polls channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Direct polls listener connected!');
+          } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+            console.log('❌ Polls channel disconnected:', status);
+            setTimeout(() => {
+              if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
+                console.log('🔄 Retrying polls channel...');
+                planPollsChannel = null;
+                usePlansStore.getState().checkAndRestartSubscriptions(userId);
+              }
+            }, 5000);
+          }
+        });
+
       startPlansHealthCheck(userId);
 
       // Wait a moment for subscription to establish
@@ -1375,9 +1409,19 @@ async function stopAllRealtimeChannels() {
     }
   }
 
+  if (planPollsChannel) {
+    try {
+      await supabase.removeChannel(planPollsChannel);
+      console.log('🛑 Stopped polls channel');
+    } catch (error) {
+      console.error('❌ Error stopping polls channel:', error);
+    }
+  }
+
   updatesChannel = null;
   participantsChannel = null;
   pollVotesChannel = null;
+  planPollsChannel = null;
   Object.keys(retryAttempts).forEach((key) => {
     retryAttempts[key] = 0;
   });
@@ -1530,6 +1574,7 @@ function startPlansHealthCheck(userId: string) {
       { name: 'plan_updates', state: updatesChannel?.state },
       { name: 'participants', state: participantsChannel?.state },
       { name: 'poll_votes', state: pollVotesChannel?.state },
+      { name: 'polls', state: planPollsChannel?.state },
     ];
 
     const allHealthy = channelsStatus.every((channel) => channel.state === 'joined');
@@ -1819,6 +1864,33 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   console.log(`✅ INSTANT poll vote update complete! User ${userId} vote on option ${optionId}`);
   
   // Update unseen counts
+  useUnseenStore.getState().fetchUnseenCounts();
+}
+
+function handleDirectPollStructureUpdate(payload: any, currentUserId: string) {
+  const eventType = payload.eventType;
+  const newPoll = payload.new;
+  const oldPoll = payload.old;
+
+  const pollId = newPoll?.id || oldPoll?.id;
+  const planIdFromPayload = newPoll?.plan_id || oldPoll?.plan_id;
+
+  let planId = planIdFromPayload;
+  if (!planId && pollId) {
+    const store = usePlansStore.getState();
+    const plan = Object.values(store.plans).find((candidate) =>
+      candidate.polls?.some((poll) => poll.id === pollId)
+    );
+    planId = plan?.id;
+  }
+
+  if (!planId) {
+    console.log('⚠️ Poll update missing plan id, skipping refresh');
+    return;
+  }
+
+  console.log(`📊 INSTANT poll structure ${eventType} for plan ${planId}`);
+  schedulePlanRefresh(planId, currentUserId, 500, 'poll_structure_changed');
   useUnseenStore.getState().fetchUnseenCounts();
 }
 

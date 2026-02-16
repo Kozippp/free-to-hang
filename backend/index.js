@@ -216,7 +216,6 @@ app.post('/api/setup-plans', async (req, res) => {
 const userRoutes = require('./routes/user');
 const friendsRoutes = require('./routes/friends');
 const plansRoutes = require('./routes/plans');
-const pollsRoutes = require('./routes/polls');
 const storageRoutes = require('./routes/storage');
 const chatRoutes = require('./routes/chat');
 const notificationRoutes = require('./routes/notifications');
@@ -225,7 +224,6 @@ const notificationRoutes = require('./routes/notifications');
 app.use('/api/user', userRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/plans', plansRoutes);
-app.use('/api/polls', pollsRoutes);
 app.use('/api/storage', storageRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);

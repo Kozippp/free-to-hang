@@ -285,17 +285,47 @@ class PlansService {
     }
   }
 
-  // Create poll for plan
+  // Create poll directly in Supabase (RLS guarded)
   async createPoll(planId: string, pollData: CreatePollData): Promise<Plan> {
     try {
-      console.log('📊 Creating poll for plan:', planId);
-      const poll = await this.apiRequest(`/plans/${planId}/polls`, {
-        method: 'POST',
-        body: JSON.stringify(pollData)
-      });
-      console.log('✅ Poll created successfully');
+      console.log('📊 Creating poll directly in Supabase for plan:', planId);
 
-      // Return updated plan with the new poll
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: poll, error: pollError } = await supabase
+        .from('plan_polls')
+        .insert({
+          plan_id: planId,
+          title: pollData.question,
+          poll_type: pollData.type || 'custom',
+          ends_at: pollData.expiresAt || null,
+          invited_users: pollData.invitedUsers || null,
+          created_by: user.id
+        })
+        .select('id')
+        .single();
+
+      if (pollError || !poll) {
+        throw pollError || new Error('Failed to create poll');
+      }
+
+      const optionsToInsert = pollData.options.map((optionText, index) => ({
+        poll_id: poll.id,
+        option_text: optionText,
+        option_order: index
+      }));
+
+      const { error: optionsError } = await supabase
+        .from('plan_poll_options')
+        .insert(optionsToInsert);
+
+      if (optionsError) {
+        await supabase.from('plan_polls').delete().eq('id', poll.id);
+        throw optionsError;
+      }
+
+      console.log('✅ Poll created successfully (Supabase direct)');
       return await this.getPlan(planId);
     } catch (error) {
       console.error('❌ Error creating poll:', error);
@@ -319,65 +349,48 @@ class PlansService {
     }
   }
 
-  // Vote on poll - DIRECT DB WRITE (like chat!)
+  // Vote on poll via Edge Function
   async voteOnPoll(planId: string, pollId: string, optionIds: string[]): Promise<void> {
     try {
-      console.log('🗳️ Voting on poll:', pollId, 'options:', optionIds);
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      console.log('🗳️ Voting on poll via edge function:', { planId, pollId, optionIds });
 
-      // 1. DELETE existing votes for this user + poll
-      const { error: deleteError } = await supabase
-        .from('plan_poll_votes')
-        .delete()
-        .eq('poll_id', pollId)
-        .eq('user_id', user.id);
+      const { data, error } = await supabase.functions.invoke('poll-vote', {
+        body: { pollId, optionIds }
+      });
 
-      if (deleteError) {
-        console.error('❌ Error deleting old votes:', deleteError);
-        throw deleteError;
+      if (error) {
+        throw new Error(error.message || 'Failed to submit vote');
       }
 
-      // 2. INSERT new votes (only if there are any)
-      if (optionIds.length > 0) {
-        const voteInserts = optionIds.map(optionId => ({
-          poll_id: pollId,
-          option_id: optionId,
-          user_id: user.id
-        }));
-
-        const { error: insertError } = await supabase
-          .from('plan_poll_votes')
-          .insert(voteInserts);
-
-        if (insertError) {
-          console.error('❌ Error inserting new votes:', insertError);
-          throw insertError;
-        }
-        console.log('✅ Vote submitted successfully (direct DB)');
-      } else {
-        console.log('✅ Unvoted successfully (direct DB)');
+      if (data?.error) {
+        throw new Error(data.error);
       }
 
-      // 3. Real-time listener will update store automatically!
-      // No need to return anything - fire and forget like chat messages
-      console.log('✅ Vote operation complete - waiting for realtime update');
+      console.log('✅ Vote submitted successfully via edge function');
     } catch (error) {
       console.error('❌ Error voting on poll:', error);
       throw error;
     }
   }
 
-  // Edit poll
+  // Edit poll via Edge Function (with protected options logic)
   async editPoll(planId: string, pollId: string, question: string, options: string[]): Promise<Plan> {
     try {
-      console.log('✏️ Editing poll:', pollId);
-      await this.apiRequest(`/plans/${planId}/polls/${pollId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ question, options })
+      console.log('✏️ Editing poll via edge function:', pollId);
+
+      const { data, error } = await supabase.functions.invoke('poll-edit', {
+        body: { pollId, question, options }
       });
-      console.log('✅ Poll edited successfully');
+
+      if (error) {
+        throw new Error(error.message || 'Failed to edit poll');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      console.log('✅ Poll edited successfully via edge function');
 
       // Return updated plan with the edited poll
       return await this.getPlan(planId);
@@ -387,14 +400,22 @@ class PlansService {
     }
   }
 
-  // Delete poll
+  // Delete poll directly in Supabase (RLS guarded)
   async deletePoll(planId: string, pollId: string): Promise<Plan> {
     try {
-      console.log('🗑️ Deleting poll:', pollId);
-      await this.apiRequest(`/plans/${planId}/polls/${pollId}`, {
-        method: 'DELETE'
-      });
-      console.log('✅ Poll deleted successfully');
+      console.log('🗑️ Deleting poll directly in Supabase:', pollId);
+
+      const { error } = await supabase
+        .from('plan_polls')
+        .delete()
+        .eq('id', pollId)
+        .eq('plan_id', planId);
+
+      if (error) {
+        throw error;
+      }
+
+      console.log('✅ Poll deleted successfully (Supabase direct)');
 
       // Return updated plan without the deleted poll
       return await this.getPlan(planId);
