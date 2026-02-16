@@ -39,6 +39,7 @@ interface PollDisplayProps {
   isLoading?: boolean; // New prop to show loading state on the poll
   loadingText?: string; // Custom loading text
   readOnly?: boolean; // When true, renders poll results without interactions
+  votingInProgress?: Record<string, boolean>; // Track loading per option (key: `${pollId}-${optionId}`)
 }
 
 export default function PollDisplay({
@@ -56,7 +57,8 @@ export default function PollDisplay({
   isRealTimeUpdate = false,
   isLoading = false,
   loadingText = "Updating poll...",
-  readOnly = false
+  readOnly = false,
+  votingInProgress = {}
 }: PollDisplayProps) {
   // Local state to manage poll data independently
   const [localOptions, setLocalOptions] = useState<PollOption[]>(options);
@@ -90,33 +92,14 @@ export default function PollDisplay({
   }, []); // Empty dependency array - only run once on mount
 
   // Update vote counts when options change (for real-time updates)
+  // Removed automatic animation trigger - only animate on user click
   React.useEffect(() => {
     const newCounts: Record<string, number> = {};
     localOptions.forEach(option => {
-      const oldCount = voteCounts[option.id] || 0;
-      const newCount = option.votes;
-
-      // If vote count increased, trigger +1 animation
-      if (newCount > oldCount && isRealTimeUpdate && animatedValues[option.id]) {
-        // Trigger a quick pulse animation for the increased vote
-        Animated.sequence([
-          Animated.timing(animatedValues[option.id], {
-            toValue: 1,
-            duration: 150,
-            useNativeDriver: true,
-          }),
-          Animated.timing(animatedValues[option.id], {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: true,
-          })
-        ]).start();
-      }
-
-      newCounts[option.id] = newCount;
+      newCounts[option.id] = option.votes;
     });
     setVoteCounts(newCounts);
-  }, [localOptions, isRealTimeUpdate]); // Removed voteCounts and animatedValues to prevent infinite loops
+  }, [localOptions]);
 
   // Ensure all options have animation values
   React.useEffect(() => {
@@ -127,31 +110,15 @@ export default function PollDisplay({
     });
   }, [localOptions]); // Removed animatedValues to prevent infinite loops
 
-  // Real-time update animation
-  React.useEffect(() => {
-    if (isRealTimeUpdate) {
-      // Animate all options with a subtle pulse
-      const animations = localOptions.map(option =>
-        Animated.sequence([
-          Animated.timing(animatedValues[option.id], {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(animatedValues[option.id], {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          })
-        ])
-      );
-
-      Animated.parallel(animations).start();
-    }
-  }, [isRealTimeUpdate, localOptions]); // Removed animatedValues to prevent infinite loops
-
   const handleVote = (optionId: string) => {
     if (readOnly) {
+      return;
+    }
+
+    // Check if this specific option is currently being voted on
+    const voteKey = `${pollId}-${optionId}`;
+    if (votingInProgress[voteKey]) {
+      console.log('⏳ Vote already in progress for:', voteKey);
       return;
     }
 
@@ -165,6 +132,7 @@ export default function PollDisplay({
     }
 
     // Animate the selection only if animation value exists
+    // Single bounce animation on click
     if (animatedValues[optionId]) {
       Animated.sequence([
         Animated.timing(animatedValues[optionId], {
@@ -317,6 +285,8 @@ export default function PollDisplay({
       <View style={[styles.optionsContainer, hideQuestion && styles.compactOptionsContainer]}>
         {sortedOptions.map((option, index) => {
           const isSelected = localUserVotes.includes(option.id);
+          const voteKey = `${pollId}-${option.id}`;
+          const isVoting = votingInProgress[voteKey];
           
           return (
             <Animated.View
@@ -340,24 +310,29 @@ export default function PollDisplay({
                 style={styles.optionButton}
                 onPress={() => handleVote(option.id)}
                 activeOpacity={readOnly ? 1 : 0.8}
-                disabled={readOnly}
+                disabled={readOnly || isVoting}
               >
-                {/* Check mark for selected - top left corner */}
-                {isSelected && (
+                {/* Loading indicator or Check mark for selected - top left corner */}
+                {isVoting ? (
+                  <View style={styles.loadingTopLeft}>
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                  </View>
+                ) : isSelected ? (
                   <View style={styles.checkmarkTopLeft}>
                     <Check size={12} color="white" />
                   </View>
-                )}
+                ) : null}
                 
                 <View style={styles.optionContent}>
                   <View style={[
                     styles.optionLeft,
-                    isSelected && styles.selectedOptionLeft
+                    (isSelected || isVoting) && styles.selectedOptionLeft
                   ]}>
                     {/* Option text */}
                     <Text style={[
                       styles.optionText,
                       isSelected && styles.selectedOptionText,
+                      isVoting && styles.votingOptionText,
                     ]}>
                       {option.text}
                     </Text>
@@ -373,29 +348,6 @@ export default function PollDisplay({
                         ]}>
                           {option.votes}
                         </Text>
-                        {isRealTimeUpdate && option.votes > (voteCounts[option.id] || 0) && (
-                          <Animated.View
-                            style={[
-                              styles.newVoteIndicator,
-                              {
-                                opacity: animatedValues[option.id]?.interpolate({
-                                  inputRange: [0, 1],
-                                  outputRange: [0, 1],
-                                }) || 0,
-                                transform: [
-                                  {
-                                    scale: animatedValues[option.id]?.interpolate({
-                                      inputRange: [0, 1],
-                                      outputRange: [0.8, 1.2],
-                                    }) || 1,
-                                  },
-                                ],
-                              }
-                            ]}
-                          >
-                            <Text style={styles.newVoteText}>+1</Text>
-                          </Animated.View>
-                        )}
                       </View>
 
                       {/* Voters avatars next to vote count */}
@@ -567,23 +519,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 24,
   },
-  newVoteIndicator: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    minWidth: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newVoteText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: 'white',
-  },
   compactHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -604,6 +539,23 @@ const styles = StyleSheet.create({
     transform: [
       { translateY: -10 }, // Center vertically (half of height)
     ],
+  },
+  loadingTopLeft: {
+    position: 'absolute',
+    top: '50%',
+    left: 12, // Position on the left side, accounting for optionContent padding
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    transform: [
+      { translateY: -10 }, // Center vertically (half of height)
+    ],
+  },
+  votingOptionText: {
+    color: Colors.light.secondaryText,
+    opacity: 0.7,
   },
   compactStatsContainer: {
     flex: 1,

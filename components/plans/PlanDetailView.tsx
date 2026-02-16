@@ -91,7 +91,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
   const displayTitle = editedTitle ?? plan.title;
   
-  // Poll voting state - prevent race conditions
+  // Poll voting state - track loading per option (not per poll)
+  // Key format: `${pollId}-${optionId}`
   const [votingInProgress, setVotingInProgress] = useState<Record<string, boolean>>({});
   const voteTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
   
@@ -677,15 +678,18 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
   // Helper function to handle poll voting with multiple selections
   const handlePollVote = async (pollId: string, optionId: string) => {
-    // Prevent multiple simultaneous votes on the same poll (race condition protection)
-    if (votingInProgress[pollId]) {
-      console.log('⏳ Vote already in progress for poll:', pollId);
+    // Create unique key for this specific vote
+    const voteKey = `${pollId}-${optionId}`;
+    
+    // Prevent multiple simultaneous votes on the same option (race condition protection)
+    if (votingInProgress[voteKey]) {
+      console.log('⏳ Vote already in progress for option:', voteKey);
       return;
     }
 
     try {
-      // Mark voting as in progress for this poll
-      setVotingInProgress(prev => ({ ...prev, [pollId]: true }));
+      // Mark voting as in progress for this specific option
+      setVotingInProgress(prev => ({ ...prev, [voteKey]: true }));
 
       const currentVotes = getUserVotesForPoll(pollId);
       let newVotes: string[];
@@ -741,7 +745,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       setTimeout(() => {
         setVotingInProgress(prev => {
           const updated = { ...prev };
-          delete updated[pollId];
+          delete updated[voteKey];
           return updated;
         });
       }, 500);
@@ -890,8 +894,9 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
                     isRealTimeUpdate={realTimeUpdates.has(whenPoll.id)}
-                    isLoading={loadingPollId === whenPoll.id || votingInProgress[whenPoll.id]}
-                    loadingText={votingInProgress[whenPoll.id] ? "Submitting vote..." : "Updating poll..."}
+                    isLoading={loadingPollId === whenPoll.id}
+                    loadingText="Updating poll..."
+                    votingInProgress={votingInProgress}
                   />
                 </View>
               ) : isInYesGang ? (
@@ -931,8 +936,9 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                     totalGoingParticipants={acceptedParticipants.length}
                     hideQuestion={true}
                     isRealTimeUpdate={realTimeUpdates.has(wherePoll.id)}
-                    isLoading={loadingPollId === wherePoll.id || votingInProgress[wherePoll.id]}
-                    loadingText={votingInProgress[wherePoll.id] ? "Submitting vote..." : "Updating poll..."}
+                    isLoading={loadingPollId === wherePoll.id}
+                    loadingText="Updating poll..."
+                    votingInProgress={votingInProgress}
                   />
                 </View>
               ) : isInYesGang ? (
@@ -968,8 +974,9 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                     totalGoingParticipants={acceptedParticipants.length}
                     onDelete={() => handleDeletePoll(poll.id)}
                     isRealTimeUpdate={realTimeUpdates.has(poll.id)}
-                    isLoading={loadingPollId === poll.id || deletingPollId === poll.id || votingInProgress[poll.id]}
-                    loadingText={deletingPollId === poll.id ? "Deleting poll..." : votingInProgress[poll.id] ? "Submitting vote..." : "Updating poll..."}
+                    isLoading={loadingPollId === poll.id || deletingPollId === poll.id}
+                    loadingText={deletingPollId === poll.id ? "Deleting poll..." : "Updating poll..."}
+                    votingInProgress={votingInProgress}
                   />
                 </View>
               ))}
