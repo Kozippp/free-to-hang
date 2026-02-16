@@ -9,7 +9,7 @@ import {
   Animated,
   ActivityIndicator
 } from 'react-native';
-import { Check, Crown, Edit2, Users, Trash2 } from 'lucide-react-native';
+import { Check, Edit2, Users, Trash2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 interface PollOption {
@@ -195,70 +195,11 @@ export default function PollDisplay({
   };
 
   const totalVoters = getTotalVoters();
-  const goingParticipants = Math.max(totalGoingParticipants, totalVoters);
 
-  const getPercentage = (votes: number) => {
-    return goingParticipants > 0 ? Math.round((votes / goingParticipants) * 100) : 0;
-  };
-
-  // Sort options by vote count (descending)
-  const optionsSortedByVotes = [...localOptions].sort((a, b) => b.votes - a.votes);
-  
-  // Dynamic threshold algorithm for determining winner
-  const getWinnerThreshold = () => {
-    const participantThreshold = 0.4 * goingParticipants;
-    const voterThreshold = 0.7 * totalVoters;
-    return Math.ceil(Math.min(participantThreshold, voterThreshold));
-  };
-
-  const winnerThreshold = getWinnerThreshold();
-  const maxVotes = Math.max(...localOptions.map(option => option.votes));
-  const minParticipation = Math.min(3, goingParticipants);
-
-  // Find all options with the maximum votes that meet ALL criteria
-  const topOptions = localOptions.filter(option =>
-    option.votes === maxVotes &&
-    option.votes >= winnerThreshold &&
-    option.votes > 0 &&
-    totalVoters >= minParticipation
-  );
-  
-  // Select the first option by ID when there are ties (deterministic selection)
-  // Note: The authoritative winner determination with timestamps is handled by the backend
-  const selectedWinner = React.useMemo(() => {
-    if (topOptions.length === 0) return null;
-    if (topOptions.length === 1) return topOptions[0];
-
-    // Sort by option ID and select the first one for consistency
-    // This is for real-time display; backend determines true winner by timestamp
-    const sortedTopOptions = [...topOptions].sort((a, b) => a.id.localeCompare(b.id));
-    return sortedTopOptions[0];
-  }, [topOptions]);
-
-  // Apply winner-first sorting to the vote-sorted options
+  // Sort options by vote count (descending) - most popular first
   const sortedOptions = React.useMemo(() => {
-    const result = [...optionsSortedByVotes];
-
-    // If there's a winner, move it to the first position
-    if (selectedWinner) {
-      const winnerIndex = result.findIndex(option => option.id === selectedWinner.id);
-      if (winnerIndex > 0) {
-        const [winner] = result.splice(winnerIndex, 1);
-        result.unshift(winner);
-      }
-    }
-
-    return result;
-  }, [optionsSortedByVotes, selectedWinner]);
-  
-  // An option is winning if it's the selected winner
-  const isWinning = (optionId: string) => {
-    return selectedWinner?.id === optionId;
-  };
-
-  // Check if any option qualifies as winner
-  const hasWinner = selectedWinner !== null;
-  const isRandomlySelected = topOptions.length > 1;
+    return [...localOptions].sort((a, b) => b.votes - a.votes);
+  }, [localOptions]);
 
   // Render voters avatars
   const VotersAvatars = ({ voters }: { voters: PollOption['voters'] }) => {
@@ -346,19 +287,9 @@ export default function PollDisplay({
             <View style={styles.statsItem}>
               <Users size={14} color={Colors.light.secondaryText} />
               <Text style={styles.statsText}>
-                {totalVoters} out of {goingParticipants} voted
+                {totalVoters} {totalVoters === 1 ? 'person' : 'people'} voted
               </Text>
             </View>
-            {!hasWinner && localTotalVotes > 0 && (
-              <Text style={styles.awaitingText}>
-                Awaiting more votes…
-              </Text>
-            )}
-            {hasWinner && isRandomlySelected && (
-              <Text style={styles.randomSelectionText}>
-                Winner determined by first to reach vote threshold
-              </Text>
-            )}
           </View>
         </>
       )}
@@ -370,19 +301,9 @@ export default function PollDisplay({
             <View style={styles.statsItem}>
               <Users size={14} color={Colors.light.secondaryText} />
               <Text style={styles.statsText}>
-                {totalVoters} out of {goingParticipants} voted
+                {totalVoters} {totalVoters === 1 ? 'person' : 'people'} voted
               </Text>
             </View>
-            {!hasWinner && localTotalVotes > 0 && (
-              <Text style={styles.awaitingText}>
-                Awaiting more votes…
-              </Text>
-            )}
-            {hasWinner && isRandomlySelected && (
-              <Text style={styles.randomSelectionText}>
-                Winner determined by first to reach vote threshold
-              </Text>
-            )}
           </View>
           {canVote && onEdit && !readOnly && (
             <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
@@ -395,9 +316,7 @@ export default function PollDisplay({
       {/* Vertical options list */}
       <View style={[styles.optionsContainer, hideQuestion && styles.compactOptionsContainer]}>
         {sortedOptions.map((option, index) => {
-          const percentage = getPercentage(option.votes);
           const isSelected = localUserVotes.includes(option.id);
-          const isWinningOption = isWinning(option.id);
           
           return (
             <Animated.View
@@ -405,8 +324,6 @@ export default function PollDisplay({
               style={[
                 styles.optionRow,
                 isSelected && styles.selectedOptionRow,
-                isWinningOption && styles.winningOptionRow,
-                isSelected && isWinningOption && styles.selectedWinningOptionRow,
                 {
                   transform: [
                     {
@@ -437,33 +354,24 @@ export default function PollDisplay({
                     styles.optionLeft,
                     isSelected && styles.selectedOptionLeft
                   ]}>
-                    {/* Crown for winner */}
-                    {isWinningOption && (
-                      <View style={styles.crownContainer}>
-                        <Crown size={14} color="#FFD700" fill="#FFD700" />
-                      </View>
-                    )}
-                    
                     {/* Option text */}
                     <Text style={[
                       styles.optionText,
                       isSelected && styles.selectedOptionText,
-                      isWinningOption && styles.winningOptionText,
                     ]}>
                       {option.text}
                     </Text>
                   </View>
                   
                   <View style={styles.optionRight}>
-                    {/* Percentage and voters in row */}
+                    {/* Vote count and voters in row */}
                     <View style={styles.rightRow}>
-                      <View style={styles.percentageContainer}>
+                      <View style={styles.voteCountContainer}>
                         <Text style={[
-                          styles.percentageText,
-                          isSelected && styles.selectedPercentageText,
-                          isWinningOption && styles.winningPercentageText
+                          styles.voteCountText,
+                          isSelected && styles.selectedVoteCountText,
                         ]}>
-                          {percentage}%
+                          {option.votes}
                         </Text>
                         {isRealTimeUpdate && option.votes > (voteCounts[option.id] || 0) && (
                           <Animated.View
@@ -490,7 +398,7 @@ export default function PollDisplay({
                         )}
                       </View>
 
-                      {/* Voters avatars next to percentage */}
+                      {/* Voters avatars next to vote count */}
                       <VotersAvatars voters={option.voters} />
                     </View>
                   </View>
@@ -567,20 +475,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  winningOptionRow: {
-    borderColor: '#FFD700',
-    backgroundColor: '#FFF9E6',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  selectedWinningOptionRow: {
-    borderColor: Colors.light.primary, // Blue border when selected and winning
-    backgroundColor: '#FFF9E6', // Keep golden background
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
   optionButton: {
     padding: 0,
   },
@@ -595,13 +489,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: 8,
-  },
-  crownContainer: {
-    width: 18,
-    height: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   optionText: {
     fontSize: 15,
@@ -615,10 +502,6 @@ const styles = StyleSheet.create({
   },
   selectedOptionLeft: {
     paddingLeft: 28, // Push text to the right to avoid overlap with checkbox
-  },
-  winningOptionText: {
-    fontWeight: '700',
-    color: '#B8860B',
   },
   optionRight: {
     flexDirection: 'row',
@@ -638,17 +521,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  percentageText: {
+  voteCountText: {
     fontSize: 14,
     fontWeight: '700',
     color: Colors.light.text,
     textAlign: 'left',
   },
-  selectedPercentageText: {
+  selectedVoteCountText: {
     color: Colors.light.primary,
-  },
-  winningPercentageText: {
-    color: '#B8860B',
   },
   votersContainer: {
     flexDirection: 'row',
@@ -682,9 +562,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.secondaryText,
   },
-  percentageContainer: {
+  voteCountContainer: {
     position: 'relative',
     alignItems: 'center',
+    minWidth: 24,
   },
   newVoteIndicator: {
     position: 'absolute',
@@ -723,18 +604,6 @@ const styles = StyleSheet.create({
     transform: [
       { translateY: -10 }, // Center vertically (half of height)
     ],
-  },
-  awaitingText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.light.secondaryText,
-    marginTop: 4,
-  },
-  randomSelectionText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.light.secondaryText,
-    marginTop: 4,
   },
   compactStatsContainer: {
     flex: 1,

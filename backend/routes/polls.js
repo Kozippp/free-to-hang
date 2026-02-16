@@ -61,7 +61,7 @@ const notifyPlanUpdate = async (planId, updateType, triggeredBy, metadata = {}) 
   }
 };
 
-// GET /polls/:planId - Get all polls for a plan (when, where, custom only)
+// GET /polls/:planId - Get all polls for a plan
 router.get('/:planId', requireAuth, async (req, res) => {
   try {
     const { planId } = req.params;
@@ -81,7 +81,7 @@ router.get('/:planId', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied - not a participant in this plan' });
     }
 
-    // Get polls (only when, where, custom - exclude invitation polls)
+    // Get polls
     const { data: polls, error: pollsError } = await supabase
       .from('plan_polls')
       .select('*')
@@ -190,7 +190,7 @@ router.get('/:planId', requireAuth, async (req, res) => {
   }
 });
 
-// POST /polls/:planId - Create new poll (when, where, custom only)
+// POST /polls/:planId - Create new poll
 router.post('/:planId', requireAuth, async (req, res) => {
   try {
     const { planId } = req.params;
@@ -205,7 +205,7 @@ router.post('/:planId', requireAuth, async (req, res) => {
     }
 
     if (!['when', 'where', 'custom'].includes(type)) {
-      return res.status(400).json({ error: 'Invalid poll type. Only when, where, and custom polls are supported' });
+      return res.status(400).json({ error: 'Invalid poll type' });
     }
 
     // Verify user can create polls (must be going participant)
@@ -338,18 +338,13 @@ router.post('/:planId/:pollId/vote', requireAuth, async (req, res) => {
     // Verify poll exists and belongs to the plan
     const { data: poll, error: pollError } = await supabase
       .from('plan_polls')
-      .select('id, poll_type')
+      .select('id')
       .eq('id', pollId)
       .eq('plan_id', planId)
       .single();
 
     if (pollError || !poll) {
       return res.status(404).json({ error: 'Poll not found' });
-    }
-
-    // Verify poll type is supported (not invitation)
-    if (!['when', 'where', 'custom'].includes(poll.poll_type)) {
-      return res.status(400).json({ error: 'Voting not supported for this poll type' });
     }
 
     // Remove existing votes for this poll and user
@@ -433,10 +428,6 @@ router.put('/:planId/:pollId', requireAuth, async (req, res) => {
 
     if (poll.created_by !== userId) {
       return res.status(403).json({ error: 'Only poll creator can edit' });
-    }
-
-    if (!['when', 'where', 'custom'].includes(poll.poll_type)) {
-      return res.status(400).json({ error: 'Editing not supported for this poll type' });
     }
 
     // Get current poll options and votes to determine locking
@@ -586,183 +577,6 @@ router.delete('/:planId/:pollId', requireAuth, async (req, res) => {
 
   } catch (error) {
     console.error('Error in DELETE /polls/:planId/:pollId:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /polls/:planId/:pollId/results - Get poll results with winner determination
-router.get('/:planId/:pollId/results', requireAuth, async (req, res) => {
-  try {
-    const { planId, pollId } = req.params;
-    const userId = req.user.id;
-
-    console.log('📊 Getting poll results for:', pollId);
-
-    // Verify user has access to this plan
-    const { data: participant, error: participantError } = await supabase
-      .from('plan_participants')
-      .select('status')
-      .eq('plan_id', planId)
-      .eq('user_id', userId)
-      .single();
-
-    if (participantError || !participant) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    // Get poll details
-    const { data: poll, error: pollError } = await supabase
-      .from('plan_polls')
-      .select('*')
-      .eq('id', pollId)
-      .eq('plan_id', planId)
-      .single();
-
-    if (pollError || !poll) {
-      return res.status(404).json({ error: 'Poll not found' });
-    }
-
-    // Get poll options with vote counts
-    const { data: options, error: optionsError } = await supabase
-      .from('plan_poll_options')
-      .select(`
-        id,
-        option_text,
-        option_order
-      `)
-      .eq('poll_id', pollId)
-      .order('option_order', { ascending: true });
-
-    if (optionsError) {
-      console.error('Error fetching options:', optionsError);
-      return res.status(500).json({ error: 'Failed to fetch options' });
-    }
-
-    // Get vote counts with timestamps
-    const optionIds = options?.map(o => o.id) || [];
-    const { data: votes, error: votesError } = await supabase
-      .from('plan_poll_votes')
-      .select('option_id, user_id, created_at')
-      .in('option_id', optionIds)
-      .order('created_at', { ascending: true });
-
-    if (votesError) {
-      console.error('Error fetching votes:', votesError);
-      return res.status(500).json({ error: 'Failed to fetch votes' });
-    }
-
-    // Calculate vote counts and get going participants count
-    const voteCounts = {};
-    const voteTimestamps = {};
-    const uniqueVoters = new Set();
-    (votes || []).forEach(vote => {
-      voteCounts[vote.option_id] = (voteCounts[vote.option_id] || 0) + 1;
-      uniqueVoters.add(vote.user_id);
-
-      // Store timestamps for each option
-      if (!voteTimestamps[vote.option_id]) {
-        voteTimestamps[vote.option_id] = [];
-      }
-      voteTimestamps[vote.option_id].push(new Date(vote.created_at));
-    });
-
-    const { data: goingParticipants, error: participantsError } = await supabase
-      .from('plan_participants')
-      .select('id')
-      .eq('plan_id', planId)
-      .eq('status', 'going');
-
-    if (participantsError) {
-      console.error('Error fetching participants:', participantsError);
-      return res.status(500).json({ error: 'Failed to fetch participants' });
-    }
-
-    const totalVoters = uniqueVoters.size;
-    const goingParticipantsCount = goingParticipants?.length || 0;
-
-    // Winner determination logic
-    const winnerThreshold = Math.max(
-      Math.ceil(0.4 * goingParticipantsCount), // 40% of going participants
-      Math.ceil(0.7 * totalVoters), // 70% of voters
-      Math.min(3, goingParticipantsCount) // Minimum threshold
-    );
-
-    // Sort options by vote count
-    const optionsWithVotes = (options || []).map(option => ({
-      id: option.id,
-      text: option.option_text,
-      votes: voteCounts[option.id] || 0,
-      percentage: totalVoters > 0 ? Math.round(((voteCounts[option.id] || 0) / totalVoters) * 100) : 0
-    })).sort((a, b) => b.votes - a.votes);
-
-    // Find winners
-    const potentialWinners = optionsWithVotes.filter(option =>
-      option.votes >= winnerThreshold &&
-      option.votes > 0 &&
-      totalVoters >= Math.min(3, goingParticipantsCount)
-    );
-
-    let winner = null;
-    let isRandomlySelected = false;
-
-    if (potentialWinners.length === 1) {
-      winner = potentialWinners[0];
-    } else if (potentialWinners.length > 1) {
-      // Multiple winners with same vote count - select the one that reached the vote count first
-      const maxVotes = potentialWinners[0].votes; // All have same vote count
-
-      // Find the earliest timestamp when any option reached the winning vote count
-      let earliestWinner = null;
-      let earliestTime = null;
-
-      potentialWinners.forEach(option => {
-        const timestamps = voteTimestamps[option.id] || [];
-        if (timestamps.length >= maxVotes) {
-          // The timestamp of the Nth vote (where N = maxVotes) is when this option reached the winning count
-          const timeReached = timestamps[maxVotes - 1];
-          if (!earliestTime || timeReached < earliestTime) {
-            earliestTime = timeReached;
-            earliestWinner = option;
-          }
-        }
-      });
-
-      winner = earliestWinner;
-      isRandomlySelected = false; // No longer random
-    }
-
-    const result = {
-      poll: {
-        id: poll.id,
-        question: poll.title,
-        type: poll.poll_type,
-        totalVoters,
-        totalGoingParticipants: goingParticipantsCount,
-        winnerThreshold,
-        hasWinner: winner !== null,
-        isRandomlySelected,
-        winner: winner ? {
-          id: winner.id,
-          text: winner.text,
-          votes: winner.votes,
-          percentage: winner.percentage
-        } : null
-      },
-      options: optionsWithVotes,
-      stats: {
-        totalVotes: totalVoters,
-        goingParticipants: goingParticipantsCount,
-        winnerThreshold,
-        participationRate: goingParticipantsCount > 0 ?
-          Math.round((totalVoters / goingParticipantsCount) * 100) : 0
-      }
-    };
-
-    console.log('✅ Poll results calculated successfully');
-    res.json(result);
-
-  } catch (error) {
-    console.error('Error in GET /polls/:planId/:pollId/results:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
