@@ -60,8 +60,22 @@ export default function PollDisplay({
   readOnly = false,
   votingInProgress = {}
 }: PollDisplayProps) {
-  // Local state to manage poll data independently
-  const [localOptions, setLocalOptions] = useState<PollOption[]>(options);
+  // Initialize localOptions sorted by votes on mount
+  const [localOptions, setLocalOptions] = useState<PollOption[]>(() => {
+    return [...options].sort((a, b) => b.votes - a.votes);
+  });
+  
+  // Reset local state if pollId changes (effectively a new poll instance)
+  React.useEffect(() => {
+    setLocalOptions([...options].sort((a, b) => b.votes - a.votes));
+    setLocalUserVotes(userVotes);
+    setLocalTotalVotes(totalVotes);
+  }, [pollId]); // Only run when poll identity changes, ignore other prop updates to maintain snapshot
+
+  // We explicitly IGNORE updates to 'options', 'userVotes', 'totalVotes' props 
+  // while the component is mounted to prevent re-sorting and vote count changes
+  // as per user requirement: "control panelis olles ta häälte arvu ei muuda"
+
   const [localUserVotes, setLocalUserVotes] = useState<string[]>(userVotes);
   const [localTotalVotes, setLocalTotalVotes] = useState<number>(totalVotes);
 
@@ -73,61 +87,8 @@ export default function PollDisplay({
     return values;
   });
 
-  const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
-  
-  // Track which options we've optimistically updated to avoid race conditions
-  const optimisticVotesRef = useRef<Set<string>>(new Set());
 
-  // Sync local state with props when they change
-  React.useEffect(() => {
-    setLocalOptions(options);
-    
-    // Only sync userVotes if we didn't just make an optimistic update
-    // Clear optimistic votes after sync
-    const currentOptimisticVotes = optimisticVotesRef.current;
-    
-    setLocalUserVotes(currentUserVotes => {
-      // If no optimistic votes, just use the new props
-      if (currentOptimisticVotes.size === 0) {
-        return userVotes;
-      }
-      
-      // If we have optimistic votes and voting is complete, sync with server
-      const hasVotingInProgress = Array.from(currentOptimisticVotes).some(
-        optionId => votingInProgress[`${pollId}-${optionId}`]
-      );
-      
-      if (!hasVotingInProgress) {
-        // Voting completed, clear optimistic votes and sync
-        optimisticVotesRef.current = new Set();
-        return userVotes;
-      }
-      
-      // Voting still in progress, keep current votes
-      return currentUserVotes;
-    });
-    
-    setLocalTotalVotes(totalVotes);
-  }, [options, userVotes, totalVotes, votingInProgress, pollId]);
 
-  // Initialize vote counts on first render
-  React.useEffect(() => {
-    const initialCounts: Record<string, number> = {};
-    options.forEach(option => {
-      initialCounts[option.id] = option.votes;
-    });
-    setVoteCounts(initialCounts);
-  }, []); // Empty dependency array - only run once on mount
-
-  // Update vote counts when options change (for real-time updates)
-  // Removed automatic animation trigger - only animate on user click
-  React.useEffect(() => {
-    const newCounts: Record<string, number> = {};
-    localOptions.forEach(option => {
-      newCounts[option.id] = option.votes;
-    });
-    setVoteCounts(newCounts);
-  }, [localOptions]);
 
   // Ensure all options have animation values
   React.useEffect(() => {
@@ -159,12 +120,36 @@ export default function PollDisplay({
       return;
     }
 
-    // Mark this as an optimistic update
-    optimisticVotesRef.current.add(optionId);
-
     // Optimistic UI update - toggle vote immediately
     setLocalUserVotes(currentVotes => {
-      if (currentVotes.includes(optionId)) {
+      const hasVoted = currentVotes.includes(optionId);
+      
+      // Update localOptions manually since we ignore props
+      setLocalOptions(prevOptions => {
+        return prevOptions.map(opt => {
+          if (opt.id === optionId) {
+            const newCount = hasVoted ? opt.votes - 1 : opt.votes + 1;
+            return {
+              ...opt,
+              votes: Math.max(0, newCount)
+            };
+          }
+          return opt;
+        });
+      });
+      
+    // Update localTotalVotes (unique voters)
+    setLocalTotalVotes(prev => {
+      if (hasVoted) {
+        // Removing a vote: if this was my only vote, decrement unique voters
+        return currentVotes.length === 1 ? prev - 1 : prev;
+      } else {
+        // Adding a vote: if this is my first vote, increment unique voters
+        return currentVotes.length === 0 ? prev + 1 : prev;
+      }
+    });
+
+      if (hasVoted) {
         // Remove vote
         return currentVotes.filter(id => id !== optionId);
       } else {
@@ -193,23 +178,10 @@ export default function PollDisplay({
     onVote(optionId);
   };
 
-  // Calculate statistics
-  const getTotalVoters = () => {
-    const uniqueVoters = new Set<string>();
-    localOptions.forEach(option => {
-      option.voters.forEach(voter => {
-        uniqueVoters.add(voter.id);
-      });
-    });
-    return uniqueVoters.size;
-  };
+  const totalVoters = localTotalVotes;
 
-  const totalVoters = getTotalVoters();
-
-  // Sort options by vote count (descending) - most popular first
-  const sortedOptions = React.useMemo(() => {
-    return [...localOptions].sort((a, b) => b.votes - a.votes);
-  }, [localOptions]);
+  // No re-sorting on render to keep positions stable
+  const sortedOptions = localOptions;
 
   // Render voters avatars
   const VotersAvatars = ({ voters }: { voters: PollOption['voters'] }) => {
