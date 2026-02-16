@@ -94,7 +94,9 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   // Poll voting state - track loading per option (not per poll)
   // Key format: `${pollId}-${optionId}`
   const [votingInProgress, setVotingInProgress] = useState<Record<string, boolean>>({});
-  const voteTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const voteTimeoutRef = useRef<Record<string, NodeJS.Timeout | number>>({});
+  // Track pending votes locally to handle rapid clicking/race conditions
+  const pendingVotesRef = useRef<Record<string, string[]>>({});
   
   // Confirmation states removed
   // const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -678,20 +680,16 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
   // Helper function to handle poll voting with multiple selections
   const handlePollVote = async (pollId: string, optionId: string) => {
-    // Create unique key for this specific vote
+    // Create unique key for this specific vote animation state if needed
     const voteKey = `${pollId}-${optionId}`;
     
-    // Prevent multiple simultaneous votes on the same option (race condition protection)
-    if (votingInProgress[voteKey]) {
-      console.log('⏳ Vote already in progress for option:', voteKey);
-      return;
-    }
-
     try {
-      // Mark voting as in progress for this specific option
-      setVotingInProgress(prev => ({ ...prev, [voteKey]: true }));
-
-      const currentVotes = getUserVotesForPoll(pollId);
+      // Determine current votes: use pending local state if available, otherwise get from store
+      // This handles rapid clicking where store might not have updated yet
+      const currentVotes = pendingVotesRef.current[pollId] !== undefined 
+        ? pendingVotesRef.current[pollId] 
+        : getUserVotesForPoll(pollId);
+      
       let newVotes: string[];
 
       if (currentVotes.includes(optionId)) {
@@ -701,54 +699,69 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         // Add vote if not selected
         newVotes = [...currentVotes, optionId];
       }
+      
+      // Update local pending state immediately
+      pendingVotesRef.current[pollId] = newVotes;
 
       // Optimistic update - update UI immediately
       console.log('🚀 Optimistic vote update:', { pollId, newVotes });
       voteOnPollOptimistic(plan.id, pollId, newVotes, user.id);
 
-      // Use API to vote on poll
-      console.log('🗳️ Voting on poll via edge function:', { pollId, newVotes });
-      await plansService.voteOnPoll(plan.id, pollId, newVotes);
-      console.log('✅ Vote submitted successfully via edge function');
-
-      // Real-time subscription will handle updating the store
-      // No need to manually reload plans
-      
-      // Add a small delay before allowing next vote to prevent race conditions
-      await new Promise(resolve => setTimeout(resolve, 300));
-    } catch (error) {
-      console.error('❌ Error voting on poll:', error);
-
-      // Revert optimistic update on error
-      console.log('🔄 Reverting optimistic update due to error');
-      await loadPlans(user.id);
-
-      let errorMessage = 'Failed to submit vote. Please try again.';
-
-      if (error instanceof Error) {
-        if (error.message.includes('Authentication')) {
-          errorMessage = 'Your session has expired. Please sign out and sign back in.';
-        } else if (error.message.includes('403')) {
-          errorMessage = 'You need to respond "Going" to the plan to vote on polls.';
-        } else {
-          errorMessage = error.message;
-        }
+      // Debounce the API call
+      // Clear any existing timeout for this poll
+      if (voteTimeoutRef.current[pollId]) {
+        clearTimeout(voteTimeoutRef.current[pollId]);
       }
+      
+      // Set new timeout to send votes to server
+      voteTimeoutRef.current[pollId] = setTimeout(async () => {
+        try {
+          console.log('🗳️ Voting on poll via edge function (debounced):', { pollId, newVotes });
+          
+          // Get the latest votes from ref to ensure we send the most recent state
+          // (in case multiple clicks happened within the timeout)
+          const finalVotes = pendingVotesRef.current[pollId] || newVotes;
+          
+          await plansService.voteOnPoll(plan.id, pollId, finalVotes);
+          console.log('✅ Vote submitted successfully via edge function');
+          
+          // Clear pending state after successful submission
+          // We keep it until now to ensure subsequent clicks used the correct base
+          delete pendingVotesRef.current[pollId];
+        } catch (error) {
+          console.error('❌ Error submitting votes:', error);
+          
+          // Revert optimistic update on error by reloading plans
+          console.log('🔄 Reverting optimistic update due to error');
+          await loadPlans(user.id);
+          
+          // Clear pending state so next attempt starts fresh
+          delete pendingVotesRef.current[pollId];
 
-      Alert.alert(
-        'Error Voting',
-        errorMessage,
-        [{ text: 'OK', style: 'default' }]
-      );
-    } finally {
-      // Clear voting in progress state after a delay
-      setTimeout(() => {
-        setVotingInProgress(prev => {
-          const updated = { ...prev };
-          delete updated[voteKey];
-          return updated;
-        });
-      }, 500);
+          let errorMessage = 'Failed to submit vote. Please try again.';
+
+          if (error instanceof Error) {
+            if (error.message.includes('Authentication')) {
+              errorMessage = 'Your session has expired. Please sign out and sign back in.';
+            } else if (error.message.includes('403')) {
+              errorMessage = 'You need to respond "Going" to the plan to vote on polls.';
+            } else {
+              errorMessage = error.message;
+            }
+          }
+
+          Alert.alert(
+            'Error Voting',
+            errorMessage,
+            [{ text: 'OK', style: 'default' }]
+          );
+        }
+      }, 500); // 500ms debounce delay
+      
+    } catch (error) {
+      console.error('❌ Error processing vote:', error);
+      // If something fails locally, try to reload
+      loadPlans(user.id);
     }
   };
 
