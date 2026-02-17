@@ -1,6 +1,9 @@
 import { API_URL } from '@/constants/config';
 import { supabase } from './supabase';
 
+// Enable direct Supabase reads for plans
+const ENABLE_DIRECT_PLANS_READ = true;
+
 // Types matching the backend API
 export interface PlanParticipant {
   id: string;
@@ -163,6 +166,12 @@ class PlansService {
 
   // Get all user's plans with optional pagination
   async getPlans(status: 'all' | 'active' | 'completed' | 'cancelled' = 'all', limit?: number, offset?: number): Promise<Plan[]> {
+    // Use direct Supabase read if enabled
+    if (ENABLE_DIRECT_PLANS_READ) {
+      return this.getPlansDirect(status, limit, offset);
+    }
+
+    // Fallback to API
     try {
       console.log('📋 Fetching plans with status:', status, 'limit:', limit, 'offset:', offset);
       let query = `/plans?status=${status}`;
@@ -178,8 +187,131 @@ class PlansService {
     }
   }
 
+  // Direct Supabase: Get plans with participants
+  private async getPlansDirect(status: 'all' | 'active' | 'completed' | 'cancelled' = 'all', limit?: number, offset?: number): Promise<Plan[]> {
+    try {
+      console.log('📋 [DIRECT] Fetching plans from Supabase with status:', status, 'limit:', limit, 'offset:', offset);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Not authenticated');
+      }
+
+      // Build query for plans
+      // Note: RLS will automatically filter to only show plans where user is a participant or creator
+      let query = supabase
+        .from('plans')
+        .select(`
+          id,
+          title,
+          description,
+          location,
+          date,
+          is_anonymous,
+          max_participants,
+          status,
+          created_at,
+          updated_at,
+          creator:creator_id(id, name, username, avatar_url),
+          participants:plan_participants(
+            id,
+            user_id,
+            response,
+            created_at,
+            user:user_id(id, name, username, avatar_url)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      // Apply status filter
+      if (status !== 'all') {
+        query = query.eq('status', status);
+      }
+
+      // Apply pagination
+      if (limit !== undefined) {
+        query = query.limit(limit);
+      }
+      if (offset !== undefined) {
+        query = query.range(offset, offset + (limit || 10) - 1);
+      }
+
+      const { data: plans, error } = await query;
+
+      if (error) {
+        console.error('❌ [DIRECT] Supabase query error:', error);
+        throw error;
+      }
+
+      if (!plans) {
+        return [];
+      }
+
+      // Transform data to match API response format
+      const transformedPlans: Plan[] = plans.map((plan: any) => {
+        // Map participants
+        const participants: PlanParticipant[] = (plan.participants || []).map((p: any) => ({
+          id: p.user?.id || p.user_id,
+          name: p.user?.name || 'Unknown',
+          avatar: p.user?.avatar_url || '',
+          status: this.mapParticipantStatus(p.response),
+          conditionalFriends: [],
+          joinedAt: p.created_at
+        }));
+
+        return {
+          id: plan.id,
+          title: plan.title,
+          description: plan.description || '',
+          location: plan.location || '',
+          date: plan.date,
+          isAnonymous: plan.is_anonymous || false,
+          maxParticipants: plan.max_participants,
+          status: plan.status || 'active',
+          creator: plan.creator ? {
+            id: plan.creator.id,
+            name: plan.creator.name,
+            username: plan.creator.username,
+            avatar_url: plan.creator.avatar_url || ''
+          } : null,
+          participants,
+          polls: [], // Will be loaded separately if needed
+          completionVotes: [],
+          userCompletionVote: false,
+          attendance: [],
+          createdAt: plan.created_at,
+          updatedAt: plan.updated_at
+        };
+      });
+
+      console.log('✅ [DIRECT] Plans fetched successfully from Supabase:', transformedPlans.length);
+      return transformedPlans;
+    } catch (error) {
+      console.error('❌ [DIRECT] Error fetching plans from Supabase:', error);
+      throw error;
+    }
+  }
+
+  // Helper to map database status to frontend status
+  private mapParticipantStatus(dbStatus: string): 'pending' | 'going' | 'maybe' | 'declined' | 'conditional' {
+    const statusMap: Record<string, 'pending' | 'going' | 'maybe' | 'declined' | 'conditional'> = {
+      'pending': 'pending',
+      'accepted': 'going',
+      'maybe': 'maybe',
+      'declined': 'declined',
+      'conditional': 'conditional'
+    };
+    return statusMap[dbStatus] || 'pending';
+  }
+
   // Get specific plan details
   async getPlan(planId: string): Promise<Plan> {
+    // Use direct Supabase read if enabled
+    if (ENABLE_DIRECT_PLANS_READ) {
+      return this.getPlanDirect(planId);
+    }
+
+    // Fallback to API
     try {
       console.log('📋 Fetching plan details:', planId);
       const plan = await this.apiRequest(`/plans/${planId}`);
@@ -187,6 +319,162 @@ class PlansService {
       return plan;
     } catch (error) {
       console.error('❌ Error fetching plan details:', error);
+      throw error;
+    }
+  }
+
+  // Direct Supabase: Get single plan with full details (including polls)
+  private async getPlanDirect(planId: string): Promise<Plan> {
+    try {
+      console.log('📋 [DIRECT] Fetching plan details from Supabase:', planId);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Not authenticated');
+      }
+
+      // Get plan with all related data
+      const { data: plan, error } = await supabase
+        .from('plans')
+        .select(`
+          id,
+          title,
+          description,
+          location,
+          date,
+          is_anonymous,
+          max_participants,
+          status,
+          created_at,
+          updated_at,
+          creator:creator_id(id, name, username, avatar_url),
+          participants:plan_participants(
+            id,
+            user_id,
+            response,
+            created_at,
+            user:user_id(id, name, username, avatar_url)
+          )
+        `)
+        .eq('id', planId)
+        .single();
+
+      if (error) {
+        console.error('❌ [DIRECT] Supabase query error:', error);
+        throw error;
+      }
+
+      if (!plan) {
+        throw new Error('Plan not found');
+      }
+
+      // Get polls for this plan
+      const { data: polls, error: pollsError } = await supabase
+        .from('plan_polls')
+        .select(`
+          id,
+          title,
+          poll_type,
+          ends_at,
+          invited_users,
+          created_at,
+          created_by,
+          creator:created_by(id, name, username, avatar_url),
+          options:plan_poll_options(
+            id,
+            option_text,
+            option_order,
+            votes:plan_poll_votes(
+              id,
+              user_id,
+              voter:user_id(id, name, avatar_url)
+            )
+          )
+        `)
+        .eq('plan_id', planId)
+        .order('created_at', { ascending: false });
+
+      if (pollsError) {
+        console.error('❌ [DIRECT] Error fetching polls:', pollsError);
+      }
+
+      // Transform participants
+      const participants: PlanParticipant[] = (plan.participants || []).map((p: any) => ({
+        id: p.user?.id || p.user_id,
+        name: p.user?.name || 'Unknown',
+        avatar: p.user?.avatar_url || '',
+        status: this.mapParticipantStatus(p.response),
+        conditionalFriends: [],
+        joinedAt: p.created_at
+      }));
+
+      // Transform polls
+      const transformedPolls: Poll[] = (polls || []).map((poll: any) => {
+        const options: PollOption[] = (poll.options || []).map((opt: any) => {
+          const votes = (opt.votes || []).map((v: any) => v.user_id);
+          const voters = (opt.votes || []).map((v: any) => ({
+            id: v.voter?.id || v.user_id,
+            name: v.voter?.name || 'Unknown',
+            avatar: v.voter?.avatar_url || ''
+          }));
+
+          return {
+            id: opt.id,
+            text: opt.option_text,
+            votes,
+            voters
+          };
+        });
+
+        return {
+          id: poll.id,
+          question: poll.title,
+          type: poll.poll_type as 'when' | 'where' | 'custom' | 'invitation',
+          expiresAt: poll.ends_at,
+          invitedUsers: poll.invited_users || [],
+          createdBy: poll.creator ? {
+            id: poll.creator.id,
+            name: poll.creator.name,
+            username: poll.creator.username,
+            avatar_url: poll.creator.avatar_url || ''
+          } : {
+            id: poll.created_by,
+            name: 'Unknown',
+            username: 'unknown',
+            avatar_url: ''
+          },
+          options
+        };
+      });
+
+      const transformedPlan: Plan = {
+        id: plan.id,
+        title: plan.title,
+        description: plan.description || '',
+        location: plan.location || '',
+        date: plan.date,
+        isAnonymous: plan.is_anonymous || false,
+        maxParticipants: plan.max_participants,
+        status: plan.status || 'active',
+        creator: plan.creator ? {
+          id: plan.creator.id,
+          name: plan.creator.name,
+          username: plan.creator.username,
+          avatar_url: plan.creator.avatar_url || ''
+        } : null,
+        participants,
+        polls: transformedPolls,
+        completionVotes: [],
+        userCompletionVote: false,
+        attendance: [],
+        createdAt: plan.created_at,
+        updatedAt: plan.updated_at
+      };
+
+      console.log('✅ [DIRECT] Plan details fetched successfully from Supabase');
+      return transformedPlan;
+    } catch (error) {
+      console.error('❌ [DIRECT] Error fetching plan details from Supabase:', error);
       throw error;
     }
   }

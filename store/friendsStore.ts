@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import { relationshipService, RelationshipStatus, Friend, FriendRequest } from '@/lib/relationship-service';
+import { friendsDirectService } from '@/lib/friends-direct-service';
 import { prefetchAvatars } from '@/utils/avatarCache';
 
 interface User {
@@ -230,7 +231,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
   isLoadingRequests: false,
   isLoadingFriends: false,
 
-  // Search users with relationship status
+  // Search users with relationship status (DIRECT SUPABASE)
   searchUsers: async (query: string) => {
     if (!query || query.length < 2) {
       set({ searchResults: [] });
@@ -239,8 +240,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
 
     set({ isSearching: true });
     try {
-      console.log('🔍 Searching users:', query);
-      const users = await relationshipService.searchUsers(query);
+      console.log('🔍 [DIRECT] Searching users:', query);
+      // Use direct Supabase service for reading data
+      const users = await friendsDirectService.searchUsers(query);
       set({ searchResults: users });
       void prefetchAvatars(
         users.map(user => ({
@@ -248,9 +250,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           avatarUrl: user.avatar_url
         }))
       );
-      console.log('✅ Search completed, found:', users.length, 'users');
+      console.log('✅ [DIRECT] Search completed, found:', users.length, 'users');
     } catch (error) {
-      console.error('❌ Error searching users:', error);
+      console.error('❌ [DIRECT] Error searching users:', error);
       set({ searchResults: [] });
     } finally {
       set({ isSearching: false });
@@ -449,7 +451,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     }
   },
 
-  // Load friends
+  // Load friends (DIRECT SUPABASE)
   loadFriends: async () => {
     if (!shouldRefreshData('friends')) {
       console.log('⚡ Using cached friends data');
@@ -458,8 +460,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     
     set({ isLoadingFriends: true });
     try {
-      console.log('👥 Loading friends...');
-      const friends = await relationshipService.getFriends();
+      console.log('👥 [DIRECT] Loading friends...');
+      // Use direct Supabase service for reading data
+      const friends = await friendsDirectService.getFriends();
       set({ friends });
       void prefetchAvatars(
         friends.map(friend => ({
@@ -468,16 +471,16 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         }))
       );
       lastLoadTimes['friends'] = Date.now();
-      console.log('✅ Friends loaded:', friends.length);
+      console.log('✅ [DIRECT] Friends loaded:', friends.length);
     } catch (error) {
-      console.error('❌ Error loading friends:', error);
+      console.error('❌ [DIRECT] Error loading friends:', error);
       set({ friends: [] });
     } finally {
       set({ isLoadingFriends: false });
     }
   },
 
-  // Load incoming requests
+  // Load incoming requests (DIRECT SUPABASE)
   loadIncomingRequests: async () => {
     if (!shouldRefreshData('incoming')) {
       console.log('⚡ Using cached incoming requests data');
@@ -486,8 +489,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     
     set({ isLoadingRequests: true });
     try {
-      console.log('📥 Loading incoming requests...');
-      const requests = await relationshipService.getIncomingRequests();
+      console.log('📥 [DIRECT] Loading incoming requests...');
+      // Use direct Supabase service for reading data
+      const requests = await friendsDirectService.getIncomingRequests();
       set({ incomingRequests: requests });
       void prefetchAvatars(
         requests.map(request => ({
@@ -496,16 +500,16 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         }))
       );
       lastLoadTimes['incoming'] = Date.now();
-      console.log('✅ Incoming requests loaded:', requests.length);
+      console.log('✅ [DIRECT] Incoming requests loaded:', requests.length);
     } catch (error) {
-      console.error('❌ Error loading incoming requests:', error);
+      console.error('❌ [DIRECT] Error loading incoming requests:', error);
       set({ incomingRequests: [] });
     } finally {
       set({ isLoadingRequests: false });
     }
   },
 
-  // Load outgoing requests
+  // Load outgoing requests (DIRECT SUPABASE)
   loadOutgoingRequests: async () => {
     if (!shouldRefreshData('outgoing')) {
       console.log('⚡ Using cached outgoing requests data');
@@ -513,8 +517,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     }
     
     try {
-      console.log('📤 Loading outgoing requests...');
-      const requests = await relationshipService.getOutgoingRequests();
+      console.log('📤 [DIRECT] Loading outgoing requests...');
+      // Use direct Supabase service for reading data
+      const requests = await friendsDirectService.getOutgoingRequests();
       set({ outgoingRequests: requests });
       void prefetchAvatars(
         requests.map(request => ({
@@ -523,9 +528,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         }))
       );
       lastLoadTimes['outgoing'] = Date.now();
-      console.log('✅ Outgoing requests loaded:', requests.length);
+      console.log('✅ [DIRECT] Outgoing requests loaded:', requests.length);
     } catch (error) {
-      console.error('❌ Error loading outgoing requests:', error);
+      console.error('❌ [DIRECT] Error loading outgoing requests:', error);
       set({ outgoingRequests: [] });
     }
   },
