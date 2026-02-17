@@ -97,7 +97,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const voteTimeoutRef = useRef<Record<string, NodeJS.Timeout | number>>({});
   // Track pending votes locally to handle rapid clicking/race conditions
   const pendingVotesRef = useRef<Record<string, string[]>>({});
-  
+  const cleanupTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
+
   // Confirmation states removed
   // const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   // const [confirmationMessage, setConfirmationMessage] = useState('');
@@ -618,20 +619,22 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       Alert.alert('Error', 'Failed to update status. Please try again.');
     }
   };
-  
-  // Handle confirmation modal completion - REMOVED
-  // const handleConfirmationComplete = async () => { ... }
-  
+
   // Helper function to get user votes for a poll
   const getUserVotesForPoll = (pollId: string): string[] => {
+    // 1. Check pending local votes first (High Priority)
+    // This ensures UI reflects immediate user action regardless of store state/glitches
+    if (pendingVotesRef.current[pollId] !== undefined) {
+      return pendingVotesRef.current[pollId];
+    }
+
+    // 2. Fallback to store data
     const poll = polls.find(p => p.id === pollId);
     if (!poll) return [];
 
     const userVotes = poll.options
       .filter(option => option.votes.includes(user.id))
       .map(option => option.id);
-
-    //console.log('🔍 getUserVotesForPoll:', { pollId, userVotes, userId: user.id, pollOptions: poll.options.map(o => ({ id: o.id, votes: o.votes })) });
 
     return userVotes;
   };
@@ -641,11 +644,15 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     const poll = polls.find(p => p.id === pollId);
     if (!poll) return 0;
     
-    // Count unique voters
+    // Use prepared poll data to get accurate counts that include local optimistic updates
+    const preparedPoll = preparePollForDisplay(poll);
+    
+    // Count unique voters from the prepared options
     const uniqueVoters = new Set<string>();
-    poll.options.forEach(option => {
-      option.votes.forEach(voterId => {
-        uniqueVoters.add(voterId);
+    preparedPoll.options.forEach(option => {
+      // We need to look at the voters array which contains objects with IDs
+      option.voters.forEach(voter => {
+        uniqueVoters.add(voter.id);
       });
     });
     
@@ -654,24 +661,41 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   
   // Prepare poll data for display
   const preparePollForDisplay = (poll: Poll) => {
+    // Get the authoritative user votes (local pending OR store)
+    const currentUserVotes = getUserVotesForPoll(poll.id);
+
     return {
       ...poll,
-      options: poll.options.map(option => ({
-        ...option,
-        votes: option.votes.length,
-        voters: option.votes.map(voterId => {
-          const participant = latestPlan.participants.find(p => p.id === voterId);
-          return participant ? {
-            id: participant.id,
-            name: participant.name,
-            avatar: participant.avatar
-          } : {
-            id: voterId,
-            name: `User ${voterId}`,
-            avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`
-          };
-        })
-      }))
+      options: poll.options.map(option => {
+        // Calculate effective votes by patching store data with local state
+        let effectiveVoteIds = [...option.votes];
+        const storeIncludesUser = effectiveVoteIds.includes(user.id);
+        const localIncludesUser = currentUserVotes.includes(option.id);
+
+        // Apply local override
+        if (localIncludesUser && !storeIncludesUser) {
+           effectiveVoteIds.push(user.id);
+        } else if (!localIncludesUser && storeIncludesUser) {
+           effectiveVoteIds = effectiveVoteIds.filter(id => id !== user.id);
+        }
+
+        return {
+          ...option,
+          votes: effectiveVoteIds.length,
+          voters: effectiveVoteIds.map(voterId => {
+            const participant = latestPlan.participants.find(p => p.id === voterId);
+            return participant ? {
+              id: participant.id,
+              name: participant.name,
+              avatar: participant.avatar
+            } : {
+              id: voterId,
+              name: `User ${voterId}`,
+              avatar: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face`
+            };
+          })
+        };
+      })
     };
   };
   
@@ -684,11 +708,10 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     const voteKey = `${pollId}-${optionId}`;
     
     try {
-      // Determine current votes: use pending local state if available, otherwise get from store
-      // This handles rapid clicking where store might not have updated yet
+      // Determine current votes: always use pending local state if available as base
       const currentVotes = pendingVotesRef.current[pollId] !== undefined 
         ? pendingVotesRef.current[pollId] 
-        : getUserVotesForPoll(pollId);
+        : getUserVotesForPoll(pollId); // This will fallback to store if no pending
       
       let newVotes: string[];
 
@@ -700,14 +723,29 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         newVotes = [...currentVotes, optionId];
       }
       
-      // Update local pending state immediately
+      // 1. Update local pending state immediately
       pendingVotesRef.current[pollId] = newVotes;
+      
+      // 2. Extend/Refresh cleanup timer
+      // We keep the pending state active for a safety window (e.g. 3s) to bridge 
+      // the gap between optimistic update -> realtime glitch -> final realtime update
+      if (cleanupTimeoutRef.current[pollId]) {
+        clearTimeout(cleanupTimeoutRef.current[pollId]);
+      }
+      
+      cleanupTimeoutRef.current[pollId] = setTimeout(() => {
+        delete pendingVotesRef.current[pollId];
+        // Force re-render to switch to store source
+        // We use setVotingInProgress as a trigger, though the value doesn't matter much
+        setVotingInProgress(prev => ({ ...prev }));
+      }, 3000);
 
-      // Optimistic update - update UI immediately
+      // 3. Optimistic update - update UI store immediately
+      // This ensures other views (dashboard etc) get updated too
       console.log('🚀 Optimistic vote update:', { pollId, newVotes });
       voteOnPollOptimistic(plan.id, pollId, newVotes, user.id);
 
-      // Debounce the API call
+      // 4. Debounce the API call
       // Clear any existing timeout for this poll
       if (voteTimeoutRef.current[pollId]) {
         clearTimeout(voteTimeoutRef.current[pollId]);
@@ -725,33 +763,43 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
           await plansService.voteOnPoll(plan.id, pollId, finalVotes);
           console.log('✅ Vote submitted successfully via edge function');
           
-          // Clear pending state after successful submission
-          // We keep it until now to ensure subsequent clicks used the correct base
-          delete pendingVotesRef.current[pollId];
-        } catch (error) {
+          // NOTE: We do NOT delete pendingVotesRef here anymore.
+          // We rely on the cleanupTimeout to clear it after the safety window.
+          // This prevents the UI from flickering back to an old Realtime state 
+          // that might arrive shortly after this call.
+          
+        } catch (error: any) {
           console.error('❌ Error submitting votes:', error);
           
-          // Revert optimistic update on error by reloading plans
-          console.log('🔄 Reverting optimistic update due to error');
-          await loadPlans(user.id);
-          
-          // Clear pending state so next attempt starts fresh
+          // Clear pending state so UI shows the error state (reverted)
           delete pendingVotesRef.current[pollId];
+          
+          // Force UI update to remove optimistic state
+          setVotingInProgress(prev => ({ ...prev }));
 
+          // Revert optimistic update by reloading plans (safely)
+          console.log('🔄 Reverting optimistic update due to error');
+          loadPlans(user.id).catch(err => console.log('Silent loadPlans fail:', err));
+          
           let errorMessage = 'Failed to submit vote. Please try again.';
+          let errorTitle = 'Error Voting';
 
-          if (error instanceof Error) {
-            if (error.message.includes('Authentication')) {
-              errorMessage = 'Your session has expired. Please sign out and sign back in.';
-            } else if (error.message.includes('403')) {
-              errorMessage = 'You need to respond "Going" to the plan to vote on polls.';
-            } else {
-              errorMessage = error.message;
-            }
+          // Robust error handling for network issues
+          const msg = error?.message || (typeof error === 'string' ? error : '');
+          
+          if (msg.includes('Authentication')) {
+            errorMessage = 'Your session has expired. Please sign out and sign back in.';
+          } else if (msg.includes('403')) {
+            errorMessage = 'You need to respond "Going" to the plan to vote on polls.';
+          } else if (msg.toLowerCase().includes('network') || msg.toLowerCase().includes('fetch')) {
+            errorTitle = 'No Internet Connection';
+            errorMessage = 'Your vote could not be saved because the internet connection was lost. Please check your connection and try again.';
+          } else if (msg) {
+            errorMessage = msg;
           }
 
           Alert.alert(
-            'Error Voting',
+            errorTitle,
             errorMessage,
             [{ text: 'OK', style: 'default' }]
           );
