@@ -216,7 +216,7 @@ class PlansService {
           participants:plan_participants(
             id,
             user_id,
-            response,
+            status,
             created_at,
             user:user_id(id, name, username, avatar_url)
           )
@@ -254,7 +254,7 @@ class PlansService {
           id: p.user?.id || p.user_id,
           name: p.user?.name || 'Unknown',
           avatar: p.user?.avatar_url || '',
-          status: this.mapParticipantStatus(p.response),
+          status: this.mapParticipantStatus(p.status ?? p.response),
           conditionalFriends: [],
           joinedAt: p.created_at
         }));
@@ -297,6 +297,7 @@ class PlansService {
     const statusMap: Record<string, 'pending' | 'going' | 'maybe' | 'declined' | 'conditional'> = {
       'pending': 'pending',
       'accepted': 'going',
+      'going': 'going',
       'maybe': 'maybe',
       'declined': 'declined',
       'conditional': 'conditional'
@@ -351,7 +352,7 @@ class PlansService {
           participants:plan_participants(
             id,
             user_id,
-            response,
+            status,
             created_at,
             user:user_id(id, name, username, avatar_url)
           )
@@ -403,7 +404,7 @@ class PlansService {
         id: p.user?.id || p.user_id,
         name: p.user?.name || 'Unknown',
         avatar: p.user?.avatar_url || '',
-        status: this.mapParticipantStatus(p.response),
+        status: this.mapParticipantStatus(p.status ?? p.response),
         conditionalFriends: [],
         joinedAt: p.created_at
       }));
