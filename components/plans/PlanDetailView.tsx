@@ -339,6 +339,13 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    // Refresh plan data when switching to Control Panel so polls are always
+    // up-to-date (e.g. after returning from background while on Chat tab).
+    // Safe for realtime: this is an event handler, never a useEffect, so it
+    // fires exactly once per deliberate tab switch and cannot loop.
+    if (tab === 'Control Panel' && user?.id) {
+      loadPlan(latestPlan.id, user.id).catch(() => {});
+    }
   };
   
   const handleDescriptionSave = () => {
