@@ -14,7 +14,7 @@ import {
   Keyboard,
   Modal,
   Dimensions,
-  RefreshControl
+  ActivityIndicator
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { 
@@ -60,10 +60,9 @@ interface PlanDetailViewProps {
   editedTitle?: string;
   onEditPermissionChange?: (canEdit: boolean) => void;
   initialTab?: string;
-  isInitialLoading?: boolean;
 }
 
-export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, onEditPermissionChange, initialTab, isInitialLoading }: PlanDetailViewProps) {
+export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, onEditPermissionChange, initialTab }: PlanDetailViewProps) {
   const { user } = useAuth();
   const { 
     voteOnPollOptimistic,
@@ -119,7 +118,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [isPollLoading, setIsPollLoading] = useState(false);
   const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
-  const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
+  const [isRefreshingControlPanel, setIsRefreshingControlPanel] = useState(false);
   const hasMarkedControlPanelRef = useRef(false);
 
   
@@ -347,19 +346,11 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     // Safe for realtime: this is an event handler, never a useEffect, so it
     // fires exactly once per deliberate tab switch and cannot loop.
     if (tab === 'Control Panel' && user?.id) {
-      setIsRefreshingPlan(true);
+      setIsRefreshingControlPanel(true);
       loadPlan(latestPlan.id, user.id)
         .catch(() => {})
-        .finally(() => setIsRefreshingPlan(false));
+        .finally(() => setIsRefreshingControlPanel(false));
     }
-  };
-
-  const handleManualRefresh = () => {
-    if (!user?.id) return;
-    setIsRefreshingPlan(true);
-    loadPlan(latestPlan.id, user.id)
-      .catch(() => {})
-      .finally(() => setIsRefreshingPlan(false));
   };
   
   const handleDescriptionSave = () => {
@@ -933,15 +924,14 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
               style={styles.content}
               contentContainerStyle={styles.contentContainer}
               showsVerticalScrollIndicator={Platform.OS === 'web'}
-              refreshControl={
-                <RefreshControl
-                  refreshing={!!isInitialLoading || isRefreshingPlan}
-                  onRefresh={handleManualRefresh}
-                  tintColor={Colors.light.primary}
-                  colors={[Colors.light.primary]}
-                />
-              }
             >
+          {/* Subtle refresh indicator shown while loadPlan fetches fresh data */}
+          {isRefreshingControlPanel && (
+            <View style={styles.refreshBanner}>
+              <ActivityIndicator size="small" color={Colors.light.primary} />
+              <Text style={styles.refreshBannerText}>Updating...</Text>
+            </View>
+          )}
           {/* Description Section - Title moved to modal header */}
           <PlanTitle 
             title={displayTitle}
@@ -1299,6 +1289,22 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   
+  refreshBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    gap: 8,
+    backgroundColor: `${Colors.light.primary}10`,
+    borderBottomWidth: 1,
+    borderBottomColor: `${Colors.light.primary}20`,
+  },
+  refreshBannerText: {
+    fontSize: 13,
+    color: Colors.light.primary,
+    fontWeight: '500',
+  },
   chatContainer: {
     flex: 1,
   },
