@@ -209,6 +209,11 @@ interface PlansState {
     visited: Set<string>
   ) => boolean;
   
+  // Surgical polls-only refresh: queries plan_polls directly from Supabase and
+  // patches only the polls field in the store. Does NOT replace the whole plan
+  // and does NOT call recalculatePlanArrays, so realtime vote updates are safe.
+  refreshPlanPolls: (planId: string) => Promise<void>;
+
   // Poll actions - These are now handled via API calls
   // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => void;
@@ -829,6 +834,69 @@ const usePlansStore = create<PlansState>((set, get) => ({
     return allFriendsSatisfied;
   },
   
+  // Surgical polls-only refresh using a direct Supabase query.
+  // Only updates the polls field in the store – does NOT replace the whole plan
+  // and does NOT call recalculatePlanArrays, keeping realtime vote updates safe.
+  refreshPlanPolls: async (planId: string) => {
+    try {
+      const { data: polls, error } = await supabase
+        .from('plan_polls')
+        .select(`
+          id,
+          title,
+          poll_type,
+          ends_at,
+          invited_users,
+          options:plan_poll_options(
+            id,
+            option_text,
+            option_order,
+            votes:plan_poll_votes(user_id)
+          )
+        `)
+        .eq('plan_id', planId)
+        .order('created_at', { ascending: false });
+
+      if (error || !polls) {
+        console.warn('⚠️ refreshPlanPolls: Supabase query failed', error);
+        return;
+      }
+
+      const transformedPolls: Poll[] = polls.map((poll: any) => ({
+        id: poll.id,
+        question: poll.title,
+        type: poll.poll_type as Poll['type'],
+        expiresAt: poll.ends_at ? new Date(poll.ends_at).getTime() : undefined,
+        invitedUsers: poll.invited_users || [],
+        options: (poll.options || [])
+          .sort((a: any, b: any) => (a.option_order ?? 0) - (b.option_order ?? 0))
+          .map((opt: any) => ({
+            id: opt.id,
+            text: opt.option_text,
+            votes: (opt.votes || []).map((v: any) => v.user_id)
+          }))
+      }));
+
+      // Single atomic functional update – reads latest state so concurrent
+      // realtime writes (votes, participant changes) are never overwritten.
+      set(state => {
+        const existingPlan = state.plans[planId];
+        if (!existingPlan) return state;
+        const updatedPlan: Plan = { ...existingPlan, polls: transformedPolls };
+        return {
+          plans: { ...state.plans, [planId]: updatedPlan },
+          invitations: state.invitations.map(p => p.id === planId ? updatedPlan : p),
+          activePlans: state.activePlans.map(p => p.id === planId ? updatedPlan : p),
+          completedPlans: state.completedPlans.map(p => p.id === planId ? updatedPlan : p)
+        };
+      });
+
+      console.log('✅ refreshPlanPolls: polls patched in store for plan', planId);
+    } catch (error) {
+      console.error('❌ refreshPlanPolls: unexpected error', error);
+    }
+  },
+
   // Poll actions - These are now handled via API calls
   // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => {
@@ -1780,7 +1848,7 @@ function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
 }
 
 // NEW: Direct poll vote update handler (chat-style, instant!)
-function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
+async function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   const eventType = payload.eventType;
   const newVote = payload.new;
   const oldVote = payload.old;
@@ -1802,10 +1870,21 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   const allPlans = Object.values(store.plans);
   
   // Find plan that contains this poll
-  const plan = allPlans.find(p => p.polls?.some(poll => poll.id === pollId));
+  let plan = allPlans.find(p => p.polls?.some(poll => poll.id === pollId));
   
   if (!plan) {
-    console.log('⚠️ Plan with poll not in store yet');
+    // Plan not in store (e.g. other account has different plans loaded) – fetch and refresh so UI can update
+    const { data: pollRow } = await supabase
+      .from('plan_polls')
+      .select('plan_id')
+      .eq('id', pollId)
+      .single();
+    if (pollRow?.plan_id) {
+      schedulePlanRefresh(pollRow.plan_id, currentUserId, 0, 'poll_vote');
+      console.log('⚠️ Plan with poll not in store – scheduled refresh for plan', pollRow.plan_id);
+    } else {
+      console.log('⚠️ Plan with poll not in store yet (could not resolve plan_id)');
+    }
     return;
   }
 
@@ -1817,23 +1896,20 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
 
   console.log(`🗳️ INSTANT poll vote update for poll ${pollId} in plan ${plan.id}`);
 
-  // Check if this is a duplicate of a recent optimistic update (within 2 seconds)
+  // Only skip if this is clearly the echo of OUR OWN vote from THIS device (within ~400ms).
+  // Using a short window prevents skipping legitimate updates from the same user on another device:
+  // the other device's realtime event arrives later, so timeSinceOptimistic on this device is large.
   const lastOptimistic = lastOptimisticUpdate[pollId];
   if (lastOptimistic && userId === currentUserId) {
     const timeSinceOptimistic = Date.now() - lastOptimistic.timestamp;
-    
-    if (timeSinceOptimistic < 2000) {
-      // Check if the vote state matches the optimistic update
+    if (timeSinceOptimistic < 400) {
       const currentUserVotes = poll.options
         .filter(opt => opt.votes.includes(userId))
         .map(opt => opt.id)
         .sort();
-      
       const optimisticVotes = lastOptimistic.optionIds;
-      
-      // If votes match, skip this realtime update (it's a duplicate of optimistic)
       if (JSON.stringify(currentUserVotes) === JSON.stringify(optimisticVotes)) {
-        console.log(`⏭️ Skipping duplicate realtime update (matches optimistic update from ${timeSinceOptimistic}ms ago)`);
+        console.log(`⏭️ Skipping duplicate realtime update (echo from this device ${timeSinceOptimistic}ms ago)`);
         return;
       }
     }

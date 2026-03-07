@@ -69,7 +69,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     invitations,
     activePlans,
     loadPlans,
-    loadPlan
+    refreshPlanPolls
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   // const { getUnreadCount } = useChatStore();
@@ -341,13 +341,13 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
-    // Refresh plan data when switching to Control Panel so polls are always
-    // up-to-date (e.g. after returning from background while on Chat tab).
-    // Safe for realtime: this is an event handler, never a useEffect, so it
-    // fires exactly once per deliberate tab switch and cannot loop.
-    if (tab === 'Control Panel' && user?.id) {
+    // Surgically refresh only polls when switching to Control Panel.
+    // refreshPlanPolls queries plan_polls directly from Supabase and patches
+    // only the polls field – it never replaces the whole plan or calls
+    // recalculatePlanArrays, so concurrent realtime vote updates are safe.
+    if (tab === 'Control Panel') {
       setIsRefreshingControlPanel(true);
-      loadPlan(latestPlan.id, user.id)
+      refreshPlanPolls(latestPlan.id)
         .catch(() => {})
         .finally(() => setIsRefreshingControlPanel(false));
     }
@@ -528,11 +528,10 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
       console.log('✅ Users invited successfully, received updated plan');
       
-      // Immediately reload the specific plan to show updated participant list
-      // This ensures the UI is in sync with the backend
-      console.log('🔄 Reloading plan data to show updated participants...');
-      await loadPlan(latestPlan.id, user?.id);
-      console.log('✅ Plan data reloaded successfully');
+      // Reload plans so the updated participant list is visible immediately.
+      console.log('🔄 Reloading plans to show updated participants...');
+      await loadPlans(user?.id);
+      console.log('✅ Plans reloaded successfully');
       
       Alert.alert(
         'Friends Invited!',
