@@ -209,11 +209,6 @@ interface PlansState {
     visited: Set<string>
   ) => boolean;
   
-  // Surgical polls-only refresh: queries plan_polls directly from Supabase and
-  // patches only the polls field in the store. Does NOT replace the whole plan
-  // and does NOT call recalculatePlanArrays, so realtime vote updates are safe.
-  refreshPlanPolls: (planId: string) => Promise<void>;
-
   // Poll actions - These are now handled via API calls
   // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => void;
@@ -834,69 +829,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
     return allFriendsSatisfied;
   },
   
-  // Surgical polls-only refresh using a direct Supabase query.
-  // Only updates the polls field in the store – does NOT replace the whole plan
-  // and does NOT call recalculatePlanArrays, keeping realtime vote updates safe.
-  refreshPlanPolls: async (planId: string) => {
-    try {
-      const { data: polls, error } = await supabase
-        .from('plan_polls')
-        .select(`
-          id,
-          title,
-          poll_type,
-          ends_at,
-          invited_users,
-          options:plan_poll_options(
-            id,
-            option_text,
-            option_order,
-            votes:plan_poll_votes(user_id)
-          )
-        `)
-        .eq('plan_id', planId)
-        .order('created_at', { ascending: false });
-
-      if (error || !polls) {
-        console.warn('⚠️ refreshPlanPolls: Supabase query failed', error);
-        return;
-      }
-
-      const transformedPolls: Poll[] = polls.map((poll: any) => ({
-        id: poll.id,
-        question: poll.title,
-        type: poll.poll_type as Poll['type'],
-        expiresAt: poll.ends_at ? new Date(poll.ends_at).getTime() : undefined,
-        invitedUsers: poll.invited_users || [],
-        options: (poll.options || [])
-          .sort((a: any, b: any) => (a.option_order ?? 0) - (b.option_order ?? 0))
-          .map((opt: any) => ({
-            id: opt.id,
-            text: opt.option_text,
-            votes: (opt.votes || []).map((v: any) => v.user_id)
-          }))
-      }));
-
-      // Single atomic functional update – reads latest state so concurrent
-      // realtime writes (votes, participant changes) are never overwritten.
-      set(state => {
-        const existingPlan = state.plans[planId];
-        if (!existingPlan) return state;
-        const updatedPlan: Plan = { ...existingPlan, polls: transformedPolls };
-        return {
-          plans: { ...state.plans, [planId]: updatedPlan },
-          invitations: state.invitations.map(p => p.id === planId ? updatedPlan : p),
-          activePlans: state.activePlans.map(p => p.id === planId ? updatedPlan : p),
-          completedPlans: state.completedPlans.map(p => p.id === planId ? updatedPlan : p)
-        };
-      });
-
-      console.log('✅ refreshPlanPolls: polls patched in store for plan', planId);
-    } catch (error) {
-      console.error('❌ refreshPlanPolls: unexpected error', error);
-    }
-  },
-
   // Poll actions - These are now handled via API calls
   // The real-time subscriptions will update the store automatically
   addPoll: (planId: string, poll: Poll) => {

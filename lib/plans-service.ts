@@ -675,8 +675,8 @@ class PlansService {
         throw new Error(error.message || 'Failed to edit poll');
       }
 
-      if (data?.error) {
-        throw new Error(data.error);
+      if (data?.success === false || data?.error) {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to edit poll');
       }
 
       console.log('✅ Poll edited successfully via edge function');

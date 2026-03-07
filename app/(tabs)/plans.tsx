@@ -26,7 +26,7 @@ export default function PlansScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   
   const { user } = useAuth();
-  const { invitations, activePlans, completedPlans, isLoading, loadPlans, refreshPlanPolls, loadCompletedPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
+  const { invitations, activePlans, completedPlans, isLoading, loadPlans, loadCompletedPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -246,9 +246,6 @@ export default function PlansScreen() {
         // Small delay to ensure app is fully active
         setTimeout(() => {
           checkAndRestartSubscriptions(user.id);
-          // Also refresh plan data so any missed realtime events (e.g. polls created
-          // while the app was backgrounded) are picked up immediately.
-          loadPlans(user.id).catch(() => {});
         }, 1000);
       }
     });
@@ -256,7 +253,7 @@ export default function PlansScreen() {
     return () => {
       subscription?.remove();
     };
-  }, [user?.id, checkAndRestartSubscriptions, loadPlans]);
+  }, [user?.id, checkAndRestartSubscriptions]);
 
   // Handle navigation focus (when user returns to plans tab)
   useFocusEffect(
@@ -391,12 +388,6 @@ export default function PlansScreen() {
     if (plan.hasUnreadUpdates) {
       markUpdatesAsRead(plan.id);
     }
-
-    // Surgically refresh only polls when a plan is opened.
-    // refreshPlanPolls patches only the polls field in the store without
-    // replacing the whole plan or calling recalculatePlanArrays, so it
-    // cannot overwrite concurrent realtime vote updates.
-    refreshPlanPolls(plan.id).catch(() => {});
   };
   
   const handleCloseModal = () => {
@@ -548,6 +539,11 @@ export default function PlansScreen() {
                   keyExtractor={(item) => `completedPlans-${item.id}`}
                   contentContainerStyle={styles.listContent}
                   ListEmptyComponent={renderEmptyState}
+                  ListFooterComponent={() => (
+                    filteredCompletedPlans.length > 0 ? (
+                      <View style={styles.finalSeparator} />
+                    ) : null
+                  )}
                   refreshControl={
                     <RefreshControl
                       refreshing={isRefreshing || isLoading}

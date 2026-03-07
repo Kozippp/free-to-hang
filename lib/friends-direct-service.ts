@@ -51,24 +51,42 @@ export interface UserSearchResult {
   relationshipStatus: RelationshipStatus;
 }
 
+/** Returns true if the error looks like a transient network/connection failure. */
+function isRetryableNetworkError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    /connection timeout|upstream connect error|disconnect\/reset|ECONNRESET|ETIMEDOUT|network request failed/i.test(msg)
+  );
+}
+
+/** Run fn; on retryable network error, wait then retry once. */
+async function withRetryOnce<T>(fn: () => Promise<T>, delayMs = 2000): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!isRetryableNetworkError(err)) throw err;
+    await new Promise((r) => setTimeout(r, delayMs));
+    return await fn();
+  }
+}
+
 /**
  * Direct Supabase Friends Service
  */
 class FriendsDirectService {
   /**
-   * Get all friends (accepted friend requests)
-   * Returns list of friends with their profile data
+   * Get all friends (accepted friend requests).
+   * Retries once on connection timeout / upstream errors.
    */
   async getFriends(): Promise<Friend[]> {
-    try {
+    const run = async (): Promise<Friend[]> => {
       console.log('👥 [Direct] Fetching friends from Supabase...');
-      
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('Not authenticated');
       }
 
-      // Query friend_requests where status is 'accepted' and user is either sender or receiver
       const { data, error } = await supabase
         .from('friend_requests')
         .select(`
@@ -87,12 +105,9 @@ class FriendsDirectService {
         throw error;
       }
 
-      // Map the data to Friend objects
-      // For each accepted friendship, the "friend" is the OTHER person (not me)
       const friends: Friend[] = (data || []).map((friendship: any) => {
         const isSender = friendship.sender_id === user.id;
         const friendProfile = isSender ? friendship.receiver : friendship.sender;
-        
         return {
           friend_id: friendProfile.id,
           friend_name: friendProfile.name,
@@ -105,19 +120,28 @@ class FriendsDirectService {
 
       console.log(`✅ [Direct] Fetched ${friends.length} friends from Supabase`);
       return friends;
+    };
+
+    try {
+      return await withRetryOnce(run);
     } catch (error) {
-      console.error('❌ [Direct] Error fetching friends:', error);
+      if (isRetryableNetworkError(error)) {
+        console.warn('❌ [Direct] Friends: connection failed (timeout or network). You can pull to retry.');
+      } else {
+        console.error('❌ [Direct] Error fetching friends:', error);
+      }
       throw error;
     }
   }
 
   /**
-   * Get incoming friend requests (pending requests where I'm the receiver)
+   * Get incoming friend requests (pending requests where I'm the receiver).
+   * Retries once on connection timeout / upstream errors.
    */
   async getIncomingRequests(): Promise<FriendRequest[]> {
-    try {
+    const run = async (): Promise<FriendRequest[]> => {
       console.log('📥 [Direct] Fetching incoming friend requests from Supabase...');
-      
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('Not authenticated');
@@ -153,17 +177,26 @@ class FriendsDirectService {
 
       console.log(`✅ [Direct] Fetched ${requests.length} incoming requests from Supabase`);
       return requests;
+    };
+
+    try {
+      return await withRetryOnce(run);
     } catch (error) {
-      console.error('❌ [Direct] Error fetching incoming requests:', error);
+      if (isRetryableNetworkError(error)) {
+        console.warn('❌ [Direct] Incoming requests: connection failed (timeout or network). You can pull to retry.');
+      } else {
+        console.error('❌ [Direct] Error fetching incoming requests:', error);
+      }
       throw error;
     }
   }
 
   /**
-   * Get outgoing friend requests (pending requests where I'm the sender)
+   * Get outgoing friend requests (pending requests where I'm the sender).
+   * Retries once on connection timeout / upstream errors.
    */
   async getOutgoingRequests(): Promise<FriendRequest[]> {
-    try {
+    const run = async (): Promise<FriendRequest[]> => {
       console.log('📤 [Direct] Fetching outgoing friend requests from Supabase...');
       
       const { data: { user } } = await supabase.auth.getUser();
@@ -201,8 +234,16 @@ class FriendsDirectService {
 
       console.log(`✅ [Direct] Fetched ${requests.length} outgoing requests from Supabase`);
       return requests;
+    };
+
+    try {
+      return await withRetryOnce(run);
     } catch (error) {
-      console.error('❌ [Direct] Error fetching outgoing requests:', error);
+      if (isRetryableNetworkError(error)) {
+        console.warn('❌ [Direct] Outgoing requests: connection failed (timeout or network). You can retry later.');
+      } else {
+        console.error('❌ [Direct] Error fetching outgoing requests:', error);
+      }
       throw error;
     }
   }

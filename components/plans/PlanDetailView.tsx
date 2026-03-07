@@ -13,8 +13,7 @@ import {
   Alert,
   Keyboard,
   Modal,
-  Dimensions,
-  ActivityIndicator
+  Dimensions
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { 
@@ -69,7 +68,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     invitations,
     activePlans,
     loadPlans,
-    refreshPlanPolls
+    loadPlan
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   // const { getUnreadCount } = useChatStore();
@@ -118,7 +117,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [isPollLoading, setIsPollLoading] = useState(false);
   const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
-  const [isRefreshingControlPanel, setIsRefreshingControlPanel] = useState(false);
   const hasMarkedControlPanelRef = useRef(false);
 
   
@@ -341,16 +339,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
-    // Surgically refresh only polls when switching to Control Panel.
-    // refreshPlanPolls queries plan_polls directly from Supabase and patches
-    // only the polls field – it never replaces the whole plan or calls
-    // recalculatePlanArrays, so concurrent realtime vote updates are safe.
-    if (tab === 'Control Panel') {
-      setIsRefreshingControlPanel(true);
-      refreshPlanPolls(latestPlan.id)
-        .catch(() => {})
-        .finally(() => setIsRefreshingControlPanel(false));
-    }
   };
   
   const handleDescriptionSave = () => {
@@ -528,10 +516,11 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
       console.log('✅ Users invited successfully, received updated plan');
       
-      // Reload plans so the updated participant list is visible immediately.
-      console.log('🔄 Reloading plans to show updated participants...');
-      await loadPlans(user?.id);
-      console.log('✅ Plans reloaded successfully');
+      // Immediately reload the specific plan to show updated participant list
+      // This ensures the UI is in sync with the backend
+      console.log('🔄 Reloading plan data to show updated participants...');
+      await loadPlan(latestPlan.id, user?.id);
+      console.log('✅ Plan data reloaded successfully');
       
       Alert.alert(
         'Friends Invited!',
@@ -924,13 +913,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
               contentContainerStyle={styles.contentContainer}
               showsVerticalScrollIndicator={Platform.OS === 'web'}
             >
-          {/* Subtle refresh indicator shown while loadPlan fetches fresh data */}
-          {isRefreshingControlPanel && (
-            <View style={styles.refreshBanner}>
-              <ActivityIndicator size="small" color={Colors.light.primary} />
-              <Text style={styles.refreshBannerText}>Updating...</Text>
-            </View>
-          )}
           {/* Description Section - Title moved to modal header */}
           <PlanTitle 
             title={displayTitle}
@@ -1288,22 +1270,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   
-  refreshBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    gap: 8,
-    backgroundColor: `${Colors.light.primary}10`,
-    borderBottomWidth: 1,
-    borderBottomColor: `${Colors.light.primary}20`,
-  },
-  refreshBannerText: {
-    fontSize: 13,
-    color: Colors.light.primary,
-    fontWeight: '500',
-  },
   chatContainer: {
     flex: 1,
   },
