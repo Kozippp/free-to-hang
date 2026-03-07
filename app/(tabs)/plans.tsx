@@ -24,6 +24,7 @@ export default function PlansScreen() {
   // DISABLED: const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isPlanDetailLoading, setIsPlanDetailLoading] = useState(false);
   
   const { user } = useAuth();
   const { invitations, activePlans, completedPlans, isLoading, loadPlans, loadPlan, loadCompletedPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
@@ -392,11 +393,16 @@ export default function PlansScreen() {
       markUpdatesAsRead(plan.id);
     }
 
-    // Fetch fresh plan data in background so polls and latest info are always visible.
-    // Fire-and-forget: runs once per open, never inside a useEffect, so it cannot
-    // overwrite a realtime update that arrives after the initial load.
+    // Fetch fresh plan data once on open so polls are always visible.
+    // Loading state is passed to PlanDetailView so it can show a spinner
+    // while the single fetch is in-flight. Using a single call here (not in
+    // PlanDetailView's useEffect) avoids the double-fetch race condition that
+    // could overwrite realtime vote updates.
     if (user?.id) {
-      loadPlan(plan.id, user.id).catch(() => {});
+      setIsPlanDetailLoading(true);
+      loadPlan(plan.id, user.id)
+        .catch(() => {})
+        .finally(() => setIsPlanDetailLoading(false));
     }
   };
   
@@ -404,6 +410,7 @@ export default function PlansScreen() {
     setModalVisible(false);
     setSelectedPlan(null);
     setModalTab(undefined);
+    setIsPlanDetailLoading(false);
   };
   
   const handleRespondToPlan = async (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
@@ -585,6 +592,7 @@ export default function PlansScreen() {
             isCompleted={activeTab === 'Completed'}
             onAttendanceUpdate={activeTab === 'Completed' ? updateAttendance : undefined}
             initialTab={modalTab}
+            isInitialLoading={isPlanDetailLoading}
           />
         )}
         

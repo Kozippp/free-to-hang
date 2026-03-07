@@ -60,9 +60,10 @@ interface PlanDetailViewProps {
   editedTitle?: string;
   onEditPermissionChange?: (canEdit: boolean) => void;
   initialTab?: string;
+  isInitialLoading?: boolean;
 }
 
-export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, onEditPermissionChange, initialTab }: PlanDetailViewProps) {
+export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, onEditPermissionChange, initialTab, isInitialLoading }: PlanDetailViewProps) {
   const { user } = useAuth();
   const { 
     voteOnPollOptimistic,
@@ -120,16 +121,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
   const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
   const hasMarkedControlPanelRef = useRef(false);
-
-  // Load fresh plan data on mount so polls are always visible when opening a plan.
-  // [plan.id] dependency means it re-runs if a different plan is shown in the same component.
-  React.useEffect(() => {
-    if (!user?.id) return;
-    setIsRefreshingPlan(true);
-    loadPlan(plan.id, user.id)
-      .catch(() => {})
-      .finally(() => setIsRefreshingPlan(false));
-  }, [plan.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   
   // Decline animation states
@@ -944,7 +935,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
               showsVerticalScrollIndicator={Platform.OS === 'web'}
               refreshControl={
                 <RefreshControl
-                  refreshing={isRefreshingPlan}
+                  refreshing={!!isInitialLoading || isRefreshingPlan}
                   onRefresh={handleManualRefresh}
                   tintColor={Colors.light.primary}
                   colors={[Colors.light.primary]}
