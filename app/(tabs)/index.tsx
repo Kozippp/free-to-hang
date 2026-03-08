@@ -47,6 +47,8 @@ import FriendCard from '@/components/FriendCard';
 import AddFriendsModal from '@/components/friends/AddFriendsModal';
 import useHangStore from '@/store/hangStore';
 import { useAuth } from '@/contexts/AuthContext';
+import useUnseenStore from '@/store/unseenStore';
+import { useFocusEffect } from 'expo-router';
 
 export default function HangScreen() {
   const { 
@@ -68,8 +70,16 @@ export default function HangScreen() {
   } = useHangStore();
   
   const { user: authUser } = useAuth();
+  const { markFriendsListSeen } = useUnseenStore();
   const router = useRouter();
-  
+
+  // Mark the friends list as seen whenever the Hang tab comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      void markFriendsListSeen();
+    }, [markFriendsListSeen])
+  );
+
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);

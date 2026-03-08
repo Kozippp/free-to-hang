@@ -38,7 +38,7 @@ import {
   Check,
   User
 } from 'lucide-react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import Colors from '@/constants/colors';
 import { 
   Friend, 
@@ -57,6 +57,7 @@ import useFriendsStore from '@/store/friendsStore';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { uploadImage, deleteImage } from '@/lib/storage';
 import { formatFriendLastAvailable } from '@/utils/time';
+import useUnseenStore from '@/store/unseenStore';
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
@@ -96,6 +97,16 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
   const [refreshing, setRefreshing] = useState(false);
   
+  const { fetchUnseenCounts } = useUnseenStore();
+
+  // Refresh unseen counts when profile tab comes into focus
+  // so the friend-request badge reflects the current state
+  useFocusEffect(
+    React.useCallback(() => {
+      void fetchUnseenCounts();
+    }, [fetchUnseenCounts])
+  );
+
   // Friend relationships disabled - no loading needed
 
   // Start friends realtime when profile tab mounts

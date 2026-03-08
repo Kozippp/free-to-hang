@@ -1,51 +1,69 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Tabs } from "expo-router";
 import { Bell, Calendar, ToggleLeft, User } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { StatusBar } from "expo-status-bar";
-import { View, Text } from "react-native";
-import usePlansStore from "@/store/plansStore";
+import { View } from "react-native";
 import useNotificationsStore from "@/store/notificationsStore";
 import useUnseenStore from "@/store/unseenStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { initializeRealtimeManager, stopRealtimeManager } from "@/utils/realtimeManager";
+import * as Notifications from "expo-notifications";
+
+// ─────────────────────────────────────────────────────────────
+// Small reusable red dot
+// ─────────────────────────────────────────────────────────────
+function RedDot() {
+  return (
+    <View
+      style={{
+        position: "absolute",
+        top: -2,
+        right: -6,
+        backgroundColor: "#FF3B30",
+        borderRadius: 3.5,
+        width: 7,
+        height: 7,
+      }}
+    />
+  );
+}
 
 export default function TabLayout() {
   const { user } = useAuth();
-  const { invitations } = usePlansStore();
   const { unreadCount } = useNotificationsStore();
-  const [hasUnreadInvitations, setHasUnreadInvitations] = useState(false);
-  // Sync badge with the actual notifications list count
-  const notificationsBadge = unreadCount;
-  
-  // Check for unread invitations
-  useEffect(() => {
-    const count = invitations.filter(plan => !plan.isRead).length;
-    setHasUnreadInvitations(count > 0);
-  }, [invitations]);
+  const {
+    invitationUnreadCount,
+    totalPlanUnseen,
+    friendRequestCount,
+    newFriendsCount,
+  } = useUnseenStore();
 
   // Initialize global realtime manager when user is authenticated
   useEffect(() => {
-    if (!user?.id) {
-      console.log('⏸️ No authenticated user - skipping realtime initialization');
-      return;
-    }
-    
-    console.log('🚀 Initializing global realtime manager...');
+    if (!user?.id) return;
     initializeRealtimeManager(user.id);
-    
-    // Cleanup when layout unmounts or user signs out
     return () => {
-      console.log('⏹️ Tab layout cleanup - stopping realtime manager');
       stopRealtimeManager();
     };
   }, [user?.id]);
-  
+
+  // Sync app icon badge with total unseen
+  useEffect(() => {
+    const badgeCount =
+      totalPlanUnseen + invitationUnreadCount + unreadCount + friendRequestCount + newFriendsCount;
+    Notifications.setBadgeCountAsync(badgeCount > 0 ? badgeCount : 0).catch(() => {});
+  }, [totalPlanUnseen, invitationUnreadCount, unreadCount, friendRequestCount, newFriendsCount]);
+
+  const hasPlansActivity = invitationUnreadCount > 0 || totalPlanUnseen > 0;
+  const hasNotificationsActivity = unreadCount > 0;
+  const hasProfileActivity = friendRequestCount > 0;
+  const hasHangActivity = newFriendsCount > 0;
+
   return (
     <>
-      {/* Set status bar to dark content for better visibility on light backgrounds */}
       <StatusBar style="dark" />
-      
+
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: Colors.light.primary,
@@ -64,21 +82,27 @@ export default function TabLayout() {
             borderBottomColor: Colors.light.border,
           },
           headerTitleStyle: {
-            fontWeight: '600',
+            fontWeight: "600",
             fontSize: 18,
           },
-          headerTitleAlign: 'center',
+          headerTitleAlign: "center",
         }}
       >
+        {/* Hang tab */}
         <Tabs.Screen
           name="index"
           options={{
             title: "Hang",
             tabBarIcon: ({ color, size }) => (
-              <ToggleLeft size={size} color={color} />
+              <View>
+                <ToggleLeft size={size} color={color} />
+                {hasHangActivity && <RedDot />}
+              </View>
             ),
           }}
         />
+
+        {/* Plans tab */}
         <Tabs.Screen
           name="plans"
           options={{
@@ -86,24 +110,13 @@ export default function TabLayout() {
             tabBarIcon: ({ color, size }) => (
               <View>
                 <Calendar size={size} color={color} />
-                {hasUnreadInvitations && (
-                  <View style={{
-                    position: 'absolute',
-                    top: -2,
-                    right: -6,
-                    backgroundColor: '#FF3B30', // Instagram-style red
-                    borderRadius: 3.5,
-                    width: 7, // 15% smaller than before
-                    height: 7,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}>
-                  </View>
-                )}
+                {hasPlansActivity && <RedDot />}
               </View>
             ),
           }}
         />
+
+        {/* Notifications tab */}
         <Tabs.Screen
           name="notifications"
           options={{
@@ -111,36 +124,22 @@ export default function TabLayout() {
             tabBarIcon: ({ color, size }) => (
               <View>
                 <Bell size={size} color={color} />
-                {notificationsBadge > 0 && (
-                  <View
-                    style={{
-                      position: 'absolute',
-                      top: -4,
-                      right: -6,
-                      backgroundColor: '#FF3B30',
-                      borderRadius: 7,
-                      width: 14,
-                      height: 14,
-                      justifyContent: 'center',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>
-                      {notificationsBadge > 9 ? '9+' : notificationsBadge}
-                    </Text>
-                  </View>
-                )}
+                {hasNotificationsActivity && <RedDot />}
               </View>
             ),
-            tabBarBadge: notificationsBadge > 0 ? notificationsBadge : undefined
           }}
         />
+
+        {/* Profile tab */}
         <Tabs.Screen
           name="profile"
           options={{
             title: "Profile",
             tabBarIcon: ({ color, size }) => (
-              <User size={size} color={color} />
+              <View>
+                <User size={size} color={color} />
+                {hasProfileActivity && <RedDot />}
+              </View>
             ),
           }}
         />

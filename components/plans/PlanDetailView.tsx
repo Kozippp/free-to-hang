@@ -74,7 +74,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   // const { getUnreadCount } = useChatStore();
-  const { markControlPanelSeen, markChatSeen, plans: unseenPlans } = useUnseenStore();
+  const { markControlPanelSeen, markChatSeen, markInvitationSeen, plans: unseenPlans } = useUnseenStore();
   const router = useRouter();
   
   // Early return if user is not authenticated
@@ -165,6 +165,16 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       markChatSeen(plan.id);
     }
   }, [activeTab, markControlPanelSeen, markChatSeen, plan.id]);
+
+  // Mark invitation as seen when plan detail is opened for a pending invitation
+  React.useEffect(() => {
+    const userInPlan = latestPlan.participants.find(p => p.id === user.id || p.id === 'current');
+    if (userInPlan?.status === 'pending') {
+      void markInvitationSeen(plan.id);
+    }
+  // Run once per plan open
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.id]);
 
   React.useEffect(() => {
     const previousActiveTab = previousActiveTabRef.current;

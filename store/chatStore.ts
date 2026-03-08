@@ -197,53 +197,45 @@ const useChatStore = create<ChatState>((set, get) => ({
   },
 
   // ============================================
-  // FETCH READ RECEIPTS
+  // FETCH READ RECEIPTS (direct Supabase)
   // ============================================
   fetchReadReceipts: async (planId: string) => {
     try {
-      const token = await getAuthToken();
+      const { data, error } = await supabase
+        .from('chat_read_receipts')
+        .select(`
+          user_id,
+          last_read_message_id,
+          last_read_at,
+          user:user_id(id, name, avatar_url)
+        `)
+        .eq('plan_id', planId);
 
-      // For testing: allow API call even without token
-      const headers: any = {
-        'Content-Type': 'application/json'
-      };
-
-      if (token) {
-        console.log('🔑 Fetching read receipts with token:', token.substring(0, 20) + '...');
-        headers['Authorization'] = `Bearer ${token}`;
-      } else {
-        console.log('⚠️ Fetching read receipts without auth token (testing mode)');
+      if (error) {
+        console.error('❌ [chatStore] fetchReadReceipts error:', error);
+        return;
       }
 
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}/chat/${planId}/read-receipts`,
-        { headers }
-      );
-
-      console.log('📡 Read receipts response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Read receipts API error:', response.status, errorText);
-        throw new Error(`Failed to fetch read receipts: ${response.status} ${errorText}`);
+      const receipts: Record<string, ReadReceipt> = {};
+      for (const row of data ?? []) {
+        receipts[row.user_id] = {
+          userId: row.user_id,
+          lastReadMessageId: row.last_read_message_id,
+          lastReadAt: row.last_read_at,
+          user: (row.user as any) ?? { id: row.user_id, name: '', avatar_url: '' },
+        };
       }
-
-      const result = await response.json();
-      console.log('📦 Read receipts result:', result);
-
-      const receipts = result.data;
 
       set(state => ({
         readReceipts: {
           ...state.readReceipts,
-          [planId]: receipts
-        }
+          [planId]: receipts,
+        },
       }));
 
-      console.log(`✅ Fetched ${Object.keys(receipts).length} read receipts for plan ${planId}`);
-
+      console.log(`✅ [chatStore] Fetched ${Object.keys(receipts).length} read receipts (Supabase)`);
     } catch (error) {
-      console.error('Error fetching read receipts:', error);
+      console.error('❌ [chatStore] fetchReadReceipts error:', error);
     }
   },
   
@@ -337,35 +329,35 @@ const useChatStore = create<ChatState>((set, get) => ({
           }
         }));
 
-      // Update sender's read receipt to include their own message (both locally and on server)
+      // Update sender's read receipt locally + persist to Supabase (fire-and-forget)
+      const senderNow = new Date().toISOString();
       const senderReceipt: ReadReceipt = {
         userId: realMessage.userId,
         lastReadMessageId: realMessage.id,
-        lastReadAt: new Date().toISOString(),
+        lastReadAt: senderNow,
         user: {
           id: realMessage.userId,
           name: realMessage.userName,
-          avatar_url: realMessage.userAvatar
-        }
+          avatar_url: realMessage.userAvatar,
+        },
       };
       get().updateReadReceipt(planId, realMessage.userId, senderReceipt);
 
-      // Send read receipt to server (fire and forget)
-      const readToken = await getAuthToken();
-      if (readToken) {
-        fetch(`${API_CONFIG.BASE_URL}/chat/${planId}/read`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${readToken}`,
-            'Content-Type': 'application/json'
+      // Persist sender read receipt to Supabase (fire-and-forget)
+      supabase
+        .from('chat_read_receipts')
+        .upsert(
+          {
+            plan_id: planId,
+            user_id: realMessage.userId,
+            last_read_message_id: realMessage.id,
+            last_read_at: senderNow,
           },
-          body: JSON.stringify({
-            lastReadMessageId: realMessage.id
-          })
-        }).catch(error => {
-          console.error('Failed to update sender read receipt on server:', error);
+          { onConflict: 'plan_id,user_id' }
+        )
+        .then(({ error }) => {
+          if (error) console.error('❌ [chatStore] sender read receipt upsert error:', error);
         });
-      }
 
       console.log(`✅ Message sent: ${realMessage.id}`);
       
@@ -487,7 +479,7 @@ const useChatStore = create<ChatState>((set, get) => ({
   },
   
   // ============================================
-  // MARK MESSAGES AS READ
+  // MARK MESSAGES AS READ (direct Supabase upsert)
   // ============================================
   markMessagesAsRead: async (planId: string, userId: string, messageId?: string) => {
     try {
@@ -495,83 +487,55 @@ const useChatStore = create<ChatState>((set, get) => ({
       let targetMessage;
 
       if (messageId) {
-        // Use specific message ID
         targetMessage = messages.find(m => m.id === messageId);
       } else {
-        // Use last message
         targetMessage = messages[messages.length - 1];
       }
 
       if (!targetMessage) return;
 
-      // Skip if message is a temporary ID (not yet saved to backend)
+      // Skip temporary messages not yet persisted to Supabase
       if (targetMessage.id.startsWith('temp-')) {
         console.log('⏳ Skipping read receipt for temporary message');
         return;
       }
 
-      const token = await getAuthToken();
-      if (!token) {
-        console.error('No auth token available');
-        return;
-      }
+      const now = new Date().toISOString();
 
-      // Optimistic update - update locally first for instant UI feedback
+      // Optimistic update
       const existingReceipt = get().readReceipts[planId]?.[userId];
       const optimisticReceipt: ReadReceipt = {
-        userId: userId,
+        userId,
         lastReadMessageId: targetMessage.id,
-        lastReadAt: new Date().toISOString(),
-        user: existingReceipt?.user || { id: userId, name: '', avatar_url: '' }
+        lastReadAt: now,
+        user: existingReceipt?.user || { id: userId, name: '', avatar_url: '' },
       };
-
       get().updateReadReceipt(planId, userId, optimisticReceipt);
-      console.log(`⚡ Optimistically updated read receipt for ${userId}`);
-      console.log(`✅ Production read: Message ${targetMessage.id} by user ${userId}`);
+      console.log(`⚡ [chatStore] Optimistic read receipt: ${targetMessage.id}`);
 
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}/chat/${planId}/read`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+      // Upsert directly to Supabase
+      const { error } = await supabase
+        .from('chat_read_receipts')
+        .upsert(
+          {
+            plan_id: planId,
+            user_id: userId,
+            last_read_message_id: targetMessage.id,
+            last_read_at: now,
           },
-          body: JSON.stringify({
-            lastReadMessageId: targetMessage.id
-          })
-        }
-      );
+          { onConflict: 'plan_id,user_id' }
+        );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        // Ignore foreign key violations (message not yet in DB due to sync lag)
-        if (response.status === 500 && errorText.includes('foreign key constraint')) {
-           console.log(`⏳ Message ${targetMessage.id} not yet in DB, skipping server read receipt`);
-           return;
-        }
-        
-        console.error('Failed to mark messages as read:', response.status, errorText);
-        // Don't throw to avoid disrupting UI for background sync issue
+      if (error) {
+        console.error('❌ [chatStore] markMessagesAsRead upsert error:', error);
         return;
       }
 
-      const result = await response.json();
-
-      // Update with server response (including user details)
-      const receipt: ReadReceipt = {
-        userId: userId,
-        lastReadMessageId: targetMessage.id,
-        lastReadAt: new Date().toISOString(),
-        user: result.data.user || optimisticReceipt.user
-      };
-
-      get().updateReadReceipt(planId, userId, receipt);
-
-      console.log(`✅ Confirmed read receipt for user ${userId} in plan ${planId}`);
-
+      // Update unseenStore (clears chat badge for this plan)
+      useUnseenStore.getState().markChatSeen(planId);
+      console.log(`✅ [chatStore] Read receipt persisted (Supabase) for ${userId} in plan ${planId}`);
     } catch (error) {
-      console.error('Error marking messages as read:', error);
+      console.error('❌ [chatStore] markMessagesAsRead error:', error);
     }
   },
       

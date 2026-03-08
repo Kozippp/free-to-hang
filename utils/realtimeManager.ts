@@ -5,6 +5,7 @@ import useHangStore from '@/store/hangStore';
 import useChatStore from '@/store/chatStore';
 import useNotificationsStore from '@/store/notificationsStore';
 import useUnseenStore from '@/store/unseenStore';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Global Realtime Manager
@@ -22,6 +23,21 @@ const MIN_BACKGROUND_TIME_FOR_RESTART = 30000; // 30 seconds
 
 // Track when app went to background
 let backgroundStartTime = 0;
+
+// Realtime channel for unseen counter triggers
+let unseenRealtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+
+// Debounce timer for unseen count refetch
+let unseenRefetchTimer: ReturnType<typeof setTimeout> | null = null;
+const UNSEEN_REFETCH_DEBOUNCE_MS = 800;
+
+function scheduleUnseenRefetch() {
+  if (unseenRefetchTimer) clearTimeout(unseenRefetchTimer);
+  unseenRefetchTimer = setTimeout(() => {
+    useUnseenStore.getState().fetchUnseenCounts();
+    unseenRefetchTimer = null;
+  }, UNSEEN_REFETCH_DEBOUNCE_MS);
+}
 
 /**
  * Initialize the global realtime manager
@@ -110,6 +126,72 @@ function handleAppStateChange(nextAppState: AppStateStatus) {
 }
 
 /**
+ * Start Supabase Realtime subscription for unseen counter triggers.
+ * Listens for new plan_updates, chat_messages and friend_request changes
+ * and debounces a full refetch of unseenStore.
+ */
+function startUnseenRealtimeSubscription(userId: string) {
+  stopUnseenRealtimeSubscription();
+
+  unseenRealtimeChannel = supabase
+    .channel(`unseen_triggers_${userId}_${Date.now()}`)
+    // New plan_update rows → control panel badge may change
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'plan_updates' },
+      () => scheduleUnseenRefetch()
+    )
+    // New chat message → chat badge may change
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+      () => scheduleUnseenRefetch()
+    )
+    // Friend request INSERT/UPDATE → friend request badge or new-friends badge
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'friend_requests' },
+      () => scheduleUnseenRefetch()
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'friend_requests' },
+      () => scheduleUnseenRefetch()
+    )
+    // plan_participants INSERT (new invitation) → invitation badge
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'plan_participants' },
+      (payload) => {
+        if ((payload.new as any)?.user_id === userId) {
+          scheduleUnseenRefetch();
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ [unseenRealtime] Subscribed to unseen trigger channel');
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('❌ [unseenRealtime] Channel error – will retry on next foreground');
+      }
+    });
+}
+
+/**
+ * Stop and clean up the unseen realtime channel.
+ */
+function stopUnseenRealtimeSubscription() {
+  if (unseenRealtimeChannel) {
+    supabase.removeChannel(unseenRealtimeChannel).catch(() => {});
+    unseenRealtimeChannel = null;
+  }
+  if (unseenRefetchTimer) {
+    clearTimeout(unseenRefetchTimer);
+    unseenRefetchTimer = null;
+  }
+}
+
+/**
  * Start all realtime subscriptions
  */
 function startAllSubscriptions(userId: string) {
@@ -132,9 +214,12 @@ function startAllSubscriptions(userId: string) {
   notificationsStore.fetchNotifications(userId);
   notificationsStore.startRealTimeUpdates(userId);
 
-  // Unseen counts
+  // Unseen counts – initial fetch
   const unseenStore = useUnseenStore.getState();
   unseenStore.fetchUnseenCounts();
+
+  // Unseen counts – Realtime triggers
+  startUnseenRealtimeSubscription(userId);
 
   console.log('✅ All realtime subscriptions started');
 }
@@ -168,6 +253,9 @@ function stopAllSubscriptions() {
     chatStore.unsubscribeFromChat(planId, { preserveDesired: false });
   });
 
+  // Unseen realtime channel
+  stopUnseenRealtimeSubscription();
+
   console.log('✅ All realtime subscriptions stopped');
 }
 
@@ -185,8 +273,9 @@ function checkAndRestartAllSubscriptions(userId: string) {
   const notificationsStore = useNotificationsStore.getState();
   notificationsStore.checkAndRestartSubscription(userId);
 
-  // Unseen counts - re-fetch to ensure accuracy
+  // Unseen counts – re-fetch and restart realtime trigger channel
   useUnseenStore.getState().fetchUnseenCounts();
+  startUnseenRealtimeSubscription(userId);
 
   // Hang store and Friends store don't have dedicated check methods,
   // but their health checks will handle reconnection automatically

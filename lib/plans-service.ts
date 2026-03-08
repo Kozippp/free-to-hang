@@ -480,7 +480,11 @@ class PlansService {
     }
   }
 
-  // Get unified unseen counts for plans (chat + control panel)
+  /**
+   * @deprecated Use fetchPlanUnseenCounts() from lib/unseen-counters-supabase.ts instead.
+   * This backend endpoint is no longer used; unseen counts are now computed
+   * directly client ↔ Supabase.
+   */
   async getUnseenCounts(): Promise<UnseenCountsResponse> {
     try {
       const result = await this.apiRequest('/plans/unseen-counts');
@@ -491,7 +495,10 @@ class PlansService {
     }
   }
 
-  // Mark control panel updates as seen for a plan
+  /**
+   * @deprecated Use markControlPanelSeenDirect() from lib/unseen-counters-supabase.ts instead.
+   * Direct Supabase upsert is now used to mark the control panel as seen.
+   */
   async markControlPanelSeen(planId: string): Promise<void> {
     try {
       await this.apiRequest(`/plans/${planId}/control-panel/seen`, {

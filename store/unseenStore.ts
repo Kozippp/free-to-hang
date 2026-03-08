@@ -1,62 +1,88 @@
 import { create } from 'zustand';
-import { plansService } from '@/lib/plans-service';
+import { supabase } from '@/lib/supabase';
+import {
+  fetchAllUnseenCounts,
+  markControlPanelSeenDirect,
+  markInvitationSeen,
+  markFriendsListSeen,
+  type PlanUnseenCounts,
+  type UnseenCountsResult,
+} from '@/lib/unseen-counters-supabase';
 
-export type PlanUnseenCounts = {
-  chat: number;
-  control: number;
-  total: number;
-};
+export type { PlanUnseenCounts };
 
 interface UnseenState {
+  // Plan-level counters (chat + control panel per plan)
   plans: Record<string, PlanUnseenCounts>;
-  totalUnseen: number;
+  totalPlanUnseen: number;
+
+  // Tab-level counters
+  invitationUnreadCount: number;
+  friendRequestCount: number;
+  newFriendsCount: number;
+
+  // Loading / dedup
   loading: boolean;
   pendingRefetch: boolean;
+
+  // Actions
   fetchUnseenCounts: () => Promise<void>;
   markControlPanelSeen: (planId: string) => Promise<void>;
   markChatSeen: (planId: string) => void;
+  markInvitationSeen: (planId: string) => Promise<void>;
+  markFriendsListSeen: () => Promise<void>;
   clear: () => void;
 }
 
 const useUnseenStore = create<UnseenState>((set, get) => ({
   plans: {},
-  totalUnseen: 0,
+  totalPlanUnseen: 0,
+  invitationUnreadCount: 0,
+  friendRequestCount: 0,
+  newFriendsCount: 0,
   loading: false,
   pendingRefetch: false,
 
+  // ─────────────────────────────────────────────────────────
+  // Fetch all counters directly from Supabase
+  // ─────────────────────────────────────────────────────────
   fetchUnseenCounts: async () => {
     const state = get();
     if (state.loading) {
-      // If already loading, mark that we need another fetch after this one
-      // This prevents parallel requests but ensures we eventually get the latest data
       if (!state.pendingRefetch) {
-        console.log('⏳ Unseen counts fetch already in progress, queuing refetch');
         set({ pendingRefetch: true });
       }
       return;
     }
 
     set({ loading: true });
+
     try {
-      const result = await plansService.getUnseenCounts();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
+        set({ loading: false });
+        return;
+      }
+
+      const result: UnseenCountsResult = await fetchAllUnseenCounts(user.id);
+
       set({
-        plans: result.plans || {},
-        totalUnseen: result.totalUnseen || 0,
-        loading: false
+        plans: result.plans,
+        totalPlanUnseen: result.totalPlanUnseen,
+        invitationUnreadCount: result.invitationUnreadCount,
+        friendRequestCount: result.friendRequestCount,
+        newFriendsCount: result.newFriendsCount,
+        loading: false,
       });
-      
-      // If a refetch was requested while we were loading, trigger it now
+
       if (get().pendingRefetch) {
-        console.log('🔄 Processing queued unseen counts refetch');
         set({ pendingRefetch: false });
-        // Small delay to let UI breathe
         setTimeout(() => get().fetchUnseenCounts(), 100);
       }
     } catch (error) {
-      console.error('❌ Failed to fetch unseen counts:', error);
+      console.error('❌ [unseenStore] fetchUnseenCounts error:', error);
       set({ loading: false });
-      
-      // If pending refetch, retry after a delay
+
       if (get().pendingRefetch) {
         set({ pendingRefetch: false });
         setTimeout(() => get().fetchUnseenCounts(), 2000);
@@ -64,44 +90,102 @@ const useUnseenStore = create<UnseenState>((set, get) => ({
     }
   },
 
+  // ─────────────────────────────────────────────────────────
+  // Mark control panel seen (direct Supabase upsert)
+  // ─────────────────────────────────────────────────────────
   markControlPanelSeen: async (planId: string) => {
     if (!planId) return;
     const current = get().plans[planId];
-    if (current && current.control === 0) {
-      return;
+    if (current && current.control === 0) return;
+
+    // Optimistic update first
+    const previous = get().plans[planId];
+    if (previous) {
+      const updated = { ...previous, control: 0, total: previous.chat };
+      const updatedPlans = { ...get().plans, [planId]: updated };
+      const totalPlanUnseen = Object.values(updatedPlans).reduce((s, v) => s + v.total, 0);
+      set({ plans: updatedPlans, totalPlanUnseen });
     }
 
     try {
-      await plansService.markControlPanelSeen(planId);
+      await markControlPanelSeenDirect(planId);
     } catch (error) {
-      console.error('❌ Failed to mark control panel seen:', error);
-      // We don't return here because we want to perform the optimistic update anyway
-      // to clear the badge for the user
-    }
-
-    const previous = get().plans[planId];
-    if (previous) {
-      const updatedPlan = { ...previous, control: 0, total: previous.chat };
-      const updatedPlans = { ...get().plans, [planId]: updatedPlan };
-      const totalUnseen = Object.values(updatedPlans).reduce((sum, item) => sum + item.total, 0);
-      set({ plans: updatedPlans, totalUnseen });
-    } else {
-      await get().fetchUnseenCounts();
+      console.error('❌ [unseenStore] markControlPanelSeen error:', error);
+      // Revert on failure
+      if (previous) {
+        const revertedPlans = { ...get().plans, [planId]: previous };
+        const totalPlanUnseen = Object.values(revertedPlans).reduce((s, v) => s + v.total, 0);
+        set({ plans: revertedPlans, totalPlanUnseen });
+      }
     }
   },
 
+  // ─────────────────────────────────────────────────────────
+  // Mark chat seen (optimistic local update only;
+  // actual receipt is written in chatStore via Supabase upsert)
+  // ─────────────────────────────────────────────────────────
   markChatSeen: (planId: string) => {
     if (!planId) return;
     const previous = get().plans[planId];
     if (previous && previous.chat > 0) {
-      const updatedPlan = { ...previous, chat: 0, total: previous.control };
-      const updatedPlans = { ...get().plans, [planId]: updatedPlan };
-      const totalUnseen = Object.values(updatedPlans).reduce((sum, item) => sum + item.total, 0);
-      set({ plans: updatedPlans, totalUnseen });
+      const updated = { ...previous, chat: 0, total: previous.control };
+      const updatedPlans = { ...get().plans, [planId]: updated };
+      const totalPlanUnseen = Object.values(updatedPlans).reduce((s, v) => s + v.total, 0);
+      set({ plans: updatedPlans, totalPlanUnseen });
     }
   },
 
-  clear: () => set({ plans: {}, totalUnseen: 0, loading: false, pendingRefetch: false })
+  // ─────────────────────────────────────────────────────────
+  // Mark invitation seen
+  // ─────────────────────────────────────────────────────────
+  markInvitationSeen: async (planId: string) => {
+    if (!planId) return;
+
+    // Optimistic: decrement invitation count
+    set((state) => ({
+      invitationUnreadCount: Math.max(0, state.invitationUnreadCount - 1),
+    }));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return;
+      await markInvitationSeen(planId, user.id);
+    } catch (error) {
+      console.error('❌ [unseenStore] markInvitationSeen error:', error);
+      // Revert on failure
+      set((state) => ({ invitationUnreadCount: state.invitationUnreadCount + 1 }));
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Mark friends list seen (Hang tab)
+  // ─────────────────────────────────────────────────────────
+  markFriendsListSeen: async () => {
+    // Optimistic: clear the badge immediately
+    set({ newFriendsCount: 0 });
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return;
+      await markFriendsListSeen(user.id);
+    } catch (error) {
+      console.error('❌ [unseenStore] markFriendsListSeen error:', error);
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // Clear all counters (on sign-out)
+  // ─────────────────────────────────────────────────────────
+  clear: () =>
+    set({
+      plans: {},
+      totalPlanUnseen: 0,
+      invitationUnreadCount: 0,
+      friendRequestCount: 0,
+      newFriendsCount: 0,
+      loading: false,
+      pendingRefetch: false,
+    }),
 }));
 
 export default useUnseenStore;

@@ -445,6 +445,38 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // Recalculate computed arrays
       get().recalculatePlanArrays();
 
+      // Fetch invitation seen status from Supabase and apply to store
+      if (currentUserId && currentUserId !== 'unknown') {
+        supabase
+          .from('plan_participants')
+          .select('plan_id, invitation_seen_at')
+          .eq('user_id', currentUserId)
+          .eq('status', 'pending')
+          .then(({ data, error }) => {
+            if (error) {
+              console.error('❌ [plansStore] invitation_seen_at fetch error:', error);
+              return;
+            }
+            if (!data || data.length === 0) return;
+
+            set(state => {
+              const updatedPlans = { ...state.plans };
+              data.forEach((row: { plan_id: string; invitation_seen_at: string | null }) => {
+                if (updatedPlans[row.plan_id]) {
+                  updatedPlans[row.plan_id] = {
+                    ...updatedPlans[row.plan_id],
+                    isRead: row.invitation_seen_at !== null,
+                  };
+                }
+              });
+              return { plans: updatedPlans };
+            });
+
+            // Recalculate after isRead update
+            get().recalculatePlanArrays();
+          });
+      }
+
       // Also fetch unseen counts
       useUnseenStore.getState().fetchUnseenCounts();
 
@@ -567,14 +599,34 @@ const usePlansStore = create<PlansState>((set, get) => ({
   // },
   
   markAsRead: (planId: string) => {
+    // Optimistic local update
     set((state) => ({
-      invitations: state.invitations.map(plan => 
+      invitations: state.invitations.map(plan =>
         plan.id === planId ? { ...plan, isRead: true } : plan
       ),
-      activePlans: state.activePlans.map(plan => 
+      activePlans: state.activePlans.map(plan =>
         plan.id === planId ? { ...plan, isRead: true } : plan
-      )
+      ),
     }));
+
+    // Persist to Supabase (fire-and-forget)
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user?.id) return;
+      supabase
+        .from('plan_participants')
+        .update({ invitation_seen_at: new Date().toISOString() })
+        .eq('plan_id', planId)
+        .eq('user_id', user.id)
+        .is('invitation_seen_at', null)
+        .then(({ error }) => {
+          if (error) {
+            console.error('❌ [plansStore] markAsRead – Supabase update error:', error);
+          }
+        });
+
+      // Also update unseenStore invitation count
+      useUnseenStore.getState().markInvitationSeen(planId);
+    });
   },
   
   respondToPlan: async (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
@@ -1272,8 +1324,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
           console.log('📡 Participants channel status:', status);
           if (status === 'SUBSCRIBED') {
             console.log('✅ Direct participant listener connected!');
-          } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
-            console.log('❌ Participants channel disconnected:', status);
+        } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3211c6'},body:JSON.stringify({sessionId:'3211c6',location:'plansStore.ts:participantsChannel',message:'Channel error',data:{channel:'participants',status},timestamp:Date.now(),hypothesisId:'channelError'})}).catch(()=>{});
+          // #endregion
+          console.log('❌ Participants channel disconnected:', status);
             // Simple retry like chat does (no MAX_RETRIES!)
             setTimeout(() => {
               if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
@@ -1387,6 +1442,10 @@ const usePlansStore = create<PlansState>((set, get) => ({
       console.log('✅ Plans real-time subscription is active');
       return;
     }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3211c6'},body:JSON.stringify({sessionId:'3211c6',location:'plansStore.ts:checkAndRestartSubscriptions',message:'Restarting subscriptions',data:{force:options?.force,hadUpdatesChannel:!!updatesChannel,isSubscribed:get().subscriptionStatus.isSubscribed},timestamp:Date.now(),hypothesisId:'restartCalls'})}).catch(()=>{});
+    // #endregion
 
     console.log(options?.force ? '🔄 Force restarting plans subscriptions...' : '🔄 Plans subscription missing or failed - restarting...');
 
@@ -1547,6 +1606,9 @@ function createChannelWithRetry(
       }
       logSubscriptionMetrics();
     } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3211c6'},body:JSON.stringify({sessionId:'3211c6',location:'plansStore.ts:createChannelWithRetry',message:'Channel error',data:{channel:channelName,status},timestamp:Date.now(),hypothesisId:'channelError'})}).catch(()=>{});
+      // #endregion
       console.log(`❌ ${channelName} disconnected:`, status);
       onDisconnect();
       const state = usePlansStore.getState();
@@ -1603,7 +1665,9 @@ function startPlansHealthCheck(userId: string) {
       { name: 'polls', state: planPollsChannel?.state },
     ];
 
+    const planUpdatesHealthy = updatesChannel?.state === 'joined';
     const allHealthy = channelsStatus.every((channel) => channel.state === 'joined');
+    const failedChannels = channelsStatus.filter((c) => c.state !== 'joined');
 
     if (!allHealthy) {
       failedChecks += 1;
@@ -1612,9 +1676,15 @@ function startPlansHealthCheck(userId: string) {
           .map((channel) => `${channel.name}: ${channel.state ?? 'null'}`)
           .join(', ')}`
       );
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3211c6'},body:JSON.stringify({sessionId:'3211c6',location:'plansStore.ts:healthCheck',message:'Health check failed',data:{failedChecks,failedChannels:failedChannels.map(c=>({name:c.name,state:c.state})),allStates:channelsStatus.map(c=>c.state)},timestamp:Date.now(),hypothesisId:'healthCheck'})}).catch(()=>{});
+      // #endregion
 
-      if (failedChecks >= 1) {
-        console.log('🔄 Failed health check - restarting subscriptions immediately...');
+      // Only restart when the critical channel (plan_updates) is down. If plan_updates is joined
+      // but participants/poll_votes/polls are null, do NOT restart—they have their own retry
+      // and restarting would kill the working plan_updates and cause a restart loop.
+      if (!planUpdatesHealthy && failedChecks >= 1) {
+        console.log('🔄 Failed health check (plan_updates down) - restarting subscriptions...');
         usePlansStore.getState().checkAndRestartSubscriptions(userId);
         failedChecks = 0;
       }

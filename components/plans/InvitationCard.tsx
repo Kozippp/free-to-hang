@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Users, CheckCircle, HelpCircle, Clock, Eye, EyeOff, Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan } from '@/store/plansStore';
+import useUnseenStore from '@/store/unseenStore';
 
 interface InvitationCardProps {
   plan: Plan;
@@ -11,6 +12,8 @@ interface InvitationCardProps {
 
 export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
   const [currentTime, setCurrentTime] = React.useState(Date.now());
+  const { plans: unseenPlans } = useUnseenStore();
+  const unseenTotal = unseenPlans[plan.id]?.total ?? 0;
 
   // Update timer every second
   React.useEffect(() => {
@@ -110,10 +113,12 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
       onPress={() => onPress(plan)}
       activeOpacity={0.7}
     >
-      {/* Update notification badge */}
-      {plan.hasUnreadUpdates && (
+      {/* Unseen updates counter badge */}
+      {unseenTotal > 0 && (
         <View style={styles.updateBadge}>
-          <Text style={styles.updateBadgeText}>!</Text>
+          <Text style={styles.updateBadgeText}>
+            {unseenTotal > 99 ? '99+' : unseenTotal}
+          </Text>
         </View>
       )}
       
@@ -382,16 +387,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 12,
     right: 12,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#FFCC00',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 5,
   },
   updateBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 11,
+    fontWeight: '700',
     color: 'white',
   },
 });
