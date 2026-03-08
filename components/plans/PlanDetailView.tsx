@@ -44,6 +44,7 @@ import PollCreator from './PollCreator';
 import PollVoting from './PollVoting';
 import PollDisplay from './PollDisplay';
 import ChatView from '../chat/ChatView';
+import UserProfileModal from '@/components/UserProfileModal';
 import usePlansStore from '@/store/plansStore';
 // import useChatStore from '@/store/chatStore';
 import useUnseenStore from '@/store/unseenStore';
@@ -91,6 +92,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [editingDescription, setEditingDescription] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
+  const [showUserProfile, setShowUserProfile] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const displayTitle = editedTitle ?? plan.title;
   
   // Poll voting state - track loading per option (not per poll)
@@ -1132,6 +1135,10 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
             onInvite={handleInviteFriends}
             canInvite={isInYesGang}
             isInYesGang={isInYesGang}
+            onParticipantPress={(userId) => {
+              setSelectedUserId(userId);
+              setShowUserProfile(true);
+            }}
           />
           
           {/* Manual plan completion voting removed; plans auto-complete after 24h */}
@@ -1197,6 +1204,13 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         }}
         onCreateInvitationPoll={handleInviteUsers}
         plan={latestPlan}
+      />
+
+      {/* User Profile Modal - same as in profile tab */}
+      <UserProfileModal
+        visible={showUserProfile}
+        userId={selectedUserId}
+        onClose={() => setShowUserProfile(false)}
       />
       </View>
     </TouchableWithoutFeedback>

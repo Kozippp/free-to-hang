@@ -11,6 +11,7 @@ interface PlanParticipantsProps {
   onInvite: () => void;
   canInvite: boolean;
   isInYesGang: boolean;
+  onParticipantPress?: (userId: string) => void;
 }
 
 export default function PlanParticipants({
@@ -20,11 +21,15 @@ export default function PlanParticipants({
   declinedParticipants,
   onInvite,
   canInvite,
-  isInYesGang
+  isInYesGang,
+  onParticipantPress
 }: PlanParticipantsProps) {
   const renderParticipant = (participant: Participant) => {
-    return (
-      <View key={participant.id} style={styles.participantRow}>
+    const isCurrentUser = participant.id === 'current';
+    const isPressable = onParticipantPress && !isCurrentUser;
+
+    const content = (
+      <>
         <View style={styles.participantInfo}>
           <View style={styles.avatarContainer}>
             <Image source={{ uri: participant.avatar }} style={styles.avatar} />
@@ -59,6 +64,22 @@ export default function PlanParticipants({
             {participant.name}{participant.id === 'current' ? ' (you)' : ''}
           </Text>
         </View>
+      </>
+    );
+
+    return (
+      <View key={participant.id} style={styles.participantRow}>
+        {isPressable ? (
+          <TouchableOpacity
+            style={styles.participantPressable}
+            onPress={() => onParticipantPress(participant.id)}
+            activeOpacity={0.7}
+          >
+            {content}
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.participantPressable}>{content}</View>
+        )}
       </View>
     );
   };
@@ -147,6 +168,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
+  },
+  participantPressable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   participantInfo: {
     flexDirection: 'row',
