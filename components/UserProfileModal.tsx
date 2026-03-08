@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import useFriendsStore from '@/store/friendsStore';
 import { relationshipService, RelationshipStatus } from '@/lib/relationship-service';
+import { friendsDirectService } from '@/lib/friends-direct-service';
 import CachedAvatar from '@/components/CachedAvatar';
 
 
@@ -81,9 +82,9 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
   const determineRelationshipStatus = async () => {
     if (!userId) return;
-    
     try {
-      const status = await relationshipService.getRelationshipStatus(userId);
+      // Use direct Supabase read (same as friends list) so modal works even when backend is slow/unreachable
+      const status = await friendsDirectService.getRelationshipStatus(userId);
       setRelationshipStatus(status);
     } catch (error) {
       console.error('Error determining relationship status:', error);
