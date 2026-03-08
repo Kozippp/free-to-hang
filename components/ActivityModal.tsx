@@ -26,9 +26,9 @@ interface ActivityModalProps {
 const DURATION_OPTIONS = [
   { label: 'Forever', value: null },
   { label: 'Till tonight', value: 'tonight' }, // Special handling
-  { label: '1 hour', value: 60 },
-  { label: '4 hours', value: 240 },
+  { label: '6 hours', value: 360 },
   { label: '12 hours', value: 720 },
+  { label: '24 hours', value: 1440 },
 ];
 
 export default function ActivityModal({ 
