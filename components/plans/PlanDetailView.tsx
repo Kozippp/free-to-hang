@@ -1135,6 +1135,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
             onInvite={handleInviteFriends}
             canInvite={isInYesGang}
             isInYesGang={isInYesGang}
+            currentUserId={user?.id}
             onParticipantPress={(userId) => {
               setSelectedUserId(userId);
               setShowUserProfile(true);

@@ -11,9 +11,11 @@ import {
   Dimensions,
   SafeAreaView,
 } from 'react-native';
-import { X, UserPlus, UserMinus, UserX, Eye, EyeOff, Clock, MapPin, Calendar, Heart, MessageCircle } from 'lucide-react-native';
+import { X, UserPlus, UserMinus, UserX, Eye, EyeOff, Clock, MapPin, Calendar, Heart, MessageCircle, Edit3 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import useFriendsStore from '@/store/friendsStore';
 import { RelationshipStatus } from '@/lib/relationship-service';
@@ -41,6 +43,11 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ visible, userId, onClose }: UserProfileModalProps) {
+  const { user: authUser } = useAuth();
+  const router = useRouter();
+  const currentUserId = authUser?.id ?? null;
+  const isOwnProfile = !!userId && !!currentUserId && userId === currentUserId;
+
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [relationshipStatus, setRelationshipStatus] = useState<RelationshipStatus>('none');
@@ -51,13 +58,16 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
   useEffect(() => {
     if (visible && userId) {
       loadUserData();
-      determineRelationshipStatus();
+      // Don't fetch relationship status when viewing own profile
+      if (currentUserId && userId !== currentUserId) {
+        determineRelationshipStatus();
+      }
     } else {
       // Reset state when modal closes
       setUser(null);
       setRelationshipStatus('none');
     }
-  }, [visible, userId]);
+  }, [visible, userId, currentUserId]);
 
   const loadUserData = async () => {
     if (!userId) return;
@@ -210,6 +220,11 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     setActionLoading(false);
   };
 
+  const handleEditProfile = () => {
+    onClose();
+    router.push('/(tabs)/profile?edit=1');
+  };
+
   const handleBlockUser = async () => {
     console.log('🚫 Block user disabled (frontend only)');
     setActionLoading(false);
@@ -280,6 +295,19 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
   const renderActionButtons = () => {
     if (!user) return null;
+
+    // When viewing own profile, show Edit Profile instead of relationship actions
+    if (isOwnProfile) {
+      return (
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={handleEditProfile}
+        >
+          <Edit3 size={20} color="white" />
+          <Text style={styles.primaryButtonText}>Edit Profile</Text>
+        </TouchableOpacity>
+      );
+    }
 
     switch (relationshipStatus) {
       case 'none':

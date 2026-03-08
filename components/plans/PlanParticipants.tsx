@@ -12,6 +12,7 @@ interface PlanParticipantsProps {
   canInvite: boolean;
   isInYesGang: boolean;
   onParticipantPress?: (userId: string) => void;
+  currentUserId?: string | null;
 }
 
 export default function PlanParticipants({
@@ -22,11 +23,13 @@ export default function PlanParticipants({
   onInvite,
   canInvite,
   isInYesGang,
-  onParticipantPress
+  onParticipantPress,
+  currentUserId
 }: PlanParticipantsProps) {
   const renderParticipant = (participant: Participant) => {
     const isCurrentUser = participant.id === 'current';
-    const isPressable = onParticipantPress && !isCurrentUser;
+    const effectiveUserId = isCurrentUser && currentUserId ? currentUserId : participant.id;
+    const isPressable = onParticipantPress && effectiveUserId;
 
     const content = (
       <>
@@ -72,7 +75,7 @@ export default function PlanParticipants({
         {isPressable ? (
           <TouchableOpacity
             style={styles.participantPressable}
-            onPress={() => onParticipantPress(participant.id)}
+            onPress={() => onParticipantPress(effectiveUserId)}
             activeOpacity={0.7}
           >
             {content}

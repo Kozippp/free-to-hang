@@ -38,7 +38,7 @@ import {
   Check,
   User
 } from 'lucide-react-native';
-import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { 
   Friend, 
@@ -63,6 +63,7 @@ export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
   const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
   const params = useLocalSearchParams();
+  const router = useRouter();
   
   // Use real friends store for friend requests and relationships
   const {
@@ -190,6 +191,14 @@ export default function ProfileScreen() {
       setActiveTab('requests');
     }
   }, [params.tab]);
+
+  // Open edit profile modal when navigated with ?edit=1 (e.g. from UserProfileModal)
+  useEffect(() => {
+    if (params.edit === '1') {
+      setShowEditProfile(true);
+      router.replace('/(tabs)/profile');
+    }
+  }, [params.edit, router]);
   
   // Modal states
   const [showSettings, setShowSettings] = useState(false);
