@@ -513,21 +513,29 @@ const useChatStore = create<ChatState>((set, get) => ({
       get().updateReadReceipt(planId, userId, optimisticReceipt);
       console.log(`⚡ [chatStore] Optimistic read receipt: ${targetMessage.id}`);
 
-      // Upsert directly to Supabase
-      const { error } = await supabase
-        .from('chat_read_receipts')
-        .upsert(
-          {
-            plan_id: planId,
-            user_id: userId,
-            last_read_message_id: targetMessage.id,
-            last_read_at: now,
-          },
-          { onConflict: 'plan_id,user_id' }
-        );
+      // Upsert directly to Supabase (retry on FK race: message may not exist yet)
+      const upsertReceipt = async (): Promise<{ error: { code: string } | null }> =>
+        supabase
+          .from('chat_read_receipts')
+          .upsert(
+            {
+              plan_id: planId,
+              user_id: userId,
+              last_read_message_id: targetMessage.id,
+              last_read_at: now,
+            },
+            { onConflict: 'plan_id,user_id' }
+          )
+          .then(({ error }) => ({ error }));
 
-      if (error) {
-        console.error('❌ [chatStore] markMessagesAsRead upsert error:', error);
+      let result = await upsertReceipt();
+      if (result.error?.code === '23503') {
+        await new Promise(r => setTimeout(r, 400));
+        result = await upsertReceipt();
+      }
+
+      if (result.error) {
+        console.error('❌ [chatStore] markMessagesAsRead upsert error:', result.error);
         return;
       }
 
@@ -688,7 +696,6 @@ const useChatStore = create<ChatState>((set, get) => ({
         },
         async (payload) => {
           console.log('📨 New message received:', payload);
-          
           try {
             // Fetch full message with user details
             const { data, error } = await supabase

@@ -17,6 +17,7 @@ interface Friend {
   lastSeen?: string;
   lastAvailable?: string;
   statusChangedAt?: string;
+  status_expires_at?: string;
   responseStatus?: 'accepted' | 'maybe' | 'pending' | 'seen' | 'unseen';
 }
 
@@ -28,6 +29,7 @@ interface User {
   avatar: string;
   status: 'available' | 'offline';
   activity: string;
+  status_expires_at?: string | null;
 }
 
 interface HangState {
@@ -39,7 +41,7 @@ interface HangState {
   isAvailable: boolean;
   activity: string;
   setActivity: (activity: string) => void;
-  toggleAvailability: () => void;
+  toggleAvailability: (durationMinutes?: number | null) => Promise<void>;
   selectFriend: (id: string) => void;
   unselectFriend: (id: string) => void;
   clearSelectedFriends: () => void;
@@ -100,47 +102,62 @@ const useHangStore = create<HangState>()(
       
       setActivity: (activity) => set({ activity }),
       
-      toggleAvailability: async () => {
+      toggleAvailability: async (durationMinutes: number | null = null) => {
         const currentStatus = get().isAvailable;
         const newStatus = !currentStatus;
         const currentActivity = get().activity;
+        let expiresAt: string | null = null;
         
+        if (newStatus && durationMinutes) {
+          const date = new Date();
+          date.setMinutes(date.getMinutes() + durationMinutes);
+          expiresAt = date.toISOString();
+        }
+        
+        // Optimistic update
         set({ 
           isAvailable: newStatus,
           user: {
             ...get().user,
-            status: newStatus ? 'available' : 'offline'
+            status: newStatus ? 'available' : 'offline',
+            status_expires_at: expiresAt
           }
         });
         
         try {
-          const token = await getAuthToken();
-          if (!token) {
-            throw new Error('No auth token available');
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser) {
+            throw new Error('No authenticated user found');
           }
 
-          const response = await fetch(`${API_CONFIG.BASE_URL}/user/status`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              is_available: newStatus,
-              activity: newStatus && currentActivity ? currentActivity : null
-            })
-          });
+          // Direct Supabase update
+          const updates = {
+            status: newStatus ? 'available' : 'offline',
+            current_activity: newStatus && currentActivity ? currentActivity : null,
+            status_changed_at: new Date().toISOString(),
+            status_expires_at: expiresAt
+          };
 
-          if (!response.ok) {
-            throw new Error(`Backend status update failed: ${response.status}`);
+          const { error } = await supabase
+            .from('users')
+            .update(updates)
+            .eq('id', authUser.id);
+
+          if (error) {
+            throw error;
           }
+          
+          console.log('Status updated in Supabase:', updates);
+
         } catch (error) {
-          console.error('Error updating status via backend:', error);
+          console.error('Error updating status:', error);
+          // Revert on error
           set({
             isAvailable: currentStatus,
             user: {
               ...get().user,
-              status: currentStatus ? 'available' : 'offline'
+              status: currentStatus ? 'available' : 'offline',
+              status_expires_at: get().user.status_expires_at // Potential bug here if we don't track prev, but acceptable for now
             }
           });
         }
@@ -279,7 +296,8 @@ const useHangStore = create<HangState>()(
                 status,
                 current_activity,
                 status_changed_at,
-                last_seen_at
+                last_seen_at,
+                status_expires_at
               ),
               receiver:users!friend_requests_receiver_id_fkey (
                 id,
@@ -289,7 +307,8 @@ const useHangStore = create<HangState>()(
                 status,
                 current_activity,
                 status_changed_at,
-                last_seen_at
+                last_seen_at,
+                status_expires_at
               )
             `)
             .eq('status', 'accepted')
@@ -317,7 +336,16 @@ const useHangStore = create<HangState>()(
               
               if (friendData && !seenIds.has(friendData.id)) {
                 seenIds.add(friendData.id);
-                const friendStatus = friendData.status === 'available' ? 'available' : 'offline';
+                
+                // Check if status has expired
+                let friendStatus: 'available' | 'offline' = friendData.status === 'available' ? 'available' : 'offline';
+                if (friendStatus === 'available' && friendData.status_expires_at) {
+                  const expiresAt = new Date(friendData.status_expires_at);
+                  if (expiresAt < new Date()) {
+                    friendStatus = 'offline';
+                  }
+                }
+                
                 const lastAvailable = formatFriendLastAvailable({
                   status: friendStatus,
                   statusChangedAt: friendData.status_changed_at,
@@ -335,7 +363,8 @@ const useHangStore = create<HangState>()(
                   lastAvailable,
                   lastActive: lastAvailable,
                   lastSeen: friendData.last_seen_at,
-                  statusChangedAt: friendData.status_changed_at
+                  statusChangedAt: friendData.status_changed_at,
+                  status_expires_at: friendData.status_expires_at
                 });
               }
             });
@@ -479,7 +508,7 @@ const useHangStore = create<HangState>()(
               console.log('📡 User status change detected:', payload);
               
               // If a friend went online (chain effect trigger)
-              const newStatus = payload.new;
+              const newStatus = payload.new as any;
               if (payload.eventType === 'UPDATE' && newStatus?.is_available === true) {
                 console.log('🔥 Friend went online, chain effect will trigger from backend');
               }

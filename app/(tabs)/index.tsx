@@ -120,9 +120,9 @@ export default function HangScreen() {
     }
   };
   
-  const handleActivitySubmit = (newActivity: string) => {
+  const handleActivitySubmit = (newActivity: string, duration: number | null) => {
     setActivity(newActivity);
-    toggleAvailability();
+    toggleAvailability(duration);
   };
   
   const handleFriendSelect = (id: string) => {
