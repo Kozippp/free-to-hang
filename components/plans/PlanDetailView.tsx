@@ -13,7 +13,8 @@ import {
   Alert,
   Keyboard,
   Modal,
-  Dimensions
+  Dimensions,
+  RefreshControl
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { 
@@ -117,7 +118,18 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [isPollLoading, setIsPollLoading] = useState(false);
   const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
+  const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
   const hasMarkedControlPanelRef = useRef(false);
+
+  // Load fresh plan data on mount so polls are always visible when opening a plan.
+  // [plan.id] dependency means it re-runs if a different plan is shown in the same component.
+  React.useEffect(() => {
+    if (!user?.id) return;
+    setIsRefreshingPlan(true);
+    loadPlan(plan.id, user.id)
+      .catch(() => {})
+      .finally(() => setIsRefreshingPlan(false));
+  }, [plan.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   
   // Decline animation states
@@ -339,6 +351,24 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    // Refresh plan data when switching to Control Panel so polls are always
+    // up-to-date (e.g. after returning from background while on Chat tab).
+    // Safe for realtime: this is an event handler, never a useEffect, so it
+    // fires exactly once per deliberate tab switch and cannot loop.
+    if (tab === 'Control Panel' && user?.id) {
+      setIsRefreshingPlan(true);
+      loadPlan(latestPlan.id, user.id)
+        .catch(() => {})
+        .finally(() => setIsRefreshingPlan(false));
+    }
+  };
+
+  const handleManualRefresh = () => {
+    if (!user?.id) return;
+    setIsRefreshingPlan(true);
+    loadPlan(latestPlan.id, user.id)
+      .catch(() => {})
+      .finally(() => setIsRefreshingPlan(false));
   };
   
   const handleDescriptionSave = () => {
@@ -912,6 +942,14 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
               style={styles.content}
               contentContainerStyle={styles.contentContainer}
               showsVerticalScrollIndicator={Platform.OS === 'web'}
+              refreshControl={
+                <RefreshControl
+                  refreshing={isRefreshingPlan}
+                  onRefresh={handleManualRefresh}
+                  tintColor={Colors.light.primary}
+                  colors={[Colors.light.primary]}
+                />
+              }
             >
           {/* Description Section - Title moved to modal header */}
           <PlanTitle 
