@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import { relationshipService, RelationshipStatus, Friend, FriendRequest } from '@/lib/relationship-service';
+import { RelationshipStatus, Friend, FriendRequest } from '@/lib/relationship-service';
 import { friendsDirectService } from '@/lib/friends-direct-service';
+import { triggerFriendRequestNotification, triggerFriendAcceptedNotification } from '@/lib/notification-trigger';
 import { prefetchAvatars } from '@/utils/avatarCache';
 
 interface User {
@@ -125,7 +126,7 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
       console.log('📥 New incoming friend request received via real-time');
       
       // Force reload incoming requests (bypass cache)
-      relationshipService.getIncomingRequests().then(requests => {
+      friendsDirectService.getIncomingRequests().then(requests => {
         useFriendsStore.setState({ incomingRequests: requests });
         lastLoadTimes['incoming'] = Date.now();
         console.log('✅ Incoming requests updated via real-time:', requests.length);
@@ -138,7 +139,7 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
       console.log('📤 New outgoing friend request sent via real-time');
       
       // Force reload outgoing requests (bypass cache)
-      relationshipService.getOutgoingRequests().then(requests => {
+      friendsDirectService.getOutgoingRequests().then(requests => {
         useFriendsStore.setState({ outgoingRequests: requests });
         lastLoadTimes['outgoing'] = Date.now();
         console.log('✅ Outgoing requests updated via real-time:', requests.length);
@@ -171,7 +172,7 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
       }
       
       // Force reload friends list to include new friend (bypass cache)
-      relationshipService.getFriends().then(friends => {
+      friendsDirectService.getFriends().then(friends => {
         useFriendsStore.setState({ friends });
         lastLoadTimes['friends'] = Date.now();
         console.log('✅ Friends updated via real-time:', friends.length);
@@ -195,9 +196,9 @@ function handleRealtimeChange(payload: any, currentUserId: string) {
     console.log('🔄 DELETE event detected - force refreshing all relationship data');
     
     Promise.all([
-      relationshipService.getFriends(),
-      relationshipService.getIncomingRequests(),
-      relationshipService.getOutgoingRequests(),
+      friendsDirectService.getFriends(),
+      friendsDirectService.getIncomingRequests(),
+      friendsDirectService.getOutgoingRequests(),
     ]).then(([friends, incomingRequests, outgoingRequests]) => {
       useFriendsStore.setState({ 
         friends, 
@@ -259,12 +260,15 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     }
   },
 
-  // Send friend request
+  // Send friend request (direct Supabase + notification trigger)
   sendFriendRequest: async (userId: string): Promise<boolean> => {
     try {
-      const success = await relationshipService.sendFriendRequest(userId);
-      if (success) {
+      const result = await friendsDirectService.sendFriendRequest(userId);
+      if (result.success && result.requestId) {
         console.log('🚀 Friend request sent, updating UI immediately...');
+        
+        // Trigger notification (fire-and-forget, don't block UI)
+        void triggerFriendRequestNotification(userId, result.requestId);
         
         // Update search results to show pending status immediately
         const { searchResults } = get();
@@ -278,39 +282,38 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
         
         // Force reload outgoing requests immediately (bypass cache)
         try {
-          console.log('📤 Force loading outgoing requests (bypass cache)...');
-          const requests = await relationshipService.getOutgoingRequests();
+          const requests = await friendsDirectService.getOutgoingRequests();
           set({ outgoingRequests: requests });
           lastLoadTimes['outgoing'] = Date.now();
-          console.log('✅ Outgoing requests force loaded:', requests.length);
         } catch (error) {
           console.error('❌ Error force loading outgoing requests:', error);
         }
         
         console.log('✅ UI updated after sending friend request');
       }
-      return success;
+      return result.success;
     } catch (error) {
       console.error('❌ Error sending friend request:', error);
       return false;
     }
   },
 
-  // Accept friend request
+  // Accept friend request (direct Supabase + notification trigger)
   acceptFriendRequest: async (requestId: string): Promise<boolean> => {
     try {
-      const success = await relationshipService.acceptFriendRequest(requestId);
+      const success = await friendsDirectService.acceptFriendRequest(requestId);
       if (success) {
         console.log('🚀 Friend request accepted, updating UI immediately...');
         
+        // Trigger notification (fire-and-forget)
+        void triggerFriendAcceptedNotification(requestId);
+        
         // Force reload all data immediately (bypass cache)
         try {
-          console.log('🔄 Force loading all relationships (bypass cache)...');
-          
           const [friends, incomingRequests, outgoingRequests] = await Promise.all([
-            relationshipService.getFriends(),
-            relationshipService.getIncomingRequests(),
-            relationshipService.getOutgoingRequests(),
+            friendsDirectService.getFriends(),
+            friendsDirectService.getIncomingRequests(),
+            friendsDirectService.getOutgoingRequests(),
           ]);
           
           set({ 
@@ -319,16 +322,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
             outgoingRequests 
           });
           
-          // Update cache times
           lastLoadTimes['friends'] = Date.now();
           lastLoadTimes['incoming'] = Date.now();
           lastLoadTimes['outgoing'] = Date.now();
-          
-          console.log('✅ All relationships force loaded:', {
-            friends: friends.length,
-            incoming: incomingRequests.length,
-            outgoing: outgoingRequests.length
-          });
         } catch (error) {
           console.error('❌ Error force loading relationships:', error);
         }
@@ -340,26 +336,21 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     }
   },
 
-  // Decline friend request
+  // Decline friend request (direct Supabase)
   declineFriendRequest: async (requestId: string): Promise<boolean> => {
     try {
-      const success = await relationshipService.declineFriendRequest(requestId);
+      const success = await friendsDirectService.declineFriendRequest(requestId);
       if (success) {
-        console.log('🚀 Friend request declined, updating UI immediately...');
-        
         // Remove from incoming requests immediately
         const { incomingRequests } = get();
         set({
           incomingRequests: incomingRequests.filter(req => req.request_id !== requestId)
         });
         
-        // Force reload incoming requests to ensure consistency (bypass cache)
         try {
-          console.log('📥 Force loading incoming requests (bypass cache)...');
-          const requests = await relationshipService.getIncomingRequests();
+          const requests = await friendsDirectService.getIncomingRequests();
           set({ incomingRequests: requests });
           lastLoadTimes['incoming'] = Date.now();
-          console.log('✅ Incoming requests force loaded:', requests.length);
         } catch (error) {
           console.error('❌ Error force loading incoming requests:', error);
         }
@@ -371,13 +362,11 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     }
   },
 
-  // Cancel friend request
+  // Cancel friend request (direct Supabase)
   cancelFriendRequest: async (receiverId: string): Promise<boolean> => {
     try {
-      const success = await relationshipService.cancelFriendRequest(receiverId);
+      const success = await friendsDirectService.cancelFriendRequest(receiverId);
       if (success) {
-        console.log('🚀 Friend request cancelled, updating UI immediately...');
-        
         // Update search results immediately
         const { searchResults } = get();
         set({
@@ -388,13 +377,10 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           )
         });
         
-        // Force reload outgoing requests immediately (bypass cache)
         try {
-          console.log('📤 Force loading outgoing requests (bypass cache)...');
-          const requests = await relationshipService.getOutgoingRequests();
+          const requests = await friendsDirectService.getOutgoingRequests();
           set({ outgoingRequests: requests });
           lastLoadTimes['outgoing'] = Date.now();
-          console.log('✅ Outgoing requests force loaded:', requests.length);
         } catch (error) {
           console.error('❌ Error force loading outgoing requests:', error);
         }
@@ -406,19 +392,14 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     }
   },
 
-  // Remove friend
+  // Remove friend (direct Supabase)
   removeFriend: async (friendId: string): Promise<boolean> => {
     try {
-      console.log('💔 Starting friend removal process for:', friendId);
-      const success = await relationshipService.removeFriend(friendId);
+      const success = await friendsDirectService.removeFriend(friendId);
       if (success) {
-        console.log('🚀 Friend removed from backend, updating UI immediately...');
-        
         // Remove from friends list immediately
         const { friends, searchResults } = get();
-        console.log('👥 Current friends before removal:', friends.length);
         const updatedFriends = friends.filter(friend => friend.friend_id !== friendId);
-        console.log('👥 Friends after filtering:', updatedFriends.length);
         
         set({
           friends: updatedFriends,
@@ -429,20 +410,13 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           )
         });
         
-        console.log('✅ Friend removed from UI immediately');
-        
-        // Force reload friends list to ensure consistency (bypass cache)
         try {
-          console.log('👥 Force loading friends (bypass cache)...');
-          const freshFriends = await relationshipService.getFriends();
+          const freshFriends = await friendsDirectService.getFriends();
           set({ friends: freshFriends });
           lastLoadTimes['friends'] = Date.now();
-          console.log('✅ Friends force loaded:', freshFriends.length);
         } catch (error) {
           console.error('❌ Error force loading friends:', error);
         }
-      } else {
-        console.log('❌ Backend friend removal failed');
       }
       return success;
     } catch (error) {

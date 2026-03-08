@@ -1,8 +1,125 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
+const { notifyUser, NotificationTemplates } = require('../services/notificationService');
 
 const supabase = global.supabase;
+
+// POST /notifications/trigger-friend-request - Trigger notification after client sends friend request via Supabase
+// Called by client after successful direct Supabase insert. Creates notification + push for receiver.
+router.post('/trigger-friend-request', verifyToken, async (req, res) => {
+  try {
+    const senderId = req.user.id;
+    const { receiver_id, request_id } = req.body;
+
+    if (!receiver_id || !request_id) {
+      return res.status(400).json({ error: 'receiver_id and request_id are required' });
+    }
+
+    // Verify the friend_request exists and caller is the sender
+    const { data: request, error: fetchError } = await supabase
+      .from('friend_requests')
+      .select('id, sender_id, receiver_id, status')
+      .eq('id', request_id)
+      .single();
+
+    if (fetchError || !request) {
+      return res.status(404).json({ error: 'Friend request not found' });
+    }
+    if (request.sender_id !== senderId || request.receiver_id !== receiver_id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Request is not pending' });
+    }
+
+    const { data: senderProfile } = await supabase
+      .from('users')
+      .select('name, avatar_url')
+      .eq('id', senderId)
+      .single();
+
+    const senderName = senderProfile?.name || 'Someone';
+    const senderAvatar = senderProfile?.avatar_url || null;
+    const template = NotificationTemplates.friend_request(senderName);
+    await notifyUser({
+      userId: receiver_id,
+      ...template,
+      data: {
+        user_id: senderId,
+        request_id,
+        actorId: senderId,
+        actorName: senderName,
+        actorAvatarUrl: senderAvatar,
+        imageUrl: senderAvatar
+      },
+      triggeredBy: senderId
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error triggering friend request notification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /notifications/trigger-friend-accepted - Trigger notification after client accepts via Supabase
+// Called by client after successful direct Supabase update. Creates notification + push for original sender.
+router.post('/trigger-friend-accepted', verifyToken, async (req, res) => {
+  try {
+    const receiverId = req.user.id; // The one who accepted (receiver of original request)
+    const { request_id } = req.body;
+
+    if (!request_id) {
+      return res.status(400).json({ error: 'request_id is required' });
+    }
+
+    const { data: request, error: fetchError } = await supabase
+      .from('friend_requests')
+      .select('id, sender_id, receiver_id, status')
+      .eq('id', request_id)
+      .single();
+
+    if (fetchError || !request) {
+      return res.status(404).json({ error: 'Friend request not found' });
+    }
+    if (request.receiver_id !== receiverId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    if (request.status !== 'accepted') {
+      return res.status(400).json({ error: 'Request is not accepted' });
+    }
+
+    const senderId = request.sender_id;
+    const { data: receiverProfile } = await supabase
+      .from('users')
+      .select('name, avatar_url')
+      .eq('id', receiverId)
+      .single();
+
+    const receiverName = receiverProfile?.name || 'Your friend';
+    const receiverAvatar = receiverProfile?.avatar_url || null;
+    const template = NotificationTemplates.friend_accepted(receiverName);
+    await notifyUser({
+      userId: senderId,
+      ...template,
+      data: {
+        user_id: receiverId,
+        request_id,
+        actorId: receiverId,
+        actorName: receiverName,
+        actorAvatarUrl: receiverAvatar,
+        imageUrl: receiverAvatar
+      },
+      triggeredBy: receiverId
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error triggering friend accepted notification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 router.get('/', verifyToken, async (req, res) => {
   try {

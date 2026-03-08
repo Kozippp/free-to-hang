@@ -47,7 +47,7 @@ export default function NotificationGroupItem({ group, onPress, onAvatarPress, o
       
       // Check if request is still incoming
       const hasIncomingRequest = requestId 
-        ? incomingRequests.some(r => r.request_id === requestId || r.id === requestId)
+        ? incomingRequests.some(r => r.request_id === requestId)
         : (senderId && incomingRequests.some(r => r.sender_id === senderId));
 
       if (isAlreadyFriend) {

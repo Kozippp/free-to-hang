@@ -30,6 +30,10 @@ export const API_ENDPOINTS = {
   FRIENDS_INCOMING: '/friends/requests/incoming',
   FRIENDS_OUTGOING: '/friends/requests/outgoing',
   FRIENDS_STATUS: '/friends/status',
+
+  // Notification trigger endpoints (called after direct Supabase writes)
+  NOTIFY_FRIEND_REQUEST: '/notifications/trigger-friend-request',
+  NOTIFY_FRIEND_ACCEPTED: '/notifications/trigger-friend-accepted',
   
   // Plans endpoints
   PLANS: '/plans',

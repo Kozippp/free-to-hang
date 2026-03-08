@@ -16,7 +16,7 @@ import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import useFriendsStore from '@/store/friendsStore';
-import { relationshipService, RelationshipStatus } from '@/lib/relationship-service';
+import { RelationshipStatus } from '@/lib/relationship-service';
 import { friendsDirectService } from '@/lib/friends-direct-service';
 import CachedAvatar from '@/components/CachedAvatar';
 
@@ -98,7 +98,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     setActionLoading(true);
     try {
       console.log('📤 Sending friend request to:', user.name);
-      const success = await relationshipService.sendFriendRequest(userId);
+      const success = await useFriendsStore.getState().sendFriendRequest(userId);
       if (success) {
         console.log('✅ Friend request sent successfully');
         setRelationshipStatus('pending_sent');
@@ -122,7 +122,7 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
     setActionLoading(true);
     try {
       console.log('🔄 Cancelling friend request to:', user.name);
-      const success = await relationshipService.cancelFriendRequest(userId);
+      const success = await useFriendsStore.getState().cancelFriendRequest(userId);
       if (success) {
         console.log('✅ Friend request cancelled successfully');
         setRelationshipStatus('none');

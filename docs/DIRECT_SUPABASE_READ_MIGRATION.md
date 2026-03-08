@@ -200,6 +200,13 @@ Eesmärk: Asendada praegune serveri-poolne socketi loogika (või polling) Supaba
     *   Kood organiseeritud ja dokumenteeritud
     *   WRITE operatsioonid jäävad API-sse (hübriid-mudel)
 
+*   **[08.03.2026]** - ✅ **Friend WRITE operatsioonid otse Supabase:**
+    *   Kõik friend operatsioonid (send, accept, decline, cancel, remove) lähevad nüüd otse Supabase'i
+    *   Teated (push) käivitatakse kliendipoolse päringuga: POST /notifications/trigger-friend-request ja trigger-friend-accepted
+    *   Backend säilitab ainult teadete loogika (notifyUser)
+    *   `friendsDirectService` implementeerib kõik write operatsioonid
+    *   `lib/notification-trigger.ts` kutsub notification endpoint'e pärast edukat Supabase kirjutust
+
 ---
 
 ## 🎉 Migratsioon Lõpetatud!
@@ -219,7 +226,8 @@ Otseühenduse migratsioon on edukalt lõpetatud! Rakendus kasutab nüüd Supabas
 
 **Hübriid-mudel:**
 - ✅ READ (GET) → Supabase Direct (RLS kaitstud)
-- ✅ WRITE (POST/PUT/DELETE) → API endpoint (äriloogikaga)
+- ✅ Friend WRITE → Supabase Direct + notification trigger API (send/accept)
+- ✅ Teised WRITE (plans, chat jms) → API endpoint (äriloogikaga)
 
 **Implementeeritud:**
 1. ✅ RLS poliitikad kõigile tabelitele

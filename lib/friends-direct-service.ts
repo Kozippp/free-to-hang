@@ -333,50 +333,152 @@ class FriendsDirectService {
 
   /**
    * Send a friend request
-   * Note: Write operations still go through backend API for now (as per migration plan)
-   * This is a placeholder for future direct write support
+   * Direct Supabase insert. Caller should trigger notification via API after success.
    */
-  async sendFriendRequest(receiverId: string): Promise<boolean> {
-    // For now, delegate to API (Phase 2 focuses on READ operations)
-    // TODO: Implement direct write in later phase if needed
-    console.warn('⚠️ sendFriendRequest should use API endpoint (write operation)');
-    return false;
+  async sendFriendRequest(receiverId: string): Promise<{ success: boolean; requestId?: string }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      if (user.id === receiverId) throw new Error('Cannot send friend request to yourself');
+
+      const { data: existingRequest, error: checkError } = await supabase
+        .from('friend_requests')
+        .select('id')
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${user.id})`)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') throw checkError;
+      if (existingRequest) throw new Error('Friend request already exists or you are already friends');
+
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .insert({ sender_id: user.id, receiver_id: receiverId, status: 'pending' })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      console.log('✅ [Direct] Friend request sent');
+
+      return { success: true, requestId: data.id };
+    } catch (error) {
+      console.error('❌ [Direct] Error sending friend request:', error);
+      return { success: false };
+    }
   }
 
   /**
    * Accept a friend request
-   * Note: Write operations still go through backend API for now
+   * Direct Supabase update. Caller should trigger notification via API after success.
    */
   async acceptFriendRequest(requestId: string): Promise<boolean> {
-    console.warn('⚠️ acceptFriendRequest should use API endpoint (write operation)');
-    return false;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .eq('id', requestId)
+        .eq('receiver_id', user.id)
+        .eq('status', 'pending')
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Friend request not found or already processed');
+
+      console.log('✅ [Direct] Friend request accepted');
+      return true;
+    } catch (error) {
+      console.error('❌ [Direct] Error accepting friend request:', error);
+      return false;
+    }
   }
 
   /**
    * Decline a friend request
-   * Note: Write operations still go through backend API for now
+   * Direct Supabase delete.
    */
   async declineFriendRequest(requestId: string): Promise<boolean> {
-    console.warn('⚠️ declineFriendRequest should use API endpoint (write operation)');
-    return false;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('id', requestId)
+        .eq('receiver_id', user.id)
+        .eq('status', 'pending')
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Friend request not found or already processed');
+
+      console.log('✅ [Direct] Friend request declined');
+      return true;
+    } catch (error) {
+      console.error('❌ [Direct] Error declining friend request:', error);
+      return false;
+    }
   }
 
   /**
    * Cancel a sent friend request
-   * Note: Write operations still go through backend API for now
+   * Direct Supabase delete.
    */
   async cancelFriendRequest(receiverId: string): Promise<boolean> {
-    console.warn('⚠️ cancelFriendRequest should use API endpoint (write operation)');
-    return false;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('sender_id', user.id)
+        .eq('receiver_id', receiverId)
+        .eq('status', 'pending')
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Friend request not found or already processed');
+
+      console.log('✅ [Direct] Friend request cancelled');
+      return true;
+    } catch (error) {
+      console.error('❌ [Direct] Error cancelling friend request:', error);
+      return false;
+    }
   }
 
   /**
    * Remove a friend
-   * Note: Write operations still go through backend API for now
+   * Direct Supabase delete.
    */
   async removeFriend(friendId: string): Promise<boolean> {
-    console.warn('⚠️ removeFriend should use API endpoint (write operation)');
-    return false;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .delete()
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`)
+        .eq('status', 'accepted')
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Friendship not found');
+
+      console.log('✅ [Direct] Friend removed');
+      return true;
+    } catch (error) {
+      console.error('❌ [Direct] Error removing friend:', error);
+      return false;
+    }
   }
 }
 
