@@ -69,7 +69,8 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     invitations,
     activePlans,
     loadPlans,
-    loadPlan
+    loadPlan,
+    checkAndRestartSubscriptions
     // markPlanAsSeen // TODO: Enable when backend is ready
   } = usePlansStore();
   // const { getUnreadCount } = useChatStore();
@@ -98,7 +99,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const voteTimeoutRef = useRef<Record<string, NodeJS.Timeout | number>>({});
   // Track pending votes locally to handle rapid clicking/race conditions
   const pendingVotesRef = useRef<Record<string, string[]>>({});
-  const cleanupTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const cleanupTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   // Confirmation states removed
   // const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -120,6 +121,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
   const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
   const hasMarkedControlPanelRef = useRef(false);
+  const previousActiveTabRef = useRef(activeTab);
 
   // Load fresh plan data on mount so polls are always visible when opening a plan.
   // [plan.id] dependency means it re-runs if a different plan is shown in the same component.
@@ -163,7 +165,25 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       markChatSeen(plan.id);
     }
   }, [activeTab, markControlPanelSeen, markChatSeen, plan.id]);
-  
+
+  React.useEffect(() => {
+    const previousActiveTab = previousActiveTabRef.current;
+    previousActiveTabRef.current = activeTab;
+
+    if (!user?.id || previousActiveTab !== 'Chat' || activeTab !== 'Control Panel') {
+      return;
+    }
+
+    setIsRefreshingPlan(true);
+
+    Promise.allSettled([
+      checkAndRestartSubscriptions(user.id, { force: true }),
+      loadPlan(plan.id, user.id)
+    ]).finally(() => {
+      setIsRefreshingPlan(false);
+    });
+  }, [activeTab, checkAndRestartSubscriptions, loadPlan, plan.id, user?.id]);
+
   // Swipe gesture state
   const { width } = Dimensions.get('window');
   const translateX = useRef(new Animated.Value(0)).current;
@@ -351,16 +371,6 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
-    // Refresh plan data when switching to Control Panel so polls are always
-    // up-to-date (e.g. after returning from background while on Chat tab).
-    // Safe for realtime: this is an event handler, never a useEffect, so it
-    // fires exactly once per deliberate tab switch and cannot loop.
-    if (tab === 'Control Panel' && user?.id) {
-      setIsRefreshingPlan(true);
-      loadPlan(latestPlan.id, user.id)
-        .catch(() => {})
-        .finally(() => setIsRefreshingPlan(false));
-    }
   };
 
   const handleManualRefresh = () => {

@@ -170,7 +170,7 @@ interface PlansState {
   // Real-time subscriptions
   startRealTimeUpdates: (userId: string) => Promise<void>;
   stopRealTimeUpdates: () => void;
-  checkAndRestartSubscriptions: (userId: string) => Promise<void>;
+  checkAndRestartSubscriptions: (userId: string, options?: { force?: boolean }) => Promise<void>;
   updateChannelStatus: (
     channel: 'plans' | 'plan_updates',
     state: ChannelConnectionState,
@@ -239,6 +239,7 @@ let updatesChannel: any = null;
 let participantsChannel: any = null;
 let pollVotesChannel: any = null;
 let planPollsChannel: any = null;
+let isStartingPlansRealtime = false;
 
 // Debouncing map for per-plan refresh control
 const planRefreshTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -1192,6 +1193,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   // Real-time subscriptions - consolidated channels
   startRealTimeUpdates: async (userId: string) => {
+    if (isStartingPlansRealtime) {
+      console.log('⏳ Plans real-time startup already in progress');
+      return;
+    }
+
     if (get().subscriptionStatus.isSubscribed) {
       console.log('🛑 Plans real-time subscriptions already active');
       return;
@@ -1204,6 +1210,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
     }
 
     console.log('🚀 Starting plans real-time updates...');
+    isStartingPlansRealtime = true;
 
     try {
       // Remember current user for filtering
@@ -1345,12 +1352,14 @@ const usePlansStore = create<PlansState>((set, get) => ({
         usePlansStore.getState().setSubscriptionActive(true);
         console.log('✅ Plans real-time subscription started successfully!');
         console.log('🔥 Listening for: plan_updates (all notifications)');
+        isStartingPlansRealtime = false;
       }, 1000);
 
     } catch (error) {
       console.error('❌ Error starting plans real-time updates:', error);
       usePlansStore.getState().setSubscriptionActive(false);
       await stopAllRealtimeChannels();
+      isStartingPlansRealtime = false;
     }
   },
   
@@ -1365,16 +1374,16 @@ const usePlansStore = create<PlansState>((set, get) => ({
     console.log('✅ All plans real-time updates stopped');
   },
 
-  checkAndRestartSubscriptions: async (userId: string) => {
+  checkAndRestartSubscriptions: async (userId: string, options?: { force?: boolean }) => {
     console.log('🔍 Checking plans real-time subscription status...');
 
     // If already subscribed and channel exists, no need to restart
-    if (get().subscriptionStatus.isSubscribed && updatesChannel) {
+    if (!options?.force && get().subscriptionStatus.isSubscribed && updatesChannel) {
       console.log('✅ Plans real-time subscription is active');
       return;
     }
 
-    console.log('🔄 Plans subscription missing or failed - restarting...');
+    console.log(options?.force ? '🔄 Force restarting plans subscriptions...' : '🔄 Plans subscription missing or failed - restarting...');
 
     // Clear any pending timeouts
     clearAllPlanRefreshTimeouts();
@@ -1390,6 +1399,8 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
 // Helper function to stop realtime channel
 async function stopAllRealtimeChannels() {
+  isStartingPlansRealtime = false;
+
   if (updatesChannel) {
     try {
       await supabase.removeChannel(updatesChannel);

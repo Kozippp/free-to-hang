@@ -236,7 +236,7 @@ export default function PlansScreen() {
         setSelectedPlan(updatedPlan);
       }
     }
-  }, [invitations, activePlans, completedPlans, selectedPlan]);
+  }, [invitations, activePlans, completedPlans, selectedPlan, user?.id]);
 
   // Handle app state changes (background/foreground) to restart realtime subscriptions
   useEffect(() => {

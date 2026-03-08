@@ -64,3 +64,39 @@ Please review and provide guidance on further actions or adjustments.
 
 _End of report._
 
+---
+
+## 5. Realtime Regression Fix
+
+**Date:** 2026-03-08  
+**Area:** `Chat -> Control Panel` realtime recovery  
+**Status:** Fixed and verified on devices
+
+### Problem
+
+After opening a plan chat and returning to `Control Panel`, realtime updates could stop arriving on that device.
+The failure was misleading because the plans realtime channels still looked connected locally, but new `plan_updates` and `plan_poll_votes` events no longer reached the screen reliably.
+
+### Root Cause
+
+The app could end up with a silent stale plans realtime subscription after leaving chat.
+A normal subscription health check was not enough, because the plans channels still appeared active and therefore were not restarted.
+
+### Final Fix
+
+1. Force a real plans realtime restart specifically when the user returns from `Chat` to `Control Panel`.
+2. Reload the active plan immediately after that forced restart so the Control Panel is re-synced with backend state.
+3. Prevent duplicate plans realtime startup with a startup lock in `store/plansStore.ts`.
+
+### Files Updated
+
+- `components/plans/PlanDetailView.tsx`
+- `store/plansStore.ts`
+- `app/(tabs)/plans.tsx`
+
+### Verification
+
+- Reproduced the bug on devices before the fix.
+- Confirmed that after the fix, Phone A receives poll vote updates again even after going `Chat -> Control Panel`.
+- Debug instrumentation used during investigation was removed after verification.
+
