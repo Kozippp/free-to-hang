@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import Colors from '@/constants/colors';
 
 interface PlanTabsProps {
@@ -8,10 +8,47 @@ interface PlanTabsProps {
   controlBadge?: number;
   chatBadge?: number;
   customTabs?: string[];
+  scrollX?: Animated.Value; // New prop for animation
 }
 
-export default function PlanTabs({ activeTab, onTabChange, controlBadge = 0, chatBadge = 0, customTabs }: PlanTabsProps) {
+export default function PlanTabs({ 
+  activeTab, 
+  onTabChange, 
+  controlBadge = 0, 
+  chatBadge = 0, 
+  customTabs,
+  scrollX 
+}: PlanTabsProps) {
   const tabs = customTabs || ['Control Panel', 'Chat'];
+  const { width } = Dimensions.get('window');
+  const tabWidth = width / tabs.length;
+  
+  // Indicator animation
+  // If scrollX is provided (totalX from parent, 0 to -width), we interpolate it
+  // 0 (CP) -> 0
+  // -width (Chat) -> tabWidth
+  const indicatorTranslateX = scrollX ? scrollX.interpolate({
+    inputRange: [-width, 0],
+    outputRange: [tabWidth, 0],
+    extrapolate: 'clamp' // Don't move indicator for exit swipe
+  }) : new Animated.Value(activeTab === tabs[1] ? tabWidth : 0);
+
+  // If no scrollX provided, we might want to animate based on activeTab (fallback)
+  const fallbackAnim = useRef(new Animated.Value(activeTab === tabs[1] ? 1 : 0)).current;
+  
+  useEffect(() => {
+    if (!scrollX) {
+      Animated.spring(fallbackAnim, {
+        toValue: activeTab === tabs[1] ? 1 : 0,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [activeTab, scrollX]);
+
+  const finalIndicatorX = scrollX ? indicatorTranslateX : fallbackAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, tabWidth]
+  });
   
   return (
     <View style={styles.container}>
@@ -50,10 +87,15 @@ export default function PlanTabs({ activeTab, onTabChange, controlBadge = 0, cha
               </View>
             )}
           </View>
-          
-          {activeTab === tab && <View style={styles.indicator} />}
         </TouchableOpacity>
       ))}
+      
+      <Animated.View 
+        style={[
+          styles.indicator, 
+          { width: tabWidth, transform: [{ translateX: finalIndicatorX }] }
+        ]} 
+      />
     </View>
   );
 }
@@ -64,15 +106,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
+    position: 'relative', // Needed for absolute indicator
   },
   tab: {
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
     position: 'relative',
+    zIndex: 1, // Text above indicator
   },
   activeTab: {
-    backgroundColor: Colors.light.background,
+    backgroundColor: 'transparent',
   },
   tabText: {
     fontSize: 14,
@@ -87,9 +131,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     left: 0,
-    right: 0,
     height: 2,
     backgroundColor: Colors.light.primary,
+    zIndex: 0,
   },
   tabContent: {
     flexDirection: 'row',

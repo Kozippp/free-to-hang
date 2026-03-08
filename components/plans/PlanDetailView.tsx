@@ -258,8 +258,27 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   // Swipe gesture state
   const { width } = Dimensions.get('window');
   const translateX = useRef(new Animated.Value(0)).current;
+  // tabOffset tracks the base position: 0 for Control Panel, -width for Chat
+  const initialOffset = (initialTab === 'Chat' || activeTab === 'Chat') ? -width : 0;
+  const tabOffset = useRef(new Animated.Value(initialOffset)).current;
+  const tabOffsetValue = useRef(initialOffset);
+  
+  // Track numeric value for gesture logic
+  React.useEffect(() => {
+    const id = tabOffset.addListener(({ value }) => {
+      tabOffsetValue.current = value;
+    });
+    return () => tabOffset.removeListener(id);
+  }, []);
+
   const scrollViewRef = useRef<ScrollView | null>(null);
   
+  // Calculate total X position for content and tabs
+  // 0 = Control Panel
+  // -width = Chat
+  // width = Exit (slide away)
+  const totalTranslateX = Animated.add(tabOffset, translateX);
+
   // Group participants by status
   const acceptedParticipants = latestPlan.participants.filter(p => p.status === 'going');
   const maybeParticipants = latestPlan.participants.filter(p =>
@@ -286,90 +305,79 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const onHandlerStateChange = (event: any) => {
     if (event.nativeEvent.state === State.END) {
       const { translationX: tx, velocityX } = event.nativeEvent;
+      const currentOffset = tabOffsetValue.current; // 0 or -width
+      
+      // Calculate projected end position to determine snap point
+      // Basic logic: 
+      // If Control Panel (0):
+      //   Swipe Left (tx < -100) -> Chat (-width)
+      //   Swipe Right (tx > 100) -> Exit (width)
+      // If Chat (-width):
+      //   Swipe Right (tx > 100) -> Control Panel (0)
+      //   Swipe Left (tx < -100) -> Stay (-width) or bounce
+      
+      let targetOffset = currentOffset;
+      let shouldClose = false;
 
-      if (activeTab === 'Control Panel') {
-        // Control Panel: swipe left to right exits, swipe right to left goes to Chat
-        if (tx > 100 || velocityX > 500) {
-          // Swipe left to right (or fast velocity) - exit/close
-          Animated.timing(translateX, {
-            toValue: width,
-            duration: 350, 
-            useNativeDriver: true,
-            easing: Easing.out(Easing.quad),
-          }).start(() => {
-            onClose(true);
-          });
-        } else if (tx < -100 || velocityX < -500) {
-          // Swipe right to left (or fast velocity) - go to Chat
-          Animated.timing(translateX, {
-            toValue: -width,
-            duration: 250,
-            useNativeDriver: true,
-            easing: Easing.out(Easing.quad),
-          }).start(() => {
-            setActiveTab('Chat');
-            translateX.setValue(0);
-          });
-        } else {
-          // Reset
-          Animated.spring(translateX, {
-            toValue: 0,
-            velocity: velocityX,
-            tension: 68,
-            friction: 12,
-            useNativeDriver: true,
-          }).start();
+      if (currentOffset === 0) { // Control Panel
+        if (tx < -100 || velocityX < -500) {
+           targetOffset = -width; // Go to Chat
+        } else if (tx > 100 || velocityX > 500) {
+           targetOffset = width; // Exit
+           shouldClose = true;
         }
-      } else if (activeTab === 'Chat') {
-        // Chat: swipe left to right goes back to Control Panel
+      } else { // Chat (-width)
         if (tx > 100 || velocityX > 500) {
-          Animated.timing(translateX, {
-            toValue: width,
-            duration: 250,
-            useNativeDriver: true,
-            easing: Easing.out(Easing.quad),
-          }).start(() => {
-            setActiveTab('Control Panel');
-            translateX.setValue(0);
-          });
-        } else {
-          // Reset
-          Animated.spring(translateX, {
-            toValue: 0,
-            velocity: velocityX,
-            tension: 68,
-            friction: 12,
-            useNativeDriver: true,
-          }).start();
+           targetOffset = 0; // Go to Control Panel
         }
       }
+
+      // If we are exiting, we animate tabOffset to 'width' 
+      // We animate translateX to (targetOffset - currentOffset)
+      // The goal is: totalTranslateX ends up at targetOffset
+      
+      const distance = targetOffset - currentOffset;
+
+      Animated.timing(translateX, {
+        toValue: distance,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }).start(() => {
+        if (shouldClose) {
+          onClose(true);
+        } else {
+          // Commit the change
+          tabOffset.setValue(targetOffset);
+          translateX.setValue(0);
+          
+          // Update state for logic
+          if (targetOffset === -width) {
+            setActiveTab('Chat');
+          } else if (targetOffset === 0) {
+            setActiveTab('Control Panel');
+          }
+        }
+      });
     }
   };
 
   // Interpolations for transforms
-  const exitTranslateX = translateX.interpolate({
-    inputRange: [0, width],
-    outputRange: activeTab === 'Control Panel' ? [0, width] : [0, 0],
-    extrapolate: 'clamp'
+  const exitTranslateX = totalTranslateX.interpolate({
+    inputRange: [0, width], // Only affect exit animation (positive values)
+    outputRange: [0, width],
+    extrapolate: 'clamp' // Don't move header/bg when going to Chat (negative values)
   });
 
-  const contentTranslateX = translateX.interpolate({
-    inputRange: [-width, 0, width],
-    outputRange: activeTab === 'Control Panel' 
-      ? [-width, 0, 0] 
-      : [-width, -width, 0],
-    extrapolate: 'clamp'
+  const contentTranslateX = totalTranslateX.interpolate({
+    inputRange: [-width, 0],
+    outputRange: [-width, 0],
+    extrapolateRight: 'clamp' // Don't move inner content right when exiting (handled by wrapper)
   });
-  
+
   // Reset translateX when tab changes to prevent visual glitches
   // For non-swipe transitions (like tapping tab buttons)
-  React.useEffect(() => {
-    const timeout = setTimeout(() => {
-      translateX.setValue(0);
-    }, 350); // Delay to allow swipe animations to complete (300ms) plus buffer
-
-    return () => clearTimeout(timeout);
-  }, [activeTab]);
+  // REMOVED: Managed by tabOffset now
   
   // Mark plan as seen when first opened (if user is pending)
   React.useEffect(() => {
@@ -424,7 +432,20 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   });
   
   const handleTabChange = (tab: string) => {
+    if (tab === activeTab) return;
+    
+    // Animate to new position
+    const targetOffset = tab === 'Chat' ? -width : 0;
+    
+    // Update state immediately for UI feedback
     setActiveTab(tab);
+    
+    Animated.spring(tabOffset, {
+      toValue: targetOffset,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 40
+    }).start();
   };
 
   const handleManualRefresh = () => {
@@ -1008,14 +1029,16 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
             title={headerTitle}
             onBack={() => {
               // Animate out just like the swipe gesture
-          Animated.timing(translateX, {
-            toValue: width,
-            duration: 350,
-            useNativeDriver: true,
-            easing: Easing.out(Easing.quad),
-          }).start(() => {
-            onClose(true);
-          });
+              // We animate tabOffset to 'width' (Exit state)
+              // Since translateX is 0, totalTranslateX goes to width
+              Animated.timing(tabOffset, {
+                toValue: width,
+                duration: 350,
+                useNativeDriver: true,
+                easing: Easing.out(Easing.quad),
+              }).start(() => {
+                onClose(true);
+              });
             }}
             isEditing={isEditingHeaderTitle}
             onEditStart={() => {
@@ -1035,6 +1058,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
             onTabChange={handleTabChange}
             controlBadge={planUnseen.control}
             chatBadge={planUnseen.chat}
+            scrollX={totalTranslateX}
           />
 
           <View style={{ flex: 1, overflow: 'hidden' }}>
