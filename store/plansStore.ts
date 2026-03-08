@@ -444,7 +444,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       // Recalculate computed arrays
       get().recalculatePlanArrays();
-      
+
       // Also fetch unseen counts
       useUnseenStore.getState().fetchUnseenCounts();
 
@@ -961,6 +961,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // Helper function to process plans
       const processPlanList = (planList: Plan[], remainingList: Plan[]) => {
         planList.forEach(plan => {
+          // Server is source of truth: if API says plan is still active, keep it in active list
+          if (plan.status === 'active') {
+            remainingList.push(plan);
+            return;
+          }
           const planCreatedAt = new Date(plan.createdAt);
           
           // Plan should be completed if created before the cutoff time
