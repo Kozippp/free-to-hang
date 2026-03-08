@@ -326,6 +326,9 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           lastLoadTimes['friends'] = Date.now();
           lastLoadTimes['incoming'] = Date.now();
           lastLoadTimes['outgoing'] = Date.now();
+
+          // Profile uses hangStore for friends list - must refresh so new friend appears
+          void useHangStore.getState().loadFriends();
         } catch (error) {
           console.error('❌ Error force loading relationships:', error);
         }

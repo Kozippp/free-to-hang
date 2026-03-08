@@ -452,10 +452,17 @@ const useHangStore = create<HangState>()(
         
         // Load friends once initially
         get().loadFriends();
+
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) {
+          console.log('⏸️ No authenticated user - skipping real-time subscription');
+          isStartingRealtime = false;
+          return;
+        }
         
         console.log('🚀 Starting real-time friend status updates...');
 
-        const channelName = `user_status_changes_${Date.now()}`;
+        const channelName = `hang_${authUser.id}_${Date.now()}`;
         console.log(`📡 Creating new hang channel: ${channelName}`);
         
         // Set up real-time subscription for user status changes
@@ -478,6 +485,44 @@ const useHangStore = create<HangState>()(
               }
               
               // Immediately reload friends data when any user status changes
+              get().loadFriends();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'friend_requests',
+              filter: `sender_id=eq.${authUser.id}`,
+            },
+            () => {
+              console.log('📡 Friend request change (as sender) - reloading friends');
+              get().loadFriends();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'friend_requests',
+              filter: `receiver_id=eq.${authUser.id}`,
+            },
+            () => {
+              console.log('📡 Friend request change (as receiver) - reloading friends');
+              get().loadFriends();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'friend_requests',
+            },
+            (payload) => {
+              console.log('📡 Friend request change (global):', payload.eventType);
               get().loadFriends();
             }
           )

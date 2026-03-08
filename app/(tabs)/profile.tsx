@@ -716,6 +716,8 @@ export default function ProfileScreen() {
         console.log('✅ Friend request accepted successfully');
         setShowRequestProfile(false);
         setSelectedRequest(null);
+        // Explicitly refresh hangStore friends so new friend appears in list immediately
+        await loadFriends();
       } else {
         Alert.alert('Error', 'Failed to accept friend request. Please try again.');
       }
