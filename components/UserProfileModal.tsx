@@ -40,9 +40,11 @@ interface UserProfileModalProps {
   visible: boolean;
   userId: string | null;
   onClose: () => void;
+  /** When provided (e.g. from plan view), called instead of router.push - allows parent to close overlays first */
+  onEditProfile?: () => void;
 }
 
-export default function UserProfileModal({ visible, userId, onClose }: UserProfileModalProps) {
+export default function UserProfileModal({ visible, userId, onClose, onEditProfile }: UserProfileModalProps) {
   const { user: authUser } = useAuth();
   const router = useRouter();
   const currentUserId = authUser?.id ?? null;
@@ -222,7 +224,11 @@ export default function UserProfileModal({ visible, userId, onClose }: UserProfi
 
   const handleEditProfile = () => {
     onClose();
-    router.push('/(tabs)/profile?edit=1');
+    if (onEditProfile) {
+      onEditProfile();
+    } else {
+      router.push('/(tabs)/profile?edit=1');
+    }
   };
 
   const handleBlockUser = async () => {

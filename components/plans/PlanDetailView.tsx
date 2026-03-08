@@ -1212,6 +1212,10 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
         visible={showUserProfile}
         userId={selectedUserId}
         onClose={() => setShowUserProfile(false)}
+        onEditProfile={() => {
+          onClose();
+          router.push('/(tabs)/profile?edit=1');
+        }}
       />
       </View>
     </TouchableWithoutFeedback>
