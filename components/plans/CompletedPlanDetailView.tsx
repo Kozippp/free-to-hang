@@ -31,6 +31,7 @@ import useHangStore from '@/store/hangStore';
 import usePlansStore from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import PlanDetailHeader from './PlanDetailHeader';
 
 interface CompletedPlanDetailViewProps {
   plan: Plan;
@@ -322,10 +323,17 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
 
   return (
     <View style={styles.container}>
+      <PlanDetailHeader
+        title={latestPlan.title || 'Untitled Plan'}
+        onBack={onClose}
+        isEditing={false}
+        canEdit={false}
+      />
+      
       <PlanTabs 
         activeTab={activeTab} 
         onTabChange={handleTabChange}
-        unreadCount={unreadCount}
+        chatBadge={unreadCount}
         customTabs={['Details', 'Chat']}
       />
       

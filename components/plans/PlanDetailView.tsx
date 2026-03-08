@@ -14,7 +14,9 @@ import {
   Keyboard,
   Modal,
   Dimensions,
-  RefreshControl
+  RefreshControl,
+  Pressable,
+  Easing
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { 
@@ -51,6 +53,8 @@ import useUnseenStore from '@/store/unseenStore';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { plansService } from '@/lib/plans-service';
+import PlanDetailHeader from './PlanDetailHeader';
+import { MAX_PLAN_TITLE_LENGTH } from '@/constants/limits';
 
 const noop = () => {};
 
@@ -94,8 +98,62 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [highlightNewPlan, setHighlightNewPlan] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const displayTitle = editedTitle ?? plan.title;
+
+  // Header Title State (moved from PlanDetailModal)
+  const [headerTitle, setHeaderTitle] = useState(plan.title?.slice(0, MAX_PLAN_TITLE_LENGTH) ?? '');
+  const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
+  const [isSavingHeaderTitle, setIsSavingHeaderTitle] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(0);
+
+  const displayTitle = headerTitle;
   
+  // Sync header title with plan updates (if not editing)
+  React.useEffect(() => {
+    if (plan?.title && !isEditingHeaderTitle) {
+      setHeaderTitle(plan.title.slice(0, MAX_PLAN_TITLE_LENGTH));
+    }
+  }, [plan?.title, isEditingHeaderTitle]);
+
+  const handleHeaderTitleSave = async () => {
+    if (!plan || isSavingHeaderTitle) {
+      setIsEditingHeaderTitle(false);
+      return;
+    }
+
+    const trimmedTitle = headerTitle.trim();
+
+    if (!trimmedTitle) {
+      Alert.alert('Title required', 'Please enter a plan title.');
+      setHeaderTitle(plan.title?.slice(0, MAX_PLAN_TITLE_LENGTH) ?? '');
+      setIsEditingHeaderTitle(false);
+      return;
+    }
+
+    if (trimmedTitle === (plan.title || '').trim()) {
+      setHeaderTitle(trimmedTitle.slice(0, MAX_PLAN_TITLE_LENGTH));
+      setIsEditingHeaderTitle(false);
+      return;
+    }
+
+    try {
+      setIsSavingHeaderTitle(true);
+      Keyboard.dismiss();
+      await plansService.updatePlan(plan.id, { title: trimmedTitle });
+      await loadPlan(plan.id, user.id);
+      setHeaderTitle(trimmedTitle.slice(0, MAX_PLAN_TITLE_LENGTH));
+    } catch (error) {
+      console.error('❌ Error updating plan title:', error);
+      const message = error instanceof Error
+        ? error.message
+        : 'Failed to update the plan title. Please try again.';
+      Alert.alert('Title update failed', message);
+      setHeaderTitle(plan.title?.slice(0, MAX_PLAN_TITLE_LENGTH) ?? '');
+    } finally {
+      setIsSavingHeaderTitle(false);
+      setIsEditingHeaderTitle(false);
+    }
+  };
+
   // Poll voting state - track loading per option (not per poll)
   // Key format: `${pollId}-${optionId}`
   const [votingInProgress, setVotingInProgress] = useState<Record<string, boolean>>({});
@@ -222,27 +280,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   // Gesture handlers for swipe navigation
   const onGestureEvent = Animated.event(
     [{ nativeEvent: { translationX: translateX } }],
-    { 
-      useNativeDriver: true,
-      listener: (event: any) => {
-        const tx = event.nativeEvent.translationX;
-        
-        // Control Panel: allow both directions (left to exit, right to chat)
-        if (activeTab === 'Control Panel') {
-          // Allow natural swipe in both directions
-          return;
-        } 
-        // Chat: only allow left to right swipe (back to Control Panel)
-        else if (activeTab === 'Chat') {
-          // Only allow positive translation (left to right)
-          // Block any right to left movement
-          if (tx < 0) {
-            event.nativeEvent.translationX = 0;
-            translateX.setValue(0);
-          }
-        }
-      }
-    }
+    { useNativeDriver: true }
   );
 
   const onHandlerStateChange = (event: any) => {
@@ -255,30 +293,25 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
           // Swipe left to right (or fast velocity) - exit/close
           Animated.timing(translateX, {
             toValue: width,
-            duration: 250,
+            duration: 350, 
             useNativeDriver: true,
+            easing: Easing.out(Easing.quad),
           }).start(() => {
-            onClose();
+            onClose(true);
           });
         } else if (tx < -100 || velocityX < -500) {
           // Swipe right to left (or fast velocity) - go to Chat
-          // Animate smoothly to create swipe effect, then change tab
           Animated.timing(translateX, {
-            toValue: -width * 0.3, // Animate to 30% of screen width
-            duration: 150,
+            toValue: -width,
+            duration: 250,
             useNativeDriver: true,
+            easing: Easing.out(Easing.quad),
           }).start(() => {
-            // Change tab after partial animation
             setActiveTab('Chat');
-            // Animate the remaining distance smoothly
-            Animated.timing(translateX, {
-              toValue: 0,
-              duration: 150,
-              useNativeDriver: true,
-            }).start();
+            translateX.setValue(0);
           });
         } else {
-          // Not far enough - reset
+          // Reset
           Animated.spring(translateX, {
             toValue: 0,
             velocity: velocityX,
@@ -288,26 +321,19 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
           }).start();
         }
       } else if (activeTab === 'Chat') {
-        // Chat: ONLY swipe left to right goes back to Control Panel
+        // Chat: swipe left to right goes back to Control Panel
         if (tx > 100 || velocityX > 500) {
-          // Swipe left to right (or fast velocity) - back to Control Panel
-          // Animate smoothly to create swipe effect, then change tab
           Animated.timing(translateX, {
-            toValue: width * 0.3, // Animate to 30% of screen width
-            duration: 150,
+            toValue: width,
+            duration: 250,
             useNativeDriver: true,
+            easing: Easing.out(Easing.quad),
           }).start(() => {
-            // Change tab after partial animation
             setActiveTab('Control Panel');
-            // Animate the remaining distance smoothly
-            Animated.timing(translateX, {
-              toValue: 0,
-              duration: 150,
-              useNativeDriver: true,
-            }).start();
+            translateX.setValue(0);
           });
         } else {
-          // Not far enough or wrong direction - reset
+          // Reset
           Animated.spring(translateX, {
             toValue: 0,
             velocity: velocityX,
@@ -319,6 +345,21 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       }
     }
   };
+
+  // Interpolations for transforms
+  const exitTranslateX = translateX.interpolate({
+    inputRange: [0, width],
+    outputRange: activeTab === 'Control Panel' ? [0, width] : [0, 0],
+    extrapolate: 'clamp'
+  });
+
+  const contentTranslateX = translateX.interpolate({
+    inputRange: [-width, 0, width],
+    outputRange: activeTab === 'Control Panel' 
+      ? [-width, 0, 0] 
+      : [-width, -width, 0],
+    extrapolate: 'clamp'
+  });
   
   // Reset translateX when tab changes to prevent visual glitches
   // For non-swipe transitions (like tapping tab buttons)
@@ -379,7 +420,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   
   const highlightBackground = highlightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(91, 138, 245, 0)', 'rgba(91, 138, 245, 0.1)']
+    outputRange: [Colors.light.background, 'rgba(91, 138, 245, 0.1)']
   });
   
   const handleTabChange = (tab: string) => {
@@ -930,19 +971,23 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
           <Text style={styles.declineText}>Plan Declined ✓</Text>
         </Animated.View>
       )}
-      
-      <PlanTabs 
-        activeTab={activeTab} 
-        onTabChange={handleTabChange}
-        controlBadge={planUnseen.control}
-        chatBadge={planUnseen.chat}
-      />
+
+      {isEditingHeaderTitle && (
+        <Pressable 
+          style={[styles.editDismissOverlay, { top: headerHeight }]}
+          onPress={() => {
+            if (isEditingHeaderTitle) {
+              Keyboard.dismiss();
+              handleHeaderTitleSave();
+            }
+          }}
+        />
+      )}
       
       <PanGestureHandler
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
         activeOffsetX={[-10, 10]}
-        failOffsetX={activeTab === 'Chat' ? [-10, 10000] : undefined}
         simultaneousHandlers={scrollViewRef}
       >
         <Animated.View 
@@ -953,13 +998,54 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
               transform: [
                 { scale: declineAnimation },
                 { translateY: slideAnimation },
-                { translateX: translateX }
+                { translateX: exitTranslateX }
               ],
               opacity: fadeAnimation
             }
           ]}
         >
-          {activeTab === 'Control Panel' && (
+          <PlanDetailHeader 
+            title={headerTitle}
+            onBack={() => {
+              // Animate out just like the swipe gesture
+          Animated.timing(translateX, {
+            toValue: width,
+            duration: 350,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.quad),
+          }).start(() => {
+            onClose(true);
+          });
+            }}
+            isEditing={isEditingHeaderTitle}
+            onEditStart={() => {
+              if (canEditPlan && !isSavingHeaderTitle) {
+                setIsEditingHeaderTitle(true);
+              }
+            }}
+            onEditEnd={handleHeaderTitleSave}
+            onTitleChange={(text) => setHeaderTitle(text.slice(0, MAX_PLAN_TITLE_LENGTH))}
+            isSaving={isSavingHeaderTitle}
+            canEdit={canEditPlan}
+            onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+          />
+
+          <PlanTabs 
+            activeTab={activeTab} 
+            onTabChange={handleTabChange}
+            controlBadge={planUnseen.control}
+            chatBadge={planUnseen.chat}
+          />
+
+          <View style={{ flex: 1, overflow: 'hidden' }}>
+            <Animated.View style={{ 
+              flexDirection: 'row', 
+              width: width * 2,
+              flex: 1,
+              transform: [{ translateX: contentTranslateX }]
+            }}>
+              {/* Control Panel Container */}
+              <View style={{ width: width, height: '100%' }}>
             <ScrollView 
               ref={scrollViewRef}
               style={styles.content}
@@ -1155,20 +1241,23 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
           {/* Bottom padding for better scrolling */}
           <View style={styles.bottomPadding} />
         </ScrollView>
-      )}
-      
-          {activeTab === 'Chat' && (
-            <View style={styles.chatContainer}>
-              <ChatView
-                plan={latestPlan}
-                currentUserId={user.id}
-                onAvatarPress={(userId) => {
-                  setSelectedUserId(userId);
-                  setShowUserProfile(true);
-                }}
-              />
-            </View>
-          )}
+              </View>
+
+              {/* Chat Container */}
+              <View style={{ width: width, height: '100%' }}>
+                <View style={styles.chatContainer}>
+                  <ChatView
+                    plan={latestPlan}
+                    currentUserId={user.id}
+                    onAvatarPress={(userId) => {
+                      setSelectedUserId(userId);
+                      setShowUserProfile(true);
+                    }}
+                  />
+                </View>
+              </View>
+            </Animated.View>
+          </View>
         </Animated.View>
       </PanGestureHandler>
       
@@ -1229,7 +1318,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: 'transparent',
   },
   contentWrapper: {
     flex: 1,
@@ -1431,5 +1520,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 16,
+  },
+  editDismissOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
   },
 });

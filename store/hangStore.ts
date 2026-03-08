@@ -494,26 +494,19 @@ const useHangStore = create<HangState>()(
         const channelName = `hang_${authUser.id}_${Date.now()}`;
         console.log(`📡 Creating new hang channel: ${channelName}`);
         
-        // Set up real-time subscription for user status changes
+        // Set up real-time subscription for user status/activity changes (public.users)
         statusChannel = supabase
           .channel(channelName)
           .on(
             'postgres_changes',
             {
-              event: '*',
+              event: 'UPDATE',
               schema: 'public',
-              table: 'user_status',
+              table: 'users',
             },
             (payload) => {
-              console.log('📡 User status change detected:', payload);
-              
-              // If a friend went online (chain effect trigger)
-              const newStatus = payload.new as any;
-              if (payload.eventType === 'UPDATE' && newStatus?.is_available === true) {
-                console.log('🔥 Friend went online, chain effect will trigger from backend');
-              }
-              
-              // Immediately reload friends data when any user status changes
+              const newRow = payload.new as { status?: string; current_activity?: string };
+              console.log('📡 User status/activity change detected:', { status: newRow?.status, current_activity: newRow?.current_activity });
               get().loadFriends();
             }
           )

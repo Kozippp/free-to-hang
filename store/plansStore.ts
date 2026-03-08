@@ -1325,9 +1325,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
           if (status === 'SUBSCRIBED') {
             console.log('✅ Direct participant listener connected!');
         } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3211c6'},body:JSON.stringify({sessionId:'3211c6',location:'plansStore.ts:participantsChannel',message:'Channel error',data:{channel:'participants',status},timestamp:Date.now(),hypothesisId:'channelError'})}).catch(()=>{});
-          // #endregion
           console.log('❌ Participants channel disconnected:', status);
             // Simple retry like chat does (no MAX_RETRIES!)
             setTimeout(() => {
@@ -1442,10 +1439,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
       console.log('✅ Plans real-time subscription is active');
       return;
     }
-
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3211c6'},body:JSON.stringify({sessionId:'3211c6',location:'plansStore.ts:checkAndRestartSubscriptions',message:'Restarting subscriptions',data:{force:options?.force,hadUpdatesChannel:!!updatesChannel,isSubscribed:get().subscriptionStatus.isSubscribed},timestamp:Date.now(),hypothesisId:'restartCalls'})}).catch(()=>{});
-    // #endregion
 
     console.log(options?.force ? '🔄 Force restarting plans subscriptions...' : '🔄 Plans subscription missing or failed - restarting...');
 
@@ -1606,9 +1599,6 @@ function createChannelWithRetry(
       }
       logSubscriptionMetrics();
     } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3211c6'},body:JSON.stringify({sessionId:'3211c6',location:'plansStore.ts:createChannelWithRetry',message:'Channel error',data:{channel:channelName,status},timestamp:Date.now(),hypothesisId:'channelError'})}).catch(()=>{});
-      // #endregion
       console.log(`❌ ${channelName} disconnected:`, status);
       onDisconnect();
       const state = usePlansStore.getState();
@@ -1676,9 +1666,6 @@ function startPlansHealthCheck(userId: string) {
           .map((channel) => `${channel.name}: ${channel.state ?? 'null'}`)
           .join(', ')}`
       );
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3211c6'},body:JSON.stringify({sessionId:'3211c6',location:'plansStore.ts:healthCheck',message:'Health check failed',data:{failedChecks,failedChannels:failedChannels.map(c=>({name:c.name,state:c.state})),allStates:channelsStatus.map(c=>c.state)},timestamp:Date.now(),hypothesisId:'healthCheck'})}).catch(()=>{});
-      // #endregion
 
       // Only restart when the critical channel (plan_updates) is down. If plan_updates is joined
       // but participants/poll_votes/polls are null, do NOT restart—they have their own retry
