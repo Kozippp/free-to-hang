@@ -26,7 +26,7 @@ export default function PlansScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   
   const { user } = useAuth();
-  const { invitations, activePlans, completedPlans, isLoading, loadPlans, loadCompletedPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
+  const { invitations, activePlans, completedPlans, isLoading, loadPlans, loadPlan, loadCompletedPlans, markAsRead, respondToPlan, processCompletedPlans, updateAttendance, getSortedPlans, markUpdatesAsRead, checkAndRestartSubscriptions } = usePlansStore();
   const params = useLocalSearchParams();
   const router = useRouter();
   
@@ -246,6 +246,9 @@ export default function PlansScreen() {
         // Small delay to ensure app is fully active
         setTimeout(() => {
           checkAndRestartSubscriptions(user.id);
+          // Also refresh plan data so any missed realtime events (e.g. polls created
+          // while the app was backgrounded) are picked up immediately.
+          loadPlans(user.id).catch(() => {});
         }, 1000);
       }
     });
@@ -253,7 +256,7 @@ export default function PlansScreen() {
     return () => {
       subscription?.remove();
     };
-  }, [user?.id, checkAndRestartSubscriptions]);
+  }, [user?.id, checkAndRestartSubscriptions, loadPlans]);
 
   // Handle navigation focus (when user returns to plans tab)
   useFocusEffect(
@@ -387,6 +390,13 @@ export default function PlansScreen() {
     // Mark updates as read when plan is opened
     if (plan.hasUnreadUpdates) {
       markUpdatesAsRead(plan.id);
+    }
+
+    // Fetch fresh plan data in background so polls and latest info are always visible.
+    // Fire-and-forget: runs once per open, never inside a useEffect, so it cannot
+    // overwrite a realtime update that arrives after the initial load.
+    if (user?.id) {
+      loadPlan(plan.id, user.id).catch(() => {});
     }
   };
   
@@ -539,11 +549,6 @@ export default function PlansScreen() {
                   keyExtractor={(item) => `completedPlans-${item.id}`}
                   contentContainerStyle={styles.listContent}
                   ListEmptyComponent={renderEmptyState}
-                  ListFooterComponent={() => (
-                    filteredCompletedPlans.length > 0 ? (
-                      <View style={styles.finalSeparator} />
-                    ) : null
-                  )}
                   refreshControl={
                     <RefreshControl
                       refreshing={isRefreshing || isLoading}

@@ -20,19 +20,19 @@ serve(async (req: Request) => {
   }
 
   if (req.method !== "POST") {
-    return jsonResponse(200, { success: false, error: "Method not allowed" });
+    return jsonResponse(405, { error: "Method not allowed" });
   }
 
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return jsonResponse(200, { success: false, error: "Missing Authorization header" });
+      return jsonResponse(401, { error: "Missing Authorization header" });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     if (!supabaseUrl || !supabaseAnonKey) {
-      return jsonResponse(200, { success: false, error: "Supabase environment is not configured" });
+      return jsonResponse(500, { error: "Supabase environment is not configured" });
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -45,13 +45,13 @@ serve(async (req: Request) => {
     const optionsRaw = payload?.options;
 
     if (typeof pollId !== "string" || !pollId) {
-      return jsonResponse(200, { success: false, error: "pollId is required" });
+      return jsonResponse(400, { error: "pollId is required" });
     }
     if (typeof questionRaw !== "string" || !questionRaw.trim()) {
-      return jsonResponse(200, { success: false, error: "question is required" });
+      return jsonResponse(400, { error: "question is required" });
     }
     if (!Array.isArray(optionsRaw) || optionsRaw.length < 2) {
-      return jsonResponse(200, { success: false, error: "options must contain at least 2 items" });
+      return jsonResponse(400, { error: "options must contain at least 2 items" });
     }
 
     const options = optionsRaw
@@ -59,7 +59,7 @@ serve(async (req: Request) => {
       .filter((value: string) => value.length > 0);
 
     if (options.length < 2) {
-      return jsonResponse(200, { success: false, error: "options must contain at least 2 non-empty values" });
+      return jsonResponse(400, { error: "options must contain at least 2 non-empty values" });
     }
 
     const {
@@ -67,7 +67,7 @@ serve(async (req: Request) => {
       error: userError,
     } = await supabase.auth.getUser();
     if (userError || !user) {
-      return jsonResponse(200, { success: false, error: "Unauthorized" });
+      return jsonResponse(401, { error: "Unauthorized" });
     }
 
     const { data: poll, error: pollError } = await supabase
@@ -76,7 +76,7 @@ serve(async (req: Request) => {
       .eq("id", pollId)
       .single();
     if (pollError || !poll) {
-      return jsonResponse(200, { success: false, error: "Poll not found" });
+      return jsonResponse(404, { error: "Poll not found" });
     }
 
     const { data: participant, error: participantError } = await supabase
@@ -86,7 +86,7 @@ serve(async (req: Request) => {
       .eq("user_id", user.id)
       .single();
     if (participantError || !participant) {
-      return jsonResponse(200, { success: false, error: "Only plan participants can edit polls" });
+      return jsonResponse(403, { error: "Only plan participants can edit polls" });
     }
 
     const { data: currentOptions, error: currentOptionsError } = await supabase
@@ -96,11 +96,17 @@ serve(async (req: Request) => {
       .order("option_order", { ascending: true });
 
     if (currentOptionsError) {
-      return jsonResponse(200, { success: false, error: currentOptionsError.message });
+      return jsonResponse(400, { error: currentOptionsError.message });
     }
 
     if (!currentOptions || currentOptions.length === 0) {
-      return jsonResponse(200, { success: false, error: "Poll has no options to edit" });
+      return jsonResponse(400, { error: "Poll has no options to edit" });
+    }
+
+    if (options.length !== currentOptions.length) {
+      return jsonResponse(400, {
+        error: "Changing option count is not allowed in this editor",
+      });
     }
 
     const { data: votes, error: votesError } = await supabase
@@ -108,7 +114,7 @@ serve(async (req: Request) => {
       .select("option_id")
       .eq("poll_id", pollId);
     if (votesError) {
-      return jsonResponse(200, { success: false, error: votesError.message });
+      return jsonResponse(400, { error: votesError.message });
     }
 
     const voteCounts = new Map<string, number>();
@@ -140,28 +146,15 @@ serve(async (req: Request) => {
       }
     });
 
-    // If removing options, ensure none of the removed ones have votes
-    if (options.length < currentOptions.length) {
-      for (let i = options.length; i < currentOptions.length; i += 1) {
-        const votesOnOption = voteCounts.get(currentOptions[i].id) ?? 0;
-        if (votesOnOption > 0) {
-          return jsonResponse(200, {
-            success: false,
-            error: "Cannot remove options that have votes",
-          });
-        }
+    for (let index = 0; index < currentOptions.length; index += 1) {
+      if (!protectedByIndex.has(index)) {
+        continue;
       }
-    }
 
-    // Protected check: top-voted option texts cannot be changed
-    const minLen = Math.min(currentOptions.length, options.length);
-    for (let index = 0; index < minLen; index += 1) {
-      if (!protectedByIndex.has(index)) continue;
       const previousText = currentOptions[index].option_text.trim();
       const nextText = options[index].trim();
       if (previousText !== nextText) {
-        return jsonResponse(200, {
-          success: false,
+        return jsonResponse(400, {
           error: "Cannot edit top voted options",
           protectedOptions: protectedOptionTexts,
         });
@@ -173,50 +166,23 @@ serve(async (req: Request) => {
       .update({ title: questionRaw.trim() })
       .eq("id", pollId);
     if (updatePollError) {
-      return jsonResponse(200, { success: false, error: updatePollError.message });
+      return jsonResponse(400, { error: updatePollError.message });
     }
 
-    // Update existing options (by index)
-    for (let index = 0; index < minLen; index += 1) {
-      if (protectedByIndex.has(index)) continue;
+    for (let index = 0; index < currentOptions.length; index += 1) {
+      if (protectedByIndex.has(index)) {
+        continue;
+      }
+
       const optionId = currentOptions[index].id;
       const newText = options[index];
       const { error: optionUpdateError } = await supabase
         .from("plan_poll_options")
         .update({ option_text: newText })
         .eq("id", optionId);
+
       if (optionUpdateError) {
-        return jsonResponse(200, { success: false, error: optionUpdateError.message });
-      }
-    }
-
-    // Add new options when user sent more than current
-    if (options.length > currentOptions.length) {
-      const inserts = [];
-      for (let index = currentOptions.length; index < options.length; index += 1) {
-        inserts.push({
-          poll_id: pollId,
-          option_text: options[index],
-          option_order: index,
-        });
-      }
-      const { error: insertError } = await supabase.from("plan_poll_options").insert(inserts);
-      if (insertError) {
-        return jsonResponse(200, { success: false, error: insertError.message });
-      }
-    }
-
-    // Remove options when user sent fewer (only those with 0 votes were allowed above)
-    if (options.length < currentOptions.length) {
-      const idsToDelete = currentOptions
-        .slice(options.length)
-        .map((o) => o.id);
-      const { error: deleteError } = await supabase
-        .from("plan_poll_options")
-        .delete()
-        .in("id", idsToDelete);
-      if (deleteError) {
-        return jsonResponse(200, { success: false, error: deleteError.message });
+        return jsonResponse(400, { error: optionUpdateError.message });
       }
     }
 
@@ -226,6 +192,6 @@ serve(async (req: Request) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return jsonResponse(200, { success: false, error: message });
+    return jsonResponse(500, { error: message });
   }
 });

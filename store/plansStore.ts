@@ -1780,7 +1780,7 @@ function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
 }
 
 // NEW: Direct poll vote update handler (chat-style, instant!)
-async function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
+function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   const eventType = payload.eventType;
   const newVote = payload.new;
   const oldVote = payload.old;
@@ -1802,21 +1802,10 @@ async function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   const allPlans = Object.values(store.plans);
   
   // Find plan that contains this poll
-  let plan = allPlans.find(p => p.polls?.some(poll => poll.id === pollId));
+  const plan = allPlans.find(p => p.polls?.some(poll => poll.id === pollId));
   
   if (!plan) {
-    // Plan not in store (e.g. other account has different plans loaded) – fetch and refresh so UI can update
-    const { data: pollRow } = await supabase
-      .from('plan_polls')
-      .select('plan_id')
-      .eq('id', pollId)
-      .single();
-    if (pollRow?.plan_id) {
-      schedulePlanRefresh(pollRow.plan_id, currentUserId, 0, 'poll_vote');
-      console.log('⚠️ Plan with poll not in store – scheduled refresh for plan', pollRow.plan_id);
-    } else {
-      console.log('⚠️ Plan with poll not in store yet (could not resolve plan_id)');
-    }
+    console.log('⚠️ Plan with poll not in store yet');
     return;
   }
 
@@ -1828,20 +1817,23 @@ async function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
 
   console.log(`🗳️ INSTANT poll vote update for poll ${pollId} in plan ${plan.id}`);
 
-  // Only skip if this is clearly the echo of OUR OWN vote from THIS device (within ~400ms).
-  // Using a short window prevents skipping legitimate updates from the same user on another device:
-  // the other device's realtime event arrives later, so timeSinceOptimistic on this device is large.
+  // Check if this is a duplicate of a recent optimistic update (within 2 seconds)
   const lastOptimistic = lastOptimisticUpdate[pollId];
   if (lastOptimistic && userId === currentUserId) {
     const timeSinceOptimistic = Date.now() - lastOptimistic.timestamp;
-    if (timeSinceOptimistic < 400) {
+    
+    if (timeSinceOptimistic < 2000) {
+      // Check if the vote state matches the optimistic update
       const currentUserVotes = poll.options
         .filter(opt => opt.votes.includes(userId))
         .map(opt => opt.id)
         .sort();
+      
       const optimisticVotes = lastOptimistic.optionIds;
+      
+      // If votes match, skip this realtime update (it's a duplicate of optimistic)
       if (JSON.stringify(currentUserVotes) === JSON.stringify(optimisticVotes)) {
-        console.log(`⏭️ Skipping duplicate realtime update (echo from this device ${timeSinceOptimistic}ms ago)`);
+        console.log(`⏭️ Skipping duplicate realtime update (matches optimistic update from ${timeSinceOptimistic}ms ago)`);
         return;
       }
     }
