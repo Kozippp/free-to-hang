@@ -25,10 +25,12 @@ import PlanTabs from './PlanTabs';
 import ChatView from '../chat/ChatView';
 import PlanSuggestionSheet from './PlanSuggestionSheet';
 import PollDisplay from './PollDisplay';
+import UserProfileModal from '@/components/UserProfileModal';
 import useChatStore from '@/store/chatStore';
 import useHangStore from '@/store/hangStore';
 import usePlansStore from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'expo-router';
 
 interface CompletedPlanDetailViewProps {
   plan: Plan;
@@ -53,8 +55,11 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
   const { getUnreadCount } = useChatStore();
   const { user: hangUser, friends } = useHangStore();
   const { user: authUser } = useAuth();
+  const router = useRouter();
   const { completedPlans } = usePlansStore();
   const [activeTab, setActiveTab] = useState('Details');
+  const [showUserProfile, setShowUserProfile] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
 
@@ -437,10 +442,24 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
         <View style={styles.chatContainer}>
           <ChatView 
             plan={latestPlan} 
-            currentUserId={authUser.id} 
+            currentUserId={authUser.id}
+            onAvatarPress={(userId) => {
+              setSelectedUserId(userId);
+              setShowUserProfile(true);
+            }}
           />
         </View>
       )}
+
+      <UserProfileModal
+        visible={showUserProfile}
+        userId={selectedUserId}
+        onClose={() => setShowUserProfile(false)}
+        onEditProfile={() => {
+          onClose();
+          router.push('/(tabs)/profile?edit=1');
+        }}
+      />
       
       {/* Plan Creation Modal */}
       <PlanSuggestionSheet

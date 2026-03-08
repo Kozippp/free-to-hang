@@ -40,6 +40,7 @@ interface ChatMessageProps {
   scrollToMessage?: (messageId: string) => void;
   previousMessage?: ChatMessageType;
   isLastMessage?: boolean; // New prop to indicate this is the last message in chat
+  onAvatarPress?: (userId: string) => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -112,7 +113,8 @@ export default function ChatMessage({
   isLastInGroup = true,
   scrollToMessage,
   previousMessage,
-  isLastMessage = false
+  isLastMessage = false,
+  onAvatarPress
 }: ChatMessageProps) {
   const { addReaction, removeReaction, deleteMessage, editMessage, setReplyingTo, readReceipts } = useChatStore();
   const [showActions, setShowActions] = useState(false);
@@ -691,6 +693,7 @@ export default function ChatMessage({
               uri={message.userAvatar}
               fallbackUri={generateDefaultAvatar(message.userName, message.userId)}
               style={styles.avatar}
+              onPress={onAvatarPress ? () => onAvatarPress(message.userId) : undefined}
             />
           )}
           

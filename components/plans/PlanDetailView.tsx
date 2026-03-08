@@ -1162,6 +1162,10 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
               <ChatView
                 plan={latestPlan}
                 currentUserId={user.id}
+                onAvatarPress={(userId) => {
+                  setSelectedUserId(userId);
+                  setShowUserProfile(true);
+                }}
               />
             </View>
           )}

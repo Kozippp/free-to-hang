@@ -24,11 +24,12 @@ interface ChatViewProps {
   plan: Plan;
   currentUserId?: string;
   disableKeyboardAvoidance?: boolean;
+  onAvatarPress?: (userId: string) => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance = false }: ChatViewProps) {
+export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance = false, onAvatarPress }: ChatViewProps) {
   const {
     messages,
     markMessagesAsRead,
@@ -303,6 +304,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
             isLastInGroup={isLastInGroup}
             scrollToMessage={scrollToMessage}
             isLastMessage={isLastMessage}
+            onAvatarPress={onAvatarPress}
           />
         </Animated.View>
       </View>
