@@ -4,6 +4,7 @@ import { RelationshipStatus, Friend, FriendRequest } from '@/lib/relationship-se
 import { friendsDirectService } from '@/lib/friends-direct-service';
 import { triggerFriendRequestNotification, triggerFriendAcceptedNotification } from '@/lib/notification-trigger';
 import { prefetchAvatars } from '@/utils/avatarCache';
+import useHangStore from '@/store/hangStore';
 
 interface User {
   id: string;
@@ -414,6 +415,8 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
           const freshFriends = await friendsDirectService.getFriends();
           set({ friends: freshFriends });
           lastLoadTimes['friends'] = Date.now();
+          // Profile uses hangStore friends - must refresh so UI updates
+          void useHangStore.getState().loadFriends();
         } catch (error) {
           console.error('❌ Error force loading friends:', error);
         }

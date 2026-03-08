@@ -745,9 +745,11 @@ export default function ProfileScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await forceRefresh();
-      await loadUserData(); // Also refresh user data
-      // Note: hangStore friends are updated via real-time, no need to reload manually
+      await Promise.all([
+        forceRefresh(),
+        loadUserData(),
+        loadFriends() // Profile shows hangStore friends - must refresh
+      ]);
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {

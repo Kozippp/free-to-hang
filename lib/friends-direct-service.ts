@@ -411,10 +411,13 @@ class FriendsDirectService {
         .eq('receiver_id', user.id)
         .eq('status', 'pending')
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      if (!data) throw new Error('Friend request not found or already processed');
+      if (!data) {
+        console.warn('⚠️ [Direct] Friend request not found or already processed');
+        return false;
+      }
 
       console.log('✅ [Direct] Friend request declined');
       return true;
@@ -440,10 +443,13 @@ class FriendsDirectService {
         .eq('receiver_id', receiverId)
         .eq('status', 'pending')
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      if (!data) throw new Error('Friend request not found or already processed');
+      if (!data) {
+        console.warn('⚠️ [Direct] Friend request not found or already processed');
+        return false;
+      }
 
       console.log('✅ [Direct] Friend request cancelled');
       return true;
@@ -455,24 +461,58 @@ class FriendsDirectService {
 
   /**
    * Remove a friend
-   * Direct Supabase delete.
+   * Direct Supabase delete. Tries both directions (A->B or B->A) since either can exist.
    */
   async removeFriend(friendId: string): Promise<boolean> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data, error } = await supabase
+      // Find the friendship row - try both directions (avoids .or() filter issues)
+      let rowId: string | null = null;
+      const dir1 = await supabase
+        .from('friend_requests')
+        .select('id')
+        .eq('sender_id', user.id)
+        .eq('receiver_id', friendId)
+        .eq('status', 'accepted')
+        .maybeSingle();
+      if (dir1.data?.id) rowId = dir1.data.id;
+
+      let dir2Result: { data: { id: string } | null; error: { message?: string } | null } | null = null;
+      if (!rowId) {
+        dir2Result = await supabase
+          .from('friend_requests')
+          .select('id')
+          .eq('sender_id', friendId)
+          .eq('receiver_id', user.id)
+          .eq('status', 'accepted')
+          .maybeSingle();
+        if (dir2Result.data?.id) rowId = dir2Result.data.id;
+      }
+
+      if (!rowId) {
+        console.warn('⚠️ [Direct] Friendship not found:', {
+          currentUserId: user.id,
+          friendIdToRemove: friendId,
+          dir1Error: dir1.error?.message,
+          dir2Error: dir2Result?.error?.message
+        });
+        return false;
+      }
+
+      // Delete by row id - use .select() to verify rows were actually deleted
+      const { data: deletedRows, error: deleteError } = await supabase
         .from('friend_requests')
         .delete()
-        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`)
-        .eq('status', 'accepted')
-        .select()
-        .single();
+        .eq('id', rowId)
+        .select('id,sender_id,receiver_id,status');
 
-      if (error) throw error;
-      if (!data) throw new Error('Friendship not found');
-
+      if (deleteError) throw deleteError;
+      if (!deletedRows || deletedRows.length === 0) {
+        console.warn('⚠️ [Direct] Delete affected 0 rows - row may not exist or RLS blocked');
+        return false;
+      }
       console.log('✅ [Direct] Friend removed');
       return true;
     } catch (error) {
