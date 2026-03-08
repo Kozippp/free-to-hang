@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -8,20 +8,28 @@ import {
   TouchableOpacity, 
   TouchableWithoutFeedback,
   Keyboard,
-  Platform,
-  ScrollView
+  ScrollView,
+  Dimensions
 } from 'react-native';
 import { activities } from '@/constants/mockData';
 import Colors from '@/constants/colors';
 import { MAX_ACTIVITY_LENGTH } from '@/constants/limits';
-import { X } from 'lucide-react-native';
+import { X, Clock } from 'lucide-react-native';
 
 interface ActivityModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (activity: string) => void;
+  onSubmit: (activity: string, duration: number | null) => void;
   initialActivity?: string;
 }
+
+const DURATION_OPTIONS = [
+  { label: 'Forever', value: null },
+  { label: 'Till tonight', value: 'tonight' }, // Special handling
+  { label: '1 hour', value: 60 },
+  { label: '4 hours', value: 240 },
+  { label: '12 hours', value: 720 },
+];
 
 export default function ActivityModal({ 
   visible, 
@@ -30,41 +38,60 @@ export default function ActivityModal({
   initialActivity = ''
 }: ActivityModalProps) {
   const [activity, setActivity] = useState(initialActivity.slice(0, MAX_ACTIVITY_LENGTH));
-  const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
   const [inputHeight, setInputHeight] = useState(60);
+  const [selectedDuration, setSelectedDuration] = useState<number | 'tonight' | null>(null);
+
+  // Sync activity when modal opens (e.g. when editing existing status)
+  useEffect(() => {
+    if (visible) {
+      setActivity(initialActivity.slice(0, MAX_ACTIVITY_LENGTH));
+    }
+  }, [visible, initialActivity]);
 
   const handleActivityChange = (text: string) => {
     setActivity(text.slice(0, MAX_ACTIVITY_LENGTH));
   };
 
-  const handleSubmit = () => {
-    // If there are selected activities, use those; otherwise use the text input
-    const selectedActivityText = selectedActivities.join(', ');
-    const finalActivitySource = selectedActivities.length > 0 
-      ? selectedActivityText
-      : activity;
-    const finalActivity = finalActivitySource.slice(0, MAX_ACTIVITY_LENGTH);
+  const calculateDuration = (value: number | 'tonight' | null): number | null => {
+    if (value === null) return null;
+    if (typeof value === 'number') return value;
+    
+    if (value === 'tonight') {
+      const now = new Date();
+      // Set to 4 AM next day (end of "night")
+      const endOfNight = new Date();
+      endOfNight.setDate(now.getDate() + 1);
+      endOfNight.setHours(4, 0, 0, 0);
       
-    onSubmit(finalActivity);
+      const diffMs = endOfNight.getTime() - now.getTime();
+      return Math.round(diffMs / (1000 * 60));
+    }
+    
+    return null;
+  };
+
+  const handleSubmit = () => {
+    // Always use the text input content - quick suggestions just append to it
+    const finalActivity = activity.trim().slice(0, MAX_ACTIVITY_LENGTH);
+    const durationMinutes = calculateDuration(selectedDuration);
+      
+    onSubmit(finalActivity, durationMinutes);
     onClose();
     
     // Reset state
     setActivity('');
-    setSelectedActivities([]);
     setInputHeight(60);
+    setSelectedDuration(null);
   };
 
   const handleActivitySelect = (activityName: string) => {
-    // Toggle selection with a maximum of 3 activities
-    if (selectedActivities.includes(activityName)) {
-      const updatedSelections = selectedActivities.filter(a => a !== activityName);
-      setSelectedActivities(updatedSelections);
-      setActivity(updatedSelections.join(', ').slice(0, MAX_ACTIVITY_LENGTH));
-    } else if (selectedActivities.length < 3) {
-      const newSelected = [...selectedActivities, activityName];
-      setSelectedActivities(newSelected);
-      setActivity(newSelected.join(', ').slice(0, MAX_ACTIVITY_LENGTH));
-    }
+    // Append ", activityName" to the text input (or just "activityName" if empty)
+    setActivity((prev) => {
+      const trimmed = prev.trim();
+      const toAdd = trimmed ? `, ${activityName}` : activityName;
+      const newText = trimmed + toAdd;
+      return newText.slice(0, MAX_ACTIVITY_LENGTH);
+    });
   };
 
   const dismissKeyboard = () => {
@@ -98,7 +125,7 @@ export default function ActivityModal({
                 onChangeText={handleActivityChange}
                 placeholder="E.g., Coffee, Movie night..."
                 placeholderTextColor={Colors.light.secondaryText}
-                autoFocus={false} // Don't auto-focus the keyboard
+                autoFocus={false}
                 maxLength={MAX_ACTIVITY_LENGTH}
                 multiline
                 numberOfLines={3}
@@ -118,28 +145,47 @@ export default function ActivityModal({
               </Text>
             </View>
             
-            <Text style={styles.suggestionsTitle}>Quick suggestions</Text>
+            <Text style={styles.sectionTitle}>Duration</Text>
+            <ScrollView 
+              horizontal={true} 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipsScrollContainer}
+            >
+              {DURATION_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.label}
+                  style={[
+                    styles.chip,
+                    selectedDuration === option.value && styles.selectedChip
+                  ]}
+                  onPress={() => setSelectedDuration(option.value as any)}
+                >
+                  <Text 
+                    style={[
+                      styles.chipText,
+                      selectedDuration === option.value && styles.selectedChipText
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.sectionTitle}>Quick suggestions</Text>
             
             <ScrollView 
               horizontal={true} 
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activitiesScrollContainer}
+              contentContainerStyle={styles.chipsScrollContainer}
             >
               {activities.map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  style={[
-                    styles.activityButton,
-                    selectedActivities.includes(item.name) && styles.selectedActivity
-                  ]}
+                  style={styles.chip}
                   onPress={() => handleActivitySelect(item.name)}
                 >
-                  <Text 
-                    style={[
-                      styles.activityText,
-                      selectedActivities.includes(item.name) && styles.selectedActivityText
-                    ]}
-                  >
+                  <Text style={styles.chipText}>
                     {item.name}
                   </Text>
                 </TouchableOpacity>
@@ -164,31 +210,32 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalView: {
     width: '90%',
     maxWidth: 400,
     backgroundColor: Colors.light.background,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 24,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.25,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 10,
   },
   closeButton: {
     position: 'absolute',
-    top: 16,
-    right: 16,
+    top: 20,
+    right: 20,
     zIndex: 1,
+    padding: 4,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
     marginBottom: 20,
@@ -197,8 +244,9 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 10,
+    borderRadius: 16,
     paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: 16,
     marginBottom: 20,
     backgroundColor: Colors.light.cardBackground,
@@ -209,12 +257,13 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   inputWithCounter: {
-    paddingRight: 80,
+    paddingRight: 60,
+    paddingBottom: 24,
   },
   charCount: {
     position: 'absolute',
     right: 12,
-    bottom: 12,
+    bottom: 32, // Adjusted to be inside the input area visually
     fontSize: 12,
     color: Colors.light.secondaryText,
   },
@@ -222,43 +271,54 @@ const styles = StyleSheet.create({
     color: Colors.light.secondary,
     fontWeight: '600',
   },
-  suggestionsTitle: {
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.secondaryText,
     marginBottom: 12,
+    marginTop: 4,
   },
-  activitiesScrollContainer: {
-    paddingBottom: 20,
+  chipsScrollContainer: {
+    paddingBottom: 16,
+    gap: 8,
   },
-  activityButton: {
+  chip: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: Colors.light.buttonBackground,
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  selectedActivity: {
+  selectedChip: {
     backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
   },
-  activityText: {
+  chipText: {
     fontSize: 14,
     color: Colors.light.text,
-  },
-  selectedActivityText: {
-    color: 'white',
     fontWeight: '500',
   },
+  selectedChipText: {
+    color: 'white',
+    fontWeight: '600',
+  },
   submitButton: {
-    backgroundColor: '#4CAF50', // Green color
-    paddingVertical: 14,
-    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 8,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   submitButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
 });
