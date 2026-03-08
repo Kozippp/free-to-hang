@@ -105,14 +105,24 @@ export default function ActivityModal({
       visible={visible}
       onRequestClose={onClose}
     >
-      <TouchableWithoutFeedback onPress={dismissKeyboard}>
-        <View style={styles.centeredView}>
-          <View style={styles.modalView}>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <X size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
-            
-            <Text style={styles.modalTitle}>What do you feel like doing?</Text>
+      <TouchableOpacity
+        style={styles.centeredView}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity
+          style={styles.modalView}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
+          <TouchableWithoutFeedback onPress={dismissKeyboard}>
+            <View>
+            <View style={styles.headerRow}>
+              <Text style={styles.modalTitle}>What do you feel like doing?</Text>
+              <TouchableOpacity style={styles.closeButton} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <X size={24} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+            </View>
             
             <View style={styles.inputContainer}>
               <TextInput
@@ -198,9 +208,10 @@ export default function ActivityModal({
             >
               <Text style={styles.submitButtonText}>I'm ready to hang</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
@@ -227,18 +238,21 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 10,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 12,
+  },
   closeButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    zIndex: 1,
     padding: 4,
   },
   modalTitle: {
+    flex: 1,
     fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 20,
     textAlign: 'center',
   },
   input: {
