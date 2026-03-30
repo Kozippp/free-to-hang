@@ -779,19 +779,6 @@ export default function ChatMessage({
               </View>
             )}
           </View>
-
-          {isOwnMessage && onAvatarPress && isLastInGroup && (
-            <CachedAvatar
-              userId={message.userId}
-              uri={message.userAvatar}
-              fallbackUri={generateDefaultAvatar(message.userName, message.userId)}
-              style={styles.ownMessageAvatar}
-              onPress={() => onAvatarPress(message.userId)}
-            />
-          )}
-          {isOwnMessage && onAvatarPress && !isLastInGroup && (
-            <View style={styles.ownMessageAvatarPlaceholder} />
-          )}
         </Animated.View>
         
         {/* Reactions - outside of avatar alignment container */}
@@ -1029,21 +1016,6 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     marginRight: 8,
-    alignSelf: 'flex-end',
-    marginBottom: 6,
-  },
-  ownMessageAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    marginLeft: 8,
-    alignSelf: 'flex-end',
-    marginBottom: 6,
-  },
-  ownMessageAvatarPlaceholder: {
-    width: 28,
-    height: 28,
-    marginLeft: 8,
     alignSelf: 'flex-end',
     marginBottom: 6,
   },
