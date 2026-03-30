@@ -203,13 +203,6 @@ export const mockBlockedUsers: Friend[] = [
 ];
 
 export interface AppSettings {
-  notifications: {
-    friendInvitation: boolean;
-    planSuggestion: boolean;
-    newPoll: boolean;
-    pollWinner: boolean;
-    newChats: boolean;
-  };
   privacy: {
     showOnlineStatus: boolean;
     allowAnonymousInvites: boolean;
@@ -217,13 +210,6 @@ export interface AppSettings {
 }
 
 export const defaultSettings: AppSettings = {
-  notifications: {
-    friendInvitation: true,
-    planSuggestion: true,
-    newPoll: true,
-    pollWinner: true,
-    newChats: true,
-  },
   privacy: {
     showOnlineStatus: true,
     allowAnonymousInvites: false,

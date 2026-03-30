@@ -14,8 +14,10 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
-  RefreshControl
+  RefreshControl,
+  ActivityIndicator
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { 
   Settings, 
@@ -58,6 +60,50 @@ import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { uploadImage, deleteImage } from '@/lib/storage';
 import { formatFriendLastAvailable } from '@/utils/time';
 import useUnseenStore from '@/store/unseenStore';
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  fetchNotificationPreferences,
+  localDateToTimeString,
+  patchNotificationPreferences,
+  timeStringToLocalDate,
+  type NotificationPreferencesState,
+} from '@/lib/notification-preferences-service';
+
+const PUSH_CATEGORY_ROWS: {
+  field: keyof NotificationPreferencesState;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    field: 'plan_notifications',
+    label: 'Plans & polls',
+    hint: 'Invites, updates, participants, and polls',
+  },
+  {
+    field: 'chat_notifications',
+    label: 'Plan chat',
+    hint: 'New messages in plan chats',
+  },
+  {
+    field: 'friend_notifications',
+    label: 'Friends',
+    hint: 'Friend requests and acceptances',
+  },
+  {
+    field: 'status_notifications',
+    label: 'Friend availability',
+    hint: 'When friends become free to hang',
+  },
+  {
+    field: 'engagement_notifications',
+    label: 'Activity tips',
+    hint: 'Friends online and gentle reminders',
+  },
+];
+
+function formatQuietTimeShort(time: string | null, fallback: string): string {
+  return (time && time.length >= 5 ? time : fallback).slice(0, 5);
+}
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
@@ -95,6 +141,14 @@ export default function ProfileScreen() {
   // Local state - friends and blocked users come from useFriendsStore
   const [allFriends, setAllFriends] = useState<Friend[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [pushPrefs, setPushPrefs] = useState<NotificationPreferencesState | null>(null);
+  const [pushPrefsLoading, setPushPrefsLoading] = useState(false);
+  const [pushPrefsError, setPushPrefsError] = useState<string | null>(null);
+  const [pushPrefsSaving, setPushPrefsSaving] = useState(false);
+  const [quietStartPickerVisible, setQuietStartPickerVisible] = useState(false);
+  const [quietEndPickerVisible, setQuietEndPickerVisible] = useState(false);
+  const [iosQuietWhich, setIosQuietWhich] = useState<'start' | 'end' | null>(null);
+  const [iosQuietDraft, setIosQuietDraft] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
   const [refreshing, setRefreshing] = useState(false);
   
@@ -209,6 +263,29 @@ export default function ProfileScreen() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [showRequestProfile, setShowRequestProfile] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
+
+  useEffect(() => {
+    if (!showSettings || !authUser?.id) return;
+    let cancelled = false;
+    setPushPrefsLoading(true);
+    setPushPrefsError(null);
+    (async () => {
+      try {
+        const prefs = await fetchNotificationPreferences();
+        if (!cancelled) setPushPrefs(prefs);
+      } catch (e) {
+        if (!cancelled) {
+          setPushPrefsError(e instanceof Error ? e.message : 'Failed to load notification settings');
+          setPushPrefs(null);
+        }
+      } finally {
+        if (!cancelled) setPushPrefsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showSettings, authUser?.id]);
   
   // Edit profile states
   const [editUsername, setEditUsername] = useState('');
@@ -577,14 +654,92 @@ export default function ProfileScreen() {
     );
   };
 
-  const updateNotificationSetting = (setting: keyof AppSettings['notifications'], value: boolean) => {
-    setSettings({
-      ...settings,
-      notifications: {
-        ...settings.notifications,
-        [setting]: value
-      }
-    });
+  const applyPushPreferencePatch = async (
+    patch: Parameters<typeof patchNotificationPreferences>[0],
+    rollback: NotificationPreferencesState
+  ) => {
+    setPushPrefsSaving(true);
+    try {
+      const next = await patchNotificationPreferences(patch);
+      setPushPrefs(next);
+    } catch (e) {
+      setPushPrefs(rollback);
+      Alert.alert(
+        'Could not save',
+        e instanceof Error ? e.message : 'Please try again.'
+      );
+    } finally {
+      setPushPrefsSaving(false);
+    }
+  };
+
+  const onTogglePushField = async (field: keyof NotificationPreferencesState, value: boolean) => {
+    if (!pushPrefs) return;
+    const previous = { ...pushPrefs };
+    let optimistic: NotificationPreferencesState = { ...pushPrefs, [field]: value };
+
+    if (field === 'quiet_hours_enabled' && value) {
+      optimistic = {
+        ...optimistic,
+        quiet_hours_start:
+          pushPrefs.quiet_hours_start || DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_start,
+        quiet_hours_end: pushPrefs.quiet_hours_end || DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_end,
+      };
+    }
+
+    setPushPrefs(optimistic);
+
+    const patch: Parameters<typeof patchNotificationPreferences>[0] = { [field]: value };
+    if (field === 'quiet_hours_enabled' && value) {
+      patch.quiet_hours_start = optimistic.quiet_hours_start;
+      patch.quiet_hours_end = optimistic.quiet_hours_end;
+    }
+
+    await applyPushPreferencePatch(patch, previous);
+  };
+
+  const onQuietTimeChange = async (which: 'start' | 'end', date: Date) => {
+    if (!pushPrefs) return;
+    const previous = { ...pushPrefs };
+    const timeStr = localDateToTimeString(date);
+    const optimistic =
+      which === 'start'
+        ? { ...pushPrefs, quiet_hours_start: timeStr }
+        : { ...pushPrefs, quiet_hours_end: timeStr };
+    setPushPrefs(optimistic);
+    await applyPushPreferencePatch(
+      which === 'start' ? { quiet_hours_start: timeStr } : { quiet_hours_end: timeStr },
+      previous
+    );
+  };
+
+  const openQuietTimeEditor = (which: 'start' | 'end') => {
+    if (!pushPrefs) return;
+    const base =
+      which === 'start' ? pushPrefs.quiet_hours_start : pushPrefs.quiet_hours_end;
+    const fallback =
+      which === 'start'
+        ? DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_start!
+        : DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_end!;
+    const initial = timeStringToLocalDate(base, fallback);
+    if (Platform.OS === 'android') {
+      if (which === 'start') setQuietStartPickerVisible(true);
+      else setQuietEndPickerVisible(true);
+    } else {
+      setIosQuietWhich(which);
+      setIosQuietDraft(initial);
+    }
+  };
+
+  const commitIosQuietTime = () => {
+    if (!iosQuietWhich || !iosQuietDraft) {
+      setIosQuietWhich(null);
+      setIosQuietDraft(null);
+      return;
+    }
+    void onQuietTimeChange(iosQuietWhich, iosQuietDraft);
+    setIosQuietWhich(null);
+    setIosQuietDraft(null);
   };
 
   const updatePrivacySetting = (setting: keyof AppSettings['privacy'], value: boolean) => {
@@ -1132,32 +1287,148 @@ export default function ProfileScreen() {
           </View>
           
           <ScrollView style={styles.modalContent}>
-            {/* Notifications */}
+            {/* Push notifications — synced with notification_preferences + backend push pipeline */}
             <View style={styles.settingsSection}>
               <View style={styles.sectionHeader}>
                 <Bell size={20} color={Colors.light.text} />
                 <Text style={styles.sectionTitle}>Push Notifications</Text>
+                {pushPrefsSaving ? (
+                  <ActivityIndicator size="small" color={Colors.light.primary} style={{ marginLeft: 8 }} />
+                ) : null}
               </View>
-              
-              {Object.entries(settings.notifications).map(([key, value]) => (
-                <View key={key} style={styles.settingRow}>
-                  <Text style={styles.settingLabel}>
-                    {key === 'friendInvitation' && 'Friend Invitation'}
-                    {key === 'planSuggestion' && 'New Plan Suggestion'}
-                    {key === 'newPoll' && 'New Poll'}
-                    {key === 'pollWinner' && 'Poll Winner'}
-                    {key === 'newChats' && 'New Chats'}
-                  </Text>
-                  <Switch
-                    value={value}
-                    onValueChange={(newValue) => updateNotificationSetting(key as keyof AppSettings['notifications'], newValue)}
-                    trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
-                    thumbColor={value ? Colors.light.primary : '#F4F3F4'}
-                  />
+
+              {pushPrefsLoading ? (
+                <View style={styles.pushPrefsLoadingBox}>
+                  <ActivityIndicator color={Colors.light.primary} />
+                  <Text style={styles.pushPrefsLoadingText}>Loading notification settings…</Text>
                 </View>
-              ))}
+              ) : pushPrefsError ? (
+                <View style={styles.pushPrefsLoadingBox}>
+                  <Text style={styles.pushPrefsErrorText}>{pushPrefsError}</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setPushPrefsError(null);
+                      setPushPrefsLoading(true);
+                      void fetchNotificationPreferences()
+                        .then(setPushPrefs)
+                        .catch((e) =>
+                          setPushPrefsError(e instanceof Error ? e.message : 'Failed to load')
+                        )
+                        .finally(() => setPushPrefsLoading(false));
+                    }}
+                  >
+                    <Text style={styles.pushPrefsRetry}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : pushPrefs ? (
+                <>
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingLabelColumn}>
+                      <Text style={styles.settingLabel}>All push notifications</Text>
+                      <Text style={styles.settingHint}>Master switch for alerts on this device</Text>
+                    </View>
+                    <Switch
+                      value={pushPrefs.push_enabled}
+                      onValueChange={(v) => void onTogglePushField('push_enabled', v)}
+                      trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
+                      thumbColor={pushPrefs.push_enabled ? Colors.light.primary : '#F4F3F4'}
+                    />
+                  </View>
+
+                  {PUSH_CATEGORY_ROWS.map(({ field, label, hint }) => {
+                    const categoryEnabled = pushPrefs[field] as boolean;
+                    return (
+                    <View key={field} style={styles.settingRow}>
+                      <View style={styles.settingLabelColumn}>
+                        <Text style={styles.settingLabel}>{label}</Text>
+                        <Text style={styles.settingHint}>{hint}</Text>
+                      </View>
+                      <Switch
+                        value={categoryEnabled}
+                        onValueChange={(v) => void onTogglePushField(field, v)}
+                        disabled={!pushPrefs.push_enabled}
+                        trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
+                        thumbColor={categoryEnabled ? Colors.light.primary : '#F4F3F4'}
+                      />
+                    </View>
+                  );})}
+
+                  <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+                    <View style={styles.settingLabelColumn}>
+                      <Text style={styles.settingLabel}>Quiet hours</Text>
+                      <Text style={styles.settingHint}>No push alerts during this window (in-app still works)</Text>
+                    </View>
+                    <Switch
+                      value={pushPrefs.quiet_hours_enabled}
+                      onValueChange={(v) => void onTogglePushField('quiet_hours_enabled', v)}
+                      disabled={!pushPrefs.push_enabled}
+                      trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
+                      thumbColor={pushPrefs.quiet_hours_enabled ? Colors.light.primary : '#F4F3F4'}
+                    />
+                  </View>
+
+                  {pushPrefs.quiet_hours_enabled && pushPrefs.push_enabled ? (
+                    <>
+                      <TouchableOpacity
+                        style={styles.quietTimeRow}
+                        onPress={() => openQuietTimeEditor('start')}
+                      >
+                        <Text style={styles.settingLabel}>Starts</Text>
+                        <Text style={styles.quietTimeValue}>
+                          {formatQuietTimeShort(
+                            pushPrefs.quiet_hours_start,
+                            DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_start!
+                          )}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.quietTimeRow}
+                        onPress={() => openQuietTimeEditor('end')}
+                      >
+                        <Text style={styles.settingLabel}>Ends</Text>
+                        <Text style={styles.quietTimeValue}>
+                          {formatQuietTimeShort(
+                            pushPrefs.quiet_hours_end,
+                            DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_end!
+                          )}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : null}
+
+                  {Platform.OS === 'android' && quietStartPickerVisible && pushPrefs ? (
+                    <DateTimePicker
+                      value={timeStringToLocalDate(
+                        pushPrefs.quiet_hours_start,
+                        DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_start!
+                      )}
+                      mode="time"
+                      is24Hour
+                      display="default"
+                      onChange={(event, date) => {
+                        setQuietStartPickerVisible(false);
+                        if (event.type === 'set' && date) void onQuietTimeChange('start', date);
+                      }}
+                    />
+                  ) : null}
+                  {Platform.OS === 'android' && quietEndPickerVisible && pushPrefs ? (
+                    <DateTimePicker
+                      value={timeStringToLocalDate(
+                        pushPrefs.quiet_hours_end,
+                        DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_end!
+                      )}
+                      mode="time"
+                      is24Hour
+                      display="default"
+                      onChange={(event, date) => {
+                        setQuietEndPickerVisible(false);
+                        if (event.type === 'set' && date) void onQuietTimeChange('end', date);
+                      }}
+                    />
+                  ) : null}
+                </>
+              ) : null}
             </View>
-            
 
             
             {/* Blocked Users */}
@@ -1192,6 +1463,49 @@ export default function ProfileScreen() {
               <Text style={styles.logoutText}>Log Out</Text>
             </TouchableOpacity>
           </ScrollView>
+
+          <Modal
+            visible={Platform.OS === 'ios' && iosQuietWhich !== null && !!iosQuietDraft}
+            transparent
+            animationType="fade"
+            onRequestClose={() => {
+              setIosQuietWhich(null);
+              setIosQuietDraft(null);
+            }}
+          >
+            <View style={styles.iosTimeModalBackdrop}>
+              <View style={styles.iosTimeModalCard}>
+                <Text style={styles.iosTimeModalTitle}>
+                  {iosQuietWhich === 'start' ? 'Quiet hours start' : 'Quiet hours end'}
+                </Text>
+                {iosQuietDraft ? (
+                  <DateTimePicker
+                    value={iosQuietDraft}
+                    mode="time"
+                    is24Hour
+                    display="spinner"
+                    onChange={(_, date) => {
+                      if (date) setIosQuietDraft(date);
+                    }}
+                  />
+                ) : null}
+                <View style={styles.iosTimeModalActions}>
+                  <TouchableOpacity
+                    style={styles.iosTimeModalButton}
+                    onPress={() => {
+                      setIosQuietWhich(null);
+                      setIosQuietDraft(null);
+                    }}
+                  >
+                    <Text style={styles.iosTimeModalCancel}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.iosTimeModalButton} onPress={commitIosQuietTime}>
+                    <Text style={styles.iosTimeModalSave}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </SafeAreaView>
       </Modal>
         
@@ -1731,6 +2045,89 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 16,
     color: Colors.light.text,
+  },
+  settingLabelColumn: {
+    flex: 1,
+    marginRight: 12,
+  },
+  settingHint: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  pushPrefsLoadingBox: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  pushPrefsLoadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+  },
+  pushPrefsErrorText: {
+    fontSize: 14,
+    color: Colors.light.destructive,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  pushPrefsRetry: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.primary,
+  },
+  quietTimeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.buttonBackground,
+  },
+  quietTimeValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.primary,
+  },
+  iosTimeModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  iosTimeModalCard: {
+    backgroundColor: Colors.light.background,
+    borderRadius: 14,
+    padding: 16,
+    overflow: 'hidden',
+  },
+  iosTimeModalTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.light.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  iosTimeModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 20,
+    marginTop: 8,
+    paddingTop: 8,
+  },
+  iosTimeModalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  iosTimeModalCancel: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+  },
+  iosTimeModalSave: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.primary,
   },
   deviceInfo: {
     paddingLeft: 28,
