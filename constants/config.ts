@@ -1,3 +1,12 @@
+/** Public site for invite links (App Store / landing). Path must match future web hosting. */
+export const PUBLIC_WEB_HOST = 'freetohang.com';
+
+export const PUBLIC_WEB_ORIGIN = `https://${PUBLIC_WEB_HOST}`;
+
+export function buildInviteUrlForUser(usernameOrUserId: string): string {
+  return `${PUBLIC_WEB_ORIGIN}/invite/${encodeURIComponent(usernameOrUserId)}`;
+}
+
 // API Configuration
 export const API_CONFIG = {
   // Local development - Use your local network IP

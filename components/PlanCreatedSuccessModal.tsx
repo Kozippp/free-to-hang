@@ -12,8 +12,14 @@ import {
   Share,
   Platform
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { CheckCircle, X, Copy, Share2, Sparkles } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import {
+  buildInviteShareMessage,
+  fetchPersonalInviteUrl,
+  INVITE_SHARE_TITLE,
+} from '@/lib/invite-link';
 
 interface PlanCreatedSuccessModalProps {
   visible: boolean;
@@ -34,6 +40,7 @@ export default function PlanCreatedSuccessModal({
   const [scaleAnim] = useState(new Animated.Value(0.5));
   const [bounceAnim] = useState(new Animated.Value(0));
   const [copied, setCopied] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
   const [confettiAnims] = useState(
     Array(20).fill(null).map((_, index) => ({
       id: `confetti-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
@@ -44,7 +51,13 @@ export default function PlanCreatedSuccessModal({
     }))
   );
 
-  const inviteLink = 'https://freetohang.app/invite?ref=alextaylor';
+  useEffect(() => {
+    if (!visible) return;
+    void (async () => {
+      const url = await fetchPersonalInviteUrl();
+      setInviteLink(url ?? '');
+    })();
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {
@@ -150,24 +163,25 @@ export default function PlanCreatedSuccessModal({
     });
   };
 
-  const handleCopyLink = () => {
-    // In a real app, you would use Clipboard.setString(inviteLink)
+  const handleCopyLink = async () => {
+    if (!inviteLink) return;
+    await Clipboard.setStringAsync(inviteLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = async () => {
     try {
+      if (!inviteLink) return;
       if (Platform.OS === 'web') {
-        // Web doesn't support Share API in all browsers
-        handleCopyLink();
+        await handleCopyLink();
         return;
       }
-      
-      const result = await Share.share({
-        message: `Hey! I'm free to hang out. Click this link to join me: ${inviteLink}`,
-        url: inviteLink, // iOS only
-        title: 'Free to Hang Invitation', // Android only
+
+      await Share.share({
+        message: buildInviteShareMessage(inviteLink),
+        url: inviteLink,
+        title: INVITE_SHARE_TITLE,
       });
     } catch (error) {
       console.error('Error sharing:', error);

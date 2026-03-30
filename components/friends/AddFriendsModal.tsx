@@ -18,6 +18,12 @@ import {
 import { X, Search, UserPlus, Share2, Users, ChevronRight, RotateCcw } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
+import { PUBLIC_WEB_HOST } from '@/constants/config';
+import {
+  buildInviteShareMessage,
+  fetchPersonalInviteUrl,
+  INVITE_SHARE_TITLE,
+} from '@/lib/invite-link';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import * as Contacts from 'expo-contacts';
 import useFriendsStore from '@/store/friendsStore';
@@ -56,7 +62,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserProfile, setShowUserProfile] = useState(false);
-  const [currentUserUsername, setCurrentUserUsername] = useState<string>('');
+  /** Shown in invite row; username or user id for path (matches shared URL). */
+  const [invitePathSegment, setInvitePathSegment] = useState<string>('');
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [contactFriends, setContactFriends] = useState<User[]>([]);
@@ -64,12 +71,11 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   const [contactsAccessGranted, setContactsAccessGranted] = useState(false);
   const [cancelledRequestIds, setCancelledRequestIds] = useState<Set<string>>(new Set());
 
-  // Load current user username
   useEffect(() => {
-    loadCurrentUserUsername();
+    loadPersonalInvitePreview();
   }, []);
 
-  const loadCurrentUserUsername = async () => {
+  const loadPersonalInvitePreview = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -80,9 +86,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
         .eq('id', user.id)
         .single();
 
-      if (userData?.username) {
-        setCurrentUserUsername(userData.username);
-      }
+      setInvitePathSegment(userData?.username ?? user.id);
     } catch (error) {
       console.error('Error loading username:', error);
     }
@@ -185,22 +189,13 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
 
   const handleInviteFriends = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const shareUrl = await fetchPersonalInviteUrl();
+      if (!shareUrl) return;
 
-      // Get current user data for username
-      const { data: userData } = await supabase
-        .from('users')
-        .select('username')
-        .eq('id', user.id)
-        .single();
-
-      const shareUrl = `https://freetohang.app/invite/${userData?.username || user.id}`;
-      
       await Share.share({
-        message: `Join me on Free to Hang! ${shareUrl}`,
+        message: buildInviteShareMessage(shareUrl),
         url: shareUrl,
-        title: 'Join Free to Hang'
+        title: INVITE_SHARE_TITLE,
       });
     } catch (error) {
       console.error('Share error:', error);
@@ -461,8 +456,10 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           </View>
           <View style={styles.actionContent}>
             <Text style={styles.actionTitle}>Invite friends</Text>
-            <Text style={styles.actionSubtitle}>
-              freetohang.app/{currentUserUsername || 'mihkelkkk'}
+            <Text style={styles.actionSubtitle} numberOfLines={1} ellipsizeMode="tail">
+              {invitePathSegment
+                ? `${PUBLIC_WEB_HOST}/invite/${invitePathSegment}`
+                : `${PUBLIC_WEB_HOST}/invite/…`}
             </Text>
           </View>
           <ChevronRight size={20} color={Colors.light.secondaryText} />
