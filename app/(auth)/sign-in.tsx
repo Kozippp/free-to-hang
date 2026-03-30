@@ -26,7 +26,7 @@ export default function SignInScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, signInWithApple } = useAuth();
   
   // Animated gradient
   const animatedValue = useRef(new Animated.Value(0)).current;
@@ -106,11 +106,16 @@ export default function SignInScreen() {
   };
 
   const handleAppleSignIn = async () => {
-    Alert.alert(
-      'Apple Sign-In', 
-      'Apple authentication is not configured yet. Please use phone number to sign in.',
-      [{ text: 'OK', style: 'default' }]
-    );
+    setIsLoading(true);
+    try {
+      await signInWithApple();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Apple sign-in failed. Please try again.';
+      Alert.alert('Sign In Failed', message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleSignIn = async () => {

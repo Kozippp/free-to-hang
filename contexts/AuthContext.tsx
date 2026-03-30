@@ -4,6 +4,9 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
 import { Platform, Alert } from 'react-native';
 import * as Linking from 'expo-linking';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import type { AppleAuthenticationCredential } from 'expo-apple-authentication';
+import { createAppleAuthNonce } from '@/lib/apple-auth';
 import {
   clearPendingInviteRef,
   getPendingInviteRef,
@@ -361,15 +364,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(maxLoadingTime);
   }, [loading, user]);
 
-  const checkOnboardingStatus = async () => {
-    if (!user || isCheckingOnboarding) {
-      console.log('🚫 Skipping onboarding check:', { hasUser: !!user, isCheckingOnboarding });
+  const checkOnboardingStatus = async (sessionUser?: User | null) => {
+    const subject = sessionUser ?? user;
+    if (!subject || isCheckingOnboarding) {
+      console.log('🚫 Skipping onboarding check:', { hasUser: !!subject, isCheckingOnboarding });
       return;
     }
 
     setIsCheckingOnboarding(true);
     setHasCheckedOnboarding(true); // Mark that we've checked to prevent loops
-    console.log('🔍 Starting onboarding status check for user:', user.email);
+    console.log('🔍 Starting onboarding status check for user:', subject.email);
 
     // Set a timeout to ensure this function always completes
     const timeoutId = setTimeout(() => {
@@ -378,7 +382,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setNavigationReady(true);
       setLoading(false);
       // Default to main app if we have a user
-      if (user && segments[0] !== '(tabs)') {
+      if (subject && segments[0] !== '(tabs)') {
         router.replace('/(tabs)');
       }
     }, 5000); // 5 second timeout
@@ -391,7 +395,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: userData, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user!.id)
+        .eq('id', subject.id)
         .single();
 
       // Clear the timeout since we got a response
@@ -427,36 +431,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           onboarding_completed: userData.onboarding_completed 
         });
         
-        // If user has name and username, consider them onboarded (backward compatibility)
-        if (userData.name && userData.username) {
-          console.log('✅ User has name and username, directing to main app');
+        const goMainApp = () => {
           if (segments[0] !== '(tabs)') {
             router.replace('/(tabs)');
           }
           setNavigationReady(true);
           setLoading(false);
           setIsCheckingOnboarding(false);
-          return;
-        }
-        
-        // If onboarding_completed field exists and is true, go to main app
+        };
+
+        const goOnboarding = () => {
+          router.replace('/(onboarding)/step-1');
+          setNavigationReady(true);
+          setLoading(false);
+          setIsCheckingOnboarding(false);
+        };
+
+        // Prefer explicit onboarding flag so OAuth / trigger placeholder rows still go through onboarding
         if (userData.onboarding_completed === true) {
           console.log('✅ User has onboarding_completed = true, directing to main app');
-          if (segments[0] !== '(tabs)') {
-            router.replace('/(tabs)');
-          }
-          setNavigationReady(true);
-          setLoading(false);
-          setIsCheckingOnboarding(false);
+          goMainApp();
           return;
-        } 
-        
-        // Otherwise, user needs onboarding
+        }
+        if (userData.onboarding_completed === false) {
+          console.log('📝 onboarding_completed is false, directing to step-1');
+          goOnboarding();
+          return;
+        }
+        // Legacy rows (onboarding_completed null / column missing in older DBs)
+        if (userData.name && userData.username) {
+          console.log('✅ Legacy profile complete (name + username), directing to main app');
+          goMainApp();
+          return;
+        }
+
         console.log('📝 User needs onboarding, directing to step-1');
-        router.replace('/(onboarding)/step-1');
-        setNavigationReady(true);
-        setLoading(false);
-        setIsCheckingOnboarding(false);
+        goOnboarding();
       } else {
         // No user data found, need onboarding
         console.log('📝 No user data found, directing to onboarding');
@@ -544,33 +554,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             onboarding_completed: userData.onboarding_completed 
           });
           
-          // If user has name and username, they're ready for main app
-          if (userData.name && userData.username) {
-            console.log('✅ Existing user is ready - will direct to main app');
+          const markReady = () => {
             setHasCheckedOnboarding(true);
             setNavigationReady(true);
-            // Set a flag to go directly to main app
+          };
+
+          if (userData.onboarding_completed === true) {
+            console.log('✅ Existing user onboarding completed - will direct to main app');
+            markReady();
             setTimeout(() => {
               router.replace('/(tabs)');
             }, 100);
             return;
           }
-          
-          // If onboarding_completed field exists and is true, go to main app
-          if (userData.onboarding_completed === true) {
-            console.log('✅ Existing user onboarding completed - will direct to main app');
-            setHasCheckedOnboarding(true);
-            setNavigationReady(true);
+          if (userData.onboarding_completed === false) {
+            console.log('📝 Existing user must finish onboarding');
+            markReady();
+            setTimeout(() => {
+              router.replace('/(onboarding)/step-1');
+            }, 100);
+            return;
+          }
+          if (userData.name && userData.username) {
+            console.log('✅ Legacy profile complete - will direct to main app');
+            markReady();
             setTimeout(() => {
               router.replace('/(tabs)');
             }, 100);
             return;
-          } 
-          
-          // Otherwise, user needs onboarding
+          }
+
           console.log('📝 Existing user needs onboarding - will direct to onboarding');
-          setHasCheckedOnboarding(true);
-          setNavigationReady(true);
+          markReady();
           return;
         } else {
           // No user data found, need onboarding
@@ -633,7 +648,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithApple = async () => {
-    throw new Error('Apple sign-in is not configured yet. Please use email and password to sign in.');
+    if (AUTH_MOCK_MODE) {
+      throw new Error('Mock mode: Apple sign-in is unavailable.');
+    }
+    if (Platform.OS !== 'ios') {
+      throw new Error('Apple sign-in is only available on iOS.');
+    }
+
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) {
+      throw new Error('Apple sign-in is not available on this device.');
+    }
+
+    const nonce = await createAppleAuthNonce();
+
+    let credential: AppleAuthenticationCredential;
+    try {
+      credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce,
+      });
+    } catch (e: unknown) {
+      const code =
+        e && typeof e === 'object' && 'code' in e
+          ? String((e as { code?: string }).code)
+          : '';
+      if (code === 'ERR_REQUEST_CANCELED') {
+        return;
+      }
+      throw e;
+    }
+
+    if (!credential.identityToken) {
+      throw new Error('Apple did not return an identity token. Please try again.');
+    }
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'apple',
+      token: credential.identityToken,
+      nonce,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const gn = credential.fullName?.givenName;
+    const fn = credential.fullName?.familyName;
+    const displayName = [gn, fn].filter(Boolean).join(' ').trim();
+    if (displayName) {
+      await supabase.auth.updateUser({
+        data: {
+          name: displayName,
+          full_name: displayName,
+        },
+      });
+    }
+
+    if (data.user) {
+      await checkOnboardingStatus(data.user);
+    }
   };
 
   const signInWithGoogle = async () => {
