@@ -260,7 +260,7 @@ export default function HangOfflineSetup({
               ))}
             </ScrollView>
 
-            <Text style={styles.chipsLabel}>How long stay visible?</Text>
+            <Text style={styles.chipsLabel}>How long stay Free to Hang?</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     width: 180, // larger than the 160px offline toggle
     height: 80, // larger than the 60px height
     borderRadius: 40,
-    backgroundColor: Colors.light.primary,
+    backgroundColor: Colors.light.onlineGreen,
   },
   mainCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',

@@ -12,6 +12,7 @@ interface StatusToggleProps {
 
 export default function StatusToggle({ isOn, onToggle, size = 'large', hideText = false }: StatusToggleProps) {
   const translateX = useRef(new Animated.Value(isOn ? 1 : 0)).current;
+  const nudgeAnim = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
     Animated.spring(translateX, {
@@ -20,7 +21,40 @@ export default function StatusToggle({ isOn, onToggle, size = 'large', hideText 
       friction: 8,
       tension: 50,
     }).start();
-  }, [isOn, translateX]);
+
+    if (!isOn) {
+      const nudge = Animated.loop(
+        Animated.sequence([
+          Animated.delay(2000),
+          Animated.timing(nudgeAnim, {
+            toValue: 1,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+          Animated.timing(nudgeAnim, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+          Animated.timing(nudgeAnim, {
+            toValue: 1,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+          Animated.timing(nudgeAnim, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+          Animated.delay(1000),
+        ])
+      );
+      nudge.start();
+      return () => nudge.stop();
+    } else {
+      nudgeAnim.setValue(0);
+    }
+  }, [isOn, translateX, nudgeAnim]);
   
   const toggleSize = size === 'large' ? styles.largeToggle : styles.smallToggle;
   const thumbSize = size === 'large' ? styles.largeThumb : styles.smallThumb;
@@ -48,10 +82,20 @@ export default function StatusToggle({ isOn, onToggle, size = 'large', hideText 
             thumbSize,
             { 
               width: thumbWidth,
-              transform: [{ translateX: translateX.interpolate({
-                inputRange: [0, 1],
-                outputRange: [4, translateDistance], // Start at 4px to keep inside track
-              }) }] 
+              transform: [
+                { 
+                  translateX: translateX.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [4, translateDistance], 
+                  }) 
+                },
+                {
+                  translateX: nudgeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, size === 'large' ? 8 : 4]
+                  })
+                }
+              ] 
             }
           ]}
         >
