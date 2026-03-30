@@ -19,6 +19,7 @@ import { Stack, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { GoogleGLogo } from '@/components/GoogleGLogo';
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
@@ -234,13 +235,13 @@ export default function SignInScreen() {
                   style={[styles.signInButton, styles.googleButton]}
                   onPress={handleGoogleSignIn}
                   disabled={isLoading}
+                  accessibilityLabel="Continue with Google"
+                  accessibilityRole="button"
                 >
                   <View style={styles.buttonContent}>
-                    <Image
-                      source={require('@/assets/images/google_logo.png')}
-                      style={styles.googleIconImage}
-                      resizeMode="contain"
-                    />
+                    <View style={styles.googleIconWrap} accessible={false}>
+                      <GoogleGLogo size={22} />
+                    </View>
                     <Text style={styles.googleButtonText}>Continue with Google</Text>
                   </View>
                 </TouchableOpacity>
@@ -457,9 +458,11 @@ const styles = StyleSheet.create({
     height: 20,
     marginRight: 8,
   },
-  googleIconImage: {
+  googleIconWrap: {
     width: 22,
     height: 22,
     marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 }); 
