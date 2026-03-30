@@ -3,20 +3,13 @@ import {
   StyleSheet, 
   View, 
   Text, 
-  FlatList, 
   TouchableOpacity, 
   SafeAreaView, 
-  Image,
   Animated,
-  LayoutAnimation,
   Platform,
-  Alert,
-  Modal,
-  TextInput,
   ScrollView,
-  PanResponder,
-  Dimensions,
-  RefreshControl
+  RefreshControl,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { 
   MessageCircle, 
@@ -37,9 +30,8 @@ import {
 } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
-import StatusToggle from '@/components/StatusToggle';
 import UserStatusBar from '@/components/UserStatusBar';
-import ActivityModal from '@/components/ActivityModal';
+import HangOfflineSetup from '@/components/hang/HangOfflineSetup';
 import PingOfflineModal from '@/components/PingOfflineModal';
 import InviteShareModal from '@/components/InviteShareModal';
 import PlanSuggestionSheet from '@/components/plans/PlanSuggestionSheet';
@@ -80,7 +72,6 @@ export default function HangScreen() {
     }, [markFriendsListSeen])
   );
 
-  const [showActivityModal, setShowActivityModal] = useState(false);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -113,9 +104,7 @@ export default function HangScreen() {
   }, [isAvailable, fadeAnim]);
   
   const handleToggle = () => {
-    if (!isAvailable) {
-      setShowActivityModal(true);
-    } else {
+    if (isAvailable) {
       toggleAvailability();
     }
   };
@@ -211,9 +200,15 @@ export default function HangScreen() {
         }}
       />
       <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoid}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
         <ScrollView 
           style={styles.scrollView} 
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -224,10 +219,12 @@ export default function HangScreen() {
         >
           {!isAvailable ? (
             <View style={styles.offlineContainer}>
-              <Text style={styles.offlineTitle}>
-                Let friends see you're free, and see who's also searching for plans tonight.
-              </Text>
-              <StatusToggle isOn={isAvailable} onToggle={handleToggle} />
+              <HangOfflineSetup
+                userName={user.name}
+                userAvatar={user.avatar}
+                initialActivity={activity}
+                onGoOnline={handleActivitySubmit}
+              />
             </View>
           ) : (
             <Animated.View 
@@ -306,6 +303,7 @@ export default function HangScreen() {
             </Animated.View>
           )}
         </ScrollView>
+        </KeyboardAvoidingView>
         
         {/* Fixed bottom buttons */}
         {isAvailable && safeSelectedFriends.length > 0 && (
@@ -330,13 +328,6 @@ export default function HangScreen() {
           </View>
         )}
       </SafeAreaView>
-      
-      <ActivityModal
-        visible={showActivityModal}
-        onClose={() => setShowActivityModal(false)}
-        onSubmit={handleActivitySubmit}
-        initialActivity={activity}
-      />
       
       <PlanSuggestionSheet
         visible={showPlanSheet}
@@ -365,24 +356,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
+  keyboardAvoid: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
   offlineContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 40,
-    paddingHorizontal: 20,
-    minHeight: 400,
-  },
-  offlineTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: Colors.light.text,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-    lineHeight: 26,
+    flexGrow: 1,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   onlineContainer: {
     flex: 1,
