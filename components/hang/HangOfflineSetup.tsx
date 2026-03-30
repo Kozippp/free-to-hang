@@ -162,12 +162,12 @@ export default function HangOfflineSetup({
 
   const togglePulseOpacity = toggleGlow.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.15, 0.4]
+    outputRange: [0.3, 0.8]
   });
 
   const toggleGlowScale = toggleGlow.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.08]
+    outputRange: [1, 1.15]
   });
 
   return (
@@ -357,10 +357,15 @@ const styles = StyleSheet.create({
   },
   pulseRing: {
     position: 'absolute',
-    width: 180, // larger than the 160px offline toggle
-    height: 80, // larger than the 60px height
+    width: 170, 
+    height: 70, 
     borderRadius: 40,
-    backgroundColor: Colors.light.onlineGreen,
+    backgroundColor: `${Colors.light.onlineGreen}40`,
+    shadowColor: Colors.light.onlineGreen,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 16,
+    elevation: 8,
   },
   mainCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
@@ -424,13 +429,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipsLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: Colors.light.secondaryText,
     marginTop: 4,
     marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 0.3,
   },
   chipsRow: {
     flexDirection: 'row',
