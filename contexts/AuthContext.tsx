@@ -701,17 +701,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
 
-    const gn = credential.fullName?.givenName;
-    const fn = credential.fullName?.familyName;
-    const displayName = [gn, fn].filter(Boolean).join(' ').trim();
-    if (displayName) {
-      await supabase.auth.updateUser({
-        data: {
-          name: displayName,
-          full_name: displayName,
-        },
-      });
-    }
+    // Do not sync Apple full name into auth metadata here — profile name is set in onboarding
+    // (same flow as "Continue with Email": OAuth only verifies identity + email).
 
     if (data.user) {
       await checkOnboardingStatus(data.user);
