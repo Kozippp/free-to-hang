@@ -26,7 +26,7 @@ export default function SignInScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signIn, signInWithApple } = useAuth();
+  const { signIn, signInWithApple, signInWithGoogle } = useAuth();
   
   // Animated gradient
   const animatedValue = useRef(new Animated.Value(0)).current;
@@ -119,11 +119,16 @@ export default function SignInScreen() {
   };
 
   const handleGoogleSignIn = async () => {
-    Alert.alert(
-      'Google Sign-In', 
-      'Google authentication is not configured yet. Please use phone number to sign in.',
-      [{ text: 'OK', style: 'default' }]
-    );
+    setIsLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Google sign-in failed. Please try again.';
+      Alert.alert('Sign In Failed', message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEmailSignIn = () => {
@@ -224,16 +229,14 @@ export default function SignInScreen() {
                     </View>
                   </TouchableOpacity>
                 )}
-                
-                {Platform.OS === 'android' && (
-                  <TouchableOpacity 
-                    style={[styles.signInButton, styles.googleButton]}
-                    onPress={handleGoogleSignIn}
-                    disabled={isLoading}
-                  >
-                    <Text style={styles.googleButtonText}>G Continue with Google</Text>
-                  </TouchableOpacity>
-                )}
+
+                <TouchableOpacity 
+                  style={[styles.signInButton, styles.googleButton]}
+                  onPress={handleGoogleSignIn}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </TouchableOpacity>
                 
                             <TouchableOpacity 
               style={[styles.signInButton, styles.emailButton]}

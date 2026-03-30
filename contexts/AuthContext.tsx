@@ -7,6 +7,7 @@ import * as Linking from 'expo-linking';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import type { AppleAuthenticationCredential } from 'expo-apple-authentication';
 import { createAppleAuthNonce } from '@/lib/apple-auth';
+import { signInWithGoogleNative } from '@/lib/google-native-auth';
 import {
   clearPendingInviteRef,
   getPendingInviteRef,
@@ -714,7 +715,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async () => {
-    throw new Error('Google sign-in is not configured yet. Please use email and password to sign in.');
+    if (AUTH_MOCK_MODE) {
+      throw new Error('Mock mode: Google sign-in is unavailable.');
+    }
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      throw new Error('Google sign-in is only available on the mobile app.');
+    }
+
+    const googleResult = await signInWithGoogleNative();
+    if (googleResult.cancelled) {
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: googleResult.idToken,
+      ...(googleResult.accessToken
+        ? { access_token: googleResult.accessToken }
+        : {}),
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data.user) {
+      await checkOnboardingStatus(data.user);
+    }
   };
 
   const resendConfirmation = async (email: string) => {

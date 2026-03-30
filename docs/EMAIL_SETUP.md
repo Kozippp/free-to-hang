@@ -106,4 +106,34 @@ Supabase Dashboard's:
 2. **Leia "User Signups" sektsioon**
 3. **Lülita välja "Enable email confirmations"**
 
-⚠️ **Hoiatus:** See lahendus ei ole sobiv toodangukeskkonnas! 
+⚠️ **Hoiatus:** See lahendus ei ole sobiv toodangukeskkonnas!
+
+---
+
+## Google Sign-In (mobile) & one account per email (English)
+
+### Environment variables
+
+Add to `.env` / EAS secrets (Expo public vars are embedded at build time):
+
+```
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<iOS OAuth client ID>.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<Android OAuth client ID>.apps.googleusercontent.com
+```
+
+### Google Cloud Console
+
+1. Create **OAuth client** types: **Web** (for Supabase callback), **iOS** (bundle ID `com.freetohang.app`), **Android** (package `com.freetohang.app` + SHA-1 fingerprints for debug and release).
+2. Under the **Web** application client, add **Authorized redirect URI**: `freetohang://oauthredirect` (must match the app’s `scheme` in `app.json` and the path used in code).
+3. In **Supabase Dashboard → Authentication → Providers → Google**: enable Google, set Web client **Client ID** and **Client Secret**, and list **all** client IDs (Web, iOS, Android) in the Client IDs field—comma-separated, **Web client ID first** (see [Supabase Google docs](https://supabase.com/docs/guides/auth/social-login/auth-google?platform=react-native)).
+
+### Same email, one user (Apple / Google / email OTP)
+
+Supabase Auth **automatically links** identities that share the same **verified** email into a single user. That means: sign up with Apple or Google, then “Continue with email” with the **same** email should resolve to the same account (not a second user).
+
+Requirements:
+
+- Use the **same** email address (Apple “Hide My Email” relay addresses will **not** match a personal Gmail—use “Share my email” when you want email OTP to link).
+- Keep **email confirmations** enabled in production so only verified emails are linked (prevents account takeover).
+
+No app code change is required beyond using normal `signInWithOtp` / `verifyOtp`; linking is enforced server-side by Supabase.
