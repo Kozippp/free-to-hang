@@ -162,12 +162,12 @@ export default function HangOfflineSetup({
 
   const togglePulseOpacity = toggleGlow.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.3, 0.8]
+    outputRange: [0.4, 1]
   });
 
   const toggleGlowScale = toggleGlow.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.15]
+    outputRange: [1, 1.1]
   });
 
   return (
@@ -196,13 +196,23 @@ export default function HangOfflineSetup({
           </Text>
 
           <View style={styles.toggleContainer}>
+            {/* Multiple animated layers for a soft, diffuse neon glow */}
             <Animated.View 
               style={[
-                styles.pulseRing,
-                {
-                  transform: [{ scale: toggleGlowScale }],
-                  opacity: togglePulseOpacity
-                }
+                styles.glowOuter,
+                { transform: [{ scale: toggleGlowScale }], opacity: togglePulseOpacity }
+              ]}
+            />
+            <Animated.View 
+              style={[
+                styles.glowMid,
+                { transform: [{ scale: toggleGlowScale }], opacity: togglePulseOpacity }
+              ]}
+            />
+            <Animated.View 
+              style={[
+                styles.glowCore,
+                { transform: [{ scale: toggleGlowScale }], opacity: togglePulseOpacity }
               ]}
             />
             <StatusToggle isOn={false} onToggle={submit} size="large" />
@@ -353,19 +363,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     zIndex: 10,
-    paddingVertical: 10, // give space for the pulse ring
+    paddingVertical: 10, 
   },
-  pulseRing: {
+  glowCore: {
     position: 'absolute',
-    width: 170, 
-    height: 70, 
-    borderRadius: 40,
-    backgroundColor: `${Colors.light.onlineGreen}40`,
+    width: 170,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: `${Colors.light.onlineGreen}25`,
     shadowColor: Colors.light.onlineGreen,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  glowMid: {
+    position: 'absolute',
+    width: 200,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: `${Colors.light.onlineGreen}12`,
+    shadowColor: Colors.light.onlineGreen,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+  },
+  glowOuter: {
+    position: 'absolute',
+    width: 240,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: `${Colors.light.onlineGreen}06`,
   },
   mainCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
@@ -430,11 +458,11 @@ const styles = StyleSheet.create({
   },
   chipsLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: Colors.light.secondaryText,
     marginTop: 4,
     marginBottom: 12,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   chipsRow: {
     flexDirection: 'row',
@@ -462,11 +490,11 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 15,
     color: Colors.light.text,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   chipTextSelected: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '600',
   },
   bottomSpacer: {
     height: 60,
