@@ -22,6 +22,7 @@
         "NSLocationWhenInUseUsageDescription": "This app uses location to help you find nearby friends and suggest meeting places.",
         "NSCameraUsageDescription": "This app uses camera to take profile pictures.",
         "NSPhotoLibraryUsageDescription": "This app uses photo library to select profile pictures.",
+        "NSContactsUsageDescription": "Free to Hang reads your contacts on your device to show which people you know are already on the app. Contact data is not uploaded to our servers.",
         "UIBackgroundModes": ["remote-notification"]
       }
     },
@@ -37,7 +38,8 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CONTACTS"
       ],
       "googleServicesFile": "./google-services.json"
     },
@@ -66,6 +68,12 @@
           "icon": "./assets/icon.png",
           "color": "#111827",
           "sounds": []
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Free to Hang reads your contacts on your device to show which people you know are already on the app. Contact data is not uploaded to our servers."
         }
       ]
     ],

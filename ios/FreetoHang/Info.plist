@@ -65,6 +65,8 @@
 	<string>This app uses photo library to select profile pictures.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app uses location to help you find nearby friends and suggest meeting places.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Free to Hang reads your contacts on your device to show which people you know are already on the app. Contact data is not uploaded to our servers.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

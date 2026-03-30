@@ -56,8 +56,6 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserProfile, setShowUserProfile] = useState(false);
-  const [showContactsModal, setShowContactsModal] = useState(false);
-  const [hasContactsPermission, setHasContactsPermission] = useState(false);
   const [currentUserUsername, setCurrentUserUsername] = useState<string>('');
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(false);
@@ -90,16 +88,6 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
     }
   };
 
-  const requestContactsPermission = async () => {
-    // TODO: Implement contacts permission with expo-contacts
-    Alert.alert(
-      'Contacts Access',
-      'This feature will be available soon. We\'ll help you find friends from your contacts.',
-      [{ text: 'OK' }]
-    );
-    setShowContactsModal(false);
-  };
-
   // Search with debounce - use friendsStore
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -117,7 +105,6 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       setSearchQuery('');
       setSelectedUser(null);
       setShowUserProfile(false);
-      setShowContactsModal(false);
       setCancelledRequestIds(new Set());
     }
   }, [visible]);
@@ -140,7 +127,13 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       console.log('📤 Sending friend request to:', user.name);
       await sendFriendRequest(user.id);
       console.log('✅ Friend request sent successfully');
-      
+
+      setContactFriends((prev) =>
+        prev.map((u) =>
+          u.id === user.id ? { ...u, relationshipStatus: 'pending_sent' } : u
+        )
+      );
+
       // The sendFriendRequest already bypasses cache and updates the store
       // No need to reload here as it's already done in the store
       
@@ -160,7 +153,13 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       console.log('🔄 Cancelling friend request to:', user.name);
       await cancelFriendRequest(user.id);
       console.log('✅ Friend request cancelled successfully');
-      
+
+      setContactFriends((prev) =>
+        prev.map((u) =>
+          u.id === user.id ? { ...u, relationshipStatus: 'none' } : u
+        )
+      );
+
       // The cancelFriendRequest already bypasses cache and updates the store
       // No need to reload here as it's already done in the store
       
@@ -315,20 +314,21 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
           console.log('Found matching users from contacts:', matchingUsers.length);
           
           // Use friendsStore to check relationship status instead of direct DB queries
-          const { friends, outgoingRequests } = useFriendsStore.getState();
-          
-          const friendIds = friends.map(u => u.friend_id);
-          const pendingIds = outgoingRequests.map(u => u.receiver_id);
+          const { friends, outgoingRequests, incomingRequests } = useFriendsStore.getState();
 
-          const availableUsers = matchingUsers.filter((user: any) => 
-            !friendIds.includes(user.id)
-          );
-          
-          // Mark users with pending requests
-          const usersWithStatus = availableUsers.map((user: any) => ({
-            ...user,
-            friendRequestSent: pendingIds.includes(user.id)
-          }));
+          const friendIds = new Set(friends.map((u) => u.friend_id));
+          const pendingReceiverIds = new Set(outgoingRequests.map((u) => u.receiver_id));
+          const incomingSenderIds = new Set(incomingRequests.map((r) => r.sender_id));
+
+          const withRelationship = (u: any): User => {
+            let relationshipStatus: User['relationshipStatus'] = 'none';
+            if (friendIds.has(u.id)) relationshipStatus = 'friends';
+            else if (pendingReceiverIds.has(u.id)) relationshipStatus = 'pending_sent';
+            else if (incomingSenderIds.has(u.id)) relationshipStatus = 'pending_received';
+            return { ...u, relationshipStatus };
+          };
+
+          const usersWithStatus = matchingUsers.map(withRelationship);
 
           setContactFriends(usersWithStatus);
           setContactsAccessGranted(true);
