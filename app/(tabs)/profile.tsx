@@ -46,7 +46,8 @@ import {
 } from 'lucide-react-native';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
-import { LEGAL_URLS, FOUNDER_SUPPORT_EMAIL } from '@/constants/config';
+import { FOUNDER_SUPPORT_EMAIL } from '@/constants/config';
+import { PRIVACY_SECTIONS, TERMS_SECTIONS } from '@/constants/legalCopy';
 import { 
   Friend, 
   UserProfile, 
@@ -61,6 +62,7 @@ import { supabase } from '@/lib/supabase';
 import AddFriendsModal from '@/components/friends/AddFriendsModal';
 import UserProfileModal from '@/components/UserProfileModal';
 import FounderFeedbackModal from '@/components/settings/FounderFeedbackModal';
+import { LegalDocumentModal } from '@/components/legal/LegalDocumentModal';
 import useFriendsStore from '@/store/friendsStore';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { uploadImage, deleteImage } from '@/lib/storage';
@@ -263,6 +265,7 @@ export default function ProfileScreen() {
   // Modal states
   const [showSettings, setShowSettings] = useState(false);
   const [showFounderFeedback, setShowFounderFeedback] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<null | 'privacy' | 'terms'>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showBlockedUsers, setShowBlockedUsers] = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -1452,7 +1455,7 @@ export default function ProfileScreen() {
 
               <TouchableOpacity
                 style={styles.legalRow}
-                onPress={() => openExternalUrl(LEGAL_URLS.privacy)}
+                onPress={() => setLegalDoc('privacy')}
               >
                 <Text style={styles.legalRowText}>Privacy Policy</Text>
                 <ChevronRight size={20} color={Colors.light.secondaryText} />
@@ -1460,9 +1463,9 @@ export default function ProfileScreen() {
 
               <TouchableOpacity
                 style={styles.legalRow}
-                onPress={() => openExternalUrl(LEGAL_URLS.terms)}
+                onPress={() => setLegalDoc('terms')}
               >
-                <Text style={styles.legalRowText}>Terms of Use</Text>
+                <Text style={styles.legalRowText}>Terms of Service</Text>
                 <ChevronRight size={20} color={Colors.light.secondaryText} />
               </TouchableOpacity>
 
@@ -1619,6 +1622,13 @@ export default function ProfileScreen() {
         visible={showFounderFeedback}
         onClose={() => setShowFounderFeedback(false)}
         userEmailSnapshot={userProfile.email || authUser?.email || null}
+      />
+
+      <LegalDocumentModal
+        visible={legalDoc !== null}
+        onClose={() => setLegalDoc(null)}
+        title={legalDoc === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
+        sections={legalDoc === 'terms' ? TERMS_SECTIONS : legalDoc === 'privacy' ? PRIVACY_SECTIONS : []}
       />
     </>
   );

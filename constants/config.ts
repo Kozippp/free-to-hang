@@ -3,12 +3,6 @@ export const PUBLIC_WEB_HOST = 'freetohang.com';
 
 export const PUBLIC_WEB_ORIGIN = `https://${PUBLIC_WEB_HOST}`;
 
-/** Legal pages (host when ready); Settings opens these URLs in the browser. */
-export const LEGAL_URLS = {
-  privacy: `${PUBLIC_WEB_ORIGIN}/privacy`,
-  terms: `${PUBLIC_WEB_ORIGIN}/terms`,
-} as const;
-
 export const FOUNDER_SUPPORT_EMAIL = 'info@freetohang.com';
 
 export function buildInviteUrlForUser(usernameOrUserId: string): string {
