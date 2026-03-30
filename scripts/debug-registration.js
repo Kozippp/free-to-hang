@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Registration Debug Script for Free2Hang
+ * Registration Debug Script for Free to Hang
  * 
  * This script helps debug the specific "Database error saving new user" issue.
  * Run with: node scripts/debug-registration.js
@@ -192,7 +192,7 @@ async function checkRecentActivity() {
 }
 
 async function main() {
-  console.log('🔧 Free2Hang Registration Debugger\n');
+  console.log('🔧 Free to Hang Registration Debugger\n');
   console.log('This will help identify why registration is failing.\n');
 
   // Get test email

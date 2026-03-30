@@ -3,6 +3,6 @@ export const LEGAL_ENTITY = {
   companyName: 'Kozip Apparel OÜ',
   registryCode: '17342785',
   contactEmail: 'info@freetohang.com',
-  appTradeName: 'Free2Hang',
+  appTradeName: 'Free to Hang',
   lastUpdated: '30 March 2026',
 } as const;

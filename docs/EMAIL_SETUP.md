@@ -51,7 +51,7 @@ Supabase Dashboard's:
 3. **Kohanda "Confirm signup" template'i:**
 
 ```html
-<h2>Tere tulemast Free2Hang'i!</h2>
+<h2>Tere tulemast rakendusse Free to Hang!</h2>
 <p>Tänud registreerumise eest!</p>
 <p>Oma e-posti aadressi kinnitamiseks kliki allolevale lingile:</p>
 <p><a href="{{ .ConfirmationURL }}">Kinnita e-posti aadress</a></p>

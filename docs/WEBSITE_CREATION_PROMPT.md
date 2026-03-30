@@ -1,15 +1,15 @@
-# Free2Hang Website Creation Prompt
+# Free to Hang Website Creation Prompt
 
-Copy and paste this entire prompt to an AI assistant in a new project to create the Free2Hang website:
+Copy and paste this entire prompt to an AI assistant in a new project to create the Free to Hang website:
 
 ---
 
-## PROJECT BRIEF: Free2Hang Website Creation
+## PROJECT BRIEF: Free to Hang Website Creation
 
-I need you to create a complete website for my mobile app "Free2Hang" using Next.js 14, Tailwind CSS, and deploy it to Vercel. The website needs to serve as both a landing page and handle authentication redirects from Supabase.
+I need you to create a complete website for my mobile app "Free to Hang" using Next.js 14, Tailwind CSS, and deploy it to Vercel. The website needs to serve as both a landing page and handle authentication redirects from Supabase.
 
 ## ABOUT THE APP
-**Free2Hang** is a social mobile app that helps friends coordinate plans and meetups. Key features:
+**Free to Hang** is a social mobile app that helps friends coordinate plans and meetups. Key features:
 - Friends can see each other's availability status (free/busy)
 - Create and join hangout plans
 - Real-time location sharing
@@ -48,7 +48,7 @@ Button Background: #F1F5F9
 Create a modern, attractive landing page with:
 
 **Header:**
-- Logo: "Free2Hang" text with toggle switch icon (green, like in app)
+- Logo: "Free to Hang" text with toggle switch icon (green, like in app)
 - Navigation: Features, Download, Contact
 - Mobile hamburger menu
 
@@ -79,7 +79,7 @@ Create a modern, attractive landing page with:
 - Contact: info@freetohang.com
 - Privacy Policy, Terms of Service (placeholder links)
 - Social media links (placeholder)
-- Copyright © 2024 Free2Hang
+- Copyright © 2024 Free to Hang
 
 ### 2. Email Confirmation Page (/auth/confirm)
 **CRITICAL: This page handles email confirmation redirects from Supabase**
@@ -87,8 +87,8 @@ Create a modern, attractive landing page with:
 Create a page that:
 - Shows success message: "✅ Email Confirmed!"
 - Explains: "Your email address has been successfully confirmed."
-- Instructions: "You can now close this page and return to the Free2Hang app to sign in."
-- Button: "Open Free2Hang App" (links to `freetohang://auth/confirmed`)
+- Instructions: "You can now close this page and return to the Free to Hang app to sign in."
+- Button: "Open Free to Hang App" (links to `freetohang://auth/confirmed`)
 - Auto-redirect script (see JavaScript below)
 
 **Required JavaScript:**
@@ -115,8 +115,8 @@ if (accessToken && refreshToken) {
 
 Create a page that:
 - Shows message: "🔒 Reset Your Password"
-- Instructions: "Click the button below to open the Free2Hang app and set your new password."
-- Button: "Open Free2Hang App" (handles token passing)
+- Instructions: "Click the button below to open the Free to Hang app and set your new password."
+- Button: "Open Free to Hang App" (handles token passing)
 - Auto-redirect script (see JavaScript below)
 
 **Required JavaScript:**
@@ -213,10 +213,10 @@ NEXT_PUBLIC_APP_SCHEME=freetohang
 
 ### Meta Tags:
 ```html
-<title>Free2Hang - Stay Connected with Your Friends</title>
+<title>Free to Hang - Stay Connected with Your Friends</title>
 <meta name="description" content="See when your friends are free to hang out and make plans together. Real-time status, easy planning, and location sharing." />
 <meta name="keywords" content="friends, hangout, plans, social app, availability, meetup" />
-<meta property="og:title" content="Free2Hang - Stay Connected with Your Friends" />
+<meta property="og:title" content="Free to Hang - Stay Connected with Your Friends" />
 <meta property="og:description" content="See when your friends are free to hang out and make plans together." />
 <meta property="og:image" content="/og-image.png" />
 <meta property="og:url" content="https://freetohang.com" />

@@ -1,8 +1,8 @@
-# Language Rules for Free2Hang App
+# Language Rules for Free to Hang App
 
 ## 🌍 Language Policy
 
-**The entire Free2Hang application must use English only.**
+**The entire Free to Hang application must use English only.**
 
 ## Rules to Follow
 
@@ -27,14 +27,14 @@
 ```javascript
 Alert.alert('Error', 'Please check your email address');
 placeholder="Enter your email address"
-title: 'Welcome to Free2Hang!'
+title: 'Welcome to Free to Hang!'
 ```
 
 ### ❌ Incorrect (Estonian):
 ```javascript
 Alert.alert('Viga', 'Palun kontrollige oma e-posti aadressi');
 placeholder="Sisestage oma e-posti aadress"
-title: 'Tere tulemast Free2Hang'i!'
+title: "Tere tulemast Free to Hang!"
 ```
 
 ## Common English Phrases to Use

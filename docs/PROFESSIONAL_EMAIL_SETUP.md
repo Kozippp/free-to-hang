@@ -1,4 +1,4 @@
-# Professional Email System Setup for Free2Hang
+# Professional Email System Setup for Free to Hang
 
 ## Complete Email System using info@freetohang.com
 
@@ -113,8 +113,8 @@ If you want info@freetohang.com as a full business email:
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">Free2Hang</div>
-            <h1>Welcome to Free2Hang!</h1>
+            <div class="logo">Free to Hang</div>
+            <h1>Welcome to Free to Hang!</h1>
         </div>
         
         <p>Thank you for signing up! We're excited to have you join our community.</p>
@@ -129,7 +129,7 @@ If you want info@freetohang.com as a full business email:
         <p style="word-break: break-all;">{{ .ConfirmationURL }}</p>
         
         <div class="footer">
-            <p>This email was sent by Free2Hang</p>
+            <p>This email was sent by Free to Hang</p>
             <p>If you didn't create an account, you can safely ignore this email.</p>
         </div>
     </div>

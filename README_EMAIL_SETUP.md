@@ -1,8 +1,8 @@
-# 📧 Free2Hang Email System - Complete Setup Guide
+# 📧 Free to Hang Email System - Complete Setup Guide
 
 ## 🎯 What's Been Done
 
-Your Free2Hang app now has a **complete professional email system** with:
+Your Free to Hang app now has a **complete professional email system** with:
 
 ✅ **Professional email support using info@freetohang.com**  
 ✅ **Email confirmation flow with beautiful UI**  

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Free2Hang app now includes a modern 3-step onboarding process that guides new users through:
+The Free to Hang app now includes a modern 3-step onboarding process that guides new users through:
 
 1. **Bio & Interests** - Users select their hangout preferences and write a bio
 2. **Profile Photo** - Users can add a profile picture (camera or gallery)

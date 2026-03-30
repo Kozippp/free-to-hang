@@ -131,7 +131,7 @@ This will:
 3. Use this template:
 
 ```html
-<h2>Welcome to Free2Hang!</h2>
+<h2>Welcome to Free to Hang!</h2>
 <p>Thanks for signing up!</p>
 <p>Click the link below to confirm your email:</p>
 <p><a href="{{ .ConfirmationURL }}">Confirm Email</a></p>

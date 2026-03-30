@@ -203,7 +203,7 @@ export default function EmailSignInScreen() {
           {/* Terms */}
           <View style={styles.termsContainer}>
             <Text style={styles.termsText}>
-              By continuing, you agree to receive emails from Free2Hang and to our{' '}
+              By continuing, you agree to receive emails from Free to Hang and to our{' '}
               <Text
                 style={styles.termsLink}
                 accessibilityRole="link"

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Email Setup Script for Free2Hang
+ * Email Setup Script for Free to Hang
  * 
  * This script helps you configure email settings for your Supabase project.
  * Run with: node scripts/setup-email.js
@@ -19,7 +19,7 @@ function question(query) {
 }
 
 async function main() {
-  console.log('\n🚀 Free2Hang Email Setup Assistant\n');
+  console.log('\n🚀 Free to Hang Email Setup Assistant\n');
   console.log('This script will guide you through setting up emails for your app.\n');
 
   // Get email provider choice

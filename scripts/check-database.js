@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Database Check Script for Free2Hang
+ * Database Check Script for Free to Hang
  * 
  * This script checks if your database schema is properly set up.
  * Run with: node scripts/check-database.js
@@ -153,7 +153,7 @@ async function provideSolution(tableResults) {
 }
 
 async function main() {
-  console.log('🔧 Free2Hang Database Diagnostic Tool\n');
+  console.log('🔧 Free to Hang Database Diagnostic Tool\n');
   console.log('This will help identify why user registration is failing.\n');
   
   // Check database connection and tables

@@ -98,13 +98,13 @@ Asenda see sellega:
 ```html
 <h2>Your verification code</h2>
 <p>Hi there!</p>
-<p>Your 6-digit verification code for Free2Hang is:</p>
+<p>Your 6-digit verification code for Free to Hang is:</p>
 <h1 style="font-size: 32px; letter-spacing: 4px; color: #3B82F6; text-align: center; margin: 20px 0;">{{ .Token }}</h1>
 <p>Enter this code in the app to complete your registration.</p>
 <p>This code will expire in 24 hours.</p>
 <p>If you didn't request this code, you can safely ignore this email.</p>
 <hr>
-<p style="color: #666; font-size: 12px;">Free2Hang - Connect with friends when you're free to hang</p>
+<p style="color: #666; font-size: 12px;">Free to Hang - Connect with friends when you're free to hang</p>
 ```
 
 ### Samm 3: Salvesta

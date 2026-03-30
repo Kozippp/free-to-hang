@@ -52,7 +52,7 @@ Create these pages on your website (freetohang.com):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Email Confirmed - Free2Hang</title>
+    <title>Email Confirmed - Free to Hang</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -75,10 +75,10 @@ Create these pages on your website (freetohang.com):
     <div class="container">
         <h1 class="success">✅ Email Confirmed!</h1>
         <p>Your email address has been successfully confirmed.</p>
-        <p>You can now close this page and return to the Free2Hang app to sign in.</p>
+        <p>You can now close this page and return to the Free to Hang app to sign in.</p>
         
         <!-- Try to open the app -->
-        <a href="freetohang://auth/confirmed" class="button">Open Free2Hang App</a>
+        <a href="freetohang://auth/confirmed" class="button">Open Free to Hang App</a>
         <br><br>
         <small>If the app doesn't open automatically, please open it manually from your device.</small>
     </div>
@@ -98,7 +98,7 @@ Create these pages on your website (freetohang.com):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Reset Password - Free2Hang</title>
+    <title>Reset Password - Free to Hang</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -120,9 +120,9 @@ Create these pages on your website (freetohang.com):
 <body>
     <div class="container">
         <h1 class="info">🔒 Reset Your Password</h1>
-        <p>Click the button below to open the Free2Hang app and set your new password.</p>
+        <p>Click the button below to open the Free to Hang app and set your new password.</p>
         
-        <a href="freetohang://auth/reset-password" class="button">Open Free2Hang App</a>
+        <a href="freetohang://auth/reset-password" class="button">Open Free to Hang App</a>
         <br><br>
         <small>If the app doesn't open automatically, please open it manually from your device.</small>
     </div>
@@ -200,7 +200,7 @@ You can also customize the email templates in Supabase to include better instruc
 
 1. Go to **Authentication → Email Templates**
 2. Edit "Confirm signup" template
-3. Add instructions: "After confirming, return to the Free2Hang app to continue"
+3. Add instructions: "After confirming, return to the Free to Hang app to continue"
 
 ## Current Status
 ✅ Password reset functionality implemented  

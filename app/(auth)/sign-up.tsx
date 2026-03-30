@@ -87,7 +87,7 @@ export default function SignUpScreen() {
                     <View style={styles.logoKnob} />
                   </View>
                 </View>
-                <Text style={styles.logoText}>Free2Hang</Text>
+                <Text style={styles.logoText}>Free to Hang</Text>
               </View>
 
               {/* Sign up form */}

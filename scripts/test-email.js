@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Email Testing Script for Free2Hang
+ * Email Testing Script for Free to Hang
  * 
  * This script helps test your email configuration directly.
  * Run with: node scripts/test-email.js
@@ -113,7 +113,7 @@ async function checkSupabaseConfig() {
 }
 
 async function main() {
-  console.log('🔧 Free2Hang Email Debugging Tool\n');
+  console.log('🔧 Free to Hang Email Debugging Tool\n');
   
   console.log('Choose what to test:');
   console.log('1. Test email delivery');
