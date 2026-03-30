@@ -117,14 +117,22 @@ Supabase Dashboard's:
 Add to `.env` / EAS secrets (Expo public vars are embedded at build time):
 
 ```
-EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<iOS OAuth client ID>.apps.googleusercontent.com
-EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<Android OAuth client ID>.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=<Web application OAuth client ID>.apps.googleusercontent.com
+```
+
+The in-app Google flow (`expo-auth-session` PKCE + `freetohang://oauthredirect`) **must** use the **Web application** client ID. Using the iOS or Android OAuth client ID there causes Google **Error 400: invalid_request** for `redirect_uri=freetohang://oauthredirect`, because only the Web client can register that redirect URI.
+
+Also create platform clients for Supabase token validation (same as Dashboard “Client IDs” list):
+
+```
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<optional; not used by app OAuth URL — Supabase config only>
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<optional; same>
 ```
 
 ### Google Cloud Console
 
-1. Create **OAuth client** types: **Web** (for Supabase callback), **iOS** (bundle ID `com.freetohang.app`), **Android** (package `com.freetohang.app` + SHA-1 fingerprints for debug and release).
-2. Under the **Web** application client, add **Authorized redirect URI**: `freetohang://oauthredirect` (must match the app’s `scheme` in `app.json` and the path used in code).
+1. Create **OAuth client** types: **Web** (for Supabase + this app’s OAuth request), **iOS** (bundle ID `com.freetohang.app`), **Android** (package `com.freetohang.app` + SHA-1 fingerprints for debug and release).
+2. Under the **Web** application client, add **Authorized redirect URI**: `freetohang://oauthredirect` (must match the app’s `scheme` in `app.json` and the path used in code — **exact string**).
 3. In **Supabase Dashboard → Authentication → Providers → Google**: enable Google, set Web client **Client ID** and **Client Secret**, and list **all** client IDs (Web, iOS, Android) in the Client IDs field—comma-separated, **Web client ID first** (see [Supabase Google docs](https://supabase.com/docs/guides/auth/social-login/auth-google?platform=react-native)).
 
 ### Same email, one user (Apple / Google / email OTP)

@@ -1,5 +1,4 @@
 import * as WebBrowser from 'expo-web-browser';
-import { Platform } from 'react-native';
 import {
   AccessTokenRequest,
   AuthRequest,
@@ -16,26 +15,20 @@ const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
 ];
 
-function getPlatformGoogleClientId(): string {
-  if (Platform.OS === 'ios') {
-    const id = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-    if (!id?.trim()) {
-      throw new Error(
-        'Google Sign-In is not configured: set EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID in your environment.'
-      );
-    }
-    return id.trim();
-  }
-  if (Platform.OS === 'android') {
-    const id = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-    if (!id?.trim()) {
-      throw new Error(
-        'Google Sign-In is not configured: set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in your environment.'
-      );
-    }
-    return id.trim();
-  }
-  throw new Error('Google Sign-In is only available on the iOS and Android apps.');
+/**
+ * PKCE + in-app browser flow must use a **Web application** OAuth client ID.
+ * That client is where Google allows registering `freetohang://oauthredirect`.
+ * iOS/Android OAuth client types do not accept this redirect → Error 400 invalid_request.
+ */
+function getGoogleWebClientIdForAuthSession(): string {
+  const web = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
+  if (web) return web;
+
+  throw new Error(
+    'Google Sign-In is not configured: set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to your Google Cloud ' +
+      '"Web application" OAuth client ID, and add authorized redirect URI exactly: freetohang://oauthredirect. ' +
+      '(Do not use the iOS/Android-only client ID for this flow.)'
+  );
 }
 
 /**
@@ -57,7 +50,7 @@ export type GoogleNativeAuthResult =
  * Native Google OAuth (PKCE code flow) → ID token for Supabase `signInWithIdToken`.
  */
 export async function signInWithGoogleNative(): Promise<GoogleNativeAuthResult> {
-  const clientId = getPlatformGoogleClientId();
+  const clientId = getGoogleWebClientIdForAuthSession();
   const redirectUri = getRedirectUri();
 
   const request = new AuthRequest({
