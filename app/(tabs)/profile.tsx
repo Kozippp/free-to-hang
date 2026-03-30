@@ -26,7 +26,6 @@ import {
   Eye, 
   Share, 
   UserX, 
-  Shield, 
   X,
   LogOut,
   Smartphone,
@@ -53,7 +52,6 @@ import {
   UserProfile, 
   AppSettings, 
   mockUserProfile, 
-  mockBlockedUsers, 
   defaultSettings 
 } from '@/constants/mockData';
 import { useAuth } from '@/contexts/AuthContext';
@@ -133,10 +131,6 @@ export default function ProfileScreen() {
     stopRealTimeUpdates
   } = useFriendsStore();
   
-  // Blocked users functionality not implemented yet
-  const blockedUsers: any[] = [];
-  const unblockUser = (userId: string) => {};
-  
   // Use real user data from hangStore, fallback to mock for missing fields
   const [userProfile, setUserProfile] = useState<UserProfile>({
     ...mockUserProfile,
@@ -146,7 +140,7 @@ export default function ProfileScreen() {
     bio: user.vibe || '', // Use vibe from sign up as bio
   });
   
-  // Local state - friends and blocked users come from useFriendsStore
+  // Local state - friends come from useFriendsStore
   const [allFriends, setAllFriends] = useState<Friend[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [pushPrefs, setPushPrefs] = useState<NotificationPreferencesState | null>(null);
@@ -267,7 +261,6 @@ export default function ProfileScreen() {
   const [showFounderFeedback, setShowFounderFeedback] = useState(false);
   const [legalDoc, setLegalDoc] = useState<null | 'privacy' | 'terms'>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showBlockedUsers, setShowBlockedUsers] = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -620,29 +613,6 @@ export default function ProfileScreen() {
     setShowUserProfile(true);
   };
 
-  const handleUnblockUser = async (userId: string) => {
-    Alert.alert(
-      'Unblock User',
-      'Are you sure you want to unblock this user?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Unblock', 
-          onPress: async () => {
-            try {
-              await unblockUser(userId);
-              // Refresh blocked users list
-              await loadAllRelationships();
-            } catch (error) {
-              console.error('Error unblocking user:', error);
-              Alert.alert('Error', 'Failed to unblock user');
-            }
-          }
-        }
-      ]
-    );
-  };
-
   const handleLogout = async () => {
     Alert.alert(
       'Log out',
@@ -969,11 +939,6 @@ export default function ProfileScreen() {
       </View>
     </TouchableOpacity>
   );
-
-  // Listen for blocked users changes
-  //useEffect(() => {
-  //  console.log('Profile: Blocked users state changed:', blockedUsers.length, blockedUsers);
-  //}, [blockedUsers]);
 
   return (
     <>
@@ -1492,17 +1457,6 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Blocked Users */}
-            <View style={styles.settingsSection}>
-              <TouchableOpacity 
-                style={styles.sectionHeader}
-                onPress={() => setShowBlockedUsers(true)}
-              >
-                <Shield size={20} color={Colors.light.text} />
-                <Text style={styles.sectionTitle}>Blocked Users ({blockedUsers.length})</Text>
-              </TouchableOpacity>
-            </View>
-            
             {/* Device Info */}
             <View style={styles.settingsSection}>
               <View style={styles.sectionHeader}>
@@ -1567,54 +1521,6 @@ export default function ProfileScreen() {
               </View>
             </View>
           </Modal>
-        </SafeAreaView>
-      </Modal>
-        
-      {/* Blocked Users Modal */}
-      <Modal
-        visible={showBlockedUsers}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Blocked Users</Text>
-            <TouchableOpacity onPress={() => setShowBlockedUsers(false)}>
-              <X size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.modalContent}>
-            {blockedUsers.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Shield size={48} color={Colors.light.secondaryText} />
-                <Text style={styles.emptyStateText}>No blocked users</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={blockedUsers}
-                renderItem={({ item }) => (
-                  <View style={styles.blockedUserCard}>
-                    <Image 
-                      source={{ uri: item.avatar_url || generateDefaultAvatar(item.name, item.id) }} 
-                      style={styles.friendAvatar} 
-                    />
-                    <View style={styles.friendDetails}>
-                      <Text style={styles.friendName}>{item.name}</Text>
-                      <Text style={styles.friendLastSeen}>@{item.username}</Text>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.unblockButton}
-                      onPress={() => handleUnblockUser(item.id)}
-                    >
-                      <Text style={styles.unblockButtonText}>Unblock</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                keyExtractor={(item) => item.id}
-              />
-            )}
-          </View>
         </SafeAreaView>
       </Modal>
 
@@ -2240,27 +2146,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  blockedUserCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: Colors.light.background,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.light.buttonBackground,
-  },
-  unblockButton: {
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  unblockButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'white',
-  },
   usernameIndicator: {
     marginTop: 8,
     marginBottom: 8,
