@@ -14,10 +14,8 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
-  RefreshControl,
-  ActivityIndicator
+  RefreshControl
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { 
   Settings, 
@@ -60,14 +58,6 @@ import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { uploadImage, deleteImage } from '@/lib/storage';
 import { formatFriendLastAvailable } from '@/utils/time';
 import useUnseenStore from '@/store/unseenStore';
-import {
-  DEFAULT_NOTIFICATION_PREFERENCES,
-  fetchNotificationPreferences,
-  localDateToTimeString,
-  patchNotificationPreferences,
-  timeStringToLocalDate,
-  type NotificationPreferencesState,
-} from '@/lib/notification-preferences-service';
 
 export default function ProfileScreen() {
   const { signOut, user: authUser } = useAuth();
@@ -105,12 +95,6 @@ export default function ProfileScreen() {
   // Local state - friends and blocked users come from useFriendsStore
   const [allFriends, setAllFriends] = useState<Friend[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
-  const [pushPrefs, setPushPrefs] = useState<NotificationPreferencesState | null>(null);
-  const [pushPrefsLoading, setPushPrefsLoading] = useState(false);
-  const [pushPrefsError, setPushPrefsError] = useState<string | null>(null);
-  const [pushPrefsSaving, setPushPrefsSaving] = useState(false);
-  const [quietStartPickerVisible, setQuietStartPickerVisible] = useState(false);
-  const [quietEndPickerVisible, setQuietEndPickerVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
   const [refreshing, setRefreshing] = useState(false);
   

@@ -207,18 +207,6 @@ router.delete('/:id', verifyToken, async (req, res) => {
   }
 });
 
-const NOTIFICATION_PREFERENCE_COLUMNS = new Set([
-  'push_enabled',
-  'plan_notifications',
-  'chat_notifications',
-  'friend_notifications',
-  'status_notifications',
-  'engagement_notifications',
-  'quiet_hours_enabled',
-  'quiet_hours_start',
-  'quiet_hours_end'
-]);
-
 router.get('/preferences', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -227,20 +215,9 @@ router.get('/preferences', verifyToken, async (req, res) => {
       .from('notification_preferences')
       .select('*')
       .eq('user_id', userId)
-      .maybeSingle();
+      .single();
 
     if (error) throw error;
-
-    if (!data) {
-      const { data: created, error: insertError } = await supabase
-        .from('notification_preferences')
-        .insert({ user_id: userId })
-        .select('*')
-        .single();
-
-      if (insertError) throw insertError;
-      return res.json({ preferences: created });
-    }
 
     res.json({ preferences: data });
   } catch (error) {
@@ -252,24 +229,14 @@ router.get('/preferences', verifyToken, async (req, res) => {
 router.patch('/preferences', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const updates = {};
-
-    for (const key of Object.keys(body)) {
-      if (NOTIFICATION_PREFERENCE_COLUMNS.has(key)) {
-        updates[key] = body[key];
-      }
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: 'No valid preference fields to update' });
-    }
-
-    updates.updated_at = new Date().toISOString();
+    const updates = req.body || {};
 
     const { data, error } = await supabase
       .from('notification_preferences')
-      .update(updates)
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
       .eq('user_id', userId)
       .select()
       .single();
