@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,6 +9,8 @@ import {
   ScrollView,
   Image,
   Platform,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -51,6 +53,8 @@ export interface HangOfflineSetupProps {
   onGoOnline: (activity: string, durationMinutes: number | null) => void;
 }
 
+const { height: windowHeight, width: windowWidth } = Dimensions.get('window');
+
 export default function HangOfflineSetup({
   userName,
   userAvatar,
@@ -61,9 +65,55 @@ export default function HangOfflineSetup({
   const [inputHeight, setInputHeight] = useState(60);
   const [selectedDuration, setSelectedDuration] = useState<number | 'tonight' | null>(null);
 
+  // Animation values for gradient
+  const animatedValue = useRef(new Animated.Value(0)).current;
+  const toggleGlow = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     setActivity(initialActivity.slice(0, MAX_ACTIVITY_LENGTH));
   }, [initialActivity]);
+
+  useEffect(() => {
+    // Gradient animation loop
+    const gradientAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(animatedValue, {
+          toValue: 1,
+          duration: 8000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(animatedValue, {
+          toValue: 0,
+          duration: 8000,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+
+    // Toggle glow pulse
+    const toggleAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(toggleGlow, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(toggleGlow, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+
+    gradientAnimation.start();
+    toggleAnimation.start();
+
+    return () => {
+      gradientAnimation.stop();
+      toggleAnimation.stop();
+    };
+  }, [animatedValue, toggleGlow]);
 
   const handleActivityChange = (text: string) => {
     setActivity(text.slice(0, MAX_ACTIVITY_LENGTH));
@@ -91,47 +141,72 @@ export default function HangOfflineSetup({
     });
   };
 
-  return (
-    <View style={styles.root}>
-        <LinearGradient
-          colors={[`${Colors.light.primary}14`, `${Colors.light.primary}06`, 'transparent']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={styles.heroGradient}
-        />
+  const gradientColors1 = animatedValue.interpolate({
+    inputRange: [0, 0.33, 0.66, 1],
+    outputRange: [
+      'rgba(173, 216, 255, 0.2)',  // blue
+      'rgba(255, 192, 203, 0.2)',  // pink
+      'rgba(216, 191, 216, 0.2)',  // lavender
+      'rgba(173, 216, 255, 0.2)'   // back to blue
+    ]
+  });
 
+  const gradientColors2 = animatedValue.interpolate({
+    inputRange: [0, 0.33, 0.66, 1],
+    outputRange: [
+      'rgba(255, 218, 185, 0.15)',  // peach
+      'rgba(216, 191, 216, 0.15)',  // lavender
+      'rgba(173, 216, 255, 0.15)',  // blue
+      'rgba(255, 192, 203, 0.15)'   // pink
+    ]
+  });
+
+  const toggleGlowOpacity = toggleGlow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 1]
+  });
+
+  const toggleGlowScale = toggleGlow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.05]
+  });
+
+  return (
+    <View style={[styles.root, { minHeight: windowHeight }]}>
+      {/* Absolute Animated Gradient Background */}
+      <Animated.View style={[styles.gradientBackground, { backgroundColor: gradientColors1 }]}>
+        <Animated.View style={[styles.gradientOverlay, { backgroundColor: gradientColors2 }]}>
+          <LinearGradient
+            colors={['transparent', 'rgba(255, 255, 255, 0.5)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradientOverlay}
+          />
+        </Animated.View>
+      </Animated.View>
+
+      <View style={styles.content}>
         <View style={styles.hero}>
-          <View style={styles.heroIconWrap}>
-            <Sparkles size={22} color={Colors.light.primary} strokeWidth={2} />
+          <View style={styles.heroHeader}>
+            <Image source={{ uri: userAvatar }} style={styles.avatar} />
+            <View style={styles.heroTextContent}>
+              <Text style={styles.heroEyebrow}>Free to hang</Text>
+              <Text style={styles.heroTitle}>Hey, {userName}</Text>
+            </View>
           </View>
-          <Text style={styles.heroEyebrow}>Hang</Text>
-          <Text style={styles.heroTitle}>Hey, {userName}</Text>
           <Text style={styles.heroSubtitle}>
-            Let friends see you&apos;re free and discover who&apos;s up for plans tonight — all in one
-            place.
+            Let friends see you're free and discover who's up for plans tonight.
           </Text>
         </View>
 
         <View style={styles.mainCard}>
-          <View style={styles.toggleSection}>
-            <View style={styles.toggleRow}>
-              <Image source={{ uri: userAvatar }} style={styles.avatar} />
-              <View style={styles.toggleCopy}>
-                <Text style={styles.toggleTitle}>Free to hang</Text>
-                <Text style={styles.toggleHint}>
-                  Turn on when you&apos;re ready — same as &quot;I&apos;m ready&quot; below.
-                </Text>
-              </View>
-              <StatusToggle isOn={false} onToggle={submit} />
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
           <View style={styles.formSection}>
-            <Text style={styles.sectionHeading}>What do you feel like doing?</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Sparkles size={20} color={Colors.light.primary} style={styles.sparkleIcon} />
+              <Text style={styles.sectionHeading}>What do you feel like doing?</Text>
+            </View>
             <Text style={styles.sectionSub}>
-              Optional — add a vibe so friends know what you&apos;re in the mood for.
+              Optional — let friends know your vibe for tonight.
             </Text>
 
             <View style={styles.inputWrap}>
@@ -162,6 +237,25 @@ export default function HangOfflineSetup({
               </Text>
             </View>
 
+            <Text style={styles.chipsLabel}>Quick suggestions</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.chipsRow}
+            >
+              {activities.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.chip}
+                  onPress={() => handleActivitySelect(item.name)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.chipText}>{item.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
             <Text style={styles.chipsLabel}>How long stay visible?</Text>
             <ScrollView
               horizontal
@@ -187,33 +281,31 @@ export default function HangOfflineSetup({
                 </TouchableOpacity>
               ))}
             </ScrollView>
-
-            <Text style={styles.chipsLabel}>Quick suggestions</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.chipsRow}
-            >
-              {activities.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.chip}
-                  onPress={() => handleActivitySelect(item.name)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.chipText}>{item.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <TouchableOpacity style={styles.cta} onPress={submit} activeOpacity={0.9}>
-              <Text style={styles.ctaText}>I&apos;m ready to hang</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
+        {/* Central Toggle Action */}
+        <View style={styles.toggleWrapper}>
+          <Text style={styles.toggleInstruction}>Ready to hang?</Text>
+          <Animated.View 
+            style={[
+              styles.toggleGlowContainer,
+              {
+                opacity: toggleGlowOpacity,
+                transform: [{ scale: toggleGlowScale }]
+              }
+            ]}
+          >
+            <View style={styles.toggleGlowEffect} />
+          </Animated.View>
+          <View style={styles.toggleComponentWrap}>
+            <StatusToggle isOn={false} onToggle={submit} size="large" />
+          </View>
+          <Text style={styles.toggleHint}>Slide to go online</Text>
+        </View>
+
         <View style={styles.bottomSpacer} />
+      </View>
     </View>
   );
 }
@@ -221,64 +313,76 @@ export default function HangOfflineSetup({
 const styles = StyleSheet.create({
   root: {
     width: '100%',
+    position: 'relative',
+    // Make sure we have no hidden overflows so the gradient can bleed if needed
   },
-  heroGradient: {
+  gradientBackground: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 220,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    top: -500, // Extend well beyond the safe area bounds
+    left: -500,
+    right: -500,
+    bottom: -500,
+  },
+  gradientOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
   hero: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 28,
-    alignItems: 'center',
+    paddingVertical: 16,
+    marginBottom: 16,
   },
-  heroIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: `${Colors.light.primary}12`,
+  heroHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: `${Colors.light.primary}20`,
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 3,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  heroTextContent: {
+    flex: 1,
+    justifyContent: 'center',
   },
   heroEyebrow: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: 1.2,
     color: Colors.light.primary,
     textTransform: 'uppercase',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   heroTitle: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.light.text,
-    textAlign: 'center',
     letterSpacing: -0.5,
   },
   heroSubtitle: {
-    marginTop: 10,
     fontSize: 16,
     lineHeight: 24,
     color: Colors.light.secondaryText,
-    textAlign: 'center',
-    maxWidth: 340,
-    fontWeight: '400',
+    fontWeight: '500',
   },
   mainCard: {
-    marginHorizontal: 20,
-    backgroundColor: Colors.light.background,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
     overflow: 'hidden',
+    marginBottom: 32,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -291,75 +395,44 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  toggleSection: {
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 18,
-    backgroundColor: Colors.light.cardBackground,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: Colors.light.background,
-  },
-  toggleCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  toggleTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.light.text,
-    letterSpacing: -0.2,
-  },
-  toggleHint: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Colors.light.secondaryText,
-    fontWeight: '400',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.light.border,
-    marginHorizontal: 20,
-  },
   formSection: {
     paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 24,
+    paddingTop: 24,
+    paddingBottom: 28,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  sparkleIcon: {
+    marginTop: -2,
   },
   sectionHeading: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.light.text,
     letterSpacing: -0.3,
   },
   sectionSub: {
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
     color: Colors.light.secondaryText,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   inputWrap: {
     position: 'relative',
+    marginBottom: 20,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: 'rgba(224, 224, 224, 0.8)',
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    backgroundColor: Colors.light.cardBackground,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     color: Colors.light.text,
     minHeight: 60,
   },
@@ -380,60 +453,90 @@ const styles = StyleSheet.create({
   },
   chipsLabel: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.light.secondaryText,
-    marginTop: 18,
-    marginBottom: 10,
+    marginTop: 8,
+    marginBottom: 12,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
   chipsRow: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
-    paddingBottom: 4,
-    gap: 8,
+    paddingBottom: 8,
+    gap: 10,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: Colors.light.buttonBackground,
-    marginRight: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: 'rgba(224, 224, 224, 0.6)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   chipSelected: {
     backgroundColor: Colors.light.primary,
     borderColor: Colors.light.primary,
   },
   chipText: {
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.light.text,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   chipTextSelected: {
     color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  cta: {
-    marginTop: 22,
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 17,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  ctaText: {
-    color: '#FFFFFF',
-    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: -0.2,
+  },
+  toggleWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    position: 'relative',
+  },
+  toggleInstruction: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.light.text,
+    marginBottom: 20,
+    letterSpacing: -0.5,
+  },
+  toggleGlowContainer: {
+    position: 'absolute',
+    top: 50,
+    alignSelf: 'center',
+    width: 140,
+    height: 80,
+    zIndex: 0,
+  },
+  toggleGlowEffect: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: Colors.light.primary,
+    borderRadius: 40,
+    opacity: 0.25,
+    filter: [{ blur: 20 }] as any, // Web/newer RN shadow fallback
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+  },
+  toggleComponentWrap: {
+    zIndex: 1,
+    transform: [{ scale: 1.2 }], // Make it nicely prominent
+    marginBottom: 24,
+  },
+  toggleHint: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.light.secondaryText,
+    letterSpacing: 0.2,
   },
   bottomSpacer: {
-    height: 32,
+    height: 60,
   },
 });
