@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Sparkles } from 'lucide-react-native';
 import StatusToggle from '@/components/StatusToggle';
 import { activities } from '@/constants/mockData';
 import Colors from '@/constants/colors';
@@ -53,7 +52,7 @@ export interface HangOfflineSetupProps {
   onGoOnline: (activity: string, durationMinutes: number | null) => void;
 }
 
-const { height: windowHeight, width: windowWidth } = Dimensions.get('window');
+const { height: windowHeight } = Dimensions.get('window');
 
 export default function HangOfflineSetup({
   userName,
@@ -96,12 +95,12 @@ export default function HangOfflineSetup({
         Animated.timing(toggleGlow, {
           toValue: 1,
           duration: 2000,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(toggleGlow, {
           toValue: 0,
           duration: 2000,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ])
     );
@@ -161,14 +160,14 @@ export default function HangOfflineSetup({
     ]
   });
 
-  const toggleGlowOpacity = toggleGlow.interpolate({
+  const togglePulseOpacity = toggleGlow.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.6, 1]
+    outputRange: [0.15, 0.4]
   });
 
   const toggleGlowScale = toggleGlow.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.05]
+    outputRange: [1, 1.08]
   });
 
   return (
@@ -186,48 +185,33 @@ export default function HangOfflineSetup({
       </Animated.View>
 
       <View style={styles.content}>
-        <View style={styles.hero}>
-          <View style={styles.heroHeader}>
-            <Image source={{ uri: userAvatar }} style={styles.avatar} />
-            <View style={styles.heroTextContent}>
-              <Text style={styles.heroEyebrow}>Free to hang</Text>
-              <Text style={styles.heroTitle}>Hey, {userName}</Text>
-            </View>
+        <View style={styles.heroCenter}>
+          <View style={styles.avatarWrapper}>
+            <Image source={{ uri: userAvatar }} style={styles.avatarLarge} />
           </View>
-          <Text style={styles.heroSubtitle}>
-            Let friends see you're free and discover who's up for plans tonight.
-          </Text>
-        </View>
 
-        {/* Central Toggle Action */}
-        <View style={styles.toggleWrapper}>
-          <Text style={styles.toggleInstruction}>Ready to hang?</Text>
-          <Animated.View 
-            style={[
-              styles.toggleGlowContainer,
-              {
-                opacity: toggleGlowOpacity,
-                transform: [{ scale: toggleGlowScale }]
-              }
-            ]}
-          >
-            <View style={styles.toggleGlowEffect} />
-          </Animated.View>
-          <View style={styles.toggleComponentWrap}>
+          <Text style={styles.heroTitle}>Ready to hang, {userName}?</Text>
+          <Text style={styles.heroSubtitle}>
+            Go online to see who's free tonight
+          </Text>
+
+          <View style={styles.toggleContainer}>
+            <Animated.View 
+              style={[
+                styles.pulseRing,
+                {
+                  transform: [{ scale: toggleGlowScale }],
+                  opacity: togglePulseOpacity
+                }
+              ]}
+            />
             <StatusToggle isOn={false} onToggle={submit} size="large" />
           </View>
-          <Text style={styles.toggleHint}>Slide to go online</Text>
         </View>
 
         <View style={styles.mainCard}>
           <View style={styles.formSection}>
-            <View style={styles.sectionHeaderRow}>
-              <Sparkles size={20} color={Colors.light.primary} style={styles.sparkleIcon} />
-              <Text style={styles.sectionHeading}>What do you feel like doing?</Text>
-            </View>
-            <Text style={styles.sectionSub}>
-              Optional — let friends know your vibe for tonight.
-            </Text>
+            <Text style={styles.sectionHeading}>What do you feel like doing?</Text>
 
             <View style={styles.inputWrap}>
               <TextInput
@@ -314,11 +298,10 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     position: 'relative',
-    // Make sure we have no hidden overflows so the gradient can bleed if needed
   },
   gradientBackground: {
     position: 'absolute',
-    top: -500, // Extend well beyond the safe area bounds
+    top: -500,
     left: -500,
     right: -500,
     bottom: -500,
@@ -331,50 +314,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
   },
-  hero: {
-    paddingVertical: 16,
-    marginBottom: 16,
-  },
-  heroHeader: {
-    flexDirection: 'row',
+  heroCenter: {
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 12,
+    paddingTop: 24,
+    paddingBottom: 32,
   },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  avatarWrapper: {
+    marginBottom: 20,
+  },
+  avatarLarge: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     borderWidth: 3,
     borderColor: 'white',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
-  },
-  heroTextContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  heroEyebrow: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    color: Colors.light.primary,
-    textTransform: 'uppercase',
-    marginBottom: 4,
+    shadowRadius: 12,
   },
   heroTitle: {
     fontSize: 28,
     fontWeight: '800',
     color: Colors.light.text,
     letterSpacing: -0.5,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   heroSubtitle: {
     fontSize: 16,
-    lineHeight: 24,
     color: Colors.light.secondaryText,
     fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  toggleContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    zIndex: 10,
+    paddingVertical: 10, // give space for the pulse ring
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 180, // larger than the 160px offline toggle
+    height: 80, // larger than the 60px height
+    borderRadius: 40,
+    backgroundColor: Colors.light.primary,
   },
   mainCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
@@ -397,33 +383,19 @@ const styles = StyleSheet.create({
   },
   formSection: {
     paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingTop: 28,
     paddingBottom: 28,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  sparkleIcon: {
-    marginTop: -2,
   },
   sectionHeading: {
     fontSize: 20,
     fontWeight: '700',
     color: Colors.light.text,
     letterSpacing: -0.3,
-  },
-  sectionSub: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: Colors.light.secondaryText,
     marginBottom: 20,
   },
   inputWrap: {
     position: 'relative',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   input: {
     borderWidth: 1,
@@ -455,7 +427,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: Colors.light.secondaryText,
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -463,7 +435,7 @@ const styles = StyleSheet.create({
   chipsRow: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
-    paddingBottom: 8,
+    paddingBottom: 12,
     gap: 10,
   },
   chip: {
@@ -491,50 +463,6 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: '#FFFFFF',
     fontWeight: '700',
-  },
-  toggleWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    position: 'relative',
-  },
-  toggleInstruction: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.light.text,
-    marginBottom: 20,
-    letterSpacing: -0.5,
-  },
-  toggleGlowContainer: {
-    position: 'absolute',
-    top: 50,
-    alignSelf: 'center',
-    width: 140,
-    height: 80,
-    zIndex: 0,
-  },
-  toggleGlowEffect: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.light.primary,
-    borderRadius: 40,
-    opacity: 0.25,
-    filter: [{ blur: 20 }] as any, // Web/newer RN shadow fallback
-    shadowColor: Colors.light.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-  },
-  toggleComponentWrap: {
-    zIndex: 1,
-    transform: [{ scale: 1.2 }], // Make it nicely prominent
-    marginBottom: 24,
-  },
-  toggleHint: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.light.secondaryText,
-    letterSpacing: 0.2,
   },
   bottomSpacer: {
     height: 60,
