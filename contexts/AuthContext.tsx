@@ -4,6 +4,10 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
 import { Platform, Alert } from 'react-native';
 import * as Linking from 'expo-linking';
+import {
+  clearPendingInviteRef,
+  getPendingInviteRef,
+} from '@/lib/pending-invite-ref';
 import usePlansStore from '@/store/plansStore';
 import useFriendsStore from '@/store/friendsStore';
 import useHangStore from '@/store/hangStore';
@@ -266,6 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboardingGroup = segments[0] === '(onboarding)';
     const inTabsGroup = segments[0] === '(tabs)';
+    const inInviteRoute = segments[0] === 'invite';
 
     if (__DEV__) {
       console.log('🧭 AuthContext navigation check:', { 
@@ -275,13 +280,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         inAuthGroup,
         inOnboardingGroup,
         inTabsGroup,
+        inInviteRoute,
         navigationReady,
         isCheckingOnboarding,
         initialSessionChecked
       });
     }
 
-    if (!user && !inAuthGroup && navigationReady) {
+    if (!user && !inAuthGroup && navigationReady && !inInviteRoute) {
       // User is not logged in and not in auth group
       console.log('🔄 Redirecting to sign-in (no user)');
       setHasCheckedOnboarding(false);
@@ -290,7 +296,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // User is logged in but in auth group - check onboarding status once
       console.log('🔍 Checking onboarding status from auth group');
       checkOnboardingStatus();
-    } else if (user && !inOnboardingGroup && !inAuthGroup && !hasCheckedOnboarding && !isCheckingOnboarding) {
+    } else if (
+      user &&
+      !inOnboardingGroup &&
+      !inAuthGroup &&
+      !inInviteRoute &&
+      !hasCheckedOnboarding &&
+      !isCheckingOnboarding
+    ) {
       // User is logged in and not in onboarding/auth - check if onboarding is completed once
       console.log('🔍 Checking onboarding status from main app');
       checkOnboardingStatus();
@@ -304,6 +317,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   }, [user, segments, loading, hasCheckedOnboarding, navigationReady, isCheckingOnboarding, initialSessionChecked]);
+
+  // After sign-in / onboarding, resume invite deep link from AsyncStorage
+  useEffect(() => {
+    if (!user?.id || !hasCheckedOnboarding || loading || !navigationReady) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const pending = await getPendingInviteRef();
+      if (!pending || cancelled) return;
+      await clearPendingInviteRef();
+      if (cancelled) return;
+      router.replace(`/invite/${encodeURIComponent(pending)}`);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, hasCheckedOnboarding, loading, navigationReady, router]);
 
   // Failsafe: Set a maximum loading time to prevent infinite loading
   useEffect(() => {

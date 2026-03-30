@@ -18,6 +18,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.freetohang.app",
       "buildNumber": "1",
+      "associatedDomains": [
+        "applinks:freetohang.com",
+        "applinks:www.freetohang.com"
+      ],
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to help you find nearby friends and suggest meeting places.",
         "NSCameraUsageDescription": "This app uses camera to take profile pictures.",
@@ -32,6 +36,25 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.freetohang.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "freetohang.com",
+              "pathPrefix": "/invite"
+            },
+            {
+              "scheme": "https",
+              "host": "www.freetohang.com",
+              "pathPrefix": "/invite"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",

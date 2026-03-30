@@ -255,4 +255,10 @@ MIT License - vaata LICENSE faili detailide jaoks.
 - Social availability sharing
 - Plan creation and management
 - Friend connections
-- Real-time updates 
+- Real-time updates
+
+## 🔗 Invite links & deep linking (handoff)
+
+Shared invite URLs use **`https://freetohang.com/invite/<username-or-user-id>`** and open the in-app profile modal when the app is installed and the user is signed in.
+
+**Full checklist for web + iOS Universal Links + Android App Links** (what to host on the domain, AASA, `assetlinks.json`, testing commands): see **[docs/INVITE_DEEP_LINKS.md](./docs/INVITE_DEEP_LINKS.md)** (English, written for a developer or agency).
