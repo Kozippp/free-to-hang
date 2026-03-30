@@ -246,9 +246,21 @@ export default function SignInScreen() {
               <View style={styles.termsContainer}>
                 <Text style={styles.termsText}>
                   By continuing, you agree to our{' '}
-                  <Text style={styles.termsLink}>Terms of Service</Text>
+                  <Text
+                    style={styles.termsLink}
+                    accessibilityRole="link"
+                    onPress={() => router.push('/(auth)/terms-of-service')}
+                  >
+                    Terms of Service
+                  </Text>
                   {' '}and{' '}
-                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                  <Text
+                    style={styles.termsLink}
+                    accessibilityRole="link"
+                    onPress={() => router.push('/(auth)/privacy-policy')}
+                  >
+                    Privacy Policy
+                  </Text>
                 </Text>
               </View>
             </View>

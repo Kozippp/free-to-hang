@@ -203,7 +203,23 @@ export default function EmailSignInScreen() {
           {/* Terms */}
           <View style={styles.termsContainer}>
             <Text style={styles.termsText}>
-              By continuing, you agree to receive emails from Free2Hang
+              By continuing, you agree to receive emails from Free2Hang and to our{' '}
+              <Text
+                style={styles.termsLink}
+                accessibilityRole="link"
+                onPress={() => router.push('/(auth)/terms-of-service')}
+              >
+                Terms of Service
+              </Text>
+              {' '}and{' '}
+              <Text
+                style={styles.termsLink}
+                accessibilityRole="link"
+                onPress={() => router.push('/(auth)/privacy-policy')}
+              >
+                Privacy Policy
+              </Text>
+              .
             </Text>
           </View>
         </KeyboardAvoidingView>
@@ -336,6 +352,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.secondaryText,
     textAlign: 'center',
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
   devButton: {
     position: 'absolute',
