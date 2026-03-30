@@ -234,10 +234,31 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
     }))
   });
 
+  const resolveParticipantUserId = (participant: Participant): string | null => {
+    if (participant.id === 'current') {
+      return authUser.id;
+    }
+    return participant.id || null;
+  };
+
+  const handleParticipantPress = (participant: Participant) => {
+    const userId = resolveParticipantUserId(participant);
+    if (!userId) return;
+    setSelectedUserId(userId);
+    setShowUserProfile(true);
+  };
+
   const renderAttendanceParticipant = (participant: Participant) => {
     const avatarUri = participant.avatar || DEFAULT_AVATAR_URI;
     return (
-      <View key={`${participant.id}-${participant.status}`} style={styles.participantRow}>
+      <TouchableOpacity
+        key={`${participant.id}-${participant.status}`}
+        style={styles.participantRow}
+        onPress={() => handleParticipantPress(participant)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`View profile, ${participant.id === 'current' ? 'You' : participant.name}`}
+      >
         <View style={styles.participantInfo}>
           <View style={styles.avatarContainer}>
             <Image source={{ uri: avatarUri }} style={styles.avatar} />
@@ -272,7 +293,7 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
             {participant.id === 'current' ? 'You' : participant.name}
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -462,7 +483,10 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
       <UserProfileModal
         visible={showUserProfile}
         userId={selectedUserId}
-        onClose={() => setShowUserProfile(false)}
+        onClose={() => {
+          setShowUserProfile(false);
+          setSelectedUserId(null);
+        }}
         onEditProfile={() => {
           onClose();
           router.push('/(tabs)/profile?edit=1');
