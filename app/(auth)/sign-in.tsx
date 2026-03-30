@@ -235,7 +235,14 @@ export default function SignInScreen() {
                   onPress={handleGoogleSignIn}
                   disabled={isLoading}
                 >
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  <View style={styles.buttonContent}>
+                    <Image
+                      source={require('@/assets/images/google_logo.png')}
+                      style={styles.googleIconImage}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  </View>
                 </TouchableOpacity>
                 
                             <TouchableOpacity 
@@ -448,6 +455,11 @@ const styles = StyleSheet.create({
   appleIconImage: {
     width: 20,
     height: 20,
+    marginRight: 8,
+  },
+  googleIconImage: {
+    width: 22,
+    height: 22,
     marginRight: 8,
   },
 }); 
