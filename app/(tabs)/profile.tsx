@@ -15,7 +15,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
@@ -38,10 +39,14 @@ import {
   EyeOff,
   ChevronRight,
   Check,
-  User
+  User,
+  FileText,
+  MessageSquare,
+  Mail,
 } from 'lucide-react-native';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
+import { LEGAL_URLS, FOUNDER_SUPPORT_EMAIL } from '@/constants/config';
 import { 
   Friend, 
   UserProfile, 
@@ -55,6 +60,7 @@ import useHangStore from '@/store/hangStore';
 import { supabase } from '@/lib/supabase';
 import AddFriendsModal from '@/components/friends/AddFriendsModal';
 import UserProfileModal from '@/components/UserProfileModal';
+import FounderFeedbackModal from '@/components/settings/FounderFeedbackModal';
 import useFriendsStore from '@/store/friendsStore';
 import { generateDefaultAvatar } from '@/constants/defaultImages';
 import { uploadImage, deleteImage } from '@/lib/storage';
@@ -256,6 +262,7 @@ export default function ProfileScreen() {
   
   // Modal states
   const [showSettings, setShowSettings] = useState(false);
+  const [showFounderFeedback, setShowFounderFeedback] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showBlockedUsers, setShowBlockedUsers] = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -923,6 +930,12 @@ export default function ProfileScreen() {
     }
   };
 
+  const openExternalUrl = (url: string) => {
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Could not open link', 'Please try again or open the page in your browser.');
+    });
+  };
+
   const renderRequestItem = ({ item }: { item: any }) => (
     <TouchableOpacity 
       style={styles.userItem}
@@ -1430,7 +1443,52 @@ export default function ProfileScreen() {
               ) : null}
             </View>
 
-            
+            {/* Legal & support */}
+            <View style={styles.settingsSection}>
+              <View style={styles.sectionHeader}>
+                <FileText size={20} color={Colors.light.text} />
+                <Text style={styles.sectionTitle}>Legal & support</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={() => openExternalUrl(LEGAL_URLS.privacy)}
+              >
+                <Text style={styles.legalRowText}>Privacy Policy</Text>
+                <ChevronRight size={20} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={() => openExternalUrl(LEGAL_URLS.terms)}
+              >
+                <Text style={styles.legalRowText}>Terms of Use</Text>
+                <ChevronRight size={20} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={() =>
+                  openExternalUrl(
+                    `mailto:${FOUNDER_SUPPORT_EMAIL}?subject=${encodeURIComponent('Free to Hang — support')}`
+                  )
+                }
+              >
+                <Mail size={18} color={Colors.light.primary} style={{ marginRight: 10 }} />
+                <Text style={styles.legalRowText}>Email {FOUNDER_SUPPORT_EMAIL}</Text>
+                <ChevronRight size={20} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={() => setShowFounderFeedback(true)}
+              >
+                <MessageSquare size={18} color={Colors.light.primary} style={{ marginRight: 10 }} />
+                <Text style={styles.legalRowText}>Give feedback to founder</Text>
+                <ChevronRight size={20} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+            </View>
+
             {/* Blocked Users */}
             <View style={styles.settingsSection}>
               <TouchableOpacity 
@@ -1556,6 +1614,12 @@ export default function ProfileScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      <FounderFeedbackModal
+        visible={showFounderFeedback}
+        onClose={() => setShowFounderFeedback(false)}
+        userEmailSnapshot={userProfile.email || authUser?.email || null}
+      />
     </>
   );
 }
@@ -2128,6 +2192,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.primary,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.buttonBackground,
+  },
+  legalRowText: {
+    flex: 1,
+    fontSize: 16,
+    color: Colors.light.text,
   },
   deviceInfo: {
     paddingLeft: 28,
