@@ -199,6 +199,26 @@ export default function HangOfflineSetup({
           </Text>
         </View>
 
+        {/* Central Toggle Action */}
+        <View style={styles.toggleWrapper}>
+          <Text style={styles.toggleInstruction}>Ready to hang?</Text>
+          <Animated.View 
+            style={[
+              styles.toggleGlowContainer,
+              {
+                opacity: toggleGlowOpacity,
+                transform: [{ scale: toggleGlowScale }]
+              }
+            ]}
+          >
+            <View style={styles.toggleGlowEffect} />
+          </Animated.View>
+          <View style={styles.toggleComponentWrap}>
+            <StatusToggle isOn={false} onToggle={submit} size="large" />
+          </View>
+          <Text style={styles.toggleHint}>Slide to go online</Text>
+        </View>
+
         <View style={styles.mainCard}>
           <View style={styles.formSection}>
             <View style={styles.sectionHeaderRow}>
@@ -282,26 +302,6 @@ export default function HangOfflineSetup({
               ))}
             </ScrollView>
           </View>
-        </View>
-
-        {/* Central Toggle Action */}
-        <View style={styles.toggleWrapper}>
-          <Text style={styles.toggleInstruction}>Ready to hang?</Text>
-          <Animated.View 
-            style={[
-              styles.toggleGlowContainer,
-              {
-                opacity: toggleGlowOpacity,
-                transform: [{ scale: toggleGlowScale }]
-              }
-            ]}
-          >
-            <View style={styles.toggleGlowEffect} />
-          </Animated.View>
-          <View style={styles.toggleComponentWrap}>
-            <StatusToggle isOn={false} onToggle={submit} size="large" />
-          </View>
-          <Text style={styles.toggleHint}>Slide to go online</Text>
         </View>
 
         <View style={styles.bottomSpacer} />
