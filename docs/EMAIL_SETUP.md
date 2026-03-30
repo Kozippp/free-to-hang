@@ -117,22 +117,20 @@ Supabase Dashboard's:
 Add to `.env` / EAS secrets (Expo public vars are embedded at build time):
 
 ```
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=<Web application OAuth client ID>.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<iOS OAuth client ID>.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<Android OAuth client ID>.apps.googleusercontent.com
 ```
 
-The in-app Google flow (`expo-auth-session` PKCE + `freetohang://oauthredirect`) **must** use the **Web application** client ID. Using the iOS or Android OAuth client ID there causes Google **Error 400: invalid_request** for `redirect_uri=freetohang://oauthredirect`, because only the Web client can register that redirect URI.
+Use the **Client ID from the iOS-type and Android-type credentials** in Google Cloud—not the Web “Supabase” client ID. Those are separate IDs.
 
-Also create platform clients for Supabase token validation (same as Dashboard “Client IDs” list):
+The app uses **iOS** and **Android** OAuth client types (not the Web client) for the in-browser PKCE flow. Google’s **Web application** clients now reject custom scheme redirects such as `freetohang://oauthredirect` (“must end with a public top-level domain”), so the app uses Google’s native redirect pattern `com.googleusercontent.apps.<client-prefix>:/oauth2redirect/google` instead. `app.config.js` registers the matching URL schemes from your client IDs; run **`npx expo prebuild --clean`** or a fresh **EAS/dev build** after changing these values.
 
-```
-EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<optional; not used by app OAuth URL — Supabase config only>
-EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<optional; same>
-```
+Supabase still needs the **Web** client for **Client ID + Client Secret** in the dashboard; only the mobile OAuth request uses the platform client IDs above.
 
 ### Google Cloud Console
 
-1. Create **OAuth client** types: **Web** (for Supabase + this app’s OAuth request), **iOS** (bundle ID `com.freetohang.app`), **Android** (package `com.freetohang.app` + SHA-1 fingerprints for debug and release).
-2. Under the **Web** application client, add **Authorized redirect URI**: `freetohang://oauthredirect` (must match the app’s `scheme` in `app.json` and the path used in code — **exact string**).
+1. Create **OAuth client** types: **Web** (Supabase: keep `https://<project>.supabase.co/auth/v1/callback` as an authorized redirect URI only), **iOS** (bundle ID `com.freetohang.app`), **Android** (package `com.freetohang.app` + SHA-1 for debug and release).
+2. Do **not** rely on adding `freetohang://…` to the Web client if Google’s console rejects it; the app no longer uses that redirect.
 3. In **Supabase Dashboard → Authentication → Providers → Google**: enable Google, set Web client **Client ID** and **Client Secret**, and list **all** client IDs (Web, iOS, Android) in the Client IDs field—comma-separated, **Web client ID first** (see [Supabase Google docs](https://supabase.com/docs/guides/auth/social-login/auth-google?platform=react-native)).
 
 ### Same email, one user (Apple / Google / email OTP)
