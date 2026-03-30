@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto';
+
 const NONCE_CHARSET =
   '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
 
@@ -21,4 +23,18 @@ export async function createAppleAuthNonce(byteLength = 32): Promise<string> {
     result += NONCE_CHARSET.charAt(bytes[i]! % NONCE_CHARSET.length);
   }
   return result;
+}
+
+/**
+ * SHA-256 hex digest of `rawNonce` (UTF-8). Pass this to `AppleAuthentication.signInAsync({ nonce })`.
+ * Pass the same `rawNonce` (not the hash) to `supabase.auth.signInWithIdToken({ nonce })` so GoTrue
+ * can match `hex(sha256(raw))` to the `nonce` claim in Apple's id_token (same as Supabase Flutter example).
+ */
+export async function hashNonceForAppleNativeRequest(rawNonce: string): Promise<string> {
+  const hex = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    rawNonce,
+    { encoding: Crypto.CryptoEncoding.HEX }
+  );
+  return hex.toLowerCase();
 }

@@ -6,7 +6,10 @@ import { Platform, Alert } from 'react-native';
 import * as Linking from 'expo-linking';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import type { AppleAuthenticationCredential } from 'expo-apple-authentication';
-import { createAppleAuthNonce } from '@/lib/apple-auth';
+import {
+  createAppleAuthNonce,
+  hashNonceForAppleNativeRequest,
+} from '@/lib/apple-auth';
 import { signInWithGoogleNative } from '@/lib/google-native-auth';
 import {
   clearPendingInviteRef,
@@ -661,7 +664,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Apple sign-in is not available on this device.');
     }
 
-    const nonce = await createAppleAuthNonce();
+    const rawNonce = await createAppleAuthNonce();
+    const nonceForAppleRequest = await hashNonceForAppleNativeRequest(rawNonce);
 
     let credential: AppleAuthenticationCredential;
     try {
@@ -670,7 +674,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
-        nonce,
+        nonce: nonceForAppleRequest,
       });
     } catch (e: unknown) {
       const code =
@@ -690,7 +694,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'apple',
       token: credential.identityToken,
-      nonce,
+      nonce: rawNonce,
     });
 
     if (error) {
