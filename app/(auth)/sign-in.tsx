@@ -126,34 +126,6 @@ export default function SignInScreen() {
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'Google sign-in failed. Please try again.';
-      // #region agent log
-      const er = error as { message?: string; code?: string; status?: number; name?: string };
-      const catchPayload = {
-        sessionId: 'cb8cd0',
-        location: 'sign-in.tsx:handleGoogleSignIn',
-        message: 'google_sign_in_catch',
-        data: {
-          code: er.code ?? null,
-          status: er.status ?? null,
-          name: er.name ?? null,
-          msgSnippet: (er.message || message || '').slice(0, 160),
-        },
-        timestamp: Date.now(),
-        runId: 'pre-fix',
-        hypothesisId: 'H5',
-      };
-      if (__DEV__) {
-        console.log('[FTH-debug]', JSON.stringify(catchPayload));
-      }
-      fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'cb8cd0',
-        },
-        body: JSON.stringify(catchPayload),
-      }).catch(() => {});
-      // #endregion
       Alert.alert('Sign In Failed', message);
     } finally {
       setIsLoading(false);

@@ -678,21 +678,6 @@ const useChatStore = create<ChatState>((set, get) => ({
     const state = get();
     const existingChannel = state.subscriptions[planId];
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
-      body: JSON.stringify({
-        sessionId: '0c6a10',
-        hypothesisId: 'H4',
-        location: 'chatStore.ts:subscribeToChat:entry',
-        message: 'subscribeToChat called',
-        data: { planId, existingState: existingChannel?.state ?? null },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
     if (existingChannel) {
       if (existingChannel.state === 'joined') {
         console.log(`✅ Already subscribed: ${planId}`);

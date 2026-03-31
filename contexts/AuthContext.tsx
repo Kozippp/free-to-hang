@@ -734,33 +734,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // #region agent log
-    const emitGoogleDebug = (payload: Record<string, unknown>) => {
-      if (__DEV__) {
-        console.log('[FTH-debug]', JSON.stringify(payload));
-      }
-      fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'cb8cd0',
-        },
-        body: JSON.stringify({ sessionId: 'cb8cd0', ...payload }),
-      }).catch(() => {});
-    };
-    emitGoogleDebug({
-      location: 'AuthContext.tsx:signInWithGoogle',
-      message: 'google_native_completed',
-      data: {
-        hasIdToken: !!googleResult.idToken,
-        hasAccessToken: !!googleResult.accessToken,
-      },
-      timestamp: Date.now(),
-      runId: 'pre-fix',
-      hypothesisId: 'H2',
-    });
-    // #endregion
-
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: googleResult.idToken,
@@ -769,56 +742,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : {}),
     });
 
-    // #region agent log
-    if (error) {
-      const ea = error as {
-        message?: string;
-        code?: string;
-        status?: number;
-        name?: string;
-      };
-      emitGoogleDebug({
-        location: 'AuthContext.tsx:signInWithGoogle',
-        message: 'signInWithIdToken_error',
-        data: {
-          code: ea.code ?? null,
-          status: ea.status ?? null,
-          name: ea.name ?? null,
-          msgSnippet: (ea.message || '').slice(0, 160),
-        },
-        timestamp: Date.now(),
-        runId: 'pre-fix',
-        hypothesisId: 'H1',
-      });
-    } else {
-      emitGoogleDebug({
-        location: 'AuthContext.tsx:signInWithGoogle',
-        message: 'signInWithIdToken_ok',
-        data: {
-          hasUser: !!data?.user,
-          hasSession: !!data?.session,
-        },
-        timestamp: Date.now(),
-        runId: 'pre-fix',
-        hypothesisId: 'H4',
-      });
-    }
-    // #endregion
-
     if (error) {
       throw error;
     }
-
-    // #region agent log
-    emitGoogleDebug({
-      location: 'AuthContext.tsx:signInWithGoogle',
-      message: 'before_checkOnboardingStatus',
-      data: { willCallOnboarding: !!data.user },
-      timestamp: Date.now(),
-      runId: 'pre-fix',
-      hypothesisId: 'H3',
-    });
-    // #endregion
 
     if (data.user) {
       await checkOnboardingStatus(data.user);

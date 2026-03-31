@@ -1452,28 +1452,6 @@ const usePlansStore = create<PlansState>((set, get) => ({
   checkAndRestartSubscriptions: async (userId: string, options?: { force?: boolean }) => {
     console.log('🔍 Checking plans real-time subscription status...');
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
-      body: JSON.stringify({
-        sessionId: '0c6a10',
-        hypothesisId: 'H1',
-        location: 'plansStore.ts:checkAndRestartSubscriptions:entry',
-        message: 'checkAndRestartSubscriptions branch inputs',
-        data: {
-          force: !!options?.force,
-          isSubscribed: get().subscriptionStatus.isSubscribed,
-          hasUpdates: !!updatesChannel,
-          hasParticipants: !!participantsChannel,
-          hasPollVotes: !!pollVotesChannel,
-          hasPlanPolls: !!planPollsChannel,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
     const auxPresent =
       !!participantsChannel && !!pollVotesChannel && !!planPollsChannel;
 
@@ -1679,20 +1657,6 @@ function createChannelWithRetry(
             updatesChannel !== channel
           ) {
             console.log(`⏭️ Skipping stale ${channelName} retry (ref replaced)`);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
-              body: JSON.stringify({
-                sessionId: '0c6a10',
-                hypothesisId: 'H2',
-                location: 'plansStore.ts:createChannelWithRetry:staleRetrySkipped',
-                message: 'Skipped stale plan_updates delayed checkAndRestart',
-                data: { channelName },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            // #endregion
             return;
           }
           console.log(`♻️ Attempting to restart ${channelName}...`);

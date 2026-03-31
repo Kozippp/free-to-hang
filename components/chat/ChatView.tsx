@@ -139,40 +139,11 @@ export default function ChatView({
 
     if (!isChatTabActive) {
       console.log(`📴 Chat tab hidden — unsubscribing realtime for plan ${plan.id}`);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
-        body: JSON.stringify({
-          sessionId: '0c6a10',
-          hypothesisId: 'H3',
-          location: 'ChatView.tsx:chatEffect:tabHidden',
-          message: 'Chat tab inactive; unsubscribing',
-          data: { planId: plan.id },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       unsubscribeFromChat(plan.id);
       return;
     }
 
     console.log(`🔄 Loading chat for plan ${plan.id} as user ${currentUserId}`);
-
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
-      body: JSON.stringify({
-        sessionId: '0c6a10',
-        hypothesisId: 'H3',
-        location: 'ChatView.tsx:chatEffect:tabActive',
-        message: 'Chat tab active; subscribe + fetch',
-        data: { planId: plan.id },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
 
     // Fetch initial messages
     fetchMessages(plan.id);
