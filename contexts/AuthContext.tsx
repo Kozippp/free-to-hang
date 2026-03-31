@@ -143,12 +143,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (event === 'SIGNED_OUT') {
           console.log('👋 User signed out');
-          
-          // Extra safety: deactivate push token on sign out event
-          // Run in background without blocking state updates
-          deactivatePushToken().catch((error) => {
-            console.error('⚠️ Failed to deactivate push token on SIGNED_OUT event:', error);
-          });
+          // Note: Push token already deactivated in signOut() function
+          // No need to deactivate again here as user is already signed out
           
           setHasCheckedOnboarding(false);
           setIsCheckingOnboarding(false);
