@@ -12,11 +12,13 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, Image as ImageIcon, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { uploadImage, deleteImage } from '@/lib/storage';
 import Colors from '@/constants/colors';
 
 export default function ProfilePhotoScreen() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const router = useRouter();
   const { name, username, vibe } = useLocalSearchParams<{ 
     name: string; 
@@ -153,6 +155,29 @@ export default function ProfilePhotoScreen() {
         return;
       }
 
+      let avatarUrlForDb: string | null = null;
+      let uploadedStoragePath: string | null = null;
+
+      if (profilePhoto) {
+        setUploadProgress(0);
+        try {
+          const uploadResult = await uploadImage(
+            profilePhoto,
+            'avatars',
+            'profiles',
+            (p) => setUploadProgress(p)
+          );
+          uploadedStoragePath = uploadResult.path;
+          avatarUrlForDb = `${uploadResult.url}?v=${Date.now()}`;
+        } catch (uploadErr) {
+          console.error('Onboarding avatar upload error:', uploadErr);
+          Alert.alert('Upload Error', 'Failed to upload image. Please try again.');
+          return;
+        } finally {
+          setUploadProgress(null);
+        }
+      }
+
       // Prepare data with guaranteed required fields from onboarding
       const profileData = {
         id: authUser.id,
@@ -160,7 +185,7 @@ export default function ProfilePhotoScreen() {
         name: name, // From onboarding step-1
         username: username, // From onboarding step-2 (validated and reserved)
         vibe: vibe || null, // From onboarding step-3 (can be empty)
-        avatar_url: profilePhoto || null,
+        avatar_url: avatarUrlForDb,
         onboarding_completed: true,
         updated_at: new Date().toISOString()
       };
@@ -176,6 +201,14 @@ export default function ProfilePhotoScreen() {
 
       if (error) {
         console.error('Failed to save profile:', error);
+
+        if (uploadedStoragePath) {
+          try {
+            await deleteImage(uploadedStoragePath);
+          } catch (delErr) {
+            console.error('Failed to remove avatar after profile save error:', delErr);
+          }
+        }
         
         // Handle specific error cases
         if (error.message.includes('duplicate key value violates unique constraint "users_username_key"')) {
@@ -279,21 +312,30 @@ export default function ProfilePhotoScreen() {
 
           {/* Continue button - only show when photo is selected */}
           {profilePhoto && (
-            <TouchableOpacity 
-              style={[
-                styles.continueButton,
-                isLoading && styles.disabledButton
-              ]}
-              onPress={handleContinue}
-              disabled={isLoading}
-            >
-              <Text style={[
-                styles.continueButtonText,
-                isLoading && styles.disabledButtonText
-              ]}>
-                {isLoading ? 'Finishing up...' : 'Sign up'}
-              </Text>
-            </TouchableOpacity>
+            <>
+              {uploadProgress !== null && (
+                <Text style={styles.uploadProgressText}>Uploading… {uploadProgress}%</Text>
+              )}
+              <TouchableOpacity 
+                style={[
+                  styles.continueButton,
+                  isLoading && styles.disabledButton
+                ]}
+                onPress={handleContinue}
+                disabled={isLoading}
+              >
+                <Text style={[
+                  styles.continueButtonText,
+                  isLoading && styles.disabledButtonText
+                ]}>
+                  {isLoading
+                    ? uploadProgress !== null
+                      ? 'Uploading…'
+                      : 'Finishing up…'
+                    : 'Sign up'}
+                </Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </SafeAreaView>
@@ -403,6 +445,12 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 60,
     paddingHorizontal: 16,
+  },
+  uploadProgressText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
+    marginBottom: 12,
+    alignSelf: 'center',
   },
   continueButton: {
     backgroundColor: Colors.light.primary,
