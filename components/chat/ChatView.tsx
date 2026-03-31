@@ -23,13 +23,21 @@ import useUnseenStore from '@/store/unseenStore';
 interface ChatViewProps {
   plan: Plan;
   currentUserId?: string;
+  /** When false, realtime is torn down. Use when chat stays mounted off-screen (e.g. plan detail swipe tabs). Default true. */
+  isChatTabActive?: boolean;
   disableKeyboardAvoidance?: boolean;
   onAvatarPress?: (userId: string) => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance = false, onAvatarPress }: ChatViewProps) {
+export default function ChatView({
+  plan,
+  currentUserId,
+  isChatTabActive = true,
+  disableKeyboardAvoidance = false,
+  onAvatarPress,
+}: ChatViewProps) {
   const {
     messages,
     markMessagesAsRead,
@@ -120,7 +128,7 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
   const currentUserName = currentUser?.name || 'You';
   const currentUserAvatar = currentUser?.avatar || '';
 
-  // Fetch messages and subscribe to real-time updates
+  // Fetch messages and subscribe to real-time updates (re-subscribe when tab becomes visible again)
   useEffect(() => {
     if (!isAuthenticated || !currentUserId || currentUserId === 'current') {
       console.log('⏳ Waiting for authentication and valid user ID before loading chat...');
@@ -129,7 +137,42 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
       return;
     }
 
+    if (!isChatTabActive) {
+      console.log(`📴 Chat tab hidden — unsubscribing realtime for plan ${plan.id}`);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
+        body: JSON.stringify({
+          sessionId: '0c6a10',
+          hypothesisId: 'H3',
+          location: 'ChatView.tsx:chatEffect:tabHidden',
+          message: 'Chat tab inactive; unsubscribing',
+          data: { planId: plan.id },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      unsubscribeFromChat(plan.id);
+      return;
+    }
+
     console.log(`🔄 Loading chat for plan ${plan.id} as user ${currentUserId}`);
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
+      body: JSON.stringify({
+        sessionId: '0c6a10',
+        hypothesisId: 'H3',
+        location: 'ChatView.tsx:chatEffect:tabActive',
+        message: 'Chat tab active; subscribe + fetch',
+        data: { planId: plan.id },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
 
     // Fetch initial messages
     fetchMessages(plan.id);
@@ -140,12 +183,20 @@ export default function ChatView({ plan, currentUserId, disableKeyboardAvoidance
     // Subscribe to real-time updates
     subscribeToChat(plan.id);
 
-    // Cleanup: unsubscribe when component unmounts
     return () => {
       console.log(`🔌 Cleanup for chat ${plan.id}`);
-      unsubscribeFromChat(plan.id, { preserveDesired: false });
+      unsubscribeFromChat(plan.id);
     };
-  }, [plan.id, currentUserId, isAuthenticated, fetchMessages, fetchReadReceipts, subscribeToChat, unsubscribeFromChat]);
+  }, [
+    plan.id,
+    currentUserId,
+    isAuthenticated,
+    isChatTabActive,
+    fetchMessages,
+    fetchReadReceipts,
+    subscribeToChat,
+    unsubscribeFromChat,
+  ]);
 
   useEffect(() => {
     // Mark messages as read when chat is opened and when messages are loaded
