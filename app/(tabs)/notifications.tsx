@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   SectionList,
   RefreshControl,
@@ -6,8 +6,11 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Alert
+  Alert,
+  Platform
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Bell } from 'lucide-react-native';
 import useNotificationsStore, { NotificationSender } from '@/store/notificationsStore';
@@ -22,6 +25,10 @@ import UserProfileModal from '@/components/UserProfileModal';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { API_CONFIG } from '@/constants/config';
+
+const LEFT_EDGE_SWIPE_WIDTH = 28;
+const EDGE_SWIPE_MIN_TRANSLATION = 56;
+const EDGE_SWIPE_MIN_VELOCITY = 380;
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -43,6 +50,27 @@ export default function NotificationsScreen() {
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+
+  const navigateToPlans = useCallback(() => {
+    router.push('/plans');
+  }, [router]);
+
+  const leftEdgeBackGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX(12)
+        .failOffsetY([-18, 18])
+        .onEnd((e) => {
+          'worklet';
+          if (
+            e.translationX > EDGE_SWIPE_MIN_TRANSLATION ||
+            e.velocityX > EDGE_SWIPE_MIN_VELOCITY
+          ) {
+            runOnJS(navigateToPlans)();
+          }
+        }),
+    [navigateToPlans]
+  );
 
   useEffect(() => {
     if (user?.id) {
@@ -193,6 +221,11 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
+      {Platform.OS !== 'web' && (
+        <GestureDetector gesture={leftEdgeBackGesture}>
+          <View style={styles.leftEdgeHitZone} accessible={false} importantForAccessibility="no" />
+        </GestureDetector>
+      )}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Notifications</Text>
         {/* Only show Mark all read if there are unread items */}
@@ -251,6 +284,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff'
+  },
+  leftEdgeHitZone: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: LEFT_EDGE_SWIPE_WIDTH,
+    zIndex: 10
   },
   header: {
     flexDirection: 'row',
