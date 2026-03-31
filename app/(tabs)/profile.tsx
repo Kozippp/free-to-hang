@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -45,6 +45,13 @@ import {
   Mail,
 } from 'lucide-react-native';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+  ScrollView as GestureScrollView,
+} from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
 import { MAX_PROFILE_NAME_LENGTH } from '@/constants/limits';
 import { FOUNDER_SUPPORT_EMAIL } from '@/constants/config';
@@ -296,6 +303,24 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (showSettings) setSettingsSubScreen('main');
   }, [showSettings]);
+
+  const goBackFromNotificationsSettings = useCallback(() => {
+    setSettingsSubScreen('main');
+  }, []);
+
+  const notificationsSettingsBackSwipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(settingsSubScreen === 'notifications')
+        .activeOffsetX(24)
+        .failOffsetY([-28, 28])
+        .onEnd((e) => {
+          if (e.translationX > 70) {
+            runOnJS(goBackFromNotificationsSettings)();
+          }
+        }),
+    [settingsSubScreen, goBackFromNotificationsSettings]
+  );
   
   // Edit profile states
   const [editUsername, setEditUsername] = useState('');
@@ -1274,6 +1299,7 @@ export default function ProfileScreen() {
           setShowFounderFeedback(false);
         }}
       >
+        <GestureHandlerRootView style={styles.settingsModalGestureRoot}>
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.settingsModalHeader}>
             <View style={styles.settingsModalHeaderSide}>
@@ -1307,7 +1333,8 @@ export default function ProfileScreen() {
             </View>
           </View>
           
-          <ScrollView style={styles.modalContent}>
+          <GestureDetector gesture={notificationsSettingsBackSwipe}>
+            <GestureScrollView style={styles.modalContent}>
             {settingsSubScreen === 'main' ? (
               <>
                 <View style={styles.settingsSection}>
@@ -1536,7 +1563,8 @@ export default function ProfileScreen() {
                 </View>
               </>
             )}
-          </ScrollView>
+            </GestureScrollView>
+          </GestureDetector>
 
           <Modal
             visible={Platform.OS === 'ios' && iosQuietWhich !== null && !!iosQuietDraft}
@@ -1587,6 +1615,7 @@ export default function ProfileScreen() {
             userEmailSnapshot={userProfile.email || authUser?.email || null}
           />
         </SafeAreaView>
+        </GestureHandlerRootView>
       </Modal>
 
       <LegalDocumentModal
@@ -1768,6 +1797,9 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  settingsModalGestureRoot: {
+    flex: 1,
   },
   modalHeader: {
     flexDirection: 'row',
