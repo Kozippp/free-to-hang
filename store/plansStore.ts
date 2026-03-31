@@ -132,6 +132,47 @@ const transformPlanForStore = (plan: any, currentUserId: string): Plan => {
   };
 };
 
+/** Poll options from API include `voters: { id, name, avatar }[]` (not in minimal PollOption type). */
+const collectPollVoterAvatarTargets = (plan: Plan): { userId: string; avatarUrl: string }[] => {
+  const out: { userId: string; avatarUrl: string }[] = [];
+  const seen = new Set<string>();
+  for (const poll of plan.polls ?? []) {
+    const rawOptions = (poll as { options?: unknown }).options;
+    if (!Array.isArray(rawOptions)) continue;
+    for (const opt of rawOptions as { voters?: unknown }[]) {
+      const voters = opt?.voters;
+      if (!Array.isArray(voters)) continue;
+      for (const v of voters as { id?: string; avatar?: string | null }[]) {
+        const id = v?.id;
+        const url = v?.avatar;
+        if (!id || typeof url !== 'string' || !url.trim()) continue;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push({ userId: id, avatarUrl: url });
+      }
+    }
+  }
+  return out;
+};
+
+const mergeAvatarPrefetchTargets = (
+  targets: { userId: string; avatarUrl?: string | null }[]
+): { userId: string; avatarUrl: string }[] => {
+  const map = new Map<string, { userId: string; avatarUrl: string }>();
+  for (const t of targets) {
+    if (!t.userId || typeof t.avatarUrl !== 'string' || !t.avatarUrl.trim()) continue;
+    map.set(t.userId, { userId: t.userId, avatarUrl: t.avatarUrl });
+  }
+  return Array.from(map.values());
+};
+
+const buildPlanAvatarPrefetchTargets = (plan: Plan): { userId: string; avatarUrl: string }[] =>
+  mergeAvatarPrefetchTargets([
+    ...plan.participants.map((p) => ({ userId: p.id, avatarUrl: p.avatar })),
+    ...(plan.creator ? [{ userId: plan.creator.id, avatarUrl: plan.creator.avatar }] : []),
+    ...collectPollVoterAvatarTargets(plan),
+  ]);
+
 // Helper function to ensure all plans have required fields
 const ensurePlanDefaults = (plan: any): Plan => {
   return {
@@ -337,29 +378,29 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const currentUserId = userId || get().currentUserId || 'unknown';
       const transformedPlan = transformPlanForStore(plan, currentUserId);
 
-      // Update plans object
-      set(state => ({
-        plans: {
-          ...state.plans,
-          [planId]: transformedPlan
-        }
-      }));
+      // Smart diff: Only update store if data has actually changed
+      const existingPlan = get().plans[planId];
+      const hasChanged = !existingPlan || JSON.stringify(existingPlan) !== JSON.stringify(transformedPlan);
 
-      // Recalculate computed arrays
-      get().recalculatePlanArrays();
+      if (hasChanged) {
+        console.log('📝 Plan data changed, updating store:', planId);
+        // Update plans object
+        set(state => ({
+          plans: {
+            ...state.plans,
+            [planId]: transformedPlan
+          }
+        }));
 
-      const avatarTargets = [
-        ...transformedPlan.participants.map((participant) => ({
-          userId: participant.id,
-          avatarUrl: participant.avatar
-        })),
-        ...(transformedPlan.creator
-          ? [{ userId: transformedPlan.creator.id, avatarUrl: transformedPlan.creator.avatar }]
-          : [])
-      ];
-      void prefetchAvatars(avatarTargets);
+        // Recalculate computed arrays
+        get().recalculatePlanArrays();
+      } else {
+        console.log('⏭️ Plan data unchanged, skipping store update:', planId);
+      }
 
-      console.log('✅ Single plan updated in store:', planId);
+      void prefetchAvatars(buildPlanAvatarPrefetchTargets(transformedPlan));
+
+      console.log('✅ Single plan load complete:', planId);
     } catch (error) {
       console.error('❌ Error loading single plan:', error);
       throw error;
@@ -445,6 +486,12 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // Recalculate computed arrays
       get().recalculatePlanArrays();
 
+      const batchAvatarTargets: { userId: string; avatarUrl: string }[] = [];
+      for (const p of Object.values(newPlansObject)) {
+        batchAvatarTargets.push(...buildPlanAvatarPrefetchTargets(p));
+      }
+      void prefetchAvatars(mergeAvatarPrefetchTargets(batchAvatarTargets));
+
       // Fetch invitation seen status from Supabase and apply to store
       if (currentUserId && currentUserId !== 'unknown') {
         supabase
@@ -510,7 +557,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
       }));
 
       get().recalculatePlanArrays();
-      
+
+      const batchAvatarTargets: { userId: string; avatarUrl: string }[] = [];
+      for (const p of Object.values(newPlansObject)) {
+        batchAvatarTargets.push(...buildPlanAvatarPrefetchTargets(p));
+      }
+      void prefetchAvatars(mergeAvatarPrefetchTargets(batchAvatarTargets));
+
       return plans.length; // Return count to determine if hasMore
     } catch (error) {
       console.error('❌ Error loading completed plans:', error);

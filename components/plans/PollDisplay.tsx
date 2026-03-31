@@ -4,13 +4,13 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   Alert,
   Animated,
   ActivityIndicator
 } from 'react-native';
 import { Check, Edit2, Users, Trash2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface PollOption {
   id: string;
@@ -230,8 +230,9 @@ export default function PollDisplay({
                   { marginLeft: index > 0 ? -10 : 0, zIndex: 3 - index }
                 ]}
               >
-                <Image
-                  source={{ uri: voter.avatar }}
+                <CachedAvatar
+                  userId={voter.id}
+                  uri={voter.avatar}
                   style={styles.avatarImage}
                 />
               </View>
