@@ -54,14 +54,6 @@ serve(async (req: Request) => {
       return jsonResponse(400, { error: "options must contain at least 2 items" });
     }
 
-    const options = optionsRaw
-      .map((value: unknown) => (typeof value === "string" ? value.trim() : ""))
-      .filter((value: string) => value.length > 0);
-
-    if (options.length < 2) {
-      return jsonResponse(400, { error: "options must contain at least 2 non-empty values" });
-    }
-
     const {
       data: { user },
       error: userError,
@@ -103,13 +95,30 @@ serve(async (req: Request) => {
       return jsonResponse(400, { error: "Poll has no options to edit" });
     }
 
-    if (options.length !== currentOptions.length) {
+    const trimmedOptions = optionsRaw.map((value: unknown) =>
+      typeof value === "string" ? value.trim() : "",
+    );
+
+    if (trimmedOptions.length !== currentOptions.length) {
       return jsonResponse(400, {
         error: "Changing option count is not allowed in this editor",
       });
     }
 
-    const { data: votes, error: votesError } = await supabase
+    if (trimmedOptions.some((t) => !t)) {
+      return jsonResponse(400, {
+        error: "Each option must have non-empty text",
+      });
+    }
+
+    const options = trimmedOptions;
+
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const voteSource = serviceRoleKey
+      ? createClient(supabaseUrl, serviceRoleKey)
+      : supabase;
+
+    const { data: votes, error: votesError } = await voteSource
       .from("plan_poll_votes")
       .select("option_id")
       .eq("poll_id", pollId);
@@ -136,7 +145,8 @@ serve(async (req: Request) => {
     const protectedOptionIds = new Set<string>();
     if (!allSameCount && currentOptions.length >= 2) {
       const ranked = [...withVotes].sort(
-        (a, b) => b.votes - a.votes || a.option_order - b.option_order,
+        (a, b) =>
+          b.votes - a.votes || (a.option_order ?? 0) - (b.option_order ?? 0),
       );
       protectedOptionIds.add(ranked[0].id);
       protectedOptionIds.add(ranked[1].id);
@@ -157,7 +167,7 @@ serve(async (req: Request) => {
       }
 
       const previousText = currentOptions[index].option_text.trim();
-      const nextText = options[index].trim();
+      const nextText = options[index];
       if (previousText !== nextText) {
         return jsonResponse(400, {
           error: "Cannot edit top voted options",
@@ -180,7 +190,7 @@ serve(async (req: Request) => {
       }
 
       const optionId = currentOptions[index].id;
-      const newText = options[index];
+      const newText = options[index].trim();
       const { error: optionUpdateError } = await supabase
         .from("plan_poll_options")
         .update({ option_text: newText })

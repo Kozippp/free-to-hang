@@ -292,6 +292,18 @@ class PlansService {
     }
   }
 
+  /**
+   * PostgREST nested `plan_poll_options` order is not guaranteed; poll-edit compares
+   * payload index ↔ option_order. Keep client order aligned with the server.
+   */
+  private sortEmbeddedPollOptions<T extends { option_order?: number | null }>(
+    raw: T[] | null | undefined,
+  ): T[] {
+    return [...(raw ?? [])].sort(
+      (a, b) => (a.option_order ?? 0) - (b.option_order ?? 0),
+    );
+  }
+
   // Helper to map database status to frontend status
   private mapParticipantStatus(dbStatus: string): 'pending' | 'going' | 'maybe' | 'declined' | 'conditional' {
     const statusMap: Record<string, 'pending' | 'going' | 'maybe' | 'declined' | 'conditional'> = {
@@ -393,7 +405,8 @@ class PlansService {
           )
         `)
         .eq('plan_id', planId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('option_order', { foreignTable: 'plan_poll_options', ascending: true });
 
       if (pollsError) {
         console.error('❌ [DIRECT] Error fetching polls:', pollsError);
@@ -411,7 +424,8 @@ class PlansService {
 
       // Transform polls
       const transformedPolls: Poll[] = (polls || []).map((poll: any) => {
-        const options: PollOption[] = (poll.options || []).map((opt: any) => {
+        const orderedRaw = this.sortEmbeddedPollOptions(poll.options);
+        const options: PollOption[] = orderedRaw.map((opt: any) => {
           const votes = (opt.votes || []).map((v: any) => v.user_id);
           const voters = (opt.votes || []).map((v: any) => ({
             id: v.voter?.id || v.user_id,
