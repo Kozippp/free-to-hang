@@ -89,6 +89,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   }
   
   // Get the latest plan data from store
+  // We need to use the live data, not memoized, to catch realtime updates
   const latestPlan = [...invitations, ...activePlans].find(p => p.id === plan.id) || plan;
   
   const [activeTab, setActiveTab] = useState(initialTab || 'Control Panel');
@@ -186,12 +187,11 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
   // Load fresh plan data on mount so polls are always visible when opening a plan.
   // [plan.id] dependency means it re-runs if a different plan is shown in the same component.
+  // Silent background refresh - no loading spinner
   React.useEffect(() => {
     if (!user?.id) return;
-    setIsRefreshingPlan(true);
-    loadPlan(plan.id, user.id)
-      .catch(() => {})
-      .finally(() => setIsRefreshingPlan(false));
+    // Don't show loading spinner on mount - show cached data immediately
+    loadPlan(plan.id, user.id).catch(() => {});
   }, [plan.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   
@@ -245,14 +245,13 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       return;
     }
 
-    setIsRefreshingPlan(true);
-
+    // Silent background refresh when switching from Chat to Control Panel
+    // Realtime should already have the latest data, this is just a safety check
     Promise.allSettled([
       checkAndRestartSubscriptions(user.id, { force: true }),
       loadPlan(plan.id, user.id)
-    ]).finally(() => {
-      setIsRefreshingPlan(false);
-    });
+    ]);
+    // No loading spinner - show cached data immediately, update silently in background
   }, [activeTab, checkAndRestartSubscriptions, loadPlan, plan.id, user?.id]);
 
   // Swipe gesture state
@@ -546,7 +545,10 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       setEditingPoll(null);
       setLoadingPollId(null);
     } catch (error) {
-      console.error('❌ Error creating poll:', error);
+      console.error(
+        editingPoll ? '❌ Error updating poll:' : '❌ Error creating poll:',
+        error,
+      );
       console.log('❌ Poll submit failed, clearing loading');
       setLoadingPollId(null);
 
@@ -563,7 +565,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       }
 
       Alert.alert(
-        'Error Creating Poll',
+        editingPoll ? 'Error Updating Poll' : 'Error Creating Poll',
         errorMessage,
         [{ text: 'OK', style: 'default' }]
       );

@@ -123,19 +123,24 @@ serve(async (req: Request) => {
       voteCounts.set(optionId, (voteCounts.get(optionId) ?? 0) + 1);
     }
 
-    const rankedOptions = [...currentOptions]
-      .map((option) => ({
-        ...option,
-        votes: voteCounts.get(option.id) ?? 0,
-      }))
-      .sort((a, b) => b.votes - a.votes);
+    const withVotes = currentOptions.map((option) => ({
+      ...option,
+      votes: voteCounts.get(option.id) ?? 0,
+    }));
 
-    const protectedOptionIds = new Set(
-      rankedOptions
-        .filter((option) => option.votes > 0)
-        .slice(0, 2)
-        .map((option) => option.id),
-    );
+    const counts = withVotes.map((o) => o.votes);
+    const minVotes = Math.min(...counts);
+    const maxVotes = Math.max(...counts);
+    const allSameCount = minVotes === maxVotes;
+
+    const protectedOptionIds = new Set<string>();
+    if (!allSameCount && currentOptions.length >= 2) {
+      const ranked = [...withVotes].sort(
+        (a, b) => b.votes - a.votes || a.option_order - b.option_order,
+      );
+      protectedOptionIds.add(ranked[0].id);
+      protectedOptionIds.add(ranked[1].id);
+    }
 
     const protectedOptionTexts: string[] = [];
     const protectedByIndex = new Set<number>();

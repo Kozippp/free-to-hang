@@ -17,6 +17,7 @@ import {
 import { X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Poll } from '@/store/plansStore';
+import { getProtectedPollOptionIndices } from '@/utils/pollProtection';
 
 interface PollCreatorProps {
   visible: boolean;
@@ -62,69 +63,16 @@ export default function PollCreator({
     }
   }, [visible, pollType, existingPoll]);
 
-  // Get the protected options (locked from editing)
-  const getProtectedOptions = () => {
-    if (!existingPoll) return new Set();
-    
-    // Calculate total voters for this poll
-    const uniqueVoters = new Set<string>();
-    existingPoll.options.forEach(option => {
-      option.votes.forEach(vote => {
-        uniqueVoters.add(vote);
-      });
-    });
-    const totalVoters = uniqueVoters.size;
-    
-    // Don't lock any options if less than 45% of people have voted
-    // Assuming we get totalParticipants from somewhere - for now use a reasonable estimate
-    const estimatedParticipants = Math.max(totalVoters * 2, 4); // Conservative estimate
-    const participationRate = totalVoters / estimatedParticipants;
-    
-    if (participationRate < 0.45) {
-      return new Set();
-    }
-    
-    const sortedOptions = [...existingPoll.options]
-      .sort((a, b) => b.votes.length - a.votes.length);
-    
-    if (sortedOptions.length < 2) return new Set();
-    
-    const topVotes = sortedOptions[0].votes.length;
-    const secondVotes = sortedOptions[1].votes.length;
-    
-    // If we have at least 3 options, check if top 2 both have more votes than others
-    if (sortedOptions.length >= 3) {
-      const thirdVotes = sortedOptions[2].votes.length;
-      
-      // Lock top 2 if they both have more votes than the third
-      if (topVotes > thirdVotes && secondVotes > thirdVotes) {
-        return new Set([sortedOptions[0].text, sortedOptions[1].text]);
-      }
-      
-      // Lock only top if it clearly leads
-      if (topVotes > secondVotes && topVotes > thirdVotes) {
-        return new Set([sortedOptions[0].text]);
-      }
-    } else {
-      // With only 2 options, lock the top one if it has more votes
-      if (topVotes > secondVotes) {
-        return new Set([sortedOptions[0].text]);
-      }
-    }
-    
-    return new Set();
-  };
+  /** Matches server poll-edit: top 2 by vote count are locked; if all counts tie, none locked. */
+  const protectedIndices = existingPoll
+    ? getProtectedPollOptionIndices(existingPoll)
+    : new Set<number>();
+  const hasProtectedOptions = protectedIndices.size > 0;
 
-  const protectedOptions = getProtectedOptions();
-  const hasProtectedOptions = protectedOptions.size > 0;
-
-  // Check for duplicate options
-  const getDuplicateOptions = () => {
-    const validOptions = options.filter(option => option.trim() !== '');
+  const getDuplicateOptionsFromList = (list: string[]) => {
     const duplicates = new Set<string>();
     const seen = new Set<string>();
-    
-    validOptions.forEach(option => {
+    list.forEach((option) => {
       const lowerOption = option.trim().toLowerCase();
       if (seen.has(lowerOption)) {
         duplicates.add(lowerOption);
@@ -132,30 +80,47 @@ export default function PollCreator({
         seen.add(lowerOption);
       }
     });
-    
     return duplicates;
   };
 
-  const duplicateOptions = getDuplicateOptions();
+  // Check for duplicate options (create flow uses non-empty rows only)
+  const getDuplicateOptions = () => {
+    const validOptions = options.filter((option) => option.trim() !== '');
+    return getDuplicateOptionsFromList(validOptions);
+  };
+
+  const duplicateOptions = existingPoll
+    ? getDuplicateOptionsFromList(
+        Array.from({ length: existingPoll.options.length }, (_, i) =>
+          (options[i] ?? '').trim(),
+        ),
+      )
+    : getDuplicateOptions();
   const hasDuplicates = duplicateOptions.size > 0;
 
   const handleProtectedOptionTap = () => {
     Alert.alert(
       'Cannot Edit Option',
-      'This option has received significant votes and cannot be edited to protect the group\'s preference.',
+      'This is one of the two leading choices by votes and cannot be changed. If all options are tied, every option stays editable.',
       [{ text: 'OK', style: 'default' }]
     );
   };
 
   const handleRemoveOption = (index: number) => {
     if (options.length > 2) {
-      const optionToRemove = options[index];
-      
-      // Don't allow removing protected options
-      if (protectedOptions.has(optionToRemove)) {
+      if (protectedIndices.has(index)) {
+        handleProtectedOptionTap();
+        return;
+      }
+
+      if (
+        existingPoll &&
+        index < existingPoll.options.length &&
+        existingPoll.options[index].votes.length > 0
+      ) {
         Alert.alert(
           'Cannot Remove Option',
-          'This option has received significant votes and cannot be removed to protect the group\'s preference.',
+          'Remove options that have no votes, or edit only non-leading options.',
           [{ text: 'OK', style: 'default' }]
         );
         return;
@@ -175,10 +140,7 @@ export default function PollCreator({
   };
 
   const handleOptionChange = (text: string, index: number) => {
-    const currentOption = options[index];
-    
-    // Don't allow editing protected options
-    if (protectedOptions.has(currentOption) && currentOption !== text) {
+    if (protectedIndices.has(index) && options[index] !== text) {
       handleProtectedOptionTap();
       return;
     }
@@ -196,30 +158,62 @@ export default function PollCreator({
   };
 
   const handleSubmit = () => {
-    const validOptions = options.filter(option => option.trim() !== '');
-    
     if (!question.trim()) {
       Alert.alert('Error', 'Please enter a question');
       return;
     }
-    
+
+    if (existingPoll) {
+      const n = existingPoll.options.length;
+      const rowTexts = Array.from({ length: n }, (_, i) => (options[i] ?? '').trim());
+      if (rowTexts.some((t) => !t)) {
+        Alert.alert(
+          'Error',
+          'Each existing option must have text. Use the remove control only for options with no votes.',
+        );
+        return;
+      }
+      const dup = getDuplicateOptionsFromList(rowTexts);
+      if (dup.size > 0) {
+        Alert.alert('Error', 'Please remove duplicate options');
+        return;
+      }
+      if (rowTexts.length < 2) {
+        Alert.alert('Error', 'Please add at least 2 options');
+        return;
+      }
+      onSubmit(question.trim(), rowTexts);
+      onClose();
+      return;
+    }
+
+    const validOptions = options.filter((option) => option.trim() !== '');
+
     if (validOptions.length < 2) {
       Alert.alert('Error', 'Please add at least 2 options');
       return;
     }
-    
+
     onSubmit(question.trim(), validOptions);
     onClose();
   };
 
   const canSubmit = () => {
-    const validOptions = options.filter(option => option.trim() !== '');
-    
-    if (!question.trim() || validOptions.length < 2 || hasDuplicates) {
+    if (!question.trim() || hasDuplicates) {
       return false;
     }
-    
-    return true;
+
+    if (existingPoll) {
+      const n = existingPoll.options.length;
+      const rowTexts = Array.from({ length: n }, (_, i) => (options[i] ?? '').trim());
+      if (rowTexts.some((t) => !t)) {
+        return false;
+      }
+      return getDuplicateOptionsFromList(rowTexts).size === 0;
+    }
+
+    const validOptions = options.filter((option) => option.trim() !== '');
+    return validOptions.length >= 2;
   };
 
   return (
@@ -289,7 +283,7 @@ export default function PollCreator({
               )}
               
               {options.map((option, index) => {
-                const isProtected = protectedOptions.has(option);
+                const isProtected = protectedIndices.has(index);
                 const isDuplicate = option.trim() !== '' && duplicateOptions.has(option.trim().toLowerCase());
                 
                 return (
@@ -327,7 +321,13 @@ export default function PollCreator({
                       )}
                     </View>
                     
-                    {options.length > 2 && !isProtected && (
+                    {options.length > 2 &&
+                      !isProtected &&
+                      !(
+                        existingPoll &&
+                        index < existingPoll.options.length &&
+                        existingPoll.options[index].votes.length > 0
+                      ) && (
                       <TouchableOpacity
                         onPress={() => handleRemoveOption(index)}
                         style={styles.removeButton}
