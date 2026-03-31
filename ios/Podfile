@@ -62,6 +62,22 @@ target 'FreetoHang' do
       end
     end
 
+    # Xcode 16.3+ / 26.x Clang: fmt enables consteval via __cpp_consteval + clang version,
+    # but FMT_STRING + format-inl.h fails ("is not a constant expression"). -DFMT_USE_CONSTEVAL=0
+    # does not work because base.h redefines it. Force-off after fmt's detection block.
+    fmt_base = File.expand_path('Pods/fmt/include/fmt/base.h', __dir__)
+    if File.exist?(fmt_base)
+      content = File.read(fmt_base)
+      unless content.include?('FTH_FMT_FORCE_NO_CONSTEVAL')
+        content = content.sub(
+          /(#else\n#  define FMT_USE_CONSTEVAL 0\n#endif)\n(#if FMT_USE_CONSTEVAL)/m,
+          "\\1\n// FTH_FMT_FORCE_NO_CONSTEVAL: Apple Clang + fmt 11 (RN 0.79) local build\n#undef FMT_USE_CONSTEVAL\n#define FMT_USE_CONSTEVAL 0\n\\2"
+        )
+        File.chmod(0o644, fmt_base)
+        File.write(fmt_base, content)
+      end
+    end
+
     # Fix for React Native 0.79 module name conflict
     # React-jsitooling and React-RuntimeCore both try to define 'react_runtime' module
     installer.pods_project.targets.each do |target|
