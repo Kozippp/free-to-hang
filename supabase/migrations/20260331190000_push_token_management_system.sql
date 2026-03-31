@@ -2,7 +2,7 @@
 -- Fixes:
 -- 1. Prevents push token conflicts when switching accounts on same device
 -- 2. Deactivates old tokens when user signs out
--- 3. Ensures only active tokens receive notifications
+-- 3. Supports multiple active devices per user (all devices receive notifications)
 
 -- Create function to register/reassign push token
 CREATE OR REPLACE FUNCTION public.register_expo_push_token(
@@ -29,13 +29,10 @@ BEGIN
     RAISE EXCEPTION 'Invalid device_type';
   END IF;
 
-  -- First, deactivate any existing tokens for this user
-  UPDATE public.push_tokens
-  SET active = false,
-      updated_at = now()
-  WHERE user_id = uid;
-
-  -- Then register/reassign the token
+  -- Register/reassign the token and mark as active
+  -- If token exists for another user, reassign it to current user
+  -- If token exists for same user, reactivate it
+  -- DO NOT deactivate other tokens for this user (multi-device support)
   INSERT INTO public.push_tokens (user_id, expo_push_token, device_type, active, last_used_at)
   VALUES (uid, p_expo_push_token, p_device_type, true, now())
   ON CONFLICT (expo_push_token) DO UPDATE SET
@@ -52,7 +49,7 @@ REVOKE ALL ON FUNCTION public.register_expo_push_token(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.register_expo_push_token(text, text) TO authenticated;
 
 COMMENT ON FUNCTION public.register_expo_push_token(text, text) IS
-  'Registers or reassigns Expo push token for auth.uid(); deactivates old tokens and handles account switches.';
+  'Registers or reassigns Expo push token for auth.uid(); supports multiple active devices per user.';
 
 -- Create function to deactivate push token on sign out
 CREATE OR REPLACE FUNCTION public.deactivate_push_token(

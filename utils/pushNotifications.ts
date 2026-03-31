@@ -102,9 +102,10 @@ export async function registerForPushNotifications(userId: string) {
     try {
       console.log('💾 Saving push token to database for user:', userId);
       // RPC function:
-      // 1. Deactivates any old tokens for this user
-      // 2. Registers/reassigns this token to current user
-      // 3. Handles account switches automatically (ON CONFLICT)
+      // 1. Registers/reassigns this token to current user
+      // 2. Handles account switches automatically (ON CONFLICT)
+      // 3. Keeps other active tokens (multi-device support)
+      // User can have multiple active devices receiving notifications
       const { error } = await supabase.rpc('register_expo_push_token', {
         p_expo_push_token: token,
         p_device_type: Platform.OS,
@@ -115,7 +116,7 @@ export async function registerForPushNotifications(userId: string) {
         throw error;
       }
       console.log('✅ Push token saved to database successfully');
-      console.log('🔄 Old tokens deactivated, new token is now active');
+      console.log('📱 Multi-device support: All logged-in devices will receive notifications');
     } catch (error) {
       console.error('❌ Failed to save push token:', error);
     }

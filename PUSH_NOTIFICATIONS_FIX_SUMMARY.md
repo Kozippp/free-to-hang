@@ -8,7 +8,7 @@
 
 1. **`register_expo_push_token(p_expo_push_token, p_device_type)`**
    - Registreerib push tokeni uue kasutaja jaoks
-   - Deaktiveerib kõik vanad tokenid sama kasutaja jaoks
+   - **EI deaktiveeri teisi tokeneid (multi-device tugi)**
    - Võtab üle tokeni teise kasutaja käest (account switch)
    - Kasutab `ON CONFLICT` automaatseks ümberjagamiseks
 
@@ -40,7 +40,7 @@
 **Muudetud:**
 - `registerForPushNotifications()`
   - Täiustatud kommentaarid
-  - Selgitab automaatset vana tokeni deaktiveerimist
+  - Selgitab multi-device tuge (kõik seadmed saavad teavitusi)
   - Selgitab account switch käsitlust
 
 #### 2. `contexts/AuthContext.tsx`
@@ -88,8 +88,8 @@ Loodud fail: `docs/PUSH_TOKEN_MANAGEMENT.md`
 **Pärast:** Token võetakse automaatselt üle uuele kasutajale
 
 ### ✅ Probleem 3: Mitme seadme tugi
-**Enne:** Kõik seadmed said teavitusi  
-**Pärast:** Ainult viimati registreeritud seade (aktiivne) saab teavitusi
+**Enne:** Kõik seadmed said teavitusi VÕI ainult üks seade sai teavitusi  
+**Pärast:** Kõik sisse logitud seadmed saavad teavitusi (multi-device support)
 
 ### ✅ Probleem 4: Äppi kustutamine ja uuesti installimine
 **Enne:** Token võis olla vale kasutaja küljes  
@@ -115,12 +115,12 @@ Loodud fail: `docs/PUSH_TOKEN_MANAGEMENT.md`
 5. ✅ Peaks töötama
 ```
 
-### Stsenaarium 3: Mitme seadme tugi
+### Stsenaarium 3: Mitu seadet
 ```
-1. Logi sisse telefonis → kontrolli teavitusi
-2. Logi sisse tahvlis → kontrolli, et ainult tahvel saab teavitusi
-3. Logi välja tahvlist
-4. Logi uuesti sisse telefonis → kontrolli teavitusi
+1. Logi sisse telefonis → kontrolli teavitusi telefonis
+2. Logi sisse tahvlis → kontrolli, et MÕLEMAD seadmed saavad teavitusi
+3. Logi välja tahvlist → kontrolli, et ainult telefon saab teavitusi
+4. Logi uuesti sisse tahvlis → kontrolli, et mõlemad seadmed saavad teavitusi
 5. ✅ Peaks töötama
 ```
 
@@ -154,9 +154,9 @@ Süsteem on nüüd Instagram-quality:
 ✅ **Token management** - automaatne deaktiveerimine ja ümberjagamine  
 ✅ **Security** - RLS policies + SECURITY DEFINER funktsioonid  
 ✅ **Account switching** - seamless token reassignment  
-✅ **Multi-device** - ainult viimane seade saab teavitusi  
-✅ **Sign-out cleanup** - teavitused lõpevad kohe  
-✅ **Fail-safe** - kahekordne deaktiveerimine  
+✅ **Multi-device** - kõik sisse logitud seadmed saavad teavitusi  
+✅ **Sign-out cleanup** - teavitused lõpevad ainult välja logitud seadmes  
+✅ **Fail-safe** - kahekordne deaktiveerimine logout'il  
 ✅ **Database history** - tokenid säilitatakse, ei kustutata  
 ✅ **Backend integration** - kasutab ainult aktiivseid tokeneid  
 

@@ -15,8 +15,8 @@ This system ensures Instagram-quality push notification handling with proper tok
 - **Solution**: RPC function reassigns token to new user automatically, deactivating old user's tokens
 
 ### 3. **Multiple device support**
-- **Problem**: User with multiple devices gets notifications on inactive devices
-- **Solution**: Only the most recently registered device per user receives notifications (old tokens deactivated)
+- **Problem**: User with multiple devices should receive notifications on all logged-in devices
+- **Solution**: Each device registers its own token, all active tokens receive notifications
 
 ### 4. **App reinstall / token reuse**
 - **Problem**: After app deletion and reinstall, token might be associated with wrong user
@@ -30,10 +30,10 @@ This system ensures Instagram-quality push notification handling with proper tok
 Called when user signs in or grants notification permission.
 
 **Flow:**
-1. Deactivates all existing tokens for current user
-2. Inserts new token or reassigns existing token to current user
-3. Marks token as active
-4. Uses `ON CONFLICT` to handle token already existing with different user
+1. Registers new token for current user
+2. Marks token as active
+3. Uses `ON CONFLICT` to handle token already existing with different user
+4. **Does NOT deactivate other tokens** - user can have multiple active devices
 
 **Security**: `SECURITY DEFINER` - runs with elevated privileges to bypass RLS
 
@@ -61,8 +61,8 @@ Helper function for notification system to fetch only active tokens.
 registerForPushNotifications(userId: string)
   → Get Expo push token
   → Call register_expo_push_token RPC
-    → Deactivates old tokens for user
     → Registers/reassigns token
+    → Keeps other active tokens (multi-device)
   → Returns token
 ```
 
@@ -96,8 +96,9 @@ SIGNED_OUT event
 
 ### Scenario 3: Multiple devices
 1. User signs in on **Phone** → token A registered and active
-2. User signs in on **Tablet** → token B registered and active, token A deactivated
-3. Only Tablet receives notifications (most recent device)
+2. User signs in on **Tablet** → token B registered and active, token A **stays active**
+3. **Both devices** receive notifications
+4. User signs out on Phone → only Tablet receives notifications
 
 ### Scenario 4: App reinstall
 1. User deletes app (token remains in database as inactive)
@@ -137,7 +138,7 @@ SIGNED_OUT event
 ✅ **Only active tokens receive notifications**
 ✅ **Token deactivated on sign out**
 ✅ **Token reassigned on account switch**
-✅ **Most recent device gets notifications**
+✅ **All logged-in devices get notifications (multi-device)**
 ✅ **No orphaned tokens sending notifications**
 ✅ **Clean database with token history**
 
@@ -146,9 +147,9 @@ SIGNED_OUT event
 - [ ] Sign in → receive notifications ✅
 - [ ] Sign out → no notifications ✅
 - [ ] Sign in on Device A → receive notifications on Device A
-- [ ] Sign in on Device B → receive notifications on Device B only
-- [ ] Sign out on Device B → no notifications on Device B
-- [ ] Sign back in on Device A → receive notifications on Device A
+- [ ] Sign in on Device B → receive notifications on **both** Device A and B
+- [ ] Sign out on Device B → receive notifications only on Device A
+- [ ] Sign back in on Device B → receive notifications on both devices again
 - [ ] Two users on same device → only active user receives notifications
 - [ ] App reinstall → notifications work after sign in
 
