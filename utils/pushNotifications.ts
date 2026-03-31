@@ -163,12 +163,10 @@ export async function updateLastActive(userId: string) {
 
 /** Deactivates push token on sign out */
 export async function deactivatePushToken() {
-  if (Platform.OS === 'android') {
-    // Skip on Android emulator
-    if (!Device.isDevice) {
-      console.log('📱 Skipping push token deactivation on emulator');
-      return;
-    }
+  // Skip on emulator/simulator
+  if (!Device.isDevice) {
+    console.log('📱 Skipping push token deactivation on emulator/simulator');
+    return;
   }
 
   try {

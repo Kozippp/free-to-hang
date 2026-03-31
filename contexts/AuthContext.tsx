@@ -145,11 +145,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('👋 User signed out');
           
           // Extra safety: deactivate push token on sign out event
-          try {
-            await deactivatePushToken();
-          } catch (error) {
+          // Run in background without blocking state updates
+          deactivatePushToken().catch((error) => {
             console.error('⚠️ Failed to deactivate push token on SIGNED_OUT event:', error);
-          }
+          });
           
           setHasCheckedOnboarding(false);
           setIsCheckingOnboarding(false);
