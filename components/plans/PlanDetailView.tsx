@@ -248,11 +248,24 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     // Silent background refresh when switching from Chat to Control Panel
     // Realtime should already have the latest data, this is just a safety check
     Promise.allSettled([
-      checkAndRestartSubscriptions(user.id, { force: true }),
+      checkAndRestartSubscriptions(user.id),
       loadPlan(plan.id, user.id)
     ]);
     // No loading spinner - show cached data immediately, update silently in background
   }, [activeTab, checkAndRestartSubscriptions, loadPlan, plan.id, user?.id]);
+
+  React.useEffect(() => {
+    if (!user?.id || activeTab !== 'Control Panel') {
+      return;
+    }
+
+    // Keep Control Panel silently in sync even if a realtime channel gets "stuck joined".
+    const interval = setInterval(() => {
+      loadPlan(plan.id, user.id).catch(() => {});
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [activeTab, loadPlan, plan.id, user?.id]);
 
   // Swipe gesture state
   const { width } = Dimensions.get('window');
@@ -291,7 +304,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const whenPoll = polls.find(poll => poll.type === 'when');
   const wherePoll = polls.find(poll => poll.type === 'where');
   const customPolls = polls.filter(poll => poll.type === 'custom');
-  
+
   // Animation for highlighting new plan
   const highlightAnim = useRef(new Animated.Value(0)).current;
   

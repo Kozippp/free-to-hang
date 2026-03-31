@@ -288,6 +288,10 @@ let plansHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 // Track last optimistic updates to avoid duplicate realtime animations
 const lastOptimisticUpdate: Record<string, { timestamp: number; userId: string; optionIds: string[] }> = {};
+const voteEventContextById: Record<
+  string,
+  { pollId: string; userId: string; optionId: string; timestamp: number }
+> = {};
 const lastPlanRefreshCallTimes: Record<string, number> = {};
 const MIN_TIME_BETWEEN_PLAN_CALLS = 500;
 
@@ -472,7 +476,19 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const newPlansObject: Record<string, Plan> = {};
       plans.forEach(plan => {
         const transformedPlan = transformPlanForStore(plan, currentUserId);
-        newPlansObject[plan.id] = transformedPlan;
+        const existingPlan = get().plans[plan.id];
+
+        // List query intentionally excludes full poll payload. Preserve already-loaded polls
+        // to avoid temporary UI regressions while background refresh updates list metadata.
+        const shouldPreserveExistingPolls =
+          (transformedPlan.polls?.length || 0) === 0 && (existingPlan?.polls?.length || 0) > 0;
+
+        newPlansObject[plan.id] = shouldPreserveExistingPolls
+          ? {
+              ...transformedPlan,
+              polls: existingPlan?.polls || []
+            }
+          : transformedPlan;
       });
 
       set(state => ({
@@ -1505,20 +1521,26 @@ const usePlansStore = create<PlansState>((set, get) => ({
   checkAndRestartSubscriptions: async (userId: string, options?: { force?: boolean }) => {
     console.log('🔍 Checking plans real-time subscription status...');
 
-    const auxPresent =
-      !!participantsChannel && !!pollVotesChannel && !!planPollsChannel;
+    const updatesJoined = updatesChannel?.state === 'joined';
+    const participantsJoined = participantsChannel?.state === 'joined';
+    const pollVotesJoined = pollVotesChannel?.state === 'joined';
+    const planPollsJoined = planPollsChannel?.state === 'joined';
+    const allJoined = updatesJoined && participantsJoined && pollVotesJoined && planPollsJoined;
 
     // plan_updates can look "healthy" while auxiliary channels were nulled by a stale retry
     // or never reattached — do not early-return unless all four channel refs exist.
-    if (!options?.force && get().subscriptionStatus.isSubscribed && updatesChannel && auxPresent) {
+    if (!options?.force && get().subscriptionStatus.isSubscribed && allJoined) {
       console.log('✅ Plans real-time subscription is active');
       return;
     }
 
-    if (!options?.force && get().subscriptionStatus.isSubscribed && updatesChannel && !auxPresent) {
-      console.log(
-        '⚠️ plan_updates active but auxiliary channel ref(s) missing — restarting subscriptions'
-      );
+    if (!options?.force && get().subscriptionStatus.isSubscribed && !allJoined) {
+      console.log('⚠️ Realtime channel state not healthy - restarting subscriptions', {
+        updatesState: updatesChannel?.state ?? null,
+        participantsState: participantsChannel?.state ?? null,
+        pollVotesState: pollVotesChannel?.state ?? null,
+        planPollsState: planPollsChannel?.state ?? null,
+      });
     }
 
     console.log(options?.force ? '🔄 Force restarting plans subscriptions...' : '🔄 Plans subscription missing or failed - restarting...');
@@ -1958,9 +1980,32 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   console.log(`🗳️ Processing poll vote ${eventType}:`, { newVote, oldVote });
 
   // Get poll_id and plan_id from the vote
-  const pollId = newVote?.poll_id || oldVote?.poll_id;
-  const userId = newVote?.user_id || oldVote?.user_id;
-  const optionId = newVote?.option_id || oldVote?.option_id;
+  const voteId = newVote?.id || oldVote?.id;
+  const cachedContext = voteId ? voteEventContextById[voteId] : null;
+  const pollId = newVote?.poll_id || oldVote?.poll_id || cachedContext?.pollId;
+  const userId = newVote?.user_id || oldVote?.user_id || cachedContext?.userId;
+  const optionId = newVote?.option_id || oldVote?.option_id || cachedContext?.optionId;
+
+  // Cache full vote context for DELETE payloads that often only contain old.id
+  if (voteId && pollId && userId && optionId) {
+    voteEventContextById[voteId] = {
+      pollId,
+      userId,
+      optionId,
+      timestamp: Date.now(),
+    };
+  }
+
+  // Keep cache bounded to avoid unbounded growth in long sessions
+  const voteContextKeys = Object.keys(voteEventContextById);
+  if (voteContextKeys.length > 1000) {
+    const cutoff = Date.now() - 10 * 60 * 1000; // 10 minutes
+    voteContextKeys.forEach((id) => {
+      if ((voteEventContextById[id]?.timestamp || 0) < cutoff) {
+        delete voteEventContextById[id];
+      }
+    });
+  }
 
   if (!pollId || !userId) {
     console.warn('⚠️ Invalid poll vote payload (missing poll_id or user_id):', payload);
@@ -2032,6 +2077,9 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
           : opt
       )
     };
+    if (voteId) {
+      delete voteEventContextById[voteId];
+    }
   } else if (eventType === 'UPDATE') {
     // User changed their vote - remove from old, add to new
     const oldOptionId = oldVote?.option_id;
