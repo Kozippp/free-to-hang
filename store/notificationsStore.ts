@@ -228,7 +228,7 @@ const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
             if (!baseNotification.sender && baseNotification.triggered_by) {
               const { data: senderData, error } = await supabase
-                .from('users')
+                .from('user_directory')
                 .select('id, name, username, avatar_url')
                 .eq('id', baseNotification.triggered_by)
                 .single();

@@ -131,6 +131,17 @@ const transformMessage = (dbMessage: any): ChatMessage => {
   };
 };
 
+async function fetchUserDirectoryProfile(
+  userId: string
+): Promise<{ id: string; name: string; username: string | null; avatar_url: string | null } | null> {
+  const { data } = await supabase
+    .from('user_directory')
+    .select('id, name, username, avatar_url')
+    .eq('id', userId)
+    .maybeSingle();
+  return data;
+}
+
 // Helper function to get auth token
 const getAuthToken = async () => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -697,40 +708,34 @@ const useChatStore = create<ChatState>((set, get) => ({
         async (payload) => {
           console.log('📨 New message received:', payload);
           try {
-            // Fetch full message with user details
-            const { data, error } = await supabase
+            const { data: msgRow, error } = await supabase
               .from('chat_messages')
-              .select(`
-                *,
-                user:users(id, name, username, avatar_url)
-              `)
+              .select('*')
               .eq('id', payload.new.id)
               .single();
-            
+
             if (error) {
               console.error('Error fetching message:', error);
               return;
             }
-            
-            if (data) {
-              // If there's a reply_to, fetch it separately
-              if (data.reply_to_message_id) {
-                const { data: replyData } = await supabase
+
+            if (msgRow) {
+              const userProfile = await fetchUserDirectoryProfile(msgRow.user_id);
+              const data: Record<string, unknown> = { ...msgRow, user: userProfile };
+
+              if (msgRow.reply_to_message_id) {
+                const { data: replyRow } = await supabase
                   .from('chat_messages')
-                  .select(`
-                    id, 
-                    content, 
-                    type,
-                    user:users(id, name)
-                  `)
-                  .eq('id', data.reply_to_message_id)
+                  .select('id, content, type, user_id')
+                  .eq('id', msgRow.reply_to_message_id)
                   .single();
-                
-                if (replyData) {
-                  data.reply_to = replyData;
+
+                if (replyRow) {
+                  const replyUser = await fetchUserDirectoryProfile(replyRow.user_id);
+                  data.reply_to = { ...replyRow, user: replyUser };
                 }
               }
-              
+
               const message = transformMessage(data);
               get().addMessageToStore(planId, message);
             }
@@ -809,7 +814,7 @@ const useChatStore = create<ChatState>((set, get) => ({
 
           // Fetch user details for the new receipt
           const { data: userData } = await supabase
-            .from('users')
+            .from('user_directory')
             .select('id, name, avatar_url')
             .eq('id', payload.new.user_id)
             .single();
@@ -845,7 +850,7 @@ const useChatStore = create<ChatState>((set, get) => ({
 
           // Fetch user details for the updated receipt
           const { data: userData } = await supabase
-            .from('users')
+            .from('user_directory')
             .select('id, name, avatar_url')
             .eq('id', payload.new.user_id)
             .single();

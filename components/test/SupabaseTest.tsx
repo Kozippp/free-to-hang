@@ -12,10 +12,11 @@ export default function SupabaseTest() {
 
     try {
       // Test 1: Basic connection
-      const { data, error } = await supabase
-        .from('users')
-        .select('count')
-        .single();
+      const { error } = await supabase
+        .from('user_directory')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
       
       if (error) {
         setStatus(`Connection Error: ${error.message}`);

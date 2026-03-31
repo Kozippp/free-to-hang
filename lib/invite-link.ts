@@ -16,7 +16,7 @@ export async function resolveInviteRefToUserId(ref: string): Promise<string | nu
 
   if (UUID_RE.test(decoded)) {
     const { data, error } = await supabase
-      .from('users')
+      .from('user_directory')
       .select('id')
       .eq('id', decoded)
       .maybeSingle();
@@ -28,7 +28,7 @@ export async function resolveInviteRefToUserId(ref: string): Promise<string | nu
   }
 
   const { data: byExact, error: errExact } = await supabase
-    .from('users')
+    .from('user_directory')
     .select('id')
     .eq('username', decoded)
     .maybeSingle();
@@ -39,7 +39,7 @@ export async function resolveInviteRefToUserId(ref: string): Promise<string | nu
   if (byExact?.id) return byExact.id;
 
   const { data: byIlike, error: errIlike } = await supabase
-    .from('users')
+    .from('user_directory')
     .select('id')
     .ilike('username', decoded)
     .maybeSingle();
@@ -79,7 +79,7 @@ export async function fetchPersonalInviteUrl(): Promise<string | null> {
   if (!user) return null;
 
   const { data: userData } = await supabase
-    .from('users')
+    .from('user_directory')
     .select('username')
     .eq('id', user.id)
     .single();

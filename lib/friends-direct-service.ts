@@ -269,8 +269,8 @@ class FriendsDirectService {
 
       // Search users by name or username (case insensitive)
       const { data: users, error: searchError } = await supabase
-        .from('users')
-        .select('id, name, username, avatar_url, bio')
+        .from('user_directory')
+        .select('id, name, username, avatar_url, bio, vibe')
         .or(`name.ilike.%${query}%,username.ilike.%${query}%`)
         .neq('id', user.id) // Exclude self
         .limit(20);
@@ -319,7 +319,7 @@ class FriendsDirectService {
         username: u.username,
         avatar_url: u.avatar_url || '',
         bio: u.bio,
-        vibe: u.bio,
+        vibe: u.vibe ?? u.bio,
         relationshipStatus: statusMap.get(u.id) || 'none'
       }));
 

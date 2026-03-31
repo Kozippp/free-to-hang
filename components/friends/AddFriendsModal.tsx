@@ -81,7 +81,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
       if (!user) return;
 
       const { data: userData } = await supabase
-        .from('users')
+        .from('user_directory')
         .select('username')
         .eq('id', user.id)
         .single();
@@ -268,14 +268,10 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
 
           // Search by emails first
           if (contactEmails.length > 0) {
-            const emailFilter = contactEmails.map(email => `email.eq.${email}`).join(',');
-
-            const { data: emailMatches, error: emailError } = await supabase
-              .from('users')
-              .select('id, name, username, avatar_url, vibe, email')
-              .or(emailFilter)
-              .neq('id', user.id)
-              .eq('onboarding_completed', true);
+            const { data: emailMatches, error: emailError } = await supabase.rpc(
+              'match_users_for_contact_discovery',
+              { contact_emails: contactEmails, exclude_user_id: user.id }
+            );
 
             if (!emailError && emailMatches) {
               matchingUsers = [...matchingUsers, ...emailMatches];
@@ -290,8 +286,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
             ).join(',');
 
             const { data: nameMatches, error: nameError } = await supabase
-              .from('users')
-              .select('id, name, username, avatar_url, vibe, email')
+              .from('user_directory')
+              .select('id, name, username, avatar_url, vibe, bio')
               .or(nameQueries)
               .neq('id', user.id)
               .eq('onboarding_completed', true);

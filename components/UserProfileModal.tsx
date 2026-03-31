@@ -59,13 +59,8 @@ export default function UserProfileModal({ visible, userId, onClose, onEditProfi
   // Load user data and relationship status when modal opens
   useEffect(() => {
     if (visible && userId) {
-      loadUserData();
-      // Don't fetch relationship status when viewing own profile
-      if (currentUserId && userId !== currentUserId) {
-        determineRelationshipStatus();
-      }
+      void loadUserData();
     } else {
-      // Reset state when modal closes
       setUser(null);
       setRelationshipStatus('none');
     }
@@ -73,34 +68,67 @@ export default function UserProfileModal({ visible, userId, onClose, onEditProfi
 
   const loadUserData = async () => {
     if (!userId) return;
-    
+
     setLoading(true);
     try {
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('id, name, username, avatar_url, bio, vibe, status, created_at')
-        .eq('id', userId)
-        .single();
+      if (currentUserId && userId === currentUserId) {
+        setRelationshipStatus('none');
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('id, name, username, avatar_url, bio, vibe, status, created_at')
+          .eq('id', userId)
+          .single();
 
-      if (error) throw error;
-      setUser(userData);
+        if (error) throw error;
+        setUser(userData);
+        return;
+      }
+
+      const [dirResult, relStatus] = await Promise.all([
+        supabase
+          .from('user_directory')
+          .select('id, name, username, avatar_url, bio, vibe, created_at')
+          .eq('id', userId)
+          .single(),
+        currentUserId && userId !== currentUserId
+          ? friendsDirectService.getRelationshipStatus(userId)
+          : Promise.resolve<RelationshipStatus>('none'),
+      ]);
+
+      if (dirResult.error) throw dirResult.error;
+      const dir = dirResult.data;
+      if (!dir) throw new Error('User not found');
+
+      setRelationshipStatus(relStatus);
+
+      let status: User['status'] | undefined;
+      if (relStatus === 'accepted_sent' || relStatus === 'accepted_received') {
+        const { data: presence } = await supabase
+          .from('users')
+          .select('status')
+          .eq('id', userId)
+          .maybeSingle();
+        const s = presence?.status;
+        if (s === 'available' || s === 'busy' || s === 'offline') {
+          status = s;
+        }
+      }
+
+      setUser({
+        id: dir.id,
+        name: dir.name,
+        username: dir.username,
+        avatar_url: dir.avatar_url ?? '',
+        bio: dir.bio ?? undefined,
+        vibe: dir.vibe ?? undefined,
+        created_at: dir.created_at ?? undefined,
+        status,
+      });
     } catch (error) {
       console.error('Error loading user:', error);
       Alert.alert('Error', 'Failed to load user profile');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const determineRelationshipStatus = async () => {
-    if (!userId) return;
-    try {
-      // Use direct Supabase read (same as friends list) so modal works even when backend is slow/unreachable
-      const status = await friendsDirectService.getRelationshipStatus(userId);
-      setRelationshipStatus(status);
-    } catch (error) {
-      console.error('Error determining relationship status:', error);
-      setRelationshipStatus('none');
     }
   };
 
