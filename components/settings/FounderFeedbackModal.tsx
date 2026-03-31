@@ -136,7 +136,11 @@ export default function FounderFeedbackModal({ visible, onClose, userEmailSnapsh
   const charsLeft = FOUNDER_FEEDBACK_MAX_BODY - body.length;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle={Platform.OS === 'ios' ? 'fullScreen' : 'pageSheet'}
+    >
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Text style={styles.title}>Give feedback to founder</Text>

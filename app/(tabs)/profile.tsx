@@ -1271,6 +1271,7 @@ export default function ProfileScreen() {
         onRequestClose={() => {
           setShowSettings(false);
           setSettingsSubScreen('main');
+          setShowFounderFeedback(false);
         }}
       >
         <SafeAreaView style={styles.modalContainer}>
@@ -1295,6 +1296,7 @@ export default function ProfileScreen() {
                 onPress={() => {
                   setShowSettings(false);
                   setSettingsSubScreen('main');
+                  setShowFounderFeedback(false);
                 }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 accessibilityRole="button"
@@ -1578,14 +1580,14 @@ export default function ProfileScreen() {
               </View>
             </View>
           </Modal>
+
+          <FounderFeedbackModal
+            visible={showFounderFeedback}
+            onClose={() => setShowFounderFeedback(false)}
+            userEmailSnapshot={userProfile.email || authUser?.email || null}
+          />
         </SafeAreaView>
       </Modal>
-
-      <FounderFeedbackModal
-        visible={showFounderFeedback}
-        onClose={() => setShowFounderFeedback(false)}
-        userEmailSnapshot={userProfile.email || authUser?.email || null}
-      />
 
       <LegalDocumentModal
         visible={legalDoc !== null}
