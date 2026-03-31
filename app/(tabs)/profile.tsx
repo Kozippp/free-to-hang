@@ -37,6 +37,7 @@ import {
   Camera,
   EyeOff,
   ChevronRight,
+  ChevronLeft,
   Check,
   User,
   FileText,
@@ -259,6 +260,7 @@ export default function ProfileScreen() {
   
   // Modal states
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsSubScreen, setSettingsSubScreen] = useState<'main' | 'notifications'>('main');
   const [showFounderFeedback, setShowFounderFeedback] = useState(false);
   const [legalDoc, setLegalDoc] = useState<null | 'privacy' | 'terms'>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -290,6 +292,10 @@ export default function ProfileScreen() {
       cancelled = true;
     };
   }, [showSettings, authUser?.id]);
+
+  useEffect(() => {
+    if (showSettings) setSettingsSubScreen('main');
+  }, [showSettings]);
   
   // Edit profile states
   const [editUsername, setEditUsername] = useState('');
@@ -1262,158 +1268,58 @@ export default function ProfileScreen() {
         visible={showSettings}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowSettings(false);
+          setSettingsSubScreen('main');
+        }}
       >
         <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Settings</Text>
-            <TouchableOpacity onPress={() => setShowSettings(false)}>
-              <X size={24} color={Colors.light.secondaryText} />
-            </TouchableOpacity>
+          <View style={styles.settingsModalHeader}>
+            <View style={styles.settingsModalHeaderSide}>
+              {settingsSubScreen === 'notifications' ? (
+                <TouchableOpacity
+                  onPress={() => setSettingsSubScreen('main')}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to settings"
+                >
+                  <ChevronLeft size={24} color={Colors.light.text} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <Text style={styles.settingsModalTitleCenter} numberOfLines={1}>
+              {settingsSubScreen === 'main' ? 'Settings' : 'Notifications'}
+            </Text>
+            <View style={styles.settingsModalHeaderSide}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowSettings(false);
+                  setSettingsSubScreen('main');
+                }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close settings"
+              >
+                <X size={24} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
+            </View>
           </View>
           
           <ScrollView style={styles.modalContent}>
-            {/* Push notifications — synced with notification_preferences + backend push pipeline */}
-            <View style={styles.settingsSection}>
-              <View style={styles.sectionHeader}>
-                <Bell size={20} color={Colors.light.text} />
-                <Text style={styles.sectionTitle}>Push Notifications</Text>
-                {pushPrefsSaving ? (
-                  <ActivityIndicator size="small" color={Colors.light.primary} style={{ marginLeft: 8 }} />
-                ) : null}
-              </View>
-
-              {pushPrefsLoading ? (
-                <View style={styles.pushPrefsLoadingBox}>
-                  <ActivityIndicator color={Colors.light.primary} />
-                  <Text style={styles.pushPrefsLoadingText}>Loading notification settings…</Text>
-                </View>
-              ) : pushPrefsError ? (
-                <View style={styles.pushPrefsLoadingBox}>
-                  <Text style={styles.pushPrefsErrorText}>{pushPrefsError}</Text>
+            {settingsSubScreen === 'main' ? (
+              <>
+                <View style={styles.settingsSection}>
                   <TouchableOpacity
-                    onPress={() => {
-                      setPushPrefsError(null);
-                      setPushPrefsLoading(true);
-                      void fetchNotificationPreferences()
-                        .then(setPushPrefs)
-                        .catch((e) =>
-                          setPushPrefsError(e instanceof Error ? e.message : 'Failed to load')
-                        )
-                        .finally(() => setPushPrefsLoading(false));
-                    }}
+                    style={styles.legalRow}
+                    onPress={() => setSettingsSubScreen('notifications')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Notifications"
                   >
-                    <Text style={styles.pushPrefsRetry}>Retry</Text>
+                    <Bell size={18} color={Colors.light.primary} style={{ marginRight: 10 }} />
+                    <Text style={styles.legalRowText}>Notifications</Text>
+                    <ChevronRight size={20} color={Colors.light.secondaryText} />
                   </TouchableOpacity>
                 </View>
-              ) : pushPrefs ? (
-                <>
-                  <View style={styles.settingRow}>
-                    <View style={styles.settingLabelColumn}>
-                      <Text style={styles.settingLabel}>All push notifications</Text>
-                      <Text style={styles.settingHint}>Master switch for alerts on this device</Text>
-                    </View>
-                    <Switch
-                      value={pushPrefs.push_enabled}
-                      onValueChange={(v) => void onTogglePushField('push_enabled', v)}
-                      trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
-                      thumbColor={pushPrefs.push_enabled ? Colors.light.primary : '#F4F3F4'}
-                    />
-                  </View>
-
-                  {PUSH_CATEGORY_ROWS.map(({ field, label, hint }) => {
-                    const categoryEnabled = pushPrefs[field] as boolean;
-                    return (
-                    <View key={field} style={styles.settingRow}>
-                      <View style={styles.settingLabelColumn}>
-                        <Text style={styles.settingLabel}>{label}</Text>
-                        <Text style={styles.settingHint}>{hint}</Text>
-                      </View>
-                      <Switch
-                        value={categoryEnabled}
-                        onValueChange={(v) => void onTogglePushField(field, v)}
-                        disabled={!pushPrefs.push_enabled}
-                        trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
-                        thumbColor={categoryEnabled ? Colors.light.primary : '#F4F3F4'}
-                      />
-                    </View>
-                  );})}
-
-                  <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
-                    <View style={styles.settingLabelColumn}>
-                      <Text style={styles.settingLabel}>Quiet hours</Text>
-                      <Text style={styles.settingHint}>No push alerts during this window (in-app still works)</Text>
-                    </View>
-                    <Switch
-                      value={pushPrefs.quiet_hours_enabled}
-                      onValueChange={(v) => void onTogglePushField('quiet_hours_enabled', v)}
-                      disabled={!pushPrefs.push_enabled}
-                      trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
-                      thumbColor={pushPrefs.quiet_hours_enabled ? Colors.light.primary : '#F4F3F4'}
-                    />
-                  </View>
-
-                  {pushPrefs.quiet_hours_enabled && pushPrefs.push_enabled ? (
-                    <>
-                      <TouchableOpacity
-                        style={styles.quietTimeRow}
-                        onPress={() => openQuietTimeEditor('start')}
-                      >
-                        <Text style={styles.settingLabel}>Starts</Text>
-                        <Text style={styles.quietTimeValue}>
-                          {formatQuietTimeShort(
-                            pushPrefs.quiet_hours_start,
-                            DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_start!
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.quietTimeRow}
-                        onPress={() => openQuietTimeEditor('end')}
-                      >
-                        <Text style={styles.settingLabel}>Ends</Text>
-                        <Text style={styles.quietTimeValue}>
-                          {formatQuietTimeShort(
-                            pushPrefs.quiet_hours_end,
-                            DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_end!
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : null}
-
-                  {Platform.OS === 'android' && quietStartPickerVisible && pushPrefs ? (
-                    <DateTimePicker
-                      value={timeStringToLocalDate(
-                        pushPrefs.quiet_hours_start,
-                        DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_start!
-                      )}
-                      mode="time"
-                      is24Hour
-                      display="default"
-                      onChange={(event, date) => {
-                        setQuietStartPickerVisible(false);
-                        if (event.type === 'set' && date) void onQuietTimeChange('start', date);
-                      }}
-                    />
-                  ) : null}
-                  {Platform.OS === 'android' && quietEndPickerVisible && pushPrefs ? (
-                    <DateTimePicker
-                      value={timeStringToLocalDate(
-                        pushPrefs.quiet_hours_end,
-                        DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_end!
-                      )}
-                      mode="time"
-                      is24Hour
-                      display="default"
-                      onChange={(event, date) => {
-                        setQuietEndPickerVisible(false);
-                        if (event.type === 'set' && date) void onQuietTimeChange('end', date);
-                      }}
-                    />
-                  ) : null}
-                </>
-              ) : null}
-            </View>
 
             {/* Legal & support */}
             <View style={styles.settingsSection}>
@@ -1481,6 +1387,153 @@ export default function ProfileScreen() {
               <LogOut size={20} color={Colors.light.destructive} />
               <Text style={styles.logoutText}>Log Out</Text>
             </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.settingsSection}>
+                  <View style={styles.sectionHeader}>
+                    <Bell size={20} color={Colors.light.text} />
+                    <Text style={styles.sectionTitle}>Push notifications</Text>
+                    {pushPrefsSaving ? (
+                      <ActivityIndicator size="small" color={Colors.light.primary} style={{ marginLeft: 8 }} />
+                    ) : null}
+                  </View>
+
+                  {pushPrefsLoading ? (
+                    <View style={styles.pushPrefsLoadingBox}>
+                      <ActivityIndicator color={Colors.light.primary} />
+                      <Text style={styles.pushPrefsLoadingText}>Loading notification settings…</Text>
+                    </View>
+                  ) : pushPrefsError ? (
+                    <View style={styles.pushPrefsLoadingBox}>
+                      <Text style={styles.pushPrefsErrorText}>{pushPrefsError}</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setPushPrefsError(null);
+                          setPushPrefsLoading(true);
+                          void fetchNotificationPreferences()
+                            .then(setPushPrefs)
+                            .catch((e) =>
+                              setPushPrefsError(e instanceof Error ? e.message : 'Failed to load')
+                            )
+                            .finally(() => setPushPrefsLoading(false));
+                        }}
+                      >
+                        <Text style={styles.pushPrefsRetry}>Retry</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : pushPrefs ? (
+                    <>
+                      <View style={styles.settingRow}>
+                        <View style={styles.settingLabelColumn}>
+                          <Text style={styles.settingLabel}>All push notifications</Text>
+                          <Text style={styles.settingHint}>Master switch for alerts on this device</Text>
+                        </View>
+                        <Switch
+                          value={pushPrefs.push_enabled}
+                          onValueChange={(v) => void onTogglePushField('push_enabled', v)}
+                          trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
+                          thumbColor={pushPrefs.push_enabled ? Colors.light.primary : '#F4F3F4'}
+                        />
+                      </View>
+
+                      {PUSH_CATEGORY_ROWS.map(({ field, label, hint }) => {
+                        const categoryEnabled = pushPrefs[field] as boolean;
+                        return (
+                          <View key={field} style={styles.settingRow}>
+                            <View style={styles.settingLabelColumn}>
+                              <Text style={styles.settingLabel}>{label}</Text>
+                              <Text style={styles.settingHint}>{hint}</Text>
+                            </View>
+                            <Switch
+                              value={categoryEnabled}
+                              onValueChange={(v) => void onTogglePushField(field, v)}
+                              disabled={!pushPrefs.push_enabled}
+                              trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
+                              thumbColor={categoryEnabled ? Colors.light.primary : '#F4F3F4'}
+                            />
+                          </View>
+                        );
+                      })}
+
+                      <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+                        <View style={styles.settingLabelColumn}>
+                          <Text style={styles.settingLabel}>Quiet hours</Text>
+                          <Text style={styles.settingHint}>No push alerts during this window (in-app still works)</Text>
+                        </View>
+                        <Switch
+                          value={pushPrefs.quiet_hours_enabled}
+                          onValueChange={(v) => void onTogglePushField('quiet_hours_enabled', v)}
+                          disabled={!pushPrefs.push_enabled}
+                          trackColor={{ false: '#E0E0E0', true: Colors.light.primary + '40' }}
+                          thumbColor={pushPrefs.quiet_hours_enabled ? Colors.light.primary : '#F4F3F4'}
+                        />
+                      </View>
+
+                      {pushPrefs.quiet_hours_enabled && pushPrefs.push_enabled ? (
+                        <>
+                          <TouchableOpacity
+                            style={styles.quietTimeRow}
+                            onPress={() => openQuietTimeEditor('start')}
+                          >
+                            <Text style={styles.settingLabel}>Starts</Text>
+                            <Text style={styles.quietTimeValue}>
+                              {formatQuietTimeShort(
+                                pushPrefs.quiet_hours_start,
+                                DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_start!
+                              )}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.quietTimeRow}
+                            onPress={() => openQuietTimeEditor('end')}
+                          >
+                            <Text style={styles.settingLabel}>Ends</Text>
+                            <Text style={styles.quietTimeValue}>
+                              {formatQuietTimeShort(
+                                pushPrefs.quiet_hours_end,
+                                DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_end!
+                              )}
+                            </Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
+
+                      {Platform.OS === 'android' && quietStartPickerVisible && pushPrefs ? (
+                        <DateTimePicker
+                          value={timeStringToLocalDate(
+                            pushPrefs.quiet_hours_start,
+                            DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_start!
+                          )}
+                          mode="time"
+                          is24Hour
+                          display="default"
+                          onChange={(event, date) => {
+                            setQuietStartPickerVisible(false);
+                            if (event.type === 'set' && date) void onQuietTimeChange('start', date);
+                          }}
+                        />
+                      ) : null}
+                      {Platform.OS === 'android' && quietEndPickerVisible && pushPrefs ? (
+                        <DateTimePicker
+                          value={timeStringToLocalDate(
+                            pushPrefs.quiet_hours_end,
+                            DEFAULT_NOTIFICATION_PREFERENCES.quiet_hours_end!
+                          )}
+                          mode="time"
+                          is24Hour
+                          display="default"
+                          onChange={(event, date) => {
+                            setQuietEndPickerVisible(false);
+                            if (event.type === 'set' && date) void onQuietTimeChange('end', date);
+                          }}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
+                </View>
+              </>
+            )}
           </ScrollView>
 
           <Modal
@@ -1721,6 +1774,26 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.buttonBackground,
+  },
+  settingsModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.buttonBackground,
+  },
+  settingsModalHeaderSide: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsModalTitleCenter: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.light.text,
+    textAlign: 'center',
   },
   modalTitle: {
     fontSize: 20,
