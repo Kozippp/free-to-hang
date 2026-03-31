@@ -1306,7 +1306,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       // NEW: Direct DB listener for participant status changes (chat-style, instant!)
       console.log('🎯 Starting direct participant status listener...');
-      participantsChannel = supabase
+      const participantsCh = supabase
         .channel(`plan_participants_${userId}_${Date.now()}`)
         .on(
           'postgres_changes',
@@ -1328,6 +1328,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
           console.log('❌ Participants channel disconnected:', status);
             // Simple retry like chat does (no MAX_RETRIES!)
             setTimeout(() => {
+              // Stale callback: a newer participantsChannel may already exist after full restart
+              if (participantsChannel !== participantsCh) {
+                console.log('⏭️ Skipping stale participants channel retry (ref replaced)');
+                return;
+              }
               if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
                 console.log('🔄 Retrying participants channel...');
                 participantsChannel = null;
@@ -1336,10 +1341,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
             }, 5000);
           }
         });
+      participantsChannel = participantsCh;
 
       // NEW: Direct DB listener for poll votes (chat-style, instant!)
       console.log('🗳️ Starting direct poll votes listener...');
-      pollVotesChannel = supabase
+      const pollVotesCh = supabase
         .channel(`plan_poll_votes_${userId}_${Date.now()}`)
         .on(
           'postgres_changes',
@@ -1361,6 +1367,10 @@ const usePlansStore = create<PlansState>((set, get) => ({
             console.log('❌ Poll votes channel disconnected:', status);
             // Simple retry like chat does (no MAX_RETRIES!)
             setTimeout(() => {
+              if (pollVotesChannel !== pollVotesCh) {
+                console.log('⏭️ Skipping stale poll votes channel retry (ref replaced)');
+                return;
+              }
               if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
                 console.log('🔄 Retrying poll votes channel...');
                 pollVotesChannel = null;
@@ -1369,10 +1379,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
             }, 5000);
           }
         });
+      pollVotesChannel = pollVotesCh;
 
       // NEW: Direct DB listener for poll structure changes (create/edit/delete)
       console.log('📊 Starting direct polls listener...');
-      planPollsChannel = supabase
+      const planPollsCh = supabase
         .channel(`plan_polls_${userId}_${Date.now()}`)
         .on(
           'postgres_changes',
@@ -1393,6 +1404,10 @@ const usePlansStore = create<PlansState>((set, get) => ({
           } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
             console.log('❌ Polls channel disconnected:', status);
             setTimeout(() => {
+              if (planPollsChannel !== planPollsCh) {
+                console.log('⏭️ Skipping stale polls channel retry (ref replaced)');
+                return;
+              }
               if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
                 console.log('🔄 Retrying polls channel...');
                 planPollsChannel = null;
@@ -1401,6 +1416,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
             }, 5000);
           }
         });
+      planPollsChannel = planPollsCh;
 
       startPlansHealthCheck(userId);
 
@@ -1434,10 +1450,42 @@ const usePlansStore = create<PlansState>((set, get) => ({
   checkAndRestartSubscriptions: async (userId: string, options?: { force?: boolean }) => {
     console.log('🔍 Checking plans real-time subscription status...');
 
-    // If already subscribed and channel exists, no need to restart
-    if (!options?.force && get().subscriptionStatus.isSubscribed && updatesChannel) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
+      body: JSON.stringify({
+        sessionId: '0c6a10',
+        hypothesisId: 'H1',
+        location: 'plansStore.ts:checkAndRestartSubscriptions:entry',
+        message: 'checkAndRestartSubscriptions branch inputs',
+        data: {
+          force: !!options?.force,
+          isSubscribed: get().subscriptionStatus.isSubscribed,
+          hasUpdates: !!updatesChannel,
+          hasParticipants: !!participantsChannel,
+          hasPollVotes: !!pollVotesChannel,
+          hasPlanPolls: !!planPollsChannel,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    const auxPresent =
+      !!participantsChannel && !!pollVotesChannel && !!planPollsChannel;
+
+    // plan_updates can look "healthy" while auxiliary channels were nulled by a stale retry
+    // or never reattached — do not early-return unless all four channel refs exist.
+    if (!options?.force && get().subscriptionStatus.isSubscribed && updatesChannel && auxPresent) {
       console.log('✅ Plans real-time subscription is active');
       return;
+    }
+
+    if (!options?.force && get().subscriptionStatus.isSubscribed && updatesChannel && !auxPresent) {
+      console.log(
+        '⚠️ plan_updates active but auxiliary channel ref(s) missing — restarting subscriptions'
+      );
     }
 
     console.log(options?.force ? '🔄 Force restarting plans subscriptions...' : '🔄 Plans subscription missing or failed - restarting...');
@@ -1667,10 +1715,18 @@ function startPlansHealthCheck(userId: string) {
           .join(', ')}`
       );
 
-      // Only restart when the critical channel (plan_updates) is down. If plan_updates is joined
-      // but participants/poll_votes/polls are null, do NOT restart—they have their own retry
-      // and restarting would kill the working plan_updates and cause a restart loop.
-      if (!planUpdatesHealthy && failedChecks >= 1) {
+      const auxHealthy =
+        participantsChannel?.state === 'joined' &&
+        pollVotesChannel?.state === 'joined' &&
+        planPollsChannel?.state === 'joined';
+
+      if (planUpdatesHealthy && !auxHealthy && failedChecks >= 1) {
+        console.log(
+          '🔄 Health check: plan_updates OK but auxiliary realtime broken — restarting subscriptions...'
+        );
+        usePlansStore.getState().checkAndRestartSubscriptions(userId);
+        failedChecks = 0;
+      } else if (!planUpdatesHealthy && failedChecks >= 1) {
         console.log('🔄 Failed health check (plan_updates down) - restarting subscriptions...');
         usePlansStore.getState().checkAndRestartSubscriptions(userId);
         failedChecks = 0;
