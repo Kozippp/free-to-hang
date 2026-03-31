@@ -30,7 +30,7 @@ export const handleNotificationNavigation = (notification: any, router: Router) 
         pathname: '/plans',
         params: { 
           highlightPlan: planId, 
-          tab: 'plan', // Vaikimisi aktiivsed plaanid
+          tab: 'active', // Vaikimisi aktiivne feed
           modalTab: 'Control Panel' // Vaikimisi detailvaade
         }
       });
@@ -46,7 +46,7 @@ export const handleNotificationNavigation = (notification: any, router: Router) 
       pathname: '/plans',
       params: { 
         highlightPlan: planId, 
-        tab: 'plan',
+        tab: 'active',
         modalTab: 'Chat' // Ava otse chat
       }
     });

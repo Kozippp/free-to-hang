@@ -4,6 +4,8 @@
  * @see https://developers.google.com/identity/protocols/oauth2/native-app
  */
 module.exports = ({ config }) => {
+  const fs = require('fs');
+  const path = require('path');
   const schemes = ['freetohang'];
 
   const schemeFromGoogleClientId = (clientId) => {
@@ -19,8 +21,25 @@ module.exports = ({ config }) => {
   if (iosScheme) schemes.push(iosScheme);
   if (androidScheme && androidScheme !== iosScheme) schemes.push(androidScheme);
 
+  const googleServicesCandidates = [
+    './google-services.json',
+    './Free-to-hang/google-services.json',
+    './android/app/google-services.json',
+  ];
+  const googleServicesFile = googleServicesCandidates.find((filePath) =>
+    fs.existsSync(path.resolve(__dirname, filePath))
+  );
+
+  const androidConfig = { ...(config.android || {}) };
+  if (googleServicesFile) {
+    androidConfig.googleServicesFile = googleServicesFile;
+  } else {
+    delete androidConfig.googleServicesFile;
+  }
+
   return {
     ...config,
     scheme: schemes.length === 1 ? schemes[0] : schemes,
+    android: androidConfig,
   };
 };

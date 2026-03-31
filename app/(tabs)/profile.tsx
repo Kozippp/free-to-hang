@@ -941,36 +941,44 @@ export default function ProfileScreen() {
     });
   };
 
-  const renderRequestItem = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={styles.userItem}
-      onPress={() => handleRequestPress(item)}
-    >
-      <Image 
-        source={{ uri: item.sender_avatar_url || generateDefaultAvatar(item.sender_name, item.sender_id) }} 
-        style={styles.avatar} 
-      />
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.sender_name}</Text>
-        <Text style={styles.userUsername}>@{item.sender_username}</Text>
-        {item.sender_vibe && <Text style={styles.userVibe} numberOfLines={1}>{item.sender_vibe}</Text>}
-      </View>
-      <View style={styles.requestActions}>
-        <TouchableOpacity 
-          style={styles.acceptQuickButton}
-          onPress={() => handleAcceptRequest(item.request_id)}
-        >
-          <Check size={18} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.declineQuickButton}
-          onPress={() => handleDeclineRequest(item.request_id)}
-        >
-          <X size={18} color={Colors.light.secondaryText} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderRequestItem = ({ item }: { item: any }) => {
+    const senderName = typeof item.sender_name === 'string' && item.sender_name.trim().length > 0
+      ? item.sender_name
+      : 'Unknown user';
+    const senderUsername = typeof item.sender_username === 'string' && item.sender_username.trim().length > 0
+      ? item.sender_username
+      : 'unknown';
+
+    return (
+      <TouchableOpacity 
+        style={styles.userItem}
+        onPress={() => handleRequestPress(item)}
+      >
+        <Image 
+          source={{ uri: item.sender_avatar_url || generateDefaultAvatar(senderName, item.sender_id) }} 
+          style={styles.avatar} 
+        />
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>{senderName}</Text>
+          <Text style={styles.userUsername}>@{senderUsername}</Text>
+        </View>
+        <View style={styles.requestActions}>
+          <TouchableOpacity 
+            style={styles.acceptQuickButton}
+            onPress={() => handleAcceptRequest(item.request_id)}
+          >
+            <Check size={18} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.declineQuickButton}
+            onPress={() => handleDeclineRequest(item.request_id)}
+          >
+            <X size={18} color={Colors.light.secondaryText} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <>
@@ -1249,18 +1257,13 @@ export default function ProfileScreen() {
 
                 {/* Profile Picture */}
                 <Image 
-                  source={{ uri: selectedRequest.sender_avatar_url || generateDefaultAvatar(selectedRequest.sender_name, selectedRequest.sender_id) }} 
+                  source={{ uri: selectedRequest.sender_avatar_url || generateDefaultAvatar(selectedRequest.sender_name || 'Unknown user', selectedRequest.sender_id) }} 
                   style={styles.profileAvatar} 
                 />
                 
                 {/* Name & Username */}
-                <Text style={styles.profileName}>{selectedRequest.sender_name}</Text>
-                <Text style={styles.profileUsername}>@{selectedRequest.sender_username}</Text>
-                
-                {/* Vibe */}
-                {selectedRequest.sender_vibe && (
-                  <Text style={styles.profileVibe}>{selectedRequest.sender_vibe}</Text>
-                )}
+                <Text style={styles.profileName}>{selectedRequest.sender_name || 'Unknown user'}</Text>
+                <Text style={styles.profileUsername}>@{selectedRequest.sender_username || 'unknown'}</Text>
                 
                 {/* Action Buttons - side by side */}
                 <View style={styles.modalActionButtons}>

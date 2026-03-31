@@ -2,8 +2,9 @@
 export const DEFAULT_AVATAR_URL = 'https://ui-avatars.com/api/?name=User&background=e5e7eb&color=6b7280&size=150&format=png';
 
 export const generateDefaultAvatar = (name: string, userId?: string) => {
+  const safeName = typeof name === 'string' && name.trim().length > 0 ? name : 'User';
   // Create a default avatar with user's initials
-  const initials = name
+  const initials = safeName
     .split(' ')
     .map(word => word.charAt(0).toUpperCase())
     .join('')

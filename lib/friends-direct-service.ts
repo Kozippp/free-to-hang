@@ -51,10 +51,41 @@ export interface UserSearchResult {
   relationshipStatus: RelationshipStatus;
 }
 
+interface DirectoryProfile {
+  id: string;
+  name: string;
+  username: string;
+  avatar_url: string | null;
+  bio: string | null;
+  vibe: string | null;
+}
+
 /**
  * Direct Supabase Friends Service
  */
 class FriendsDirectService {
+  private async getDirectoryProfilesByIds(userIds: string[]): Promise<Map<string, DirectoryProfile>> {
+    const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+    if (uniqueIds.length === 0) {
+      return new Map();
+    }
+
+    const { data, error } = await supabase
+      .from('user_directory')
+      .select('id, name, username, avatar_url, bio, vibe')
+      .in('id', uniqueIds);
+
+    if (error) {
+      throw error;
+    }
+
+    const profiles = new Map<string, DirectoryProfile>();
+    for (const profile of (data || []) as DirectoryProfile[]) {
+      profiles.set(profile.id, profile);
+    }
+    return profiles;
+  }
+
   /**
    * Get all friends (accepted friend requests)
    * Returns list of friends with their profile data
@@ -76,9 +107,7 @@ class FriendsDirectService {
           sender_id,
           receiver_id,
           status,
-          created_at,
-          sender:sender_id(id, name, username, avatar_url, bio),
-          receiver:receiver_id(id, name, username, avatar_url, bio)
+          created_at
         `)
         .eq('status', 'accepted')
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
@@ -87,18 +116,23 @@ class FriendsDirectService {
         throw error;
       }
 
+      const friendIds = ((data || []) as any[]).map((friendship: any) =>
+        friendship.sender_id === user.id ? friendship.receiver_id : friendship.sender_id
+      );
+      const profileMap = await this.getDirectoryProfilesByIds(friendIds);
+
       // Map the data to Friend objects
       // For each accepted friendship, the "friend" is the OTHER person (not me)
       const friends: Friend[] = (data || []).map((friendship: any) => {
-        const isSender = friendship.sender_id === user.id;
-        const friendProfile = isSender ? friendship.receiver : friendship.sender;
+        const friendId = friendship.sender_id === user.id ? friendship.receiver_id : friendship.sender_id;
+        const friendProfile = profileMap.get(friendId);
         
         return {
-          friend_id: friendProfile.id,
-          friend_name: friendProfile.name,
-          friend_username: friendProfile.username,
-          friend_avatar_url: friendProfile.avatar_url || '',
-          friend_vibe: friendProfile.bio,
+          friend_id: friendId,
+          friend_name: friendProfile?.name || 'Unknown user',
+          friend_username: friendProfile?.username || 'unknown',
+          friend_avatar_url: friendProfile?.avatar_url || '',
+          friend_vibe: friendProfile?.vibe ?? friendProfile?.bio ?? undefined,
           friendship_date: friendship.created_at
         };
       });
@@ -130,8 +164,7 @@ class FriendsDirectService {
           sender_id,
           receiver_id,
           status,
-          created_at,
-          sender:sender_id(id, name, username, avatar_url, bio)
+          created_at
         `)
         .eq('receiver_id', user.id)
         .eq('status', 'pending');
@@ -140,14 +173,17 @@ class FriendsDirectService {
         throw error;
       }
 
+      const senderIds = ((data || []) as any[]).map((req: any) => req.sender_id);
+      const profileMap = await this.getDirectoryProfilesByIds(senderIds);
+
       const requests: FriendRequest[] = (data || []).map((req: any) => ({
         request_id: req.id,
         sender_id: req.sender_id,
         receiver_id: req.receiver_id,
-        sender_name: req.sender?.name,
-        sender_username: req.sender?.username,
-        sender_avatar_url: req.sender?.avatar_url || '',
-        sender_vibe: req.sender?.bio,
+        sender_name: profileMap.get(req.sender_id)?.name,
+        sender_username: profileMap.get(req.sender_id)?.username,
+        sender_avatar_url: profileMap.get(req.sender_id)?.avatar_url || '',
+        sender_vibe: profileMap.get(req.sender_id)?.vibe ?? profileMap.get(req.sender_id)?.bio ?? undefined,
         created_at: req.created_at
       }));
 
@@ -178,8 +214,7 @@ class FriendsDirectService {
           sender_id,
           receiver_id,
           status,
-          created_at,
-          receiver:receiver_id(id, name, username, avatar_url, bio)
+          created_at
         `)
         .eq('sender_id', user.id)
         .eq('status', 'pending');
@@ -188,14 +223,17 @@ class FriendsDirectService {
         throw error;
       }
 
+      const receiverIds = ((data || []) as any[]).map((req: any) => req.receiver_id);
+      const profileMap = await this.getDirectoryProfilesByIds(receiverIds);
+
       const requests: FriendRequest[] = (data || []).map((req: any) => ({
         request_id: req.id,
         sender_id: req.sender_id,
         receiver_id: req.receiver_id,
-        receiver_name: req.receiver?.name,
-        receiver_username: req.receiver?.username,
-        receiver_avatar_url: req.receiver?.avatar_url || '',
-        receiver_vibe: req.receiver?.bio,
+        receiver_name: profileMap.get(req.receiver_id)?.name,
+        receiver_username: profileMap.get(req.receiver_id)?.username,
+        receiver_avatar_url: profileMap.get(req.receiver_id)?.avatar_url || '',
+        receiver_vibe: profileMap.get(req.receiver_id)?.vibe ?? profileMap.get(req.receiver_id)?.bio ?? undefined,
         created_at: req.created_at
       }));
 

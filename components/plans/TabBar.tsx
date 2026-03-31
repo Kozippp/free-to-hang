@@ -7,9 +7,16 @@ interface TabBarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   unreadCount?: number;
+  unreadTab?: string;
 }
 
-export default function TabBar({ tabs, activeTab, onTabChange, unreadCount = 0 }: TabBarProps) {
+export default function TabBar({
+  tabs,
+  activeTab,
+  onTabChange,
+  unreadCount = 0,
+  unreadTab = 'Invitations',
+}: TabBarProps) {
   return (
     <View style={styles.container}>
       {tabs.map((tab) => (
@@ -31,8 +38,8 @@ export default function TabBar({ tabs, activeTab, onTabChange, unreadCount = 0 }
               {tab}
             </Text>
             
-            {/* Show red dot for unread invitations */}
-            {tab === 'Invitations' && unreadCount > 0 && (
+            {/* Show red dot for unread invitations/active feed */}
+            {tab === unreadTab && unreadCount > 0 && (
               <View style={styles.unreadDot} />
             )}
           </View>

@@ -95,11 +95,16 @@ const resolveIsAnonymous = (plan: any): boolean => {
   return false;
 };
 
+const normalizeParticipantStatus = (status: unknown): ParticipantStatus => {
+  if (status === 'accepted') return 'going';
+  if (status === 'going' || status === 'maybe' || status === 'conditional' || status === 'declined' || status === 'pending') {
+    return status;
+  }
+  return 'pending';
+};
+
 // Helper function to transform API plan to store format
 const transformPlanForStore = (plan: any, currentUserId: string): Plan => {
-  const userParticipant = plan.participants.find((p: any) => p.id === currentUserId);
-  const userStatus = (userParticipant?.status || (userParticipant as any)?.response) || 'pending';
-
   return {
     id: plan.id,
     title: plan.title,
@@ -114,7 +119,7 @@ const transformPlanForStore = (plan: any, currentUserId: string): Plan => {
       id: p.id,
       name: p.name,
       avatar: p.avatar || '',
-      status: (p.status || (p as any).response) as ParticipantStatus,
+      status: normalizeParticipantStatus(p.status || (p as any).response),
       conditionalFriends: p.conditionalFriends
     })),
     date: plan.date,
@@ -436,7 +441,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
     plans.forEach(plan => {
       const currentUser = plan.participants.find(p => p.id === currentUserId);
-      const userStatus = currentUser?.status || 'pending';
+      const userStatus = normalizeParticipantStatus(currentUser?.status || 'pending');
 
       if (plan.status === 'completed') {
         // Show in completed unless the user explicitly declined
@@ -669,14 +674,22 @@ const usePlansStore = create<PlansState>((set, get) => ({
   
   markAsRead: (planId: string) => {
     // Optimistic local update
-    set((state) => ({
-      invitations: state.invitations.map(plan =>
-        plan.id === planId ? { ...plan, isRead: true } : plan
-      ),
-      activePlans: state.activePlans.map(plan =>
-        plan.id === planId ? { ...plan, isRead: true } : plan
-      ),
-    }));
+    set((state) => {
+      const plans = { ...state.plans };
+      if (plans[planId]) {
+        plans[planId] = { ...plans[planId], isRead: true };
+      }
+
+      return {
+        plans,
+        invitations: state.invitations.map(plan =>
+          plan.id === planId ? { ...plan, isRead: true } : plan
+        ),
+        activePlans: state.activePlans.map(plan =>
+          plan.id === planId ? { ...plan, isRead: true } : plan
+        ),
+      };
+    });
 
     // Persist to Supabase (fire-and-forget)
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -1275,8 +1288,14 @@ const usePlansStore = create<PlansState>((set, get) => ({
         }
         return plan;
       };
+
+      const plans = { ...state.plans };
+      if (plans[planId]) {
+        plans[planId] = updatePlan(plans[planId]);
+      }
       
       return {
+        plans,
         invitations: state.invitations.map(updatePlan),
         activePlans: state.activePlans.map(updatePlan),
         completedPlans: state.completedPlans
@@ -1295,8 +1314,14 @@ const usePlansStore = create<PlansState>((set, get) => ({
         }
         return plan;
       };
+
+      const plans = { ...state.plans };
+      if (plans[planId]) {
+        plans[planId] = updatePlan(plans[planId]);
+      }
       
       return {
+        plans,
         invitations: state.invitations.map(updatePlan),
         activePlans: state.activePlans.map(updatePlan),
         completedPlans: state.completedPlans
@@ -1935,7 +1960,7 @@ function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
 
   const planId = newData.plan_id;
   const userId = newData.user_id;
-  const newStatus = newData.status;
+  const newStatus = normalizeParticipantStatus(newData.status);
   const oldStatus = oldData?.status;
 
   console.log(`👥 INSTANT participant update: Plan ${planId}, User ${userId}: ${oldStatus} → ${newStatus}`);
@@ -1952,7 +1977,7 @@ function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
   // Update participant status in the plan
   const updatedParticipants = plan.participants.map(p => 
     p.id === userId 
-      ? { ...p, status: newStatus as ParticipantStatus }
+      ? { ...p, status: newStatus }
       : p
   );
 

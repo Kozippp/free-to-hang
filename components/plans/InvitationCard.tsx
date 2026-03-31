@@ -77,7 +77,14 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
   
   // Get status badge for the current user
   const getUserStatusBadge = () => {
-    if (currentUserStatus === 'going') {
+    if (currentUserStatus === 'pending') {
+      return (
+        <View style={[styles.statusBadge, styles.pendingBadge]}>
+          <Clock size={12} color="white" style={styles.statusBadgeIcon} />
+          <Text style={styles.statusBadgeText}>Invited</Text>
+        </View>
+      );
+    } else if (currentUserStatus === 'going') {
       return (
         <View style={[styles.statusBadge, styles.goingBadge]}>
           <CheckCircle size={12} color="white" style={styles.statusBadgeIcon} />
@@ -123,7 +130,7 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
       )}
       
       {/* User status badge */}
-      {currentUserStatus !== 'pending' && getUserStatusBadge()}
+      {getUserStatusBadge()}
       
       <View style={styles.header}>
         <Text style={[
@@ -328,7 +335,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     position: 'absolute',
     top: 12,
-    right: 12,
+    left: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -351,6 +358,9 @@ const styles = StyleSheet.create({
   },
   conditionalBadge: {
     backgroundColor: Colors.light.primary,
+  },
+  pendingBadge: {
+    backgroundColor: Colors.light.secondaryText,
   },
   votingBanner: {
     backgroundColor: `${Colors.light.warning}15`,

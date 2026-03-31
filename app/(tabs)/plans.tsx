@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { StyleSheet, View, Text, FlatList, SafeAreaView, Animated, Dimensions, TouchableOpacity, RefreshControl, AppState, TextInput } from 'react-native';
 import { XCircle } from 'lucide-react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
@@ -8,18 +8,15 @@ import TabBar from '@/components/plans/TabBar';
 import InvitationCard from '@/components/plans/InvitationCard';
 import CompletedPlanCard from '@/components/plans/CompletedPlanCard';
 import PlanDetailModal from '@/components/plans/PlanDetailModal';
-import CompletedPlanDetailView from '@/components/plans/CompletedPlanDetailView';
-import PlanCreatedSuccessModal from '@/components/PlanCreatedSuccessModal';
 import usePlansStore, { Plan, ParticipantStatus } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function PlansScreen() {
-  const [activeTab, setActiveTab] = useState('Plan');
+  const [activeTab, setActiveTab] = useState('Active');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   // DISABLED: const [showSuccessModal, setShowSuccessModal] = useState(false);
   // DISABLED: const [newPlanTitle, setNewPlanTitle] = useState('');
-  const [isAnonymousPlan, setIsAnonymousPlan] = useState(false);
   const [modalTab, setModalTab] = useState<string | undefined>(undefined);
   // DISABLED: const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -34,12 +31,18 @@ export default function PlansScreen() {
   const [hasMoreCompleted, setHasMoreCompleted] = useState(true);
   const [isLoadingCompleted, setIsLoadingCompleted] = useState(false);
   
-  const tabs = ['Invitations', 'Plan', 'Completed'];
+  const tabs = ['Active', 'Completed'];
   const screenWidth = Dimensions.get('window').width;
   const translateX = useRef(new Animated.Value(0)).current;
   // DISABLED: const newPlanAnimation = useRef(new Animated.Value(0)).current;
-  const tabSwitchAnimation = useRef(new Animated.Value(0)).current;
   // DISABLED: const dropInAnimation = useRef(new Animated.Value(-100)).current;
+  const activeFeedPlans = useMemo(() => {
+    const planMap = new Map<string, Plan>();
+    [...invitations, ...activePlans].forEach((plan) => {
+      planMap.set(plan.id, plan);
+    });
+    return Array.from(planMap.values());
+  }, [invitations, activePlans]);
 
   // Load plans from API when component mounts
   // NOTE: Realtime subscriptions are now managed globally by realtimeManager
@@ -62,8 +65,9 @@ export default function PlansScreen() {
 
     const normalizedTab = tabParam.toLowerCase();
     const tabMap: Record<string, string> = {
-      invitations: 'Invitations',
-      plan: 'Plan',
+      active: 'Active',
+      invitations: 'Active',
+      plan: 'Active',
       completed: 'Completed',
     };
 
@@ -94,7 +98,7 @@ export default function PlansScreen() {
         setCompletedOffset(limit);
         setHasMoreCompleted(count === limit);
       } else {
-        // For active/invitations, load active plans
+        // For active feed, load active plans
         await loadPlans(user.id);
       }
     } catch (error) {
@@ -168,22 +172,22 @@ export default function PlansScreen() {
       const planId = typeof params.highlightPlan === 'string' ? params.highlightPlan : params.highlightPlan[0];
       const initialTab = params.modalTab ? (typeof params.modalTab === 'string' ? params.modalTab : params.modalTab[0]) : undefined;
 
-      // Set active tab to Plan (unless it's completed)
-      // Check if plan is in active plans first
-      const isActivePlan = [...invitations, ...activePlans].some(p => p.id === planId);
+      // Set active tab to active feed (unless it's completed)
+      // Check if plan is in active feed first
+      const isActivePlan = activeFeedPlans.some(p => p.id === planId);
       const isCompletedPlan = completedPlans.some(p => p.id === planId);
       
       if (isActivePlan) {
-        setActiveTab('Plan');
+        setActiveTab('Active');
       } else if (isCompletedPlan) {
         setActiveTab('Completed');
       } else {
-        // If we don't know where it is yet (loading), default to Plan but logic below will handle opening
-        setActiveTab('Plan');
+        // If we don't know where it is yet (loading), default to active feed
+        setActiveTab('Active');
       }
 
       // Try to find the plan in loaded plans
-      const allPlans = [...invitations, ...activePlans, ...completedPlans];
+      const allPlans = [...activeFeedPlans, ...completedPlans];
       const foundPlan = allPlans.find(p => p.id === planId);
 
       if (foundPlan) {
@@ -211,7 +215,7 @@ export default function PlansScreen() {
          console.log('⚠️ Plan to highlight not found in current store state:', planId);
       }
     }
-  }, [params.highlightPlan, params.modalTab, invitations, activePlans, completedPlans, router]);
+  }, [params.highlightPlan, params.modalTab, activeFeedPlans, completedPlans, router]);
 
   // Check for completed plans periodically
   useEffect(() => {
@@ -408,24 +412,16 @@ export default function PlansScreen() {
   
   const handleRespondToPlan = async (planId: string, response: ParticipantStatus, conditionalFriends?: string[]) => {
     await respondToPlan(planId, response, conditionalFriends);
-    
-    // If user accepts an invitation (going), switch to Plan tab automatically
-    // This ensures that when they close the modal, they land on the Plan tab where their plan now is
-    if (activeTab === 'Invitations' && response === 'going') {
-      setActiveTab('Plan');
-    }
   };
   
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyTitle}>
-        {activeTab === 'Invitations' && 'No invitations'}
-        {activeTab === 'Plan' && 'No active plans'}
+        {activeTab === 'Active' && 'No plans yet'}
         {activeTab === 'Completed' && 'No completed plans'}
       </Text>
       <Text style={styles.emptySubtitle}>
-        {activeTab === 'Invitations' && 'When someone invites you to hang out, it will appear here.'}
-        {activeTab === 'Plan' && 'Create a plan or accept an invitation to get started.'}
+        {activeTab === 'Active' && 'Invitations and joined plans appear here in one feed.'}
         {activeTab === 'Completed' && 'Completed plans will appear here.'}
       </Text>
     </View>
@@ -476,6 +472,7 @@ export default function PlansScreen() {
           activeTab={activeTab} 
           onTabChange={handleTabChange}
           unreadCount={unreadCount}
+          unreadTab="Active"
         />
         
         <PanGestureHandler
@@ -483,29 +480,11 @@ export default function PlansScreen() {
           onHandlerStateChange={onHandlerStateChange}
         >
           <Animated.View style={[styles.contentContainer, { transform: [{ translateX }] }]}>
-            {activeTab === 'Invitations' && (
+            {activeTab === 'Active' && (
               <FlatList
-                data={getSortedPlans(invitations)}
+                data={getSortedPlans(activeFeedPlans)}
                 renderItem={renderPlanItem}
-                keyExtractor={(item) => `invitations-${item.id}`}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={renderEmptyState}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={isRefreshing || isLoading}
-                    onRefresh={handleRefresh}
-                    colors={[Colors.light.primary]}
-                    tintColor={Colors.light.primary}
-                  />
-                }
-              />
-            )}
-            
-            {activeTab === 'Plan' && (
-              <FlatList
-                data={getSortedPlans(activePlans)}
-                renderItem={renderPlanItem}
-                keyExtractor={(item) => `activePlans-${item.id}`}
+                keyExtractor={(item) => `active-${item.id}`}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={renderEmptyState}
                 refreshControl={
