@@ -1298,8 +1298,10 @@ const usePlansStore = create<PlansState>((set, get) => ({
               handlePlanUpdateNotification(payload, userId);
             }
           ),
-        () => {
-          updatesChannel = null;
+        (closedChannel) => {
+          if (updatesChannel === closedChannel) {
+            updatesChannel = null;
+          }
         },
         userId
       );
@@ -1620,7 +1622,7 @@ function createChannelWithRetry(
   channelName: PlansChannelName,
   channelId: string,
   configureChannel: (channel: any) => any,
-  onDisconnect: () => void,
+  onDisconnect: (closedChannel: any) => void,
   userId: string
 ) {
   usePlansStore.getState().updateChannelStatus(channelName, 'connecting');
@@ -1648,7 +1650,7 @@ function createChannelWithRetry(
       logSubscriptionMetrics();
     } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
       console.log(`❌ ${channelName} disconnected:`, status);
-      onDisconnect();
+      onDisconnect(channel);
       const state = usePlansStore.getState();
       state.updateChannelStatus(channelName, 'disconnected', status);
       state.setSubscriptionActive(false);
@@ -1671,6 +1673,28 @@ function createChannelWithRetry(
         logSubscriptionMetrics();
 
         setTimeout(() => {
+          if (
+            channelName === 'plan_updates' &&
+            updatesChannel != null &&
+            updatesChannel !== channel
+          ) {
+            console.log(`⏭️ Skipping stale ${channelName} retry (ref replaced)`);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/28462891-67ff-4008-918c-b3b47aa19c24', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '0c6a10' },
+              body: JSON.stringify({
+                sessionId: '0c6a10',
+                hypothesisId: 'H2',
+                location: 'plansStore.ts:createChannelWithRetry:staleRetrySkipped',
+                message: 'Skipped stale plan_updates delayed checkAndRestart',
+                data: { channelName },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
+            return;
+          }
           console.log(`♻️ Attempting to restart ${channelName}...`);
           usePlansStore.getState().checkAndRestartSubscriptions(userId);
         }, delay);
