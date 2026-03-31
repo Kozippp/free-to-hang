@@ -74,7 +74,7 @@ export default function NameInputScreen() {
             <TouchableOpacity style={styles.backButton} onPress={handleBack}>
               <ArrowLeft size={20} color="#999" />
             </TouchableOpacity>
-            <Text style={styles.logoText}>freetohang</Text>
+            <Text style={styles.logoText}>Free to Hang</Text>
             <View style={styles.placeholder} />
           </View>
 

@@ -280,7 +280,7 @@ export default function ProfilePhotoScreen() {
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <ArrowLeft size={20} color="#999" />
           </TouchableOpacity>
-          <Text style={styles.logoText}>freetohang</Text>
+          <Text style={styles.logoText}>Free to Hang</Text>
           <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
             <Text style={styles.skipText}>skip</Text>
           </TouchableOpacity>
