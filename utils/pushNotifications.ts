@@ -51,6 +51,7 @@ const resolveProjectId = () => {
   return easProjectId;
 };
 
+/** Registers token for the current session; RPC uses auth.uid() (must match userId). */
 export async function registerForPushNotifications(userId: string) {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
@@ -99,19 +100,13 @@ export async function registerForPushNotifications(userId: string) {
 
     // STEP 2: Save token to database (separate try-catch)
     try {
-      console.log('💾 Saving push token to database...');
-      const { error } = await supabase
-        .from('push_tokens')
-        .upsert(
-          {
-            user_id: userId,
-            expo_push_token: token,
-            device_type: Platform.OS,
-            active: true,
-            last_used_at: new Date().toISOString()
-          },
-          { onConflict: 'user_id,expo_push_token' }
-        );
+      console.log('💾 Saving push token to database for user:', userId);
+      // UNIQUE(expo_push_token): client upsert hits 23505 or RLS when token belonged to
+      // another user. RPC runs as SECURITY DEFINER and performs ON CONFLICT safely.
+      const { error } = await supabase.rpc('register_expo_push_token', {
+        p_expo_push_token: token,
+        p_device_type: Platform.OS,
+      });
 
       if (error) {
         console.error('❌ Database error:', error);
