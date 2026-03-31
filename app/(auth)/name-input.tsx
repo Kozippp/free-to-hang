@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
+import { MAX_PROFILE_NAME_LENGTH } from '@/constants/limits';
 
 export default function NameInputScreen() {
   const [name, setName] = useState('');
@@ -75,13 +76,18 @@ export default function NameInputScreen() {
               placeholder="Enter your name"
               placeholderTextColor="#999"
               value={name}
-              onChangeText={setName}
+              onChangeText={(text) =>
+                setName(text.slice(0, MAX_PROFILE_NAME_LENGTH))
+              }
               autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="done"
               onSubmitEditing={handleContinue}
-              maxLength={50}
+              maxLength={MAX_PROFILE_NAME_LENGTH}
             />
+            <Text style={styles.nameLengthHint}>
+              Up to {MAX_PROFILE_NAME_LENGTH} characters
+            </Text>
 
             <TouchableOpacity 
               style={[
@@ -181,8 +187,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     fontSize: 24,
     color: Colors.light.text,
-    marginBottom: 48,
+    marginBottom: 8,
     fontWeight: '400',
+  },
+  nameLengthHint: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+    textAlign: 'left',
+    marginBottom: 40,
   },
   nextButton: {
     backgroundColor: Colors.light.primary,

@@ -13,6 +13,7 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { MAX_PROFILE_NAME_LENGTH } from '@/constants/limits';
 
 export default function NameInputScreen() {
   const [name, setName] = useState('');
@@ -88,13 +89,18 @@ export default function NameInputScreen() {
                 placeholder="Enter your name"
                 placeholderTextColor="#999"
                 value={name}
-                onChangeText={setName}
+                onChangeText={(text) =>
+                  setName(text.slice(0, MAX_PROFILE_NAME_LENGTH))
+                }
                 autoCapitalize="words"
                 autoCorrect={false}
                 returnKeyType="done"
                 onSubmitEditing={handleContinue}
-                maxLength={50}
+                maxLength={MAX_PROFILE_NAME_LENGTH}
               />
+              <Text style={styles.nameLengthHint}>
+                Up to {MAX_PROFILE_NAME_LENGTH} characters
+              </Text>
             </View>
 
             {/* Continue button - positioned above keyboard */}
@@ -168,6 +174,12 @@ const styles = StyleSheet.create({
   inputContainer: {
     width: '100%',
     marginBottom: 16,
+  },
+  nameLengthHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+    textAlign: 'center',
   },
   nameInput: {
     backgroundColor: 'transparent',
