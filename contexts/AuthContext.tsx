@@ -18,6 +18,7 @@ import {
 import usePlansStore from '@/store/plansStore';
 import useFriendsStore from '@/store/friendsStore';
 import useHangStore from '@/store/hangStore';
+import { deactivatePushToken } from '@/utils/pushNotifications';
 
 // TEMPORARY: Mock mode for database setup
 // Automatically enabled when placeholder keys are used
@@ -142,6 +143,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (event === 'SIGNED_OUT') {
           console.log('👋 User signed out');
+          
+          // Extra safety: deactivate push token on sign out event
+          try {
+            await deactivatePushToken();
+          } catch (error) {
+            console.error('⚠️ Failed to deactivate push token on SIGNED_OUT event:', error);
+          }
+          
           setHasCheckedOnboarding(false);
           setIsCheckingOnboarding(false);
           setNavigationReady(true);
@@ -643,6 +652,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     if (AUTH_MOCK_MODE) {
       return;
+    }
+
+    // Deactivate push token before signing out
+    try {
+      console.log('🔕 Deactivating push token...');
+      await deactivatePushToken();
+    } catch (error) {
+      console.error('⚠️ Failed to deactivate push token, continuing with sign out:', error);
     }
 
     const { error } = await supabase.auth.signOut();

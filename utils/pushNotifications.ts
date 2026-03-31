@@ -101,8 +101,10 @@ export async function registerForPushNotifications(userId: string) {
     // STEP 2: Save token to database (separate try-catch)
     try {
       console.log('💾 Saving push token to database for user:', userId);
-      // UNIQUE(expo_push_token): client upsert hits 23505 or RLS when token belonged to
-      // another user. RPC runs as SECURITY DEFINER and performs ON CONFLICT safely.
+      // RPC function:
+      // 1. Deactivates any old tokens for this user
+      // 2. Registers/reassigns this token to current user
+      // 3. Handles account switches automatically (ON CONFLICT)
       const { error } = await supabase.rpc('register_expo_push_token', {
         p_expo_push_token: token,
         p_device_type: Platform.OS,
@@ -113,6 +115,7 @@ export async function registerForPushNotifications(userId: string) {
         throw error;
       }
       console.log('✅ Push token saved to database successfully');
+      console.log('🔄 Old tokens deactivated, new token is now active');
     } catch (error) {
       console.error('❌ Failed to save push token:', error);
     }
@@ -154,5 +157,38 @@ export async function updateLastActive(userId: string) {
       .eq('user_id', userId);
   } catch (error) {
     console.error('❌ Failed to update last active timestamp:', error);
+  }
+}
+
+/** Deactivates push token on sign out */
+export async function deactivatePushToken() {
+  if (Platform.OS === 'android') {
+    // Skip on Android emulator
+    if (!Device.isDevice) {
+      console.log('📱 Skipping push token deactivation on emulator');
+      return;
+    }
+  }
+
+  try {
+    const projectId = resolveProjectId();
+    const tokenResponse = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
+    const token = tokenResponse.data;
+
+    console.log('🔕 Deactivating push token on sign out:', token);
+
+    const { error } = await supabase.rpc('deactivate_push_token', {
+      p_expo_push_token: token,
+    });
+
+    if (error) {
+      console.error('❌ Failed to deactivate push token:', error);
+    } else {
+      console.log('✅ Push token deactivated successfully');
+    }
+  } catch (error) {
+    console.error('❌ Error during push token deactivation:', error);
   }
 }

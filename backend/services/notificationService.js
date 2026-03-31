@@ -58,6 +58,11 @@ async function sendPushNotification({ userId, title, body, data = {} }) {
     return;
   }
 
+  // Fetch only ACTIVE push tokens for the user
+  // Token management:
+  // - Tokens are marked as active=false on sign out
+  // - Only the most recent device has active=true
+  // - This prevents sending notifications to signed-out users
   const { data: tokens, error: tokenError } = await supabase
     .from('push_tokens')
     .select('expo_push_token')
