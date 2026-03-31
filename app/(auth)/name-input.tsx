@@ -85,9 +85,11 @@ export default function NameInputScreen() {
               onSubmitEditing={handleContinue}
               maxLength={MAX_PROFILE_NAME_LENGTH}
             />
-            <Text style={styles.nameLengthHint}>
-              Up to {MAX_PROFILE_NAME_LENGTH} characters
-            </Text>
+            <View style={styles.nameCounterRow}>
+              <Text style={styles.nameCounterText}>
+                {name.length}/{MAX_PROFILE_NAME_LENGTH}
+              </Text>
+            </View>
 
             <TouchableOpacity 
               style={[
@@ -190,11 +192,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '400',
   },
-  nameLengthHint: {
+  nameCounterRow: {
+    marginTop: 8,
+    minHeight: 18,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  nameCounterText: {
     fontSize: 13,
     color: Colors.light.secondaryText,
-    textAlign: 'left',
-    marginBottom: 40,
+    fontVariant: ['tabular-nums'],
   },
   nextButton: {
     backgroundColor: Colors.light.primary,

@@ -45,6 +45,7 @@ import {
 } from 'lucide-react-native';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
+import { MAX_PROFILE_NAME_LENGTH } from '@/constants/limits';
 import { FOUNDER_SUPPORT_EMAIL } from '@/constants/config';
 import { PRIVACY_SECTIONS, TERMS_SECTIONS } from '@/constants/legalCopy';
 import { 
@@ -1119,8 +1120,11 @@ export default function ProfileScreen() {
               <TextInput
                 style={styles.textInput}
                 value={editName}
-                onChangeText={setEditName}
+                onChangeText={(text) =>
+                  setEditName(text.slice(0, MAX_PROFILE_NAME_LENGTH))
+                }
                 placeholder="Your name"
+                maxLength={MAX_PROFILE_NAME_LENGTH}
                 onFocus={() => scrollToInput(50)}
               />
 

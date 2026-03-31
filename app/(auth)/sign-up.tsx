@@ -15,6 +15,7 @@ import {
 import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
+import { MAX_PROFILE_NAME_LENGTH } from '@/constants/limits';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignUpScreen() {
@@ -98,10 +99,13 @@ export default function SignUpScreen() {
                     style={styles.input}
                     placeholder="Full Name"
                     value={name}
-                    onChangeText={setName}
+                    onChangeText={(text) =>
+                      setName(text.slice(0, MAX_PROFILE_NAME_LENGTH))
+                    }
                     autoCapitalize="words"
                     autoCorrect={false}
                     returnKeyType="next"
+                    maxLength={MAX_PROFILE_NAME_LENGTH}
                   />
                 </View>
 

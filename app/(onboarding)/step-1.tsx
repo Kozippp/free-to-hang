@@ -98,9 +98,11 @@ export default function NameInputScreen() {
                 onSubmitEditing={handleContinue}
                 maxLength={MAX_PROFILE_NAME_LENGTH}
               />
-              <Text style={styles.nameLengthHint}>
-                Up to {MAX_PROFILE_NAME_LENGTH} characters
-              </Text>
+              <View style={styles.nameCounterRow}>
+                <Text style={styles.nameCounterText}>
+                  {name.length}/{MAX_PROFILE_NAME_LENGTH}
+                </Text>
+              </View>
             </View>
 
             {/* Continue button - positioned above keyboard */}
@@ -175,11 +177,17 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 16,
   },
-  nameLengthHint: {
+  nameCounterRow: {
     marginTop: 8,
+    minHeight: 18,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  nameCounterText: {
     fontSize: 13,
     color: Colors.light.secondaryText,
-    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   nameInput: {
     backgroundColor: 'transparent',
