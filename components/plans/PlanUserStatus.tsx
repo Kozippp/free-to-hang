@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, Animated, Image } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, Animated } from 'react-native';
 import { CheckCircle, HelpCircle, Eye, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { ParticipantStatus, Participant } from '@/store/plansStore';
 import ConditionalFriendsModal from './ConditionalFriendsModal';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface PlanUserStatusProps {
   currentStatus: ParticipantStatus;
@@ -96,6 +97,14 @@ export default function PlanUserStatus({
   currentUserId 
 }: PlanUserStatusProps) {
   const [showConditionalModal, setShowConditionalModal] = useState(false);
+  /** Bridges API/refetch delays so chosen friends stay visible under "If" */
+  const [localConditionalFriendIds, setLocalConditionalFriendIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (currentStatus !== 'conditional') {
+      setLocalConditionalFriendIds([]);
+    }
+  }, [currentStatus]);
 
   const handleStatusChange = (newStatus: ParticipantStatus) => {
     // Show warning only when going FROM 'going' TO maybe/conditional
@@ -147,11 +156,28 @@ export default function PlanUserStatus({
   };
 
   const handleConditionalConfirm = (selectedFriendIds: string[]) => {
+    setLocalConditionalFriendIds(selectedFriendIds);
     // ALWAYS set as conditional - even with empty friends array
     onStatusChange('conditional', selectedFriendIds);
   };
 
   const currentUser = participants.find(p => p.id === currentUserId);
+
+  const effectiveConditionalFriendIds = useMemo(() => {
+    const fromParticipant = currentUser?.conditionalFriends?.length
+      ? currentUser.conditionalFriends
+      : [];
+    if (fromParticipant.length > 0) return fromParticipant;
+    return localConditionalFriendIds;
+  }, [currentUser?.conditionalFriends, localConditionalFriendIds]);
+
+  const conditionalDependentFriends = useMemo(
+    () =>
+      effectiveConditionalFriendIds
+        .map((id) => participants.find((p) => p.id === id))
+        .filter(Boolean) as Participant[],
+    [effectiveConditionalFriendIds, participants]
+  );
 
   const getStatusStyle = (status: ParticipantStatus) => {
     switch (status) {
@@ -164,17 +190,17 @@ export default function PlanUserStatus({
         };
       case 'maybe':
         return {
-          backgroundColor: currentStatus === 'maybe' ? '#FF9800' : '#FFF3E0',
-          borderColor: '#FF9800',
-          iconColor: currentStatus === 'maybe' ? 'white' : '#FF9800',
-          textColor: currentStatus === 'maybe' ? 'white' : '#FF9800'
+          backgroundColor: currentStatus === 'maybe' ? '#FFC107' : '#FFF8E1',
+          borderColor: '#FFC107',
+          iconColor: currentStatus === 'maybe' ? 'white' : '#FFC107',
+          textColor: currentStatus === 'maybe' ? 'white' : '#FFC107'
         };
       case 'conditional':
         return {
-          backgroundColor: currentStatus === 'conditional' ? '#2196F3' : '#E3F2FD',
-          borderColor: '#2196F3',
-          iconColor: currentStatus === 'conditional' ? 'white' : '#2196F3',
-          textColor: currentStatus === 'conditional' ? 'white' : '#2196F3'
+          backgroundColor: currentStatus === 'conditional' ? '#FFC107' : '#FFF8E1',
+          borderColor: '#FFC107',
+          iconColor: currentStatus === 'conditional' ? 'white' : '#FFC107',
+          textColor: currentStatus === 'conditional' ? 'white' : '#FFC107'
         };
       case 'declined':
         return {
@@ -253,42 +279,41 @@ export default function PlanUserStatus({
           />
         </View>
 
-        {/* Show conditional terms clearly if user has conditional status */}
-        {currentStatus === 'conditional' && (() => {
-          if (currentUser?.conditionalFriends && currentUser.conditionalFriends.length > 0) {
-            const dependentFriends = currentUser.conditionalFriends
-              .map(id => participants.find(p => p.id === id))
-              .filter(Boolean);
-            
-            return (
-              <View style={styles.conditionalTermsContainer}>
-                <Text style={styles.conditionalTermsTitle}>Your status will be set to "Going" if these people come:</Text>
+        {currentStatus === 'maybe' && (
+          <View style={styles.disclaimerContainer}>
+            <Text style={styles.disclaimerText}>
+              {"You can't vote or edit this plan until you respond \"Going\"."}
+            </Text>
+          </View>
+        )}
+
+        {currentStatus === 'conditional' && (
+          <View style={styles.disclaimerContainer}>
+            {conditionalDependentFriends.length > 0 && (
+              <>
+                <Text style={styles.conditionalTermsTitle}>
+                  {"Your status will be set to \"Going\" if these people come:"}
+                </Text>
                 <View style={styles.conditionalFriendsList}>
-                  {dependentFriends.map((friend) => (
-                    <View key={friend!.id} style={styles.conditionalFriendItem}>
-                      <Image source={{ uri: friend!.avatar }} style={styles.conditionalAvatar} />
-                      <Text style={styles.conditionalFriendName}>{friend!.name}</Text>
+                  {conditionalDependentFriends.map((friend) => (
+                    <View key={friend.id} style={styles.conditionalFriendItem}>
+                      <CachedAvatar userId={friend.id} uri={friend.avatar} style={styles.conditionalAvatar} />
+                      <Text style={styles.conditionalFriendName}>{friend.name}</Text>
                     </View>
                   ))}
                 </View>
                 <Text style={styles.conditionalTermsSubtext}>
-                  Until then your friends see you as "Maybe".
+                  {"Until then your friends see you as \"Maybe\"."}
                 </Text>
-              </View>
-            );
-          }
-          return null;
-        })()}
-
-        {/* Enhanced disclaimer based on current status - show only one */}
-        {(currentStatus === 'maybe' || 
-          (currentStatus === 'conditional' && (!currentUser?.conditionalFriends || currentUser.conditionalFriends.length === 0))) && (
-          <View style={styles.disclaimerContainer}>
-            <Text style={styles.disclaimerText}>
-              {currentStatus === 'maybe'
-                ? 'You can\'t vote or edit this plan until you respond "Going".'
-                : 'As "If", you can view but not vote or edit this plan until you respond "Going".'
-              }
+              </>
+            )}
+            <Text
+              style={[
+                styles.disclaimerText,
+                conditionalDependentFriends.length > 0 && styles.conditionalDisclaimerAfterList,
+              ]}
+            >
+              {"As \"If\", you can view but not vote or edit this plan until you respond \"Going\"."}
             </Text>
           </View>
         )}
@@ -363,19 +388,14 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 18,
   },
-  conditionalTermsContainer: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#2196F3',
-  },
   conditionalTermsTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: Colors.light.text,
     marginBottom: 12,
+  },
+  conditionalDisclaimerAfterList: {
+    marginTop: 10,
   },
   conditionalFriendsList: {
     marginBottom: 8,
@@ -400,5 +420,6 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     fontStyle: 'italic',
     lineHeight: 18,
+    marginBottom: 4,
   },
 });
