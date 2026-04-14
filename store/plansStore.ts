@@ -4,6 +4,7 @@ import { plansService } from '@/lib/plans-service';
 import { supabase } from '@/lib/supabase';
 import { prefetchAvatars } from '@/utils/avatarCache';
 import { logger } from '@/lib/logger';
+import { trackPlanCreated, trackPlanRSVP, trackPollVoted } from '@/lib/analytics';
 import useUnseenStore from './unseenStore';
 
 export type ParticipantStatus = 'pending' | 'going' | 'maybe' | 'conditional' | 'declined';
@@ -599,6 +600,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
       logger.log('📝 Creating plan via API...');
       const newPlan = await plansService.createPlan(planData);
       logger.log('✅ Plan created via API:', newPlan.id);
+      trackPlanCreated({
+        planId: newPlan.id,
+        isAnonymous: !!newPlan.isAnonymous,
+        invitedCount: newPlan.participants?.length ?? 0,
+        hasDate: !!newPlan.date,
+        hasLocation: !!newPlan.location,
+      });
       
       // Transform API response to store format
       const transformedPlan: Plan = {
@@ -791,6 +799,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         } as any;
       });
       
+      trackPlanRSVP({ planId, response: response as any });
     } catch (error) {
       logger.error('❌ Error responding to plan:', error);
       throw error;

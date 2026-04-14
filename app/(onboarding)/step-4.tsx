@@ -14,6 +14,7 @@ import { Camera, Image as ImageIcon, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { uploadImage, deleteImage } from '@/lib/storage';
 import Colors from '@/constants/colors';
+import { identifyUser, trackOnboardingCompleted } from '@/lib/analytics';
 
 export default function ProfilePhotoScreen() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
@@ -238,6 +239,15 @@ export default function ProfilePhotoScreen() {
         .eq('user_id', authUser.id);
 
       console.log('Username reservation cleaned up');
+
+      // Track onboarding completion
+      identifyUser(authUser.id, {
+        name: profileData.name,
+        email: profileData.email,
+        username: profileData.username,
+        createdAt: new Date().toISOString(),
+      });
+      trackOnboardingCompleted({ userId: authUser.id, method: 'email' });
 
       // Navigate to main app first
       router.replace('/(tabs)');

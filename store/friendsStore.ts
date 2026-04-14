@@ -5,6 +5,7 @@ import { friendsDirectService } from '@/lib/friends-direct-service';
 import { triggerFriendRequestNotification, triggerFriendAcceptedNotification } from '@/lib/notification-trigger';
 import { prefetchAvatars } from '@/utils/avatarCache';
 import useHangStore from '@/store/hangStore';
+import { trackFriendRequestSent, trackFriendRequestAccepted } from '@/lib/analytics';
 
 interface User {
   id: string;
@@ -266,7 +267,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const result = await friendsDirectService.sendFriendRequest(userId);
       if (result.success && result.requestId) {
-        console.log('🚀 Friend request sent, updating UI immediately...');
+        trackFriendRequestSent();
         
         // Trigger notification (fire-and-forget, don't block UI)
         void triggerFriendRequestNotification(userId, result.requestId);
@@ -304,7 +305,7 @@ const useFriendsStore = create<FriendsState>((set, get) => ({
     try {
       const success = await friendsDirectService.acceptFriendRequest(requestId);
       if (success) {
-        console.log('🚀 Friend request accepted, updating UI immediately...');
+        trackFriendRequestAccepted();
         
         // Trigger notification (fire-and-forget)
         void triggerFriendAcceptedNotification(requestId);

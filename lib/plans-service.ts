@@ -1,6 +1,7 @@
 import { API_URL } from '@/constants/config';
 import { supabase } from './supabase';
 import { logger } from './logger';
+import { trackPollCreated, trackPollVoted } from './analytics';
 
 // Enable direct Supabase reads for plans
 const ENABLE_DIRECT_PLANS_READ = true;
@@ -693,6 +694,11 @@ class PlansService {
       }
 
       logger.log('✅ Poll created successfully (Supabase direct)');
+      trackPollCreated({
+        planId,
+        pollType: pollData.type || 'custom',
+        optionsCount: pollData.options.length,
+      });
       return await this.getPlan(planId);
     } catch (error) {
       logger.error('❌ Error creating poll:', error);
@@ -734,6 +740,7 @@ class PlansService {
       }
 
       logger.log('✅ Vote submitted successfully via edge function');
+      trackPollVoted({ planId, pollType: 'custom' });
     } catch (error) {
       logger.error('❌ Error voting on poll:', error);
       throw error;

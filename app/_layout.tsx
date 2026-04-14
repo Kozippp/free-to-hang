@@ -13,8 +13,10 @@ import * as Sentry from '@sentry/react-native';
 import { ErrorBoundary } from "./error-boundary";
 import { initSentry } from "@/lib/sentry";
 import { logger } from "@/lib/logger";
+import { initAnalytics, trackNotificationOpened, trackNotificationReceived } from "@/lib/analytics";
 
 initSentry();
+initAnalytics();
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Colors from "@/constants/colors";
 import { registerForPushNotifications, updateLastActive } from "@/utils/pushNotifications";
@@ -77,6 +79,8 @@ function RootLayoutNav() {
 
     Notifications.getLastNotificationResponseAsync().then(response => {
       if (isMounted && response) {
+        const notifType = response.notification.request.content.data?.type ?? 'unknown';
+        trackNotificationOpened({ type: notifType, appState: 'killed' });
         setNotificationResponse(response);
       }
     });
@@ -89,11 +93,19 @@ function RootLayoutNav() {
   // 2. Handle foreground/background notification tap while app is running
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const notifType = response.notification.request.content.data?.type ?? 'unknown';
+      trackNotificationOpened({ type: notifType, appState: 'background' });
       setNotificationResponse(response);
+    });
+
+    const receivedSub = Notifications.addNotificationReceivedListener(notification => {
+      const notifType = notification.request.content.data?.type ?? 'unknown';
+      trackNotificationReceived({ type: notifType, appState: 'foreground' });
     });
 
     return () => {
       subscription.remove();
+      receivedSub.remove();
     };
   }, []);
 

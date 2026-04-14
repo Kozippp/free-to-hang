@@ -4,6 +4,14 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
 import { Platform, Alert } from 'react-native';
 import { logger } from '@/lib/logger';
+import {
+  identifyUser,
+  resetAnalytics,
+  trackSignUp,
+  trackSignIn,
+  trackSignOut,
+  trackOnboardingCompleted,
+} from '@/lib/analytics';
 import * as Linking from 'expo-linking';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import type { AppleAuthenticationCredential } from 'expo-apple-authentication';
@@ -132,6 +140,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (event === 'SIGNED_IN' && session?.user) {
           logger.log('✅ User signed in:', session.user.email);
+          identifyUser(session.user.id, {
+            email: session.user.email,
+            name: session.user.user_metadata?.name,
+          });
           // Don't reset onboarding status if it was already checked during signIn
           if (!hasCheckedOnboarding) {
             setHasCheckedOnboarding(false);
@@ -528,6 +540,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // If sign in was successful, check user's onboarding status IMMEDIATELY
     if (data.user) {
+      trackSignIn({ userId: data.user.id, method: 'email', success: true });
       logger.log('✅ Sign in successful, checking user onboarding status immediately...');
       
       try {
@@ -637,6 +650,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Don't throw error for successful signup that needs email confirmation
     // The sign-up screen will handle this appropriately
+    if (data.user) {
+      trackSignUp({ userId: data.user.id, email, method: 'email' });
+    }
     return {
       user: data.user,
       needsEmailConfirmation: !!(data.user && !data.user.email_confirmed_at)
@@ -663,6 +679,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) {
       throw error;
     }
+    trackSignOut();
+    resetAnalytics();
   };
 
   const signInWithApple = async () => {
@@ -719,6 +737,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // (same flow as "Continue with Email": OAuth only verifies identity + email).
 
     if (data.user) {
+      trackSignIn({ userId: data.user.id, method: 'apple', success: true });
       await checkOnboardingStatus(data.user);
     }
   };
@@ -749,6 +768,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.user) {
+      trackSignIn({ userId: data.user.id, method: 'google', success: true });
       await checkOnboardingStatus(data.user);
     }
   };

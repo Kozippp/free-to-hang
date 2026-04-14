@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { generateDefaultAvatar, SILHOUETTE_AVATAR_URL } from '@/constants/defaultImages';
 import { formatFriendLastAvailable } from '@/utils/time';
 import { API_CONFIG } from '@/constants/config';
+import { trackHangStatusChanged } from '@/lib/analytics';
 
 interface Friend {
   id: string;
@@ -146,8 +147,12 @@ const useHangStore = create<HangState>()(
           if (error) {
             throw error;
           }
-          
-          console.log('Status updated in Supabase:', updates);
+
+          trackHangStatusChanged({
+            status: newStatus ? 'available' : 'offline',
+            durationMinutes: durationMinutes,
+            hasActivity: !!(newStatus && currentActivity),
+          });
 
         } catch (error) {
           console.error('Error updating status:', error);
