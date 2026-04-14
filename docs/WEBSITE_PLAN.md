@@ -83,16 +83,16 @@ The gradient style must match the app's mood — vibrant, warm, social. Use thes
 
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `--color-brand-from` | `#6C63FF` | Gradient start (purple) |
-| `--color-brand-to` | `#FF6B6B` | Gradient end (coral/pink) |
-| `--color-accent` | `#34C759` | Online dot, CTA highlights (from app) |
-| `--color-surface` | `#0D0D14` | Page background (near-black) |
-| `--color-surface-raised` | `#16161F` | Card backgrounds |
-| `--color-border` | `rgba(255,255,255,0.08)` | Subtle borders |
+| `--color-brand-from` | `#22C55E` | Gradient start (green) |
+| `--color-brand-to` | `#16A34A` | Gradient end (deep green) |
+| `--color-accent` | `#34C759` | Online dot, CTA highlights, buttons |
+| `--color-surface` | `#0A0F0C` | Page background (near-black, green tint) |
+| `--color-surface-raised` | `#111A14` | Card backgrounds |
+| `--color-border` | `rgba(34,197,94,0.15)` | Subtle green-tinted borders |
 | `--color-text-primary` | `#FFFFFF` | Headings |
-| `--color-text-secondary` | `#A0A0B8` | Body, captions |
+| `--color-text-secondary` | `#A0B8A6` | Body, captions |
 
-The hero and section dividers use a **diagonal gradient** (`from-[#6C63FF] via-[#A855F7] to-[#FF6B6B]`). Cards use a glassy/frosted look (`backdrop-blur`, low-opacity border).
+The hero and section dividers use a **diagonal gradient** (`from-[#22C55E] via-[#16A34A] to-[#15803D]`). Cards use a glassy/frosted look (`backdrop-blur`, low-opacity green-tinted border). Primary CTA buttons are solid green (`#22C55E`) with white text.
 
 ### Typography
 
