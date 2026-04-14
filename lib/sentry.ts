@@ -1,15 +1,11 @@
 import * as Sentry from '@sentry/react-native';
 
-const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+// DSN is public info - safe to hardcode as fallback
+const SENTRY_DSN =
+  process.env.EXPO_PUBLIC_SENTRY_DSN ||
+  'https://483fd8301b211919ad88b6e0607f48fd@o4511219784155136.ingest.de.sentry.io/4511219789135952';
 
 export function initSentry() {
-  if (!SENTRY_DSN) {
-    if (__DEV__) {
-      console.warn('[Sentry] EXPO_PUBLIC_SENTRY_DSN not set - crash reporting disabled');
-    }
-    return;
-  }
-
   Sentry.init({
     dsn: SENTRY_DSN,
     debug: false,

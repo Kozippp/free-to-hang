@@ -74,6 +74,13 @@
       "expo-router",
       "expo-apple-authentication",
       [
+        "@sentry/react-native/expo",
+        {
+          "organization": "kozip-apparel-ou",
+          "project": "react-native"
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Free to Hang to use your location to find nearby friends and suggest meeting places."
