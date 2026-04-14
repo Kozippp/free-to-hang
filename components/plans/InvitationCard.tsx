@@ -218,17 +218,13 @@ export default function InvitationCard({ plan, onPress }: InvitationCardProps) {
                 <View style={[
                   styles.avatarStatus,
                   participant.status === 'going' && styles.acceptedStatus,
-                  participant.status === 'maybe' && styles.maybeStatus,
-                  participant.status === 'conditional' && styles.conditionalStatus
+                  (participant.status === 'maybe' || participant.status === 'conditional') && styles.maybeStatus
                 ]}>
                   {participant.status === 'going' && (
                     <Check size={10} color="white" />
                   )}
-                  {participant.status === 'maybe' && (
+                  {(participant.status === 'maybe' || participant.status === 'conditional') && (
                     <Text style={styles.questionMark}>?</Text>
-                  )}
-                  {participant.status === 'conditional' && (
-                    <Eye size={10} color="white" />
                   )}
                 </View>
               )}

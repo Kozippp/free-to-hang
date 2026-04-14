@@ -5,7 +5,6 @@ import {
   Text,
   Modal,
   TouchableOpacity,
-  Image,
   ScrollView,
   TextInput,
   Alert
@@ -15,6 +14,7 @@ import Colors from '@/constants/colors';
 import { Plan } from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
 import useFriendsStore from '@/store/friendsStore';
+import CachedAvatar from '@/components/CachedAvatar';
 interface InviteFriendsModalProps {
   visible: boolean;
   onClose: () => void;
@@ -152,7 +152,7 @@ export default function InviteFriendsModal({
                     ]}
                     onPress={() => toggleFriendSelection(friend.id)}
                   >
-                    <Image source={{ uri: friend.avatar }} style={styles.friendAvatar} />
+                    <CachedAvatar userId={friend.id} uri={friend.avatar} style={styles.friendAvatar} />
                     <View style={styles.friendInfo}>
                       <Text style={styles.friendName}>{friend.name}</Text>
                       {friend.username && (

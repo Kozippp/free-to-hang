@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import Colors from '@/constants/colors';
 import { CheckCircle, HelpCircle, Eye, EyeOff } from 'lucide-react-native';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface FriendCardProps {
   id: string;
@@ -77,7 +78,7 @@ export default function FriendCard({
       activeOpacity={0.7}
     >
       <View style={styles.avatarContainer}>
-        <Image source={{ uri: avatar }} style={styles.avatar} />
+        <CachedAvatar userId={id} uri={avatar} style={styles.avatar} />
         {renderStatusIndicator()}
       </View>
       

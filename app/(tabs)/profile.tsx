@@ -3,7 +3,6 @@ import {
   StyleSheet, 
   View, 
   Text, 
-  Image, 
   TouchableOpacity, 
   FlatList, 
   SafeAreaView,
@@ -53,6 +52,7 @@ import {
 } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
+import CachedAvatar from '@/components/CachedAvatar';
 import { MAX_PROFILE_NAME_LENGTH } from '@/constants/limits';
 import { FOUNDER_SUPPORT_EMAIL } from '@/constants/config';
 import { PRIVACY_SECTIONS, TERMS_SECTIONS } from '@/constants/legalCopy';
@@ -818,7 +818,7 @@ export default function ProfileScreen() {
     >
       <View style={styles.friendInfo}>
         <View style={styles.friendAvatarContainer}>
-          <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
+          <CachedAvatar userId={item.id} uri={item.avatar} style={styles.friendAvatar} />
           <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
         </View>
         <View style={styles.friendDetails}>
@@ -942,21 +942,25 @@ export default function ProfileScreen() {
   };
 
   const renderRequestItem = ({ item }: { item: any }) => {
+    const fallbackUsername = typeof item.sender_username === 'string' && item.sender_username.trim().length > 0
+      ? item.sender_username
+      : (typeof item.sender_id === 'string' && item.sender_id.length > 0 ? item.sender_id.slice(0, 8) : 'user');
     const senderName = typeof item.sender_name === 'string' && item.sender_name.trim().length > 0
       ? item.sender_name
-      : 'Unknown user';
+      : fallbackUsername;
     const senderUsername = typeof item.sender_username === 'string' && item.sender_username.trim().length > 0
       ? item.sender_username
-      : 'unknown';
+      : fallbackUsername;
 
     return (
       <TouchableOpacity 
         style={styles.userItem}
         onPress={() => handleRequestPress(item)}
       >
-        <Image 
-          source={{ uri: item.sender_avatar_url || generateDefaultAvatar(senderName, item.sender_id) }} 
-          style={styles.avatar} 
+        <CachedAvatar
+          userId={item.sender_id}
+          uri={item.sender_avatar_url || generateDefaultAvatar(senderName, item.sender_id)}
+          style={styles.avatar}
         />
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{senderName}</Text>
@@ -1008,8 +1012,9 @@ export default function ProfileScreen() {
             onPress={() => setShowEditProfile(true)}
             activeOpacity={0.7}
           >
-            <Image
-              source={{ uri: editAvatar || userProfile.avatar }}
+            <CachedAvatar
+              userId={user?.id || userProfile.id || editUsername || 'current-user'}
+              uri={editAvatar || userProfile.avatar}
               style={styles.profilePreviewImage}
               key={editAvatar || userProfile.avatar}
             />
@@ -1138,9 +1143,10 @@ export default function ProfileScreen() {
                   style={styles.profilePictureContainer}
                   onPress={handleChangeProfilePicture}
                 >
-                  <Image 
-                    source={{ uri: editAvatar }} 
-                    style={styles.editProfileImage} 
+                  <CachedAvatar
+                    userId={user?.id || userProfile.id || editUsername || 'current-user'}
+                    uri={editAvatar}
+                    style={styles.editProfileImage}
                     key={editAvatar}
                   />
                   {uploadProgress !== null && (
@@ -1256,14 +1262,15 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
 
                 {/* Profile Picture */}
-                <Image 
-                  source={{ uri: selectedRequest.sender_avatar_url || generateDefaultAvatar(selectedRequest.sender_name || 'Unknown user', selectedRequest.sender_id) }} 
-                  style={styles.profileAvatar} 
+                <CachedAvatar
+                  userId={selectedRequest.sender_id}
+                  uri={selectedRequest.sender_avatar_url || generateDefaultAvatar(selectedRequest.sender_name || selectedRequest.sender_username || 'User', selectedRequest.sender_id)}
+                  style={styles.profileAvatar}
                 />
                 
                 {/* Name & Username */}
-                <Text style={styles.profileName}>{selectedRequest.sender_name || 'Unknown user'}</Text>
-                <Text style={styles.profileUsername}>@{selectedRequest.sender_username || 'unknown'}</Text>
+                <Text style={styles.profileName}>{selectedRequest.sender_name || selectedRequest.sender_username || 'User'}</Text>
+                <Text style={styles.profileUsername}>@{selectedRequest.sender_username || selectedRequest.sender_id?.slice(0, 8) || 'user'}</Text>
                 
                 {/* Action Buttons - side by side */}
                 <View style={styles.modalActionButtons}>

@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   ScrollView,
-  Image,
   Animated
 } from 'react-native';
 import { X, Check, Users } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Participant } from '@/store/plansStore';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface ConditionalFriendsModalProps {
   visible: boolean;
@@ -138,7 +138,7 @@ export default function ConditionalFriendsModal({
                       onPress={() => toggleFriend(participant.id)}
                     >
                       <View style={styles.friendInfo}>
-                        <Image source={{ uri: participant.avatar }} style={styles.avatar} />
+                        <CachedAvatar userId={participant.id} uri={participant.avatar} style={styles.avatar} />
                         <View style={styles.friendDetails}>
                           <Text style={styles.friendName}>{participant.name}</Text>
                           <Text style={[styles.friendStatus, { color: statusColor }]}>

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { API_CONFIG } from '@/constants/config';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { generateUUID } from '@/utils/idGenerator';
+import { logger } from '@/lib/logger';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import useUnseenStore from './unseenStore';
@@ -105,7 +106,7 @@ const transformMessage = (dbMessage: any): ChatMessage => {
       replyTo = {
         messageId: replyMsg.id,
         userId: replyUser?.id || '',
-        userName: replyUser?.name || 'Unknown User',
+        userName: replyUser?.name || 'User',
         content: replyMsg.content || '',
         type: replyMsg.type || 'text'
       };
@@ -116,7 +117,7 @@ const transformMessage = (dbMessage: any): ChatMessage => {
     id: dbMessage.id,
     planId: dbMessage.plan_id,
     userId: dbMessage.user_id,
-    userName: user?.name || 'Unknown User',
+    userName: user?.name || 'User',
     userAvatar: user?.avatar_url || '',
     type: dbMessage.type,
     content: dbMessage.content || '',
@@ -140,6 +141,26 @@ async function fetchUserDirectoryProfile(
     .eq('id', userId)
     .maybeSingle();
   return data;
+}
+
+async function fetchUserDirectoryProfilesByIds(
+  userIds: string[]
+): Promise<Map<string, { id: string; name: string; username: string | null; avatar_url: string | null }>> {
+  const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const { data } = await supabase
+    .from('user_directory')
+    .select('id, name, username, avatar_url')
+    .in('id', uniqueIds);
+
+  const profileMap = new Map<string, { id: string; name: string; username: string | null; avatar_url: string | null }>();
+  for (const row of data || []) {
+    profileMap.set(row.id, row);
+  }
+  return profileMap;
 }
 
 // Helper function to get auth token
@@ -168,7 +189,7 @@ const useChatStore = create<ChatState>((set, get) => ({
 
       const token = await getAuthToken();
       if (!token) {
-        console.error('No auth token available');
+        logger.error('No auth token available');
         return;
       }
 
@@ -187,7 +208,37 @@ const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const result = await response.json();
-      const messages = result.data.map(transformMessage);
+      const rawRows = result.data || [];
+
+      const messageUserIds: string[] = rawRows
+        .map((row: any) => row.user_id)
+        .filter(Boolean);
+      const replyUserIds: string[] = rawRows
+        .map((row: any) => {
+          const reply = Array.isArray(row.reply_to) ? row.reply_to[0] : row.reply_to;
+          return reply?.user_id;
+        })
+        .filter(Boolean);
+
+      const profileMap = await fetchUserDirectoryProfilesByIds([...messageUserIds, ...replyUserIds]);
+      const enrichedRows = rawRows.map((row: any) => {
+        const enrichedRow = { ...row };
+        const senderProfile = profileMap.get(row.user_id);
+        if (senderProfile) {
+          enrichedRow.user = senderProfile;
+        }
+
+        const reply = Array.isArray(row.reply_to) ? row.reply_to[0] : row.reply_to;
+        if (reply?.user_id) {
+          const replyProfile = profileMap.get(reply.user_id);
+          if (replyProfile) {
+            enrichedRow.reply_to = { ...reply, user: replyProfile };
+          }
+        }
+        return enrichedRow;
+      });
+
+      const messages = enrichedRows.map(transformMessage);
 
       set(state => ({
         messages: {
@@ -197,10 +248,10 @@ const useChatStore = create<ChatState>((set, get) => ({
         loading: { ...state.loading, [planId]: false }
       }));
 
-      console.log(`✅ Fetched ${messages.length} messages for plan ${planId}`);
+      logger.log(`✅ Fetched ${messages.length} messages for plan ${planId}`);
 
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      logger.error('Error fetching messages:', error);
       set(state => ({
         loading: { ...state.loading, [planId]: false }
       }));
@@ -223,17 +274,23 @@ const useChatStore = create<ChatState>((set, get) => ({
         .eq('plan_id', planId);
 
       if (error) {
-        console.error('❌ [chatStore] fetchReadReceipts error:', error);
+        logger.error('❌ [chatStore] fetchReadReceipts error:', error);
         return;
       }
 
+      const receiptUserIds = (data || []).map((row: any) => row.user_id).filter(Boolean);
+      const profileMap = await fetchUserDirectoryProfilesByIds(receiptUserIds);
+
       const receipts: Record<string, ReadReceipt> = {};
       for (const row of data ?? []) {
+        const profile = profileMap.get(row.user_id);
         receipts[row.user_id] = {
           userId: row.user_id,
           lastReadMessageId: row.last_read_message_id,
           lastReadAt: row.last_read_at,
-          user: (row.user as any) ?? { id: row.user_id, name: '', avatar_url: '' },
+          user: profile
+            ? { id: profile.id, name: profile.name, avatar_url: profile.avatar_url || '' }
+            : ((row.user as any) ?? { id: row.user_id, name: '', avatar_url: '' }),
         };
       }
 
@@ -244,9 +301,9 @@ const useChatStore = create<ChatState>((set, get) => ({
         },
       }));
 
-      console.log(`✅ [chatStore] Fetched ${Object.keys(receipts).length} read receipts (Supabase)`);
+      logger.log(`✅ [chatStore] Fetched ${Object.keys(receipts).length} read receipts (Supabase)`);
     } catch (error) {
-      console.error('❌ [chatStore] fetchReadReceipts error:', error);
+      logger.error('❌ [chatStore] fetchReadReceipts error:', error);
     }
   },
   
@@ -287,7 +344,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       // Send to backend
       const token = await getAuthToken();
       if (!token) {
-        console.error('No auth token available');
+        logger.error('No auth token available');
         // Remove message if auth failed
         set(state => ({
           messages: {
@@ -367,13 +424,13 @@ const useChatStore = create<ChatState>((set, get) => ({
           { onConflict: 'plan_id,user_id' }
         )
         .then(({ error }) => {
-          if (error) console.error('❌ [chatStore] sender read receipt upsert error:', error);
+          if (error) logger.error('❌ [chatStore] sender read receipt upsert error:', error);
         });
 
-      console.log(`✅ Message sent: ${realMessage.id}`);
+      logger.log(`✅ Message sent: ${realMessage.id}`);
       
     } catch (error) {
-      console.error('Error sending message:', error);
+      logger.error('Error sending message:', error);
       // Optionally remove failed message or mark it
     }
   },
@@ -397,7 +454,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       
       const token = await getAuthToken();
       if (!token) {
-        console.error('No auth token available');
+        logger.error('No auth token available');
         return;
       }
       
@@ -431,10 +488,10 @@ const useChatStore = create<ChatState>((set, get) => ({
         }
       }));
       
-      console.log(`✅ Reaction added to message ${messageId}`);
+      logger.log(`✅ Reaction added to message ${messageId}`);
       
     } catch (error) {
-      console.error('Error adding reaction:', error);
+      logger.error('Error adding reaction:', error);
       // Revert optimistic update on error
       get().fetchMessages(planId);
     }
@@ -461,7 +518,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       
       const token = await getAuthToken();
       if (!token) {
-        console.error('No auth token available');
+        logger.error('No auth token available');
         return;
       }
       
@@ -480,10 +537,10 @@ const useChatStore = create<ChatState>((set, get) => ({
         throw new Error('Failed to remove reaction');
       }
       
-      console.log(`✅ Reaction removed from message ${messageId}`);
+      logger.log(`✅ Reaction removed from message ${messageId}`);
       
     } catch (error) {
-      console.error('Error removing reaction:', error);
+      logger.error('Error removing reaction:', error);
       // Revert optimistic update on error
       get().fetchMessages(planId);
     }
@@ -507,7 +564,7 @@ const useChatStore = create<ChatState>((set, get) => ({
 
       // Skip temporary messages not yet persisted to Supabase
       if (targetMessage.id.startsWith('temp-')) {
-        console.log('⏳ Skipping read receipt for temporary message');
+        logger.log('⏳ Skipping read receipt for temporary message');
         return;
       }
 
@@ -522,7 +579,7 @@ const useChatStore = create<ChatState>((set, get) => ({
         user: existingReceipt?.user || { id: userId, name: '', avatar_url: '' },
       };
       get().updateReadReceipt(planId, userId, optimisticReceipt);
-      console.log(`⚡ [chatStore] Optimistic read receipt: ${targetMessage.id}`);
+      logger.log(`⚡ [chatStore] Optimistic read receipt: ${targetMessage.id}`);
 
       // Upsert directly to Supabase (retry on FK race: message may not exist yet)
       const upsertReceipt = async (): Promise<{ error: { code: string } | null }> =>
@@ -546,15 +603,15 @@ const useChatStore = create<ChatState>((set, get) => ({
       }
 
       if (result.error) {
-        console.error('❌ [chatStore] markMessagesAsRead upsert error:', result.error);
+        logger.error('❌ [chatStore] markMessagesAsRead upsert error:', result.error);
         return;
       }
 
       // Update unseenStore (clears chat badge for this plan)
       useUnseenStore.getState().markChatSeen(planId);
-      console.log(`✅ [chatStore] Read receipt persisted (Supabase) for ${userId} in plan ${planId}`);
+      logger.log(`✅ [chatStore] Read receipt persisted (Supabase) for ${userId} in plan ${planId}`);
     } catch (error) {
-      console.error('❌ [chatStore] markMessagesAsRead error:', error);
+      logger.error('❌ [chatStore] markMessagesAsRead error:', error);
     }
   },
       
@@ -581,7 +638,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       
       const token = await getAuthToken();
       if (!token) {
-        console.error('No auth token available');
+        logger.error('No auth token available');
         return;
       }
       
@@ -600,10 +657,10 @@ const useChatStore = create<ChatState>((set, get) => ({
         throw new Error('Failed to delete message');
       }
       
-      console.log(`✅ Message deleted: ${messageId}`);
+      logger.log(`✅ Message deleted: ${messageId}`);
       
     } catch (error) {
-      console.error('Error deleting message:', error);
+      logger.error('Error deleting message:', error);
       // Revert optimistic update on error
       get().fetchMessages(planId);
     }
@@ -626,7 +683,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       
       const token = await getAuthToken();
       if (!token) {
-        console.error('No auth token available');
+        logger.error('No auth token available');
         return;
       }
       
@@ -646,10 +703,10 @@ const useChatStore = create<ChatState>((set, get) => ({
         throw new Error('Failed to edit message');
       }
       
-      console.log(`✅ Message edited: ${messageId}`);
+      logger.log(`✅ Message edited: ${messageId}`);
       
     } catch (error) {
-      console.error('Error editing message:', error);
+      logger.error('Error editing message:', error);
       // Revert optimistic update on error
       get().fetchMessages(planId);
     }
@@ -680,11 +737,11 @@ const useChatStore = create<ChatState>((set, get) => ({
 
     if (existingChannel) {
       if (existingChannel.state === 'joined') {
-        console.log(`✅ Already subscribed: ${planId}`);
+        logger.log(`✅ Already subscribed: ${planId}`);
         return;
       }
       
-      console.log(`🧹 Cleaning up existing channel for ${planId} (state: ${existingChannel.state})`);
+      logger.log(`🧹 Cleaning up existing channel for ${planId} (state: ${existingChannel.state})`);
       set(state => {
         const { [planId]: _, ...rest } = state.subscriptions;
         return { subscriptions: rest };
@@ -692,7 +749,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       supabase.removeChannel(existingChannel);
     }
     
-    console.log(`📡 Subscribing to chat ${planId}`);
+    logger.log(`📡 Subscribing to chat ${planId}`);
     
     const channel = supabase
       .channel(`chat:${planId}`)
@@ -706,7 +763,7 @@ const useChatStore = create<ChatState>((set, get) => ({
           filter: `plan_id=eq.${planId}`
         },
         async (payload) => {
-          console.log('📨 New message received:', payload);
+          logger.log('📨 New message received:', payload);
           try {
             const { data: msgRow, error } = await supabase
               .from('chat_messages')
@@ -715,7 +772,7 @@ const useChatStore = create<ChatState>((set, get) => ({
               .single();
 
             if (error) {
-              console.error('Error fetching message:', error);
+              logger.error('Error fetching message:', error);
               return;
             }
 
@@ -740,7 +797,7 @@ const useChatStore = create<ChatState>((set, get) => ({
               get().addMessageToStore(planId, message);
             }
           } catch (error) {
-            console.error('Error processing new message:', error);
+            logger.error('Error processing new message:', error);
           }
         }
       )
@@ -754,11 +811,11 @@ const useChatStore = create<ChatState>((set, get) => ({
           filter: `plan_id=eq.${planId}`
         },
         (payload) => {
-          console.log('✏️ Message updated:', payload);
+          logger.log('✏️ Message updated:', payload);
           
           // If message was deleted (unsend), remove it from store
           if (payload.new.deleted === true) {
-            console.log('🗑️ Message deleted, removing from store:', payload.new.id);
+            logger.log('🗑️ Message deleted, removing from store:', payload.new.id);
             get().removeMessageFromStore(planId, payload.new.id);
           } else {
             // Otherwise update the message content
@@ -778,7 +835,7 @@ const useChatStore = create<ChatState>((set, get) => ({
           table: 'chat_reactions'
         },
         async (payload) => {
-          console.log('👍 Reaction changed:', payload);
+          logger.log('👍 Reaction changed:', payload);
 
           const newReaction = payload.new as { message_id?: string } | null;
           const oldReaction = payload.old as { message_id?: string } | null;
@@ -810,7 +867,7 @@ const useChatStore = create<ChatState>((set, get) => ({
           filter: `plan_id=eq.${planId}`
         },
         async (payload) => {
-          console.log('📖 New read receipt:', payload);
+          logger.log('📖 New read receipt:', payload);
 
           // Fetch user details for the new receipt
           const { data: userData } = await supabase
@@ -828,7 +885,7 @@ const useChatStore = create<ChatState>((set, get) => ({
             };
 
             get().updateReadReceipt(planId, payload.new.user_id, receipt);
-            console.log(`⚡ Real-time read receipt updated for ${userData.name}`);
+            logger.log(`⚡ Real-time read receipt updated for ${userData.name}`);
             
             // If the read receipt is for the current user, update unseen counts
             // This handles the case where the user reads messages on another device
@@ -846,7 +903,7 @@ const useChatStore = create<ChatState>((set, get) => ({
           filter: `plan_id=eq.${planId}`
         },
         async (payload) => {
-          console.log('📖 Updated read receipt:', payload);
+          logger.log('📖 Updated read receipt:', payload);
 
           // Fetch user details for the updated receipt
           const { data: userData } = await supabase
@@ -864,7 +921,7 @@ const useChatStore = create<ChatState>((set, get) => ({
             };
 
             get().updateReadReceipt(planId, payload.new.user_id, receipt);
-            console.log(`⚡ Real-time read receipt updated for ${userData.name}`);
+            logger.log(`⚡ Real-time read receipt updated for ${userData.name}`);
             
             // If the read receipt is for the current user, update unseen counts
             useUnseenStore.getState().fetchUnseenCounts();
@@ -892,7 +949,7 @@ const useChatStore = create<ChatState>((set, get) => ({
     const channel = state.subscriptions[planId];
     
     if (channel) {
-      console.log(`📡 Unsubscribing from chat ${planId}`);
+      logger.log(`📡 Unsubscribing from chat ${planId}`);
       supabase.removeChannel(channel);
       
       set(state => {
@@ -910,7 +967,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       const ext = uri.substring(uri.lastIndexOf('.') + 1);
       const fileName = `${planId}/${generateUUID()}.${ext}`;
       
-      console.log('📸 Uploading image:', fileName);
+      logger.log('📸 Uploading image:', fileName);
       
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -924,7 +981,7 @@ const useChatStore = create<ChatState>((set, get) => ({
         });
         
       if (error) {
-        console.error('❌ Upload error:', error);
+        logger.error('❌ Upload error:', error);
         throw error;
       }
       
@@ -932,11 +989,11 @@ const useChatStore = create<ChatState>((set, get) => ({
         .from('chat-images')
         .getPublicUrl(fileName);
         
-      console.log('✅ Image uploaded successfully:', publicUrl);
+      logger.log('✅ Image uploaded successfully:', publicUrl);
       return publicUrl;
       
     } catch (error) {
-      console.error('Error uploading image:', error);
+      logger.error('Error uploading image:', error);
       return null;
     }
   },
@@ -996,10 +1053,10 @@ const useChatStore = create<ChatState>((set, get) => ({
 }));
 
 function handleChatChannelStatus(planId: string, status: string) {
-  console.log(`📡 Chat subscription status for ${planId}:`, status);
+  logger.log(`📡 Chat subscription status for ${planId}:`, status);
 
   if (status === 'SUBSCRIBED') {
-    console.log(`✅ Chat connected: ${planId}`);
+    logger.log(`✅ Chat connected: ${planId}`);
     // Fix: Fetch messages on reconnect to fill any gaps (messages missed while disconnected)
     useChatStore.getState().fetchMessages(planId);
   } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -1015,7 +1072,7 @@ function handleChatChannelStatus(planId: string, status: string) {
       const currentChannel = store.subscriptions[planId];
       
       if (currentChannel) {
-         console.log(`🔄 Attempting to reconnect chat ${planId} after ${status}...`);
+         logger.log(`🔄 Attempting to reconnect chat ${planId} after ${status}...`);
          // Calling subscribeToChat will clean up the old one and start fresh
          store.subscribeToChat(planId);
       }

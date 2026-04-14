@@ -5,13 +5,13 @@ import {
   Text,
   Modal,
   TouchableOpacity,
-  Image,
   TextInput,
   ScrollView,
   Alert,
 } from 'react-native';
 import { X, Check, Search, UserPlus, Link } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface Friend {
   id: string;
@@ -149,8 +149,9 @@ export default function AddMoreFriendsModal({
                   >
                     <View style={styles.friendInfo}>
                       <View style={styles.friendAvatarContainer}>
-                        <Image
-                          source={{ uri: friend.avatar }}
+                        <CachedAvatar
+                          userId={friend.id}
+                          uri={friend.avatar}
                           style={styles.friendAvatar}
                         />
                         <View

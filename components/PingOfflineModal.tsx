@@ -5,7 +5,6 @@ import {
   Text,
   Modal,
   TouchableOpacity,
-  Image,
   FlatList,
   TouchableWithoutFeedback,
   Animated,
@@ -13,7 +12,7 @@ import {
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { offlineFriends } from '@/constants/mockData';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface OfflineFriend {
   id: string;
@@ -28,13 +27,15 @@ interface PingOfflineModalProps {
   onClose: () => void;
   onPingFriend: (friendId: string) => void;
   pingedFriends: string[];
+  friends?: OfflineFriend[];
 }
 
 export default function PingOfflineModal({
   visible,
   onClose,
   onPingFriend,
-  pingedFriends
+  pingedFriends,
+  friends = [],
 }: PingOfflineModalProps) {
   const [fadeAnim] = useState(new Animated.Value(0));
 
@@ -61,7 +62,7 @@ export default function PingOfflineModal({
       <View style={styles.friendItem}>
         <View style={styles.friendInfo}>
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: item.avatar }} style={styles.avatar} />
+            <CachedAvatar userId={item.id} uri={item.avatar} style={styles.avatar} />
             <View style={styles.statusDot} />
           </View>
           <View style={styles.textContainer}>
@@ -116,9 +117,9 @@ export default function PingOfflineModal({
                 Let your friends know you want to hang out with them
               </Text>
               
-              {offlineFriends.length > 0 ? (
+              {friends.length > 0 ? (
                 <FlatList
-                  data={offlineFriends as OfflineFriend[]}
+                  data={friends}
                   renderItem={renderFriendItem}
                   keyExtractor={(item) => item.id}
                   contentContainerStyle={styles.listContent}

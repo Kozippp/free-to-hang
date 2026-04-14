@@ -7,7 +7,6 @@ import {
   Modal,
   TouchableOpacity,
   ScrollView,
-  Image,
   Animated,
   Dimensions,
   TouchableWithoutFeedback,
@@ -25,6 +24,7 @@ import useHangStore from '@/store/hangStore';
 import usePlansStore, { ParticipantStatus } from '@/store/plansStore';
 import { useRouter } from 'expo-router';
 import AddMoreFriendsModal from './AddMoreFriendsModal';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface Friend {
   id: string;
@@ -335,8 +335,9 @@ export default function PlanSuggestionSheet({
                               index === currentSelectedFriends.length - 1 && styles.friendItemLast
                             ]}>
                               <View style={styles.friendAvatarContainer}>
-                                <Image
-                                  source={{ uri: friend.avatar }}
+                                <CachedAvatar
+                                  userId={friend.id}
+                                  uri={friend.avatar}
                                   style={styles.friendAvatar}
                                 />
                                 <View style={[

@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { plansService } from '@/lib/plans-service';
 import { supabase } from '@/lib/supabase';
 import { prefetchAvatars } from '@/utils/avatarCache';
+import { logger } from '@/lib/logger';
 import useUnseenStore from './unseenStore';
 
 export type ParticipantStatus = 'pending' | 'going' | 'maybe' | 'conditional' | 'declined';
@@ -380,9 +381,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
   // Load single plan from API
   loadPlan: async (planId: string, userId?: string) => {
     try {
-      console.log('📋 Loading single plan from API:', planId);
+      logger.log('📋 Loading single plan from API:', planId);
       const plan = await plansService.getPlan(planId);
-      console.log('✅ Single plan loaded from API:', planId);
+      logger.log('✅ Single plan loaded from API:', planId);
 
       const currentUserId = userId || get().currentUserId || 'unknown';
       const transformedPlan = transformPlanForStore(plan, currentUserId);
@@ -392,7 +393,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const hasChanged = !existingPlan || JSON.stringify(existingPlan) !== JSON.stringify(transformedPlan);
 
       if (hasChanged) {
-        console.log('📝 Plan data changed, updating store:', planId);
+        logger.log('📝 Plan data changed, updating store:', planId);
         // Update plans object
         set(state => ({
           plans: {
@@ -404,14 +405,14 @@ const usePlansStore = create<PlansState>((set, get) => ({
         // Recalculate computed arrays
         get().recalculatePlanArrays();
       } else {
-        console.log('⏭️ Plan data unchanged, skipping store update:', planId);
+        logger.log('⏭️ Plan data unchanged, skipping store update:', planId);
       }
 
       void prefetchAvatars(buildPlanAvatarPrefetchTargets(transformedPlan));
 
-      console.log('✅ Single plan load complete:', planId);
+      logger.log('✅ Single plan load complete:', planId);
     } catch (error) {
-      console.error('❌ Error loading single plan:', error);
+      logger.error('❌ Error loading single plan:', error);
       throw error;
     }
   },
@@ -469,11 +470,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
   loadPlans: async (userId?: string) => {
     try {
       set({ isLoading: true });
-      console.log('📋 Loading active plans from API...');
+      logger.log('📋 Loading active plans from API...');
 
       // Load only active plans initially for performance
       const plans = await plansService.getPlans('active');
-      console.log('✅ Active plans loaded from API:', plans.length);
+      logger.log('✅ Active plans loaded from API:', plans.length);
 
       const currentUserId = userId || get().currentUserId || 'unknown';
 
@@ -522,7 +523,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
           .eq('status', 'pending')
           .then(({ data, error }) => {
             if (error) {
-              console.error('❌ [plansStore] invitation_seen_at fetch error:', error);
+              logger.error('❌ [plansStore] invitation_seen_at fetch error:', error);
               return;
             }
             if (!data || data.length === 0) return;
@@ -549,7 +550,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       useUnseenStore.getState().fetchUnseenCounts();
 
     } catch (error) {
-      console.error('❌ Error loading active plans:', error);
+      logger.error('❌ Error loading active plans:', error);
       set({ isLoading: false });
     }
   },
@@ -557,10 +558,10 @@ const usePlansStore = create<PlansState>((set, get) => ({
   // Load completed plans with pagination
   loadCompletedPlans: async (userId?: string, limit = 15, offset = 0) => {
     try {
-      console.log(`📋 Loading completed plans (limit: ${limit}, offset: ${offset})...`);
+      logger.log(`📋 Loading completed plans (limit: ${limit}, offset: ${offset})...`);
 
       const plans = await plansService.getPlans('completed', limit, offset);
-      console.log('✅ Completed plans loaded:', plans.length);
+      logger.log('✅ Completed plans loaded:', plans.length);
 
       const currentUserId = userId || get().currentUserId || 'unknown';
 
@@ -587,7 +588,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
 
       return plans.length; // Return count to determine if hasMore
     } catch (error) {
-      console.error('❌ Error loading completed plans:', error);
+      logger.error('❌ Error loading completed plans:', error);
       return 0;
     }
   },
@@ -595,9 +596,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
   // Create new plan via API
   createPlan: async (planData: any) => {
     try {
-      console.log('📝 Creating plan via API...');
+      logger.log('📝 Creating plan via API...');
       const newPlan = await plansService.createPlan(planData);
-      console.log('✅ Plan created via API:', newPlan.id);
+      logger.log('✅ Plan created via API:', newPlan.id);
       
       // Transform API response to store format
       const transformedPlan: Plan = {
@@ -647,7 +648,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // });
       
     } catch (error) {
-      console.error('❌ Error creating plan:', error);
+      logger.error('❌ Error creating plan:', error);
       throw error;
     }
   },
@@ -655,9 +656,9 @@ const usePlansStore = create<PlansState>((set, get) => ({
   // Mark plan as seen via API
   // markPlanAsSeen: async (planId: string) => {
   //   try {
-  //     console.log('👁️ Marking plan as seen via API...');
+  //     logger.log('👁️ Marking plan as seen via API...');
   //     await plansService.markPlanAsSeen(planId);
-  //     console.log('✅ Plan marked as seen via API');
+  //     logger.log('✅ Plan marked as seen via API');
   //     
   //     // Update local state to mark as read
   //     set(state => ({
@@ -667,7 +668,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
   //     }));
   //     
   //   } catch (error) {
-  //     console.error('❌ Error marking plan as seen:', error);
+  //     logger.error('❌ Error marking plan as seen:', error);
   //     throw error;
   //   }
   // },
@@ -702,7 +703,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
         .is('invitation_seen_at', null)
         .then(({ error }) => {
           if (error) {
-            console.error('❌ [plansStore] markAsRead – Supabase update error:', error);
+            logger.error('❌ [plansStore] markAsRead – Supabase update error:', error);
           }
         });
 
@@ -791,7 +792,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       });
       
     } catch (error) {
-      console.error('❌ Error responding to plan:', error);
+      logger.error('❌ Error responding to plan:', error);
       throw error;
     }
   },
@@ -806,7 +807,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       };
       
       // If the plan is created by the current user and their status is non-pending, add to active
-      const currentUser = plan.participants.find(p => p.id === 'current');
+      const currentUser = plan.participants.find(p => p.id === state.currentUserId);
       if (currentUser && (currentUser.status === 'going' || currentUser.status === 'maybe' || currentUser.status === 'conditional')) {
         return {
           invitations: state.invitations,
@@ -969,11 +970,11 @@ const usePlansStore = create<PlansState>((set, get) => ({
   addPoll: (planId: string, poll: Poll) => {
     // This function is kept for backward compatibility but should not be used
     // Polls are now created via API calls
-    console.warn('⚠️ addPoll should not be called directly. Use API instead.');
+    logger.warn('⚠️ addPoll should not be called directly. Use API instead.');
   },
   
   voteOnPollOptimistic: (planId: string, pollId: string, optionIds: string[], userId: string) => {
-    console.log('🚀 Optimistic vote update:', { planId, pollId, optionIds, userId });
+    logger.log('🚀 Optimistic vote update:', { planId, pollId, optionIds, userId });
     
     // Track this optimistic update to avoid duplicate realtime updates
     lastOptimisticUpdate[pollId] = {
@@ -988,7 +989,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const planIndex = allPlans.findIndex(p => p.id === planId);
       
       if (planIndex === -1) {
-        console.warn('⚠️ Plan not found for optimistic update:', planId);
+        logger.warn('⚠️ Plan not found for optimistic update:', planId);
         return state;
       }
       
@@ -996,7 +997,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       const pollIndex = plan.polls?.findIndex(p => p.id === pollId) ?? -1;
       
       if (pollIndex === -1) {
-        console.warn('⚠️ Poll not found for optimistic update:', pollId);
+        logger.warn('⚠️ Poll not found for optimistic update:', pollId);
         return state;
       }
       
@@ -1039,38 +1040,38 @@ const usePlansStore = create<PlansState>((set, get) => ({
   updatePollOption: (planId: string, pollId: string, optionId: string, newText: string) => {
     // This function is kept for backward compatibility but should not be used
     // Poll options are now updated via API calls
-    console.warn('⚠️ updatePollOption should not be called directly. Use API instead.');
+    logger.warn('⚠️ updatePollOption should not be called directly. Use API instead.');
   },
   
   removePollOption: (planId: string, pollId: string, optionId: string) => {
     // This function is kept for backward compatibility but should not be used
     // Poll options are now removed via API calls
-    console.warn('⚠️ removePollOption should not be called directly. Use API instead.');
+    logger.warn('⚠️ removePollOption should not be called directly. Use API instead.');
   },
   
   addPollOption: (planId: string, pollId: string, optionText: string) => {
     // This function is kept for backward compatibility but should not be used
     // Poll options are now added via API calls
-    console.warn('⚠️ addPollOption should not be called directly. Use API instead.');
+    logger.warn('⚠️ addPollOption should not be called directly. Use API instead.');
   },
   
   deletePoll: (planId: string, pollId: string) => {
     // This function is kept for backward compatibility but should not be used
     // Polls are now deleted via API calls
-    console.warn('⚠️ deletePoll should not be called directly. Use API instead.');
+    logger.warn('⚠️ deletePoll should not be called directly. Use API instead.');
   },
   
   // Invitation poll actions
   processExpiredInvitationPolls: () => {
     // This function is kept for backward compatibility but should not be used
     // Expired polls are now handled via API
-    //console.warn('⚠️ processExpiredInvitationPolls should not be called directly. Use API instead.');
+    //logger.warn('⚠️ processExpiredInvitationPolls should not be called directly. Use API instead.');
   },
   
   createInvitationPollWithAutoVote: (planId: string, friendIds: string[], friendNames: string[], creatorId: string) => {
     // This function is kept for backward compatibility but should not be used
     // Invitation polls are now created via API calls
-   // console.warn('⚠️ createInvitationPollWithAutoVote should not be called directly. Use API instead.');
+   // logger.warn('⚠️ createInvitationPollWithAutoVote should not be called directly. Use API instead.');
   },
   
   // Completion actions
@@ -1219,13 +1220,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
   voteForCompletion: (planId: string, userId: string) => {
     // This function is kept for backward compatibility but should not be used
     // Completion votes are now submitted via API calls
-    console.warn('⚠️ voteForCompletion should not be called directly. Use API instead.');
+    logger.warn('⚠️ voteForCompletion should not be called directly. Use API instead.');
   },
   
   removeCompletionVote: (planId: string, userId: string) => {
     // This function is kept for backward compatibility but should not be used
     // Completion votes are now removed via API calls
-    console.warn('⚠️ removeCompletionVote should not be called directly. Use API instead.');
+    logger.warn('⚠️ removeCompletionVote should not be called directly. Use API instead.');
   },
   
   getCompletionVotingStatus: (plan: Plan) => {
@@ -1345,22 +1346,22 @@ const usePlansStore = create<PlansState>((set, get) => ({
   // Real-time subscriptions - consolidated channels
   startRealTimeUpdates: async (userId: string) => {
     if (isStartingPlansRealtime) {
-      console.log('⏳ Plans real-time startup already in progress');
+      logger.log('⏳ Plans real-time startup already in progress');
       return;
     }
 
     if (get().subscriptionStatus.isSubscribed) {
-      console.log('🛑 Plans real-time subscriptions already active');
+      logger.log('🛑 Plans real-time subscriptions already active');
       return;
     }
     
     // If channel exists but status is not subscribed, clean it up
     if (updatesChannel) {
-      console.log('⚠️ Found orphaned channel - cleaning up');
+      logger.log('⚠️ Found orphaned channel - cleaning up');
       await stopAllRealtimeChannels();
     }
 
-    console.log('🚀 Starting plans real-time updates...');
+    logger.log('🚀 Starting plans real-time updates...');
     isStartingPlansRealtime = true;
 
     try {
@@ -1371,7 +1372,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       stopPlansHealthCheck();
 
       // Load initial data immediately when real-time starts
-      console.log('📊 Loading initial plans data...');
+      logger.log('📊 Loading initial plans data...');
       await get().loadPlans(userId);
 
       // CONSOLIDATED: Single channel for all plan notifications
@@ -1388,7 +1389,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
               table: 'plan_updates'
             },
             (payload: any) => {
-              console.log('📢 Plan update notification:', payload);
+              logger.log('📢 Plan update notification:', payload);
               handlePlanUpdateNotification(payload, userId);
             }
           ),
@@ -1401,7 +1402,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       );
 
       // NEW: Direct DB listener for participant status changes (chat-style, instant!)
-      console.log('🎯 Starting direct participant status listener...');
+      logger.log('🎯 Starting direct participant status listener...');
       const participantsCh = supabase
         .channel(`plan_participants_${userId}_${Date.now()}`)
         .on(
@@ -1412,25 +1413,25 @@ const usePlansStore = create<PlansState>((set, get) => ({
             table: 'plan_participants'
           },
           async (payload: any) => {
-            console.log('👥 Direct participant update received:', payload);
+            logger.log('👥 Direct participant update received:', payload);
             handleDirectParticipantUpdate(payload, userId);
           }
         )
         .subscribe((status: string) => {
-          console.log('📡 Participants channel status:', status);
+          logger.log('📡 Participants channel status:', status);
           if (status === 'SUBSCRIBED') {
-            console.log('✅ Direct participant listener connected!');
+            logger.log('✅ Direct participant listener connected!');
         } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
-          console.log('❌ Participants channel disconnected:', status);
+          logger.log('❌ Participants channel disconnected:', status);
             // Simple retry like chat does (no MAX_RETRIES!)
             setTimeout(() => {
               // Stale callback: a newer participantsChannel may already exist after full restart
               if (participantsChannel !== participantsCh) {
-                console.log('⏭️ Skipping stale participants channel retry (ref replaced)');
+                logger.log('⏭️ Skipping stale participants channel retry (ref replaced)');
                 return;
               }
               if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
-                console.log('🔄 Retrying participants channel...');
+                logger.log('🔄 Retrying participants channel...');
                 participantsChannel = null;
                 usePlansStore.getState().checkAndRestartSubscriptions(userId);
               }
@@ -1440,7 +1441,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       participantsChannel = participantsCh;
 
       // NEW: Direct DB listener for poll votes (chat-style, instant!)
-      console.log('🗳️ Starting direct poll votes listener...');
+      logger.log('🗳️ Starting direct poll votes listener...');
       const pollVotesCh = supabase
         .channel(`plan_poll_votes_${userId}_${Date.now()}`)
         .on(
@@ -1451,24 +1452,24 @@ const usePlansStore = create<PlansState>((set, get) => ({
             table: 'plan_poll_votes'
           },
           async (payload: any) => {
-            console.log('🗳️ Direct poll vote received:', payload);
+            logger.log('🗳️ Direct poll vote received:', payload);
             handleDirectPollVoteUpdate(payload, userId);
           }
         )
         .subscribe((status: string) => {
-          console.log('📡 Poll votes channel status:', status);
+          logger.log('📡 Poll votes channel status:', status);
           if (status === 'SUBSCRIBED') {
-            console.log('✅ Direct poll votes listener connected!');
+            logger.log('✅ Direct poll votes listener connected!');
           } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
-            console.log('❌ Poll votes channel disconnected:', status);
+            logger.log('❌ Poll votes channel disconnected:', status);
             // Simple retry like chat does (no MAX_RETRIES!)
             setTimeout(() => {
               if (pollVotesChannel !== pollVotesCh) {
-                console.log('⏭️ Skipping stale poll votes channel retry (ref replaced)');
+                logger.log('⏭️ Skipping stale poll votes channel retry (ref replaced)');
                 return;
               }
               if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
-                console.log('🔄 Retrying poll votes channel...');
+                logger.log('🔄 Retrying poll votes channel...');
                 pollVotesChannel = null;
                 usePlansStore.getState().checkAndRestartSubscriptions(userId);
               }
@@ -1478,7 +1479,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       pollVotesChannel = pollVotesCh;
 
       // NEW: Direct DB listener for poll structure changes (create/edit/delete)
-      console.log('📊 Starting direct polls listener...');
+      logger.log('📊 Starting direct polls listener...');
       const planPollsCh = supabase
         .channel(`plan_polls_${userId}_${Date.now()}`)
         .on(
@@ -1489,23 +1490,23 @@ const usePlansStore = create<PlansState>((set, get) => ({
             table: 'plan_polls'
           },
           async (payload: any) => {
-            console.log('📊 Direct poll structure update received:', payload);
+            logger.log('📊 Direct poll structure update received:', payload);
             handleDirectPollStructureUpdate(payload, userId);
           }
         )
         .subscribe((status: string) => {
-          console.log('📡 Polls channel status:', status);
+          logger.log('📡 Polls channel status:', status);
           if (status === 'SUBSCRIBED') {
-            console.log('✅ Direct polls listener connected!');
+            logger.log('✅ Direct polls listener connected!');
           } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
-            console.log('❌ Polls channel disconnected:', status);
+            logger.log('❌ Polls channel disconnected:', status);
             setTimeout(() => {
               if (planPollsChannel !== planPollsCh) {
-                console.log('⏭️ Skipping stale polls channel retry (ref replaced)');
+                logger.log('⏭️ Skipping stale polls channel retry (ref replaced)');
                 return;
               }
               if (usePlansStore.getState().subscriptionStatus.isSubscribed) {
-                console.log('🔄 Retrying polls channel...');
+                logger.log('🔄 Retrying polls channel...');
                 planPollsChannel = null;
                 usePlansStore.getState().checkAndRestartSubscriptions(userId);
               }
@@ -1519,13 +1520,13 @@ const usePlansStore = create<PlansState>((set, get) => ({
       // Wait a moment for subscription to establish
       setTimeout(() => {
         usePlansStore.getState().setSubscriptionActive(true);
-        console.log('✅ Plans real-time subscription started successfully!');
-        console.log('🔥 Listening for: plan_updates (all notifications)');
+        logger.log('✅ Plans real-time subscription started successfully!');
+        logger.log('🔥 Listening for: plan_updates (all notifications)');
         isStartingPlansRealtime = false;
       }, 1000);
 
     } catch (error) {
-      console.error('❌ Error starting plans real-time updates:', error);
+      logger.error('❌ Error starting plans real-time updates:', error);
       usePlansStore.getState().setSubscriptionActive(false);
       await stopAllRealtimeChannels();
       isStartingPlansRealtime = false;
@@ -1533,18 +1534,18 @@ const usePlansStore = create<PlansState>((set, get) => ({
   },
   
   stopRealTimeUpdates: () => {
-    console.log('🛑 Stopping all plans real-time updates...');
+    logger.log('🛑 Stopping all plans real-time updates...');
 
     // Clear all per-plan debounced timeouts
     clearAllPlanRefreshTimeouts();
     stopPlansHealthCheck();
 
     stopAllRealtimeChannels();
-    console.log('✅ All plans real-time updates stopped');
+    logger.log('✅ All plans real-time updates stopped');
   },
 
   checkAndRestartSubscriptions: async (userId: string, options?: { force?: boolean }) => {
-    console.log('🔍 Checking plans real-time subscription status...');
+    logger.log('🔍 Checking plans real-time subscription status...');
 
     const updatesJoined = updatesChannel?.state === 'joined';
     const participantsJoined = participantsChannel?.state === 'joined';
@@ -1555,12 +1556,12 @@ const usePlansStore = create<PlansState>((set, get) => ({
     // plan_updates can look "healthy" while auxiliary channels were nulled by a stale retry
     // or never reattached — do not early-return unless all four channel refs exist.
     if (!options?.force && get().subscriptionStatus.isSubscribed && allJoined) {
-      console.log('✅ Plans real-time subscription is active');
+      logger.log('✅ Plans real-time subscription is active');
       return;
     }
 
     if (!options?.force && get().subscriptionStatus.isSubscribed && !allJoined) {
-      console.log('⚠️ Realtime channel state not healthy - restarting subscriptions', {
+      logger.log('⚠️ Realtime channel state not healthy - restarting subscriptions', {
         updatesState: updatesChannel?.state ?? null,
         participantsState: participantsChannel?.state ?? null,
         pollVotesState: pollVotesChannel?.state ?? null,
@@ -1568,7 +1569,7 @@ const usePlansStore = create<PlansState>((set, get) => ({
       });
     }
 
-    console.log(options?.force ? '🔄 Force restarting plans subscriptions...' : '🔄 Plans subscription missing or failed - restarting...');
+    logger.log(options?.force ? '🔄 Force restarting plans subscriptions...' : '🔄 Plans subscription missing or failed - restarting...');
 
     // Clear any pending timeouts
     clearAllPlanRefreshTimeouts();
@@ -1589,9 +1590,9 @@ async function stopAllRealtimeChannels() {
   if (updatesChannel) {
     try {
       await supabase.removeChannel(updatesChannel);
-      console.log('🛑 Stopped plan_updates channel');
+      logger.log('🛑 Stopped plan_updates channel');
     } catch (error) {
-      console.error('❌ Error stopping plan_updates channel:', error);
+      logger.error('❌ Error stopping plan_updates channel:', error);
     }
     usePlansStore.getState().updateChannelStatus('plan_updates', 'disconnected');
   }
@@ -1600,27 +1601,27 @@ async function stopAllRealtimeChannels() {
   if (participantsChannel) {
     try {
       await supabase.removeChannel(participantsChannel);
-      console.log('🛑 Stopped participants channel');
+      logger.log('🛑 Stopped participants channel');
     } catch (error) {
-      console.error('❌ Error stopping participants channel:', error);
+      logger.error('❌ Error stopping participants channel:', error);
     }
   }
 
   if (pollVotesChannel) {
     try {
       await supabase.removeChannel(pollVotesChannel);
-      console.log('🛑 Stopped poll votes channel');
+      logger.log('🛑 Stopped poll votes channel');
     } catch (error) {
-      console.error('❌ Error stopping poll votes channel:', error);
+      logger.error('❌ Error stopping poll votes channel:', error);
     }
   }
 
   if (planPollsChannel) {
     try {
       await supabase.removeChannel(planPollsChannel);
-      console.log('🛑 Stopped polls channel');
+      logger.log('🛑 Stopped polls channel');
     } catch (error) {
-      console.error('❌ Error stopping polls channel:', error);
+      logger.error('❌ Error stopping polls channel:', error);
     }
   }
 
@@ -1652,7 +1653,7 @@ function schedulePlanRefresh(
   reason?: string
 ) {
   if (!planId) {
-    console.warn('⚠️ Cannot schedule plan refresh without planId');
+    logger.warn('⚠️ Cannot schedule plan refresh without planId');
     return;
   }
 
@@ -1666,22 +1667,22 @@ function schedulePlanRefresh(
       const now = Date.now();
       const lastCall = lastPlanRefreshCallTimes[planId] || 0;
       if (now - lastCall < MIN_TIME_BETWEEN_PLAN_CALLS) {
-        console.log(
+        logger.log(
           `⏰ Rate limiting plan refresh for ${planId} (last call ${now - lastCall}ms ago)`
         );
         return;
       }
       lastPlanRefreshCallTimes[planId] = now;
 
-      console.log(
+      logger.log(
         `🔄 Refreshing plan ${planId} after update${reason ? ` (${reason})` : ''}`
       );
       await usePlansStore.getState().loadPlan(planId, currentUserId);
-      console.log('✅ Plan refreshed after update:', planId);
+      logger.log('✅ Plan refreshed after update:', planId);
     } catch (error) {
-      console.error('❌ Error refreshing plan after update:', error);
+      logger.error('❌ Error refreshing plan after update:', error);
       if (error instanceof Error && error.message.includes('429')) {
-        console.log(`⚠️ Rate limit hit while refreshing plan ${planId} - backing off`);
+        logger.log(`⚠️ Rate limit hit while refreshing plan ${planId} - backing off`);
       }
     } finally {
       delete planRefreshTimeouts[planId];
@@ -1707,10 +1708,10 @@ function createChannelWithRetry(
   const channel = configureChannel(supabase.channel(channelId));
 
   channel.subscribe((status: string) => {
-    console.log(`📡 ${channelName} status:`, status);
+    logger.log(`📡 ${channelName} status:`, status);
 
     if (status === 'SUBSCRIBED') {
-      console.log(`✅ ${channelName} connected`);
+      logger.log(`✅ ${channelName} connected`);
       retryAttempts[channelName] = 0;
       const state = usePlansStore.getState();
       state.updateChannelStatus(channelName, 'connected');
@@ -1727,7 +1728,7 @@ function createChannelWithRetry(
       }
       logSubscriptionMetrics();
     } else if (['CHANNEL_ERROR', 'CLOSED', 'TIMED_OUT'].includes(status)) {
-      console.log(`❌ ${channelName} disconnected:`, status);
+      logger.log(`❌ ${channelName} disconnected:`, status);
       onDisconnect(channel);
       const state = usePlansStore.getState();
       state.updateChannelStatus(channelName, 'disconnected', status);
@@ -1743,7 +1744,7 @@ function createChannelWithRetry(
         const baseDelay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
         const jitter = Math.random() * 1000;
         const delay = baseDelay + jitter;
-        console.log(`🔄 Retrying ${channelName} in ${delay.toFixed(0)}ms (attempt ${attempt + 1}/${MAX_CHANNEL_RETRIES})`);
+        logger.log(`🔄 Retrying ${channelName} in ${delay.toFixed(0)}ms (attempt ${attempt + 1}/${MAX_CHANNEL_RETRIES})`);
 
         retryAttempts[channelName] = attempt + 1;
         state.setChannelRetryAttempt(channelName, attempt + 1);
@@ -1756,14 +1757,14 @@ function createChannelWithRetry(
             updatesChannel != null &&
             updatesChannel !== channel
           ) {
-            console.log(`⏭️ Skipping stale ${channelName} retry (ref replaced)`);
+            logger.log(`⏭️ Skipping stale ${channelName} retry (ref replaced)`);
             return;
           }
-          console.log(`♻️ Attempting to restart ${channelName}...`);
+          logger.log(`♻️ Attempting to restart ${channelName}...`);
           usePlansStore.getState().checkAndRestartSubscriptions(userId);
         }, delay);
       } else {
-        console.warn(`❌ ${channelName} failed after ${MAX_CHANNEL_RETRIES} attempts - giving up`);
+        logger.warn(`❌ ${channelName} failed after ${MAX_CHANNEL_RETRIES} attempts - giving up`);
         subscriptionMetrics.failedReconnects += 1;
         logSubscriptionMetrics();
       }
@@ -1778,7 +1779,7 @@ function startPlansHealthCheck(userId: string) {
     return;
   }
 
-  console.log('💓 Starting plans health check system...');
+  logger.log('💓 Starting plans health check system...');
   let failedChecks = 0;
 
   plansHealthCheckInterval = setInterval(() => {
@@ -1797,7 +1798,7 @@ function startPlansHealthCheck(userId: string) {
 
     if (!allHealthy) {
       failedChecks += 1;
-      console.log(
+      logger.log(
         `⚠️ Health check failed (${failedChecks}) - Channel status: ${channelsStatus
           .map((channel) => `${channel.name}: ${channel.state ?? 'null'}`)
           .join(', ')}`
@@ -1809,13 +1810,13 @@ function startPlansHealthCheck(userId: string) {
         planPollsChannel?.state === 'joined';
 
       if (planUpdatesHealthy && !auxHealthy && failedChecks >= 1) {
-        console.log(
+        logger.log(
           '🔄 Health check: plan_updates OK but auxiliary realtime broken — restarting subscriptions...'
         );
         usePlansStore.getState().checkAndRestartSubscriptions(userId);
         failedChecks = 0;
       } else if (!planUpdatesHealthy && failedChecks >= 1) {
-        console.log('🔄 Failed health check (plan_updates down) - restarting subscriptions...');
+        logger.log('🔄 Failed health check (plan_updates down) - restarting subscriptions...');
         usePlansStore.getState().checkAndRestartSubscriptions(userId);
         failedChecks = 0;
       }
@@ -1830,7 +1831,7 @@ function stopPlansHealthCheck() {
   if (plansHealthCheckInterval) {
     clearInterval(plansHealthCheckInterval);
     plansHealthCheckInterval = null;
-    console.log('💓 Plans health check stopped');
+    logger.log('💓 Plans health check stopped');
   }
 }
 
@@ -1838,7 +1839,7 @@ function stopPlansHealthCheck() {
 function handlePlanUpdateNotification(payload: any, currentUserId: string) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
 
-  console.log('📢 Processing plan update notification:', {
+  logger.log('📢 Processing plan update notification:', {
     eventType,
     updateType: newRecord?.update_type,
     planId: newRecord?.plan_id,
@@ -1851,20 +1852,20 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     const planId = newRecord.plan_id;
 
     if (!planId) {
-      console.warn('⚠️ Plan update notification missing plan_id, skipping refresh');
+      logger.warn('⚠️ Plan update notification missing plan_id, skipping refresh');
       return;
     }
 
     // Handle different types of plan updates with per-plan debouncing
     if (updateType === 'plan_created') {
-      console.log('🎯 New plan created - loading single plan');
+      logger.log('🎯 New plan created - loading single plan');
       // Load ONLY the new plan, not everything
       usePlansStore.getState().loadPlan(planId, currentUserId).then(() => {
-        console.log('✅ New plan loaded and added to list');
+        logger.log('✅ New plan loaded and added to list');
         // Fetch unseen counts to show badge
         useUnseenStore.getState().fetchUnseenCounts();
       }).catch(error => {
-        console.error('❌ Error loading new plan:', error);
+        logger.error('❌ Error loading new plan:', error);
       });
       
       return; 
@@ -1876,9 +1877,9 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
     // If plan doesn't exist in memory but we got an update (e.g. new message in old plan),
     // we should load it so it appears in the list (bubbled to top)
     if (!planExists) {
-      console.log('👻 Update for missing plan detected - reviving plan:', planId);
+      logger.log('👻 Update for missing plan detected - reviving plan:', planId);
       usePlansStore.getState().loadPlan(planId, currentUserId).then(() => {
-        console.log('✅ Missing plan revived');
+        logger.log('✅ Missing plan revived');
         useUnseenStore.getState().fetchUnseenCounts();
       });
       return;
@@ -1889,12 +1890,12 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
       updateType === 'participant_status_changed' ||
       updateType === 'participant_invited'
     ) {
-      console.log('👥 Participant activity detected - scheduling refresh');
+      logger.log('👥 Participant activity detected - scheduling refresh');
       schedulePlanRefresh(planId, currentUserId, 1500, updateType);
       // Participant changes affect Control Panel badge
       useUnseenStore.getState().fetchUnseenCounts();
     } else if (updateType === 'poll_voted') {
-      console.log('🗳️ Poll vote detected - scheduling faster refresh');
+      logger.log('🗳️ Poll vote detected - scheduling faster refresh');
       schedulePlanRefresh(planId, currentUserId, 1000, updateType);
       // Poll votes affect Control Panel badge
       useUnseenStore.getState().fetchUnseenCounts();
@@ -1903,7 +1904,7 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
       updateType === 'invitation_poll_created' ||
       updateType === 'invitation_poll_expired'
     ) {
-      console.log('🗳️ Invitation poll activity - scheduling quick refresh');
+      logger.log('🗳️ Invitation poll activity - scheduling quick refresh');
       schedulePlanRefresh(planId, currentUserId, 750, updateType);
       // Invitation polls affect Control Panel badge
       useUnseenStore.getState().fetchUnseenCounts();
@@ -1912,18 +1913,18 @@ function handlePlanUpdateNotification(payload: any, currentUserId: string) {
       updateType === 'poll_option_added' ||
       updateType === 'poll_option_removed'
     ) {
-      console.log('📊 Poll structure change - scheduling refresh');
+      logger.log('📊 Poll structure change - scheduling refresh');
       schedulePlanRefresh(planId, currentUserId, 1200, updateType);
       // Poll changes affect Control Panel badge
       useUnseenStore.getState().fetchUnseenCounts();
     } else if (updateType === 'new_message') {
-      console.log('💬 New message detected - updating unseen counts');
+      logger.log('💬 New message detected - updating unseen counts');
       // New messages affect Chat badge - immediate update needed
       useUnseenStore.getState().fetchUnseenCounts();
       // No need to refresh the whole plan for just a chat message unless it updates lastUpdatedAt
       schedulePlanRefresh(planId, currentUserId, 2000, updateType);
     } else {
-      console.log(`🔄 Other update type (${updateType}) - scheduling default refresh`);
+      logger.log(`🔄 Other update type (${updateType}) - scheduling default refresh`);
       schedulePlanRefresh(planId, currentUserId, 1000, updateType);
       // Catch-all: update unseen counts for any other relevant updates
       useUnseenStore.getState().fetchUnseenCounts();
@@ -1943,7 +1944,7 @@ function logSubscriptionMetrics() {
         )}s`
       : 'N/A';
 
-  console.log('📊 Subscription Metrics:', {
+  logger.log('📊 Subscription Metrics:', {
     ...subscriptionMetrics,
     uptime
   });
@@ -1954,7 +1955,7 @@ function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
   const { new: newData, old: oldData } = payload;
   
   if (!newData || !newData.plan_id || !newData.user_id) {
-    console.warn('⚠️ Invalid participant update payload:', payload);
+    logger.warn('⚠️ Invalid participant update payload:', payload);
     return;
   }
 
@@ -1963,14 +1964,14 @@ function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
   const newStatus = normalizeParticipantStatus(newData.status);
   const oldStatus = oldData?.status;
 
-  console.log(`👥 INSTANT participant update: Plan ${planId}, User ${userId}: ${oldStatus} → ${newStatus}`);
+  logger.log(`👥 INSTANT participant update: Plan ${planId}, User ${userId}: ${oldStatus} → ${newStatus}`);
 
   // Update store directly (no API call needed!)
   const store = usePlansStore.getState();
   const plan = store.plans[planId];
 
   if (!plan) {
-    console.log('⚠️ Plan not in store yet, will be loaded via plan_updates notification');
+    logger.log('⚠️ Plan not in store yet, will be loaded via plan_updates notification');
     return;
   }
 
@@ -1990,7 +1991,7 @@ function handleDirectParticipantUpdate(payload: any, currentUserId: string) {
   // Update store (instant, like chat!)
   store.updatePlan(planId, updatedPlan);
 
-  console.log(`✅ INSTANT update complete! Status changed to: ${newStatus}`);
+  logger.log(`✅ INSTANT update complete! Status changed to: ${newStatus}`);
   
   // Update unseen counts
   useUnseenStore.getState().fetchUnseenCounts();
@@ -2002,7 +2003,7 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   const newVote = payload.new;
   const oldVote = payload.old;
   
-  console.log(`🗳️ Processing poll vote ${eventType}:`, { newVote, oldVote });
+  logger.log(`🗳️ Processing poll vote ${eventType}:`, { newVote, oldVote });
 
   // Get poll_id and plan_id from the vote
   const voteId = newVote?.id || oldVote?.id;
@@ -2033,7 +2034,7 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   }
 
   if (!pollId || !userId) {
-    console.warn('⚠️ Invalid poll vote payload (missing poll_id or user_id):', payload);
+    logger.warn('⚠️ Invalid poll vote payload (missing poll_id or user_id):', payload);
     return;
   }
 
@@ -2045,17 +2046,17 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   const plan = allPlans.find(p => p.polls?.some(poll => poll.id === pollId));
   
   if (!plan) {
-    console.log('⚠️ Plan with poll not in store yet');
+    logger.log('⚠️ Plan with poll not in store yet');
     return;
   }
 
   const poll = plan.polls?.find(p => p.id === pollId);
   if (!poll) {
-    console.log('⚠️ Poll not found in plan');
+    logger.log('⚠️ Poll not found in plan');
     return;
   }
 
-  console.log(`🗳️ INSTANT poll vote update for poll ${pollId} in plan ${plan.id}`);
+  logger.log(`🗳️ INSTANT poll vote update for poll ${pollId} in plan ${plan.id}`);
 
   // Check if this is a duplicate of a recent optimistic update (within 2 seconds)
   const lastOptimistic = lastOptimisticUpdate[pollId];
@@ -2073,7 +2074,7 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
       
       // If votes match, skip this realtime update (it's a duplicate of optimistic)
       if (JSON.stringify(currentUserVotes) === JSON.stringify(optimisticVotes)) {
-        console.log(`⏭️ Skipping duplicate realtime update (matches optimistic update from ${timeSinceOptimistic}ms ago)`);
+        logger.log(`⏭️ Skipping duplicate realtime update (matches optimistic update from ${timeSinceOptimistic}ms ago)`);
         return;
       }
     }
@@ -2122,7 +2123,7 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
       })
     };
   } else {
-    console.warn('⚠️ Unknown event type:', eventType);
+    logger.warn('⚠️ Unknown event type:', eventType);
     return;
   }
 
@@ -2136,7 +2137,7 @@ function handleDirectPollVoteUpdate(payload: any, currentUserId: string) {
   // Update store (instant, like chat!)
   store.updatePlan(plan.id, updatedPlan);
 
-  console.log(`✅ INSTANT poll vote update complete! User ${userId} vote on option ${optionId}`);
+  logger.log(`✅ INSTANT poll vote update complete! User ${userId} vote on option ${optionId}`);
   
   // Update unseen counts
   useUnseenStore.getState().fetchUnseenCounts();
@@ -2160,11 +2161,11 @@ function handleDirectPollStructureUpdate(payload: any, currentUserId: string) {
   }
 
   if (!planId) {
-    console.log('⚠️ Poll update missing plan id, skipping refresh');
+    logger.log('⚠️ Poll update missing plan id, skipping refresh');
     return;
   }
 
-  console.log(`📊 INSTANT poll structure ${eventType} for plan ${planId}`);
+  logger.log(`📊 INSTANT poll structure ${eventType} for plan ${planId}`);
   schedulePlanRefresh(planId, currentUserId, 500, 'poll_structure_changed');
   useUnseenStore.getState().fetchUnseenCounts();
 }

@@ -1,5 +1,6 @@
 import { API_URL } from '@/constants/config';
 import { supabase } from './supabase';
+import { logger } from './logger';
 
 // Enable direct Supabase reads for plans
 const ENABLE_DIRECT_PLANS_READ = true;
@@ -90,26 +91,46 @@ export interface CreatePollData {
 }
 
 class PlansService {
+  private getSingleRelation<T>(value: T | T[] | null | undefined): T | null {
+    if (Array.isArray(value)) {
+      return (value[0] ?? null) as T | null;
+    }
+    return (value ?? null) as T | null;
+  }
+
+  private async getDirectoryProfilesByIds(
+    userIds: string[]
+  ): Promise<Map<string, { id: string; name: string; username: string | null; avatar_url: string | null }>> {
+    const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+    if (uniqueIds.length === 0) {
+      return new Map();
+    }
+
+    const { data, error } = await supabase
+      .from('user_directory')
+      .select('id, name, username, avatar_url')
+      .in('id', uniqueIds);
+
+    if (error) {
+      throw error;
+    }
+
+    const map = new Map<string, { id: string; name: string; username: string | null; avatar_url: string | null }>();
+    for (const row of (data || []) as { id: string; name: string; username: string | null; avatar_url: string | null }[]) {
+      map.set(row.id, row);
+    }
+    return map;
+  }
+
   private async getAuthHeaders() {
-    // First try to get the current session
     let { data: { session }, error } = await supabase.auth.getSession();
-    console.log('🔑 Getting auth headers, session exists:', !!session);
     
-    // If no session or session is expired, try to refresh
     if (!session || error) {
-      console.log('🔄 No valid session found, attempting to refresh...');
       const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
       if (refreshError) {
-        console.log('❌ Token refresh failed:', refreshError.message);
         throw new Error('Authentication expired. Please sign in again.');
       }
       session = refreshData.session;
-      console.log('✅ Token refreshed successfully');
-    }
-    
-    console.log('🔑 Access token exists:', !!session?.access_token);
-    if (session?.access_token) {
-      console.log('🔑 Token preview:', session.access_token.substring(0, 20) + '...');
     }
     
     if (!session?.access_token) {
@@ -125,8 +146,6 @@ class PlansService {
   private async apiRequest(endpoint: string, options: RequestInit = {}) {
     try {
       const headers = await this.getAuthHeaders();
-      console.log('🌐 Making API request to:', `${API_URL}${endpoint}`);
-      console.log('🌐 Headers:', { ...headers, Authorization: headers.Authorization ? 'Bearer [REDACTED]' : 'missing' });
       
       const response = await fetch(`${API_URL}${endpoint}`, {
         ...options,
@@ -136,12 +155,9 @@ class PlansService {
         }
       });
 
-      console.log('🌐 Response status:', response.status);
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Network error' }));
-        console.log('🌐 Error response:', error);
         
-        // Handle authentication errors specifically
         if (response.status === 401) {
           throw new Error('Authentication expired. Please sign out and sign back in.');
         }
@@ -151,12 +167,9 @@ class PlansService {
 
       return response.json();
     } catch (error) {
-      // If it's an authentication error, provide clear guidance
       if (error instanceof Error && error.message.includes('Authentication')) {
         throw error;
       }
-      // Preserve the actual error for better debugging
-      console.error('🌐 API request failed:', error);
       if (error instanceof Error) {
         throw error;
       }
@@ -173,16 +186,16 @@ class PlansService {
 
     // Fallback to API
     try {
-      console.log('📋 Fetching plans with status:', status, 'limit:', limit, 'offset:', offset);
+      logger.log('📋 Fetching plans with status:', status, 'limit:', limit, 'offset:', offset);
       let query = `/plans?status=${status}`;
       if (limit !== undefined) query += `&limit=${limit}`;
       if (offset !== undefined) query += `&offset=${offset}`;
       
       const plans = await this.apiRequest(query);
-      console.log('✅ Plans fetched successfully:', plans.length);
+      logger.log('✅ Plans fetched successfully:', plans.length);
       return plans;
     } catch (error) {
-      console.error('❌ Error fetching plans:', error);
+      logger.error('❌ Error fetching plans:', error);
       throw error;
     }
   }
@@ -190,7 +203,7 @@ class PlansService {
   // Direct Supabase: Get plans with participants
   private async getPlansDirect(status: 'all' | 'active' | 'completed' | 'cancelled' = 'all', limit?: number, offset?: number): Promise<Plan[]> {
     try {
-      console.log('📋 [DIRECT] Fetching plans from Supabase with status:', status, 'limit:', limit, 'offset:', offset);
+      logger.log('📋 [DIRECT] Fetching plans from Supabase with status:', status, 'limit:', limit, 'offset:', offset);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -239,7 +252,7 @@ class PlansService {
       const { data: plans, error } = await query;
 
       if (error) {
-        console.error('❌ [DIRECT] Supabase query error:', error);
+        logger.error('❌ [DIRECT] Supabase query error:', error);
         throw error;
       }
 
@@ -247,13 +260,20 @@ class PlansService {
         return [];
       }
 
+      const participantIds = (plans || []).flatMap((plan: any) =>
+        (plan.participants || []).map((p: any) => p.user_id).filter(Boolean)
+      );
+      const creatorIds = (plans || []).map((plan: any) => plan.creator?.id).filter(Boolean);
+      const profileMap = await this.getDirectoryProfilesByIds([...participantIds, ...creatorIds]);
+
       // Transform data to match API response format
       const transformedPlans: Plan[] = plans.map((plan: any) => {
         // Map participants
         const participants: PlanParticipant[] = (plan.participants || []).map((p: any) => ({
+          // Prefer user_directory profile to avoid null names from FK joins
           id: p.user?.id || p.user_id,
-          name: p.user?.name || 'Unknown',
-          avatar: p.user?.avatar_url || '',
+          name: profileMap.get(p.user?.id || p.user_id)?.name || p.user?.name || 'User',
+          avatar: profileMap.get(p.user?.id || p.user_id)?.avatar_url || p.user?.avatar_url || '',
           status: this.mapParticipantStatus(p.status ?? p.response),
           conditionalFriends: [],
           joinedAt: p.created_at
@@ -270,9 +290,9 @@ class PlansService {
           status: plan.status || 'active',
           creator: plan.creator ? {
             id: plan.creator.id,
-            name: plan.creator.name,
-            username: plan.creator.username,
-            avatar_url: plan.creator.avatar_url || ''
+            name: profileMap.get(plan.creator.id)?.name || plan.creator.name,
+            username: profileMap.get(plan.creator.id)?.username || plan.creator.username,
+            avatar_url: profileMap.get(plan.creator.id)?.avatar_url || plan.creator.avatar_url || ''
           } : null,
           participants,
           polls: [], // Will be loaded separately if needed
@@ -284,10 +304,10 @@ class PlansService {
         };
       });
 
-      console.log('✅ [DIRECT] Plans fetched successfully from Supabase:', transformedPlans.length);
+      logger.log('✅ [DIRECT] Plans fetched successfully from Supabase:', transformedPlans.length);
       return transformedPlans;
     } catch (error) {
-      console.error('❌ [DIRECT] Error fetching plans from Supabase:', error);
+      logger.error('❌ [DIRECT] Error fetching plans from Supabase:', error);
       throw error;
     }
   }
@@ -326,12 +346,12 @@ class PlansService {
 
     // Fallback to API
     try {
-      console.log('📋 Fetching plan details:', planId);
+      logger.log('📋 Fetching plan details:', planId);
       const plan = await this.apiRequest(`/plans/${planId}`);
-      console.log('✅ Plan details fetched successfully');
+      logger.log('✅ Plan details fetched successfully');
       return plan;
     } catch (error) {
-      console.error('❌ Error fetching plan details:', error);
+      logger.error('❌ Error fetching plan details:', error);
       throw error;
     }
   }
@@ -339,7 +359,7 @@ class PlansService {
   // Direct Supabase: Get single plan with full details (including polls)
   private async getPlanDirect(planId: string): Promise<Plan> {
     try {
-      console.log('📋 [DIRECT] Fetching plan details from Supabase:', planId);
+      logger.log('📋 [DIRECT] Fetching plan details from Supabase:', planId);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -373,7 +393,7 @@ class PlansService {
         .single();
 
       if (error) {
-        console.error('❌ [DIRECT] Supabase query error:', error);
+        logger.error('❌ [DIRECT] Supabase query error:', error);
         throw error;
       }
 
@@ -409,14 +429,39 @@ class PlansService {
         .order('option_order', { foreignTable: 'plan_poll_options', ascending: true });
 
       if (pollsError) {
-        console.error('❌ [DIRECT] Error fetching polls:', pollsError);
+        logger.error('❌ [DIRECT] Error fetching polls:', pollsError);
       }
+
+      // Build profile map for participants/voters/creators to avoid "Unknown" labels
+      const participantIds = (plan.participants || []).map((p: any) => p.user_id).filter(Boolean);
+      const pollCreatorIds = (polls || []).map((p: any) => p.created_by).filter(Boolean);
+      const voterIds = (polls || []).flatMap((poll: any) =>
+        ((poll.options || []) as any[]).flatMap((opt: any) =>
+          ((opt.votes || []) as any[]).map((v: any) => v.user_id).filter(Boolean)
+        )
+      );
+      const creatorRelation = this.getSingleRelation<{ id: string }>(plan.creator);
+      const profileMap = await this.getDirectoryProfilesByIds([
+        ...(creatorRelation?.id ? [creatorRelation.id] : []),
+        ...participantIds,
+        ...pollCreatorIds,
+        ...voterIds
+      ]);
 
       // Transform participants
       const participants: PlanParticipant[] = (plan.participants || []).map((p: any) => ({
-        id: p.user?.id || p.user_id,
-        name: p.user?.name || 'Unknown',
-        avatar: p.user?.avatar_url || '',
+        // PostgREST relation may come as object or single-item array
+        // depending on relationship metadata.
+        // Normalize to one object before reading fields.
+        ...(() => {
+          const userRelation = this.getSingleRelation<{ id: string; name: string; avatar_url: string }>(p.user);
+          const participantId = userRelation?.id || p.user_id;
+          return {
+            id: participantId,
+            name: profileMap.get(participantId)?.name || userRelation?.name || 'User',
+            avatar: profileMap.get(participantId)?.avatar_url || userRelation?.avatar_url || '',
+          };
+        })(),
         status: this.mapParticipantStatus(p.status ?? p.response),
         conditionalFriends: [],
         joinedAt: p.created_at
@@ -424,13 +469,20 @@ class PlansService {
 
       // Transform polls
       const transformedPolls: Poll[] = (polls || []).map((poll: any) => {
+        const pollCreator = this.getSingleRelation<{ id: string; name: string; username: string; avatar_url: string }>(poll.creator);
         const orderedRaw = this.sortEmbeddedPollOptions(poll.options);
         const options: PollOption[] = orderedRaw.map((opt: any) => {
           const votes = (opt.votes || []).map((v: any) => v.user_id);
           const voters = (opt.votes || []).map((v: any) => ({
-            id: v.voter?.id || v.user_id,
-            name: v.voter?.name || 'Unknown',
-            avatar: v.voter?.avatar_url || ''
+            ...(() => {
+              const voterRelation = this.getSingleRelation<{ id: string; name: string; avatar_url: string }>(v.voter);
+              const voterId = voterRelation?.id || v.user_id;
+              return {
+                id: voterId,
+                name: profileMap.get(voterId)?.name || voterRelation?.name || 'User',
+                avatar: profileMap.get(voterId)?.avatar_url || voterRelation?.avatar_url || ''
+              };
+            })()
           }));
 
           return {
@@ -447,22 +499,33 @@ class PlansService {
           type: poll.poll_type as 'when' | 'where' | 'custom' | 'invitation',
           expiresAt: poll.ends_at,
           invitedUsers: poll.invited_users || [],
-          createdBy: poll.creator ? {
-            id: poll.creator.id,
-            name: poll.creator.name,
-            username: poll.creator.username,
-            avatar_url: poll.creator.avatar_url || ''
+          createdBy: pollCreator ? {
+            id: pollCreator.id,
+            name: profileMap.get(pollCreator.id)?.name || pollCreator.name,
+            username: profileMap.get(pollCreator.id)?.username || pollCreator.username,
+            avatar_url: profileMap.get(pollCreator.id)?.avatar_url || pollCreator.avatar_url || ''
           } : {
             id: poll.created_by,
-            name: 'Unknown',
-            username: 'unknown',
-            avatar_url: ''
+            name: profileMap.get(poll.created_by)?.name || 'User',
+            username: profileMap.get(poll.created_by)?.username || 'user',
+            avatar_url: profileMap.get(poll.created_by)?.avatar_url || ''
           },
           options
         };
       });
 
       const transformedPlan: Plan = {
+        ...(() => {
+          const creatorRelation = this.getSingleRelation<{ id: string; name: string; username: string; avatar_url: string }>(plan.creator);
+          return {
+            creator: creatorRelation ? {
+              id: creatorRelation.id,
+              name: profileMap.get(creatorRelation.id)?.name || creatorRelation.name,
+              username: profileMap.get(creatorRelation.id)?.username || creatorRelation.username,
+              avatar_url: profileMap.get(creatorRelation.id)?.avatar_url || creatorRelation.avatar_url || ''
+            } : null,
+          };
+        })(),
         id: plan.id,
         title: plan.title,
         description: plan.description || '',
@@ -471,12 +534,6 @@ class PlansService {
         isAnonymous: plan.is_anonymous || false,
         maxParticipants: plan.max_participants,
         status: plan.status || 'active',
-        creator: plan.creator ? {
-          id: plan.creator.id,
-          name: plan.creator.name,
-          username: plan.creator.username,
-          avatar_url: plan.creator.avatar_url || ''
-        } : null,
         participants,
         polls: transformedPolls,
         completionVotes: [],
@@ -486,10 +543,10 @@ class PlansService {
         updatedAt: plan.updated_at
       };
 
-      console.log('✅ [DIRECT] Plan details fetched successfully from Supabase');
+      logger.log('✅ [DIRECT] Plan details fetched successfully from Supabase');
       return transformedPlan;
     } catch (error) {
-      console.error('❌ [DIRECT] Error fetching plan details from Supabase:', error);
+      logger.error('❌ [DIRECT] Error fetching plan details from Supabase:', error);
       throw error;
     }
   }
@@ -504,7 +561,7 @@ class PlansService {
       const result = await this.apiRequest('/plans/unseen-counts');
       return result.data || { plans: {}, totalUnseen: 0 };
     } catch (error) {
-      console.error('❌ Error fetching unseen counts:', error);
+      logger.error('❌ Error fetching unseen counts:', error);
       throw error;
     }
   }
@@ -519,7 +576,7 @@ class PlansService {
         method: 'POST'
       });
     } catch (error) {
-      console.error('❌ Error marking control panel seen:', error);
+      logger.error('❌ Error marking control panel seen:', error);
       throw error;
     }
   }
@@ -527,15 +584,15 @@ class PlansService {
   // Create new plan
   async createPlan(planData: CreatePlanData): Promise<Plan> {
     try {
-      console.log('📝 Creating new plan:', planData.title);
+      logger.log('📝 Creating new plan:', planData.title);
       const plan = await this.apiRequest('/plans', {
         method: 'POST',
         body: JSON.stringify(planData)
       });
-      console.log('✅ Plan created successfully:', plan.id);
+      logger.log('✅ Plan created successfully:', plan.id);
       return plan;
     } catch (error) {
-      console.error('❌ Error creating plan:', error);
+      logger.error('❌ Error creating plan:', error);
       throw error;
     }
   }
@@ -544,14 +601,14 @@ class PlansService {
   // TODO: Enable when backend endpoint is available
   // async markPlanAsSeen(planId: string): Promise<Plan> {
   //   try {
-  //     console.log('👁️ Marking plan as seen:', planId);
+  //     logger.log('👁️ Marking plan as seen:', planId);
   //     const plan = await this.apiRequest(`/plans/${planId}/mark-seen`, {
   //       method: 'POST'
   //     });
-  //     console.log('✅ Plan marked as seen successfully');
+  //     logger.log('✅ Plan marked as seen successfully');
   //     return plan;
   //   } catch (error) {
-  //     console.error('❌ Error marking plan as seen:', error);
+  //     logger.error('❌ Error marking plan as seen:', error);
   //     throw error;
   //   }
   // }
@@ -571,10 +628,10 @@ class PlansService {
         method: 'POST',
         body: JSON.stringify(body)
       });
-      console.log('✅ Plan response updated successfully');
+      logger.log('✅ Plan response updated successfully');
       return plan;
     } catch (error) {
-      console.error('❌ Error responding to plan:', error);
+      logger.error('❌ Error responding to plan:', error);
       throw error;
     }
   }
@@ -582,15 +639,15 @@ class PlansService {
   // Update plan details (title, description)
   async updatePlan(planId: string, payload: { title?: string; description?: string }): Promise<Plan> {
     try {
-      console.log('✏️ Updating plan:', planId, 'payload:', payload);
+      logger.log('✏️ Updating plan:', planId, 'payload:', payload);
       const updatedPlan = await this.apiRequest(`/plans/${planId}`, {
         method: 'PUT',
         body: JSON.stringify(payload)
       });
-      console.log('✅ Plan updated successfully:', planId);
+      logger.log('✅ Plan updated successfully:', planId);
       return updatedPlan;
     } catch (error) {
-      console.error('❌ Error updating plan:', error);
+      logger.error('❌ Error updating plan:', error);
       throw error;
     }
   }
@@ -598,7 +655,7 @@ class PlansService {
   // Create poll directly in Supabase (RLS guarded)
   async createPoll(planId: string, pollData: CreatePollData): Promise<Plan> {
     try {
-      console.log('📊 Creating poll directly in Supabase for plan:', planId);
+      logger.log('📊 Creating poll directly in Supabase for plan:', planId);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -635,10 +692,10 @@ class PlansService {
         throw optionsError;
       }
 
-      console.log('✅ Poll created successfully (Supabase direct)');
+      logger.log('✅ Poll created successfully (Supabase direct)');
       return await this.getPlan(planId);
     } catch (error) {
-      console.error('❌ Error creating poll:', error);
+      logger.error('❌ Error creating poll:', error);
       throw error;
     }
   }
@@ -646,15 +703,15 @@ class PlansService {
   // Create plan
   async createPlan(body: { title: string; description?: string; location?: string; date: string; isAnonymous?: boolean; invitedFriends?: string[]; }): Promise<Plan> {
     try {
-      console.log('📝 Creating plan via backend:', body);
+      logger.log('📝 Creating plan via backend:', body);
       const plan = await this.apiRequest(`/plans`, {
         method: 'POST',
         body: JSON.stringify(body)
       });
-      console.log('✅ Plan created via backend');
+      logger.log('✅ Plan created via backend');
       return plan;
     } catch (error) {
-      console.error('❌ Error creating plan:', error);
+      logger.error('❌ Error creating plan:', error);
       throw error;
     }
   }
@@ -662,7 +719,7 @@ class PlansService {
   // Vote on poll via Edge Function
   async voteOnPoll(planId: string, pollId: string, optionIds: string[]): Promise<void> {
     try {
-      console.log('🗳️ Voting on poll via edge function:', { planId, pollId, optionIds });
+      logger.log('🗳️ Voting on poll via edge function:', { planId, pollId, optionIds });
 
       const { data, error } = await supabase.functions.invoke('poll-vote', {
         body: { pollId, optionIds }
@@ -676,9 +733,9 @@ class PlansService {
         throw new Error(data.error);
       }
 
-      console.log('✅ Vote submitted successfully via edge function');
+      logger.log('✅ Vote submitted successfully via edge function');
     } catch (error) {
-      console.error('❌ Error voting on poll:', error);
+      logger.error('❌ Error voting on poll:', error);
       throw error;
     }
   }
@@ -686,7 +743,7 @@ class PlansService {
   // Edit poll via Edge Function (with protected options logic)
   async editPoll(planId: string, pollId: string, question: string, options: string[]): Promise<Plan> {
     try {
-      console.log('✏️ Editing poll via edge function:', pollId);
+      logger.log('✏️ Editing poll via edge function:', pollId);
 
       const { data, error } = await supabase.functions.invoke('poll-edit', {
         body: { pollId, question, options }
@@ -700,12 +757,12 @@ class PlansService {
         throw new Error(data.error);
       }
 
-      console.log('✅ Poll edited successfully via edge function');
+      logger.log('✅ Poll edited successfully via edge function');
 
       // Return updated plan with the edited poll
       return await this.getPlan(planId);
     } catch (error) {
-      console.error('❌ Error editing poll:', error);
+      logger.error('❌ Error editing poll:', error);
       throw error;
     }
   }
@@ -713,7 +770,7 @@ class PlansService {
   // Delete poll directly in Supabase (RLS guarded)
   async deletePoll(planId: string, pollId: string): Promise<Plan> {
     try {
-      console.log('🗑️ Deleting poll directly in Supabase:', pollId);
+      logger.log('🗑️ Deleting poll directly in Supabase:', pollId);
 
       const { error } = await supabase
         .from('plan_polls')
@@ -725,12 +782,12 @@ class PlansService {
         throw error;
       }
 
-      console.log('✅ Poll deleted successfully (Supabase direct)');
+      logger.log('✅ Poll deleted successfully (Supabase direct)');
 
       // Return updated plan without the deleted poll
       return await this.getPlan(planId);
     } catch (error) {
-      console.error('❌ Error deleting poll:', error);
+      logger.error('❌ Error deleting poll:', error);
       throw error;
     }
   }
@@ -738,12 +795,12 @@ class PlansService {
   // Get poll results with winner determination
   async getPollResults(planId: string, pollId: string) {
     try {
-      console.log('📊 Getting poll results:', pollId);
+      logger.log('📊 Getting poll results:', pollId);
       const results = await this.apiRequest(`/plans/${planId}/polls/${pollId}/results`);
-      console.log('✅ Poll results retrieved successfully');
+      logger.log('✅ Poll results retrieved successfully');
       return results;
     } catch (error) {
-      console.error('❌ Error getting poll results:', error);
+      logger.error('❌ Error getting poll results:', error);
       throw error;
     }
   }
@@ -751,12 +808,12 @@ class PlansService {
   // Get all polls for a plan (separate from plan details)
   async getPolls(planId: string): Promise<Poll[]> {
     try {
-      console.log('📋 Getting polls for plan:', planId);
+      logger.log('📋 Getting polls for plan:', planId);
       const polls = await this.apiRequest(`/plans/${planId}/polls`);
-      console.log('✅ Polls retrieved successfully');
+      logger.log('✅ Polls retrieved successfully');
       return polls;
     } catch (error) {
-      console.error('❌ Error getting polls:', error);
+      logger.error('❌ Error getting polls:', error);
       throw error;
     }
   }
@@ -769,15 +826,15 @@ class PlansService {
   // Update attendance for completed plan
   async updateAttendance(planId: string, attended: boolean): Promise<Plan> {
     try {
-      console.log('📋 Updating attendance for plan:', planId, 'attended:', attended);
+      logger.log('📋 Updating attendance for plan:', planId, 'attended:', attended);
       const plan = await this.apiRequest(`/plans/${planId}/attendance`, {
         method: 'POST',
         body: JSON.stringify({ attended })
       });
-      console.log('✅ Attendance updated successfully');
+      logger.log('✅ Attendance updated successfully');
       return plan;
     } catch (error) {
-      console.error('❌ Error updating attendance:', error);
+      logger.error('❌ Error updating attendance:', error);
       throw error;
     }
   }
@@ -786,7 +843,7 @@ class PlansService {
   // Note: Real-time subscriptions are now handled in plansStore.ts
   // These functions are kept for backward compatibility but may be removed
   subscribeToPlanUpdates(planId: string, callback: (update: any) => void) {
-    console.log('🔔 Subscribing to plan updates:', planId);
+    logger.log('🔔 Subscribing to plan updates:', planId);
     
     const channel = supabase
       .channel(`plan-updates-${planId}`)
@@ -796,7 +853,7 @@ class PlansService {
         table: 'plan_updates',
         filter: `plan_id=eq.${planId}`
       }, (payload) => {
-        console.log('📡 Received plan update:', payload);
+        logger.log('📡 Received plan update:', payload);
         callback(payload);
       })
       .subscribe();
@@ -806,7 +863,7 @@ class PlansService {
 
   // Subscribe to all user's plan updates
   subscribeToUserPlanUpdates(userId: string, callback: (update: any) => void) {
-    console.log('🔔 Subscribing to user plan updates:', userId);
+    logger.log('🔔 Subscribing to user plan updates:', userId);
     
     const channel = supabase
       .channel(`user-plan-updates-${userId}`)
@@ -822,7 +879,7 @@ class PlansService {
             // Verify user has access to this plan
             const plan = await this.getPlan(planId);
             if (plan) {
-              console.log('📡 Received user plan update:', payload);
+              logger.log('📡 Received user plan update:', payload);
               callback(payload);
             }
           }
@@ -895,15 +952,15 @@ canUserVote(plan: Plan, userId: string): boolean {
   // Directly invite users to a plan (no voting)
   async inviteUsers(planId: string, userIds: string[]): Promise<Plan> {
     try {
-      console.log('👥 Inviting users to plan:', planId, 'users:', userIds);
+      logger.log('👥 Inviting users to plan:', planId, 'users:', userIds);
       const plan = await this.apiRequest(`/plans/${planId}/invite`, {
         method: 'POST',
         body: JSON.stringify({ userIds })
       });
-      console.log('✅ Users invited successfully');
+      logger.log('✅ Users invited successfully');
       return plan;
     } catch (error) {
-      console.error('❌ Error inviting users:', error);
+      logger.error('❌ Error inviting users:', error);
       throw error;
     }
   }

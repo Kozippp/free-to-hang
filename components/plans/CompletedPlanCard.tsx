@@ -1,10 +1,11 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { Users, Check, X, Eye } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Plan, ParticipantStatus } from '@/store/plansStore';
 import useHangStore from '@/store/hangStore';
 import { useAuth } from '@/contexts/AuthContext';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface CompletedPlanCardProps {
   plan: Plan;
@@ -142,7 +143,7 @@ export default function CompletedPlanCard({ plan, onPress, userAttended }: Compl
                   { zIndex: 3 - index, marginLeft: index > 0 ? -8 : 0 }
                 ]}
               >
-                <Image source={{ uri: participant.avatar }} style={styles.avatar} />
+                <CachedAvatar userId={participant.id} uri={participant.avatar} style={styles.avatar} />
               </View>
             ))}
             
@@ -196,7 +197,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFC107',
   },
   conditionalIndicator: {
-    backgroundColor: Colors.light.primary,
+    backgroundColor: '#FFC107',
   },
   pendingIndicator: {
     backgroundColor: Colors.light.offlineGray,

@@ -181,6 +181,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
   const [isPollLoading, setIsPollLoading] = useState(false);
   const [loadingPollId, setLoadingPollId] = useState<string | null>(null);
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
+  const [pendingNewPoll, setPendingNewPoll] = useState<Poll | null>(null);
   const [isRefreshingPlan, setIsRefreshingPlan] = useState(false);
   const hasMarkedControlPanelRef = useRef(false);
   const previousActiveTabRef = useRef(activeTab);
@@ -525,17 +526,33 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
           options
         };
 
+        // Close the poll creator and show loading immediately
+        setShowPollCreator(false);
+
         // Use plansService to update poll via API
         const updatedPlan = await plansService.editPoll(latestPlan.id, editingPoll.id, question, options);
         console.log('✅ Poll updated successfully via API:', updatedPlan);
 
         // Manually reload plans to ensure UI updates immediately
         // Real-time subscription should also handle this, but this ensures immediate feedback
-        await loadPlans(user.id);
+        await loadPlan(latestPlan.id, user.id);
       } else {
         // Create a new poll using API
         console.log('📊 Creating poll via API:', { question, options, type: pollType });
         console.log('👤 User ID:', user.id);
+
+        // Close the poll creator and show optimistic pending poll immediately
+        setShowPollCreator(false);
+        setPendingNewPoll({
+          id: `temp-${Date.now()}`,
+          type: pollType,
+          question,
+          options: options.map((opt, i) => ({
+            id: `temp-opt-${i}`,
+            text: opt,
+            votes: []
+          }))
+        } as Poll);
 
         const pollData = {
           question,
@@ -549,14 +566,14 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
         // Manually reload plans to ensure UI updates immediately
         // Real-time subscription should also handle this, but this ensures immediate feedback
-        await loadPlans(user.id);
+        await loadPlan(latestPlan.id, user.id);
       }
 
-      // Close the poll creator and reset state
+      // Reset state after successful submit
       console.log('✅ Poll submit successful, clearing loading');
-      setShowPollCreator(false);
       setEditingPoll(null);
       setLoadingPollId(null);
+      setPendingNewPoll(null);
     } catch (error) {
       console.error(
         editingPoll ? '❌ Error updating poll:' : '❌ Error creating poll:',
@@ -564,6 +581,9 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       );
       console.log('❌ Poll submit failed, clearing loading');
       setLoadingPollId(null);
+      setPendingNewPoll(null);
+      // Re-open modal if it failed so user can try again
+      setShowPollCreator(true);
 
       let errorMessage = 'Failed to create poll. Please try again.';
 
@@ -601,7 +621,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
       
       // Manually reload plans to ensure UI updates immediately
       console.log('🔄 Reloading plans after vote submit...');
-      await loadPlans(user.id);
+      await loadPlan(latestPlan.id, user.id);
       console.log('✅ Plans reloaded after vote submit');
       
       // Close voting modal
@@ -909,7 +929,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
           // Revert optimistic update by reloading plans (safely)
           console.log('🔄 Reverting optimistic update due to error');
-          loadPlans(user.id).catch(err => console.log('Silent loadPlans fail:', err));
+          loadPlan(latestPlan.id, user.id).catch(err => console.log('Silent loadPlan fail:', err));
           
           let errorMessage = 'Failed to submit vote. Please try again.';
           let errorTitle = 'Error Voting';
@@ -939,7 +959,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
     } catch (error) {
       console.error('❌ Error processing vote:', error);
       // If something fails locally, try to reload
-      loadPlans(user.id);
+      loadPlan(latestPlan.id, user.id);
     }
   };
 
@@ -957,7 +977,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
 
       // Manually reload plans to ensure UI updates immediately
       console.log('🔄 Reloading plans after poll deletion...');
-      await loadPlans(user.id);
+      await loadPlan(latestPlan.id, user.id);
       console.log('✅ Plans reloaded after poll deletion');
     } catch (error) {
       console.error('❌ Error deleting poll:', error);
@@ -1146,6 +1166,26 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                     votingInProgress={votingInProgress}
                   />
                 </View>
+              ) : pendingNewPoll?.type === 'when' ? (
+                <View style={styles.pollContainer}>
+                  <View style={styles.pollHeader}>
+                    <Clock size={18} color={Colors.light.text} style={styles.pollIcon} />
+                    <Text style={styles.pollTitle}>What time works best?</Text>
+                  </View>
+                  <PollDisplay
+                    pollId={pendingNewPoll.id}
+                    question={pendingNewPoll.question}
+                    options={preparePollForDisplay(pendingNewPoll).options}
+                    onVote={() => {}}
+                    userVotes={[]}
+                    totalVotes={0}
+                    canVote={false}
+                    hideQuestion={true}
+                    isLoading={true}
+                    loadingText="Creating poll..."
+                    readOnly={true}
+                  />
+                </View>
               ) : isInYesGang ? (
                 <View style={styles.pollContainer}>
                   <View style={styles.pollHeader}>
@@ -1188,6 +1228,26 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                     votingInProgress={votingInProgress}
                   />
                 </View>
+              ) : pendingNewPoll?.type === 'where' ? (
+                <View style={styles.pollContainer}>
+                  <View style={styles.pollHeader}>
+                    <MapPin size={18} color={Colors.light.text} style={styles.pollIcon} />
+                    <Text style={styles.pollTitle}>Where should we meet?</Text>
+                  </View>
+                  <PollDisplay
+                    pollId={pendingNewPoll.id}
+                    question={pendingNewPoll.question}
+                    options={preparePollForDisplay(pendingNewPoll).options}
+                    onVote={() => {}}
+                    userVotes={[]}
+                    totalVotes={0}
+                    canVote={false}
+                    hideQuestion={true}
+                    isLoading={true}
+                    loadingText="Creating poll..."
+                    readOnly={true}
+                  />
+                </View>
               ) : isInYesGang ? (
                 <View style={styles.pollContainer}>
                   <View style={styles.pollHeader}>
@@ -1228,6 +1288,23 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
                 </View>
               ))}
               
+              {pendingNewPoll?.type === 'custom' && (
+                <View style={styles.pollContainer}>
+                  <PollDisplay
+                    pollId={pendingNewPoll.id}
+                    question={pendingNewPoll.question}
+                    options={preparePollForDisplay(pendingNewPoll).options}
+                    onVote={() => {}}
+                    userVotes={[]}
+                    totalVotes={0}
+                    canVote={false}
+                    isLoading={true}
+                    loadingText="Creating poll..."
+                    readOnly={true}
+                  />
+                </View>
+              )}
+              
               {/* Create Poll Button */}
               {isInYesGang && (
                 <View style={styles.pollContainer}>
@@ -1242,7 +1319,7 @@ export default function PlanDetailView({ plan, onClose, onRespond, editedTitle, 
               )}
               
               {/* Message for non-going users when no polls exist */}
-              {!isInYesGang && !whenPoll && !wherePoll && customPolls.length === 0 && (
+              {!isInYesGang && !whenPoll && !wherePoll && customPolls.length === 0 && !pendingNewPoll && (
                 <View style={styles.notSetContainer}>
                   <Text style={styles.notSetText}>Time and location haven't been decided yet</Text>
                   <Text style={styles.notSetSubtext}>Put "Going" to be the first one to suggest when and where to meet!</Text>

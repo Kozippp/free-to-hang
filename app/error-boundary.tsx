@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 
 interface Props {
   children: React.ReactNode;
@@ -84,6 +85,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    Sentry.captureException(error, { extra: { componentStack: errorInfo.componentStack } });
     sendErrorToIframeParent(error, errorInfo);
     if (this.props.onError) {
       this.props.onError(error, errorInfo);

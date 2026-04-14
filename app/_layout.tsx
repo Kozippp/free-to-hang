@@ -8,8 +8,13 @@ import { useEffect, useState } from "react";
 import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
+import * as Sentry from '@sentry/react-native';
 
 import { ErrorBoundary } from "./error-boundary";
+import { initSentry } from "@/lib/sentry";
+import { logger } from "@/lib/logger";
+
+initSentry();
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Colors from "@/constants/colors";
 import { registerForPushNotifications, updateLastActive } from "@/utils/pushNotifications";
@@ -34,7 +39,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (error) {
-      console.error(error);
+      logger.error('Font loading error', error);
       throw error;
     }
   }, [error]);
@@ -72,7 +77,6 @@ function RootLayoutNav() {
 
     Notifications.getLastNotificationResponseAsync().then(response => {
       if (isMounted && response) {
-        console.log('🔔 Found initial notification response');
         setNotificationResponse(response);
       }
     });
@@ -85,7 +89,6 @@ function RootLayoutNav() {
   // 2. Handle foreground/background notification tap while app is running
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('🔔 Notification tapped while app running');
       setNotificationResponse(response);
     });
 
@@ -100,8 +103,6 @@ function RootLayoutNav() {
       return;
     }
 
-    console.log('🚀 Processing notification navigation for authenticated user');
-    
     const { notification } = notificationResponse;
     const { request } = notification;
     const { content } = request;
@@ -111,11 +112,8 @@ function RootLayoutNav() {
       data: content.data
     };
     
-    // Check if data exists before navigating
     if (notificationData.data) {
         handleNotificationNavigation(notificationData, router);
-    } else {
-        console.log('⚠️ Notification missing data payload:', notificationData);
     }
     
     // Clear the response so we don't process it again
@@ -131,7 +129,7 @@ function RootLayoutNav() {
     registerForPushNotifications(user.id);
     updateLastActive(user.id);
     pruneAvatarCache().catch((error) => {
-      console.warn('⚠️ Failed to prune avatar cache:', error);
+      logger.warn('Failed to prune avatar cache:', error);
     });
 
     const interval = setInterval(() => {
@@ -159,7 +157,7 @@ function RootLayoutNav() {
     // Update badge count with unread notifications
     const badgeCount = totalUnseen > 0 ? totalUnseen : unreadCount;
     Notifications.setBadgeCountAsync(badgeCount).catch((error) =>
-      console.error('❌ Failed to set badge count:', error)
+      logger.error('Failed to set badge count', error)
     );
   }, [totalUnseen, unreadCount]);
 

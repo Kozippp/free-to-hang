@@ -1,10 +1,12 @@
 import React from 'react';
-import { StyleSheet, View, Text, Image } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import StatusToggle from './StatusToggle';
 import Colors from '@/constants/colors';
 import { MapPin } from 'lucide-react-native';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface UserStatusBarProps {
+  userId?: string;
   avatar: string;
   name: string;
   isAvailable: boolean;
@@ -13,6 +15,7 @@ interface UserStatusBarProps {
 }
 
 export default function UserStatusBar({ 
+  userId,
   avatar, 
   name,
   isAvailable, 
@@ -28,7 +31,7 @@ export default function UserStatusBar({
     <View style={styles.container}>
       <View style={styles.userInfo}>
         <View style={styles.avatarContainer}>
-          <Image source={{ uri: avatar }} style={styles.avatar} />
+          <CachedAvatar userId={userId || name || avatar} uri={avatar} style={styles.avatar} />
           <View style={[
             styles.statusDot,
             isAvailable ? styles.statusOnline : styles.statusOffline

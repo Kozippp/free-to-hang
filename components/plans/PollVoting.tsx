@@ -6,10 +6,10 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
-  Image,
   Platform
 } from 'react-native';
 import Colors from '@/constants/colors';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface PollOption {
   id: string;
@@ -104,8 +104,9 @@ export default function PollVoting({
                               { marginLeft: index > 0 ? -10 : 0 }
                             ]}
                           >
-                            <Image
-                              source={{ uri: voter.avatar }}
+                            <CachedAvatar
+                              userId={voter.id}
+                              uri={voter.avatar}
                               style={styles.avatarImage}
                             />
                           </View>

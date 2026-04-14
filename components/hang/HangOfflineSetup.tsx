@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Keyboard,
   ScrollView,
-  Image,
   Platform,
   Animated,
   Dimensions,
@@ -15,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import StatusToggle from '@/components/StatusToggle';
+import CachedAvatar from '@/components/CachedAvatar';
 import { activities } from '@/constants/mockData';
 import Colors from '@/constants/colors';
 import { MAX_ACTIVITY_LENGTH } from '@/constants/limits';
@@ -46,6 +46,7 @@ function calculateDurationMinutes(value: number | 'tonight' | null): number | nu
 }
 
 export interface HangOfflineSetupProps {
+  userId?: string;
   userName: string;
   userAvatar: string;
   initialActivity: string;
@@ -55,6 +56,7 @@ export interface HangOfflineSetupProps {
 const { height: windowHeight } = Dimensions.get('window');
 
 export default function HangOfflineSetup({
+  userId,
   userName,
   userAvatar,
   initialActivity,
@@ -187,7 +189,7 @@ export default function HangOfflineSetup({
       <View style={styles.content}>
         <View style={styles.heroCenter}>
           <View style={styles.avatarWrapper}>
-            <Image source={{ uri: userAvatar }} style={styles.avatarLarge} />
+            <CachedAvatar userId={userId || userName || userAvatar} uri={userAvatar} style={styles.avatarLarge} />
           </View>
 
           <Text style={styles.heroTitle}>Ready to hang, {userName}?</Text>

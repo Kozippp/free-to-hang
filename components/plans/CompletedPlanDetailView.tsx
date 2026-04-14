@@ -5,7 +5,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   Platform
 } from 'react-native';
 import { 
@@ -32,6 +31,7 @@ import usePlansStore from '@/store/plansStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import PlanDetailHeader from './PlanDetailHeader';
+import CachedAvatar from '@/components/CachedAvatar';
 
 interface CompletedPlanDetailViewProps {
   plan: Plan;
@@ -250,6 +250,8 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
 
   const renderAttendanceParticipant = (participant: Participant) => {
     const avatarUri = participant.avatar || DEFAULT_AVATAR_URI;
+    const isCurrentUser = participant.id === 'current' || participant.id === authUser.id;
+    const displayStatus = participant.status === 'conditional' && !isCurrentUser ? 'maybe' : participant.status;
     return (
       <TouchableOpacity
         key={`${participant.id}-${participant.status}`}
@@ -261,30 +263,30 @@ export default function CompletedPlanDetailView({ plan, onClose, onAttendanceUpd
       >
         <View style={styles.participantInfo}>
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: avatarUri }} style={styles.avatar} />
+            <CachedAvatar userId={participant.id} uri={avatarUri} style={styles.avatar} />
             <View style={[
               styles.statusIndicator,
-              participant.status === 'going' && styles.acceptedIndicator,
-              participant.status === 'maybe' && styles.maybeIndicator,
-              participant.status === 'conditional' && styles.conditionalIndicator,
-              participant.status === 'pending' && styles.pendingIndicator,
-              participant.status === 'declined' && styles.declinedIndicator,
+              displayStatus === 'going' && styles.acceptedIndicator,
+              displayStatus === 'maybe' && styles.maybeIndicator,
+              displayStatus === 'conditional' && styles.conditionalIndicator,
+              displayStatus === 'pending' && styles.pendingIndicator,
+              displayStatus === 'declined' && styles.declinedIndicator,
             ]}>
-              {participant.status === 'going' && (
+              {displayStatus === 'going' && (
                 <Check size={10} color="white" />
               )}
-              {participant.status === 'maybe' && (
+              {displayStatus === 'maybe' && (
                 <Text style={styles.questionMark}>?</Text>
               )}
-              {participant.status === 'conditional' && (
+              {displayStatus === 'conditional' && (
                 <Eye size={10} color="white" />
               )}
-              {participant.status === 'pending' && (
+              {displayStatus === 'pending' && (
                 <View style={styles.eyeIcon}>
                   <View style={styles.eyePupil} />
                 </View>
               )}
-              {participant.status === 'declined' && (
+              {displayStatus === 'declined' && (
                 <X size={10} color="white" />
               )}
             </View>
@@ -624,7 +626,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFC107',
   },
   conditionalIndicator: {
-    backgroundColor: Colors.light.primary,
+    backgroundColor: '#FFC107',
   },
   pendingIndicator: {
     backgroundColor: Colors.light.offlineGray,

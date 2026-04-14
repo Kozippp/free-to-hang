@@ -524,8 +524,8 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
                 // Convert FriendRequest to User format for rendering
                 const userItem: User = {
                   id: item.receiver_id,
-                  name: item.receiver_name || 'Unknown',
-                  username: item.receiver_username || 'unknown',
+                  name: item.receiver_name || item.receiver_username || 'User',
+                  username: item.receiver_username || item.receiver_id?.slice(0, 8) || 'user',
                   avatar_url: item.receiver_avatar_url || '',
                   vibe: item.receiver_vibe,
                   relationshipStatus: 'pending_sent' as const
