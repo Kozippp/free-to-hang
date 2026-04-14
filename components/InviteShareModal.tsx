@@ -19,6 +19,7 @@ import {
   fetchPersonalInviteUrl,
   INVITE_SHARE_TITLE,
 } from '@/lib/invite-link';
+import { trackInviteLinkShared } from '@/lib/analytics';
 
 interface InviteShareModalProps {
   visible: boolean;
@@ -59,6 +60,7 @@ export default function InviteShareModal({
   const handleCopyLink = async () => {
     if (!inviteLink) return;
     await Clipboard.setStringAsync(inviteLink);
+    trackInviteLinkShared('copy_link');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -78,6 +80,7 @@ export default function InviteShareModal({
       });
       
       if (result.action === Share.sharedAction) {
+        trackInviteLinkShared(result.activityType ?? 'share_sheet');
         setShared(true);
         setTimeout(() => setShared(false), 2000);
       }

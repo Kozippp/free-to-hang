@@ -27,6 +27,7 @@ import useChatStore from '@/store/chatStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
+import { trackMessageSent } from '@/lib/analytics';
 
 interface ChatInputProps {
   planId: string;
@@ -107,6 +108,7 @@ export default function ChatInput({
         type: 'text',
         content: message.trim(),
       });
+      trackMessageSent({ planId, hasImage: false });
       setMessage('');
     }
   };
@@ -167,6 +169,7 @@ export default function ChatInput({
           content: '',
           imageUrl: publicUrl,
         });
+        trackMessageSent({ planId, hasImage: true });
         
         setSelectedImage(null);
         setShowImageConfirmation(false);
