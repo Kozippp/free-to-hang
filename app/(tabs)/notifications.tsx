@@ -9,6 +9,7 @@ import {
   Alert,
   Platform
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -32,6 +33,7 @@ const EDGE_SWIPE_MIN_VELOCITY = 380;
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const {
     notifications,
@@ -226,7 +228,7 @@ export default function NotificationsScreen() {
           <View style={styles.leftEdgeHitZone} accessible={false} importantForAccessibility="no" />
         </GestureDetector>
       )}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.headerTitle}>Notifications</Text>
         {/* Only show Mark all read if there are unread items */}
         {notifications.some(n => !n.read) && (
@@ -298,7 +300,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#edf2f7'
   },

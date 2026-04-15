@@ -121,6 +121,7 @@ export default function TabLayout() {
           name="notifications"
           options={{
             title: "Notifications",
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <View>
                 <Bell size={size} color={color} />
