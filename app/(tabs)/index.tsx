@@ -77,6 +77,7 @@ export default function HangScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const bgAnimatedValue = useRef(new Animated.Value(0)).current;
   
   // Load user data when component mounts or auth user changes
   useEffect(() => {
@@ -86,6 +87,26 @@ export default function HangScreen() {
     }
   }, [authUser]);
   
+  // Background gradient animation for offline state
+  useEffect(() => {
+    const bgAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bgAnimatedValue, {
+          toValue: 1,
+          duration: 8000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(bgAnimatedValue, {
+          toValue: 0,
+          duration: 8000,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    bgAnimation.start();
+    return () => bgAnimation.stop();
+  }, [bgAnimatedValue]);
+
   // Handle initial state when component mounts
   useEffect(() => {
     if (isAvailable) {
@@ -190,6 +211,26 @@ export default function HangScreen() {
   const selectedFriendsData = getAllFriends().filter(friend => 
     safeSelectedFriends.includes(friend.id)
   );
+
+  const bgColor1 = bgAnimatedValue.interpolate({
+    inputRange: [0, 0.33, 0.66, 1],
+    outputRange: [
+      'rgba(173, 216, 255, 0.2)',
+      'rgba(255, 192, 203, 0.2)',
+      'rgba(216, 191, 216, 0.2)',
+      'rgba(173, 216, 255, 0.2)',
+    ]
+  });
+
+  const bgColor2 = bgAnimatedValue.interpolate({
+    inputRange: [0, 0.33, 0.66, 1],
+    outputRange: [
+      'rgba(255, 218, 185, 0.15)',
+      'rgba(216, 191, 216, 0.15)',
+      'rgba(173, 216, 255, 0.15)',
+      'rgba(255, 192, 203, 0.15)',
+    ]
+  });
   
   return (
     <>
@@ -199,7 +240,12 @@ export default function HangScreen() {
           headerShown: false,
         }}
       />
-      <SafeAreaView style={styles.container}>
+      {!isAvailable && (
+        <Animated.View style={[styles.statusBarGradient, { backgroundColor: bgColor1 }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: bgColor2 }]} />
+        </Animated.View>
+      )}
+      <SafeAreaView style={[styles.container, !isAvailable && styles.containerTransparent]}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -355,6 +401,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  containerTransparent: {
+    backgroundColor: 'transparent',
+  },
+  statusBarGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
   },
   keyboardAvoid: {
     flex: 1,
