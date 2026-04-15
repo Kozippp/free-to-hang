@@ -23,6 +23,8 @@ SELECT
 FROM users u
 WHERE onboarding_completed = true;
 
+ALTER VIEW public.user_directory SET (security_invoker = true);
+
 -- ============================================================
 -- 2. chat_unread_counts: restrict to current user only
 -- ============================================================
@@ -41,6 +43,8 @@ WHERE
   AND pp.user_id = auth.uid()
 GROUP BY cm.plan_id, pp.user_id;
 
+ALTER VIEW public.chat_unread_counts SET (security_invoker = true);
+
 -- ============================================================
 -- 3. notification_stats: restrict to current user only
 -- ============================================================
@@ -56,6 +60,8 @@ SELECT
 FROM notifications
 WHERE user_id = auth.uid()
 GROUP BY user_id;
+
+ALTER VIEW public.notification_stats SET (security_invoker = true);
 
 -- ============================================================
 -- 4. chat_message_counts: restrict to plans the user belongs to
@@ -75,6 +81,8 @@ WHERE
     SELECT id FROM plans WHERE creator_id = auth.uid()
   )
 GROUP BY plan_id;
+
+ALTER VIEW public.chat_message_counts SET (security_invoker = true);
 
 -- ============================================================
 -- 5. Function search_path fixes (no behaviour change)
