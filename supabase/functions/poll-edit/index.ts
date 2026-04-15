@@ -184,13 +184,21 @@ serve(async (req: Request) => {
       return jsonResponse(400, { error: updatePollError.message });
     }
 
+    const clearedVoteOptionIds: string[] = [];
+
     for (let index = 0; index < currentOptions.length; index += 1) {
       if (protectedByIndex.has(index)) {
         continue;
       }
 
       const optionId = currentOptions[index].id;
+      const previousText = currentOptions[index].option_text.trim();
       const newText = options[index].trim();
+
+      if (previousText === newText) {
+        continue;
+      }
+
       const { error: optionUpdateError } = await supabase
         .from("plan_poll_options")
         .update({ option_text: newText })
@@ -199,11 +207,23 @@ serve(async (req: Request) => {
       if (optionUpdateError) {
         return jsonResponse(400, { error: optionUpdateError.message });
       }
+
+      const { error: deleteVotesError } = await voteSource
+        .from("plan_poll_votes")
+        .delete()
+        .eq("option_id", optionId);
+
+      if (deleteVotesError) {
+        return jsonResponse(400, { error: deleteVotesError.message });
+      }
+
+      clearedVoteOptionIds.push(optionId);
     }
 
     return jsonResponse(200, {
       success: true,
       protectedOptions: protectedOptionTexts,
+      clearedVoteOptions: clearedVoteOptionIds,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
