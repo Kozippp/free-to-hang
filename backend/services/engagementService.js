@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { notifyUser, NotificationTemplates } = require('./notificationService');
+const { notifyUser, sendPushNotification, NotificationTemplates } = require('./notificationService');
 
 const supabase = global.supabase;
 let schedulerStarted = false;
@@ -116,15 +116,16 @@ function startEngagementScheduler() {
 
       if (activeFriends && activeFriends.length > 0) {
         const template = NotificationTemplates.engagement_comeback();
-        await notifyUser({
+        await sendPushNotification({
           userId: inactiveUser.user_id,
-          ...template,
+          title: template.title,
+          body: template.body,
           data: {
             type: 'comeback',
             active_friends_count: activeFriends.length
           }
         }).catch((error) => {
-          console.error('❌ Failed to send comeback notification:', error?.message);
+          console.error('❌ Failed to send comeback push notification:', error?.message);
         });
       }
     }
