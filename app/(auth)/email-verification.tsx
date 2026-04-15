@@ -16,9 +16,8 @@ import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 
 export default function EmailVerificationScreen() {
-  const { email, isDev } = useLocalSearchParams<{ 
+  const { email } = useLocalSearchParams<{ 
     email: string;
-    isDev?: string;
   }>();
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,21 +25,13 @@ export default function EmailVerificationScreen() {
   const inputRefs = useRef<TextInput[]>([]);
   const router = useRouter();
 
-  // Auto-focus first input when component mounts OR auto-verify for dev
+  // Auto-focus first input when component mounts
   useEffect(() => {
-    if (isDev === 'true') {
-      // Auto-verify for development with a dummy code
-      const timer = setTimeout(() => {
-        handleDevVerify();
-      }, 500);
-      return () => clearTimeout(timer);
-    } else {
-      const timer = setTimeout(() => {
-        inputRefs.current[0]?.focus();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isDev]);
+    const timer = setTimeout(() => {
+      inputRefs.current[0]?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Start resend timer on mount
   useEffect(() => {
@@ -182,50 +173,6 @@ export default function EmailVerificationScreen() {
     router.back();
   };
 
-  const handleDevVerify = async () => {
-    if (!email) {
-      Alert.alert('Error', 'Email address is missing');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // Try common development OTP codes
-      const devCodes = ['123456', '000000', '111111'];
-      
-      for (const code of devCodes) {
-        try {
-          const { data, error } = await supabase.auth.verifyOtp({
-            email: email,
-            token: code,
-            type: 'email'
-          });
-
-          if (!error && data.user) {
-            console.log('Dev auto-verify successful with code:', code);
-            // Let AuthContext handle navigation
-            return;
-          }
-        } catch (devError) {
-          // Continue to next code
-          continue;
-        }
-      }
-      
-      // If all dev codes fail, show alert
-      Alert.alert(
-        'Developer Mode', 
-        'Auto-verification failed. Please check your email for the OTP code or try signing in normally.',
-        [{ text: 'OK' }]
-      );
-    } catch (error: any) {
-      console.error('Dev verification error:', error);
-      Alert.alert('Error', error.message || 'Development verification failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const formatEmail = (email: string) => {
     if (email.length > 20) {
       return email.substring(0, 10) + '...' + email.substring(email.indexOf('@'));
@@ -294,7 +241,7 @@ export default function EmailVerificationScreen() {
             </View>
           </View>
 
-          {/* Manual verify button (hidden when auto-verifying) */}
+          {/* Manual verify button */}
           {code.join('').length === 6 && (
             <View style={styles.verifyContainer}>
               <TouchableOpacity 
