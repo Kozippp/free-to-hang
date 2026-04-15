@@ -11,7 +11,6 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import StatusToggle from '@/components/StatusToggle';
 import CachedAvatar from '@/components/CachedAvatar';
@@ -66,8 +65,6 @@ export default function HangOfflineSetup({
   const [inputHeight, setInputHeight] = useState(60);
   const [selectedDuration, setSelectedDuration] = useState<number | 'tonight' | null>(null);
 
-  // Animation values for gradient
-  const animatedValue = useRef(new Animated.Value(0)).current;
   const toggleGlow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -75,22 +72,6 @@ export default function HangOfflineSetup({
   }, [initialActivity]);
 
   useEffect(() => {
-    // Gradient animation loop
-    const gradientAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(animatedValue, {
-          toValue: 1,
-          duration: 8000,
-          useNativeDriver: false,
-        }),
-        Animated.timing(animatedValue, {
-          toValue: 0,
-          duration: 8000,
-          useNativeDriver: false,
-        }),
-      ])
-    );
-
     // Toggle glow pulse
     const toggleAnimation = Animated.loop(
       Animated.sequence([
@@ -107,14 +88,12 @@ export default function HangOfflineSetup({
       ])
     );
 
-    gradientAnimation.start();
     toggleAnimation.start();
 
     return () => {
-      gradientAnimation.stop();
       toggleAnimation.stop();
     };
-  }, [animatedValue, toggleGlow]);
+  }, [toggleGlow]);
 
   const handleActivityChange = (text: string) => {
     setActivity(text.slice(0, MAX_ACTIVITY_LENGTH));
@@ -142,26 +121,6 @@ export default function HangOfflineSetup({
     });
   };
 
-  const gradientColors1 = animatedValue.interpolate({
-    inputRange: [0, 0.33, 0.66, 1],
-    outputRange: [
-      'rgba(173, 216, 255, 0.2)',  // blue
-      'rgba(255, 192, 203, 0.2)',  // pink
-      'rgba(216, 191, 216, 0.2)',  // lavender
-      'rgba(173, 216, 255, 0.2)'   // back to blue
-    ]
-  });
-
-  const gradientColors2 = animatedValue.interpolate({
-    inputRange: [0, 0.33, 0.66, 1],
-    outputRange: [
-      'rgba(255, 218, 185, 0.15)',  // peach
-      'rgba(216, 191, 216, 0.15)',  // lavender
-      'rgba(173, 216, 255, 0.15)',  // blue
-      'rgba(255, 192, 203, 0.15)'   // pink
-    ]
-  });
-
   const togglePulseOpacity = toggleGlow.interpolate({
     inputRange: [0, 1],
     outputRange: [0.4, 1]
@@ -174,18 +133,6 @@ export default function HangOfflineSetup({
 
   return (
     <View style={[styles.root, { minHeight: windowHeight }]}>
-      {/* Absolute Animated Gradient Background */}
-      <Animated.View style={[styles.gradientBackground, { backgroundColor: gradientColors1 }]}>
-        <Animated.View style={[styles.gradientOverlay, { backgroundColor: gradientColors2 }]}>
-          <LinearGradient
-            colors={['transparent', 'rgba(255, 255, 255, 0.5)', 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.gradientOverlay}
-          />
-        </Animated.View>
-      </Animated.View>
-
       <View style={styles.content}>
         <View style={styles.heroCenter}>
           <View style={styles.avatarWrapper}>
@@ -310,16 +257,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     position: 'relative',
-  },
-  gradientBackground: {
-    position: 'absolute',
-    top: -500,
-    left: -500,
-    right: -500,
-    bottom: -500,
-  },
-  gradientOverlay: {
-    ...StyleSheet.absoluteFillObject,
   },
   content: {
     flex: 1,

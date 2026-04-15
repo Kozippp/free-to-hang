@@ -215,20 +215,20 @@ export default function HangScreen() {
   const bgColor1 = bgAnimatedValue.interpolate({
     inputRange: [0, 0.33, 0.66, 1],
     outputRange: [
-      'rgba(173, 216, 255, 0.2)',
-      'rgba(255, 192, 203, 0.2)',
-      'rgba(216, 191, 216, 0.2)',
-      'rgba(173, 216, 255, 0.2)',
+      'rgba(173, 216, 255, 0.4)',
+      'rgba(255, 192, 203, 0.4)',
+      'rgba(216, 191, 216, 0.4)',
+      'rgba(173, 216, 255, 0.4)',
     ]
   });
 
   const bgColor2 = bgAnimatedValue.interpolate({
     inputRange: [0, 0.33, 0.66, 1],
     outputRange: [
-      'rgba(255, 218, 185, 0.15)',
-      'rgba(216, 191, 216, 0.15)',
-      'rgba(173, 216, 255, 0.15)',
-      'rgba(255, 192, 203, 0.15)',
+      'rgba(255, 218, 185, 0.3)',
+      'rgba(216, 191, 216, 0.3)',
+      'rgba(173, 216, 255, 0.3)',
+      'rgba(255, 192, 203, 0.3)',
     ]
   });
   
