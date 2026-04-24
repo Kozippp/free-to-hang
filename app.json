@@ -105,7 +105,8 @@
         {
           "contactsPermission": "Free to Hang reads your contacts on your device to show which people you know are already on the app. Contact data is not uploaded to our servers."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "scheme": "freetohang",
     "notification": {

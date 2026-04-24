@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -9,12 +9,12 @@ import {
   SafeAreaView,
   Dimensions,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const VIDEO_HEIGHT = (SCREEN_WIDTH - 32) * (16 / 9);
+const VIDEO_HEIGHT = Math.min((SCREEN_WIDTH - 32) * (16 / 9), 280);
 
 type Props = {
   visible: boolean;
@@ -22,31 +22,23 @@ type Props = {
 };
 
 export default function WelcomeVideoModal({ visible, onClose }: Props) {
-  const videoRef = useRef<Video>(null);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const player = useVideoPlayer(require('@/assets/F2H Tervitusvideo.mov'), (p) => {
+    p.loop = false;
+  });
 
-  const handleClose = useCallback(async () => {
-    try {
-      await videoRef.current?.pauseAsync();
-    } catch {
-      // ignore
+  useEffect(() => {
+    if (visible) {
+      player.replay();
+    } else {
+      player.pause();
     }
+  }, [visible]);
+
+  const handleClose = useCallback(() => {
+    player.pause();
     onClose();
-  }, [onClose]);
-
-  const handleModalShow = useCallback(async () => {
-    try {
-      await videoRef.current?.playAsync();
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-    if (status.didJustFinish) {
-      // Video ended — keep modal open so user can still close manually
-    }
-  }, []);
+  }, [onClose, player]);
 
   return (
     <Modal
@@ -54,12 +46,11 @@ export default function WelcomeVideoModal({ visible, onClose }: Props) {
       animationType="slide"
       presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'overFullScreen'}
       transparent={Platform.OS !== 'ios'}
-      onShow={handleModalShow}
       onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
         <SafeAreaView style={styles.sheet}>
-          {/* Header */}
+          {/* Handle + close */}
           <View style={styles.header}>
             <View style={styles.handle} />
             <TouchableOpacity
@@ -77,21 +68,15 @@ export default function WelcomeVideoModal({ visible, onClose }: Props) {
             <Text style={styles.emoji}>🎉</Text>
             <Text style={styles.title}>Welcome to Free to Hang!</Text>
           </View>
-          <Text style={styles.subtitle}>
-            A quick message from the founder
-          </Text>
+          <Text style={styles.subtitle}>A quick message from the founder</Text>
 
           {/* Video */}
           <View style={styles.videoWrapper}>
-            <Video
-              ref={videoRef}
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              source={require('@/assets/F2H Tervitusvideo.mov')}
+            <VideoView
+              player={player}
               style={styles.video}
-              resizeMode={ResizeMode.CONTAIN}
-              useNativeControls
-              shouldPlay={false}
-              onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+              contentFit="contain"
+              nativeControls
             />
           </View>
 
@@ -166,7 +151,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#000',
-    height: Math.min(VIDEO_HEIGHT, 280),
+    height: VIDEO_HEIGHT,
   },
   video: {
     width: '100%',
