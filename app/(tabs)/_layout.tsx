@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Bell, Calendar, ToggleLeft, User } from "lucide-react-native";
 import Colors from "@/constants/colors";
@@ -9,6 +9,8 @@ import useUnseenStore from "@/store/unseenStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { initializeRealtimeManager, stopRealtimeManager } from "@/utils/realtimeManager";
 import * as Notifications from "expo-notifications";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import WelcomeVideoModal from "@/components/WelcomeVideoModal";
 
 // ─────────────────────────────────────────────────────────────
 // Small reusable red dot
@@ -38,6 +40,16 @@ export default function TabLayout() {
     friendRequestCount,
     newFriendsCount,
   } = useUnseenStore();
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('show_welcome_video').then((val) => {
+      if (val === 'true') {
+        AsyncStorage.removeItem('show_welcome_video');
+        setTimeout(() => setShowWelcomeModal(true), 800);
+      }
+    });
+  }, []);
 
   // Initialize global realtime manager when user is authenticated
   useEffect(() => {
@@ -63,6 +75,10 @@ export default function TabLayout() {
   return (
     <>
       <StatusBar style="dark" />
+      <WelcomeVideoModal
+        visible={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+      />
 
       <Tabs
         screenOptions={{
