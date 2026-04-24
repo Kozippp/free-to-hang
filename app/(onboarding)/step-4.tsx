@@ -15,11 +15,13 @@ import { supabase } from '@/lib/supabase';
 import { uploadImage, deleteImage } from '@/lib/storage';
 import Colors from '@/constants/colors';
 import { identifyUser, trackOnboardingCompleted } from '@/lib/analytics';
+import WelcomeVideoModal from '@/components/WelcomeVideoModal';
 
 export default function ProfilePhotoScreen() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const router = useRouter();
   const { name, username, vibe } = useLocalSearchParams<{ 
     name: string; 
@@ -252,18 +254,9 @@ export default function ProfilePhotoScreen() {
       // Navigate to main app first
       router.replace('/(tabs)');
       
-      // Then show congrats message after a brief delay
+      // Then show welcome video modal after a brief delay
       setTimeout(() => {
-        Alert.alert(
-          'Welcome to Free to Hang! 🎉',
-          'Now connect with your friends and make plans effortlessly',
-          [
-            {
-              text: 'Get Started',
-              style: 'default'
-            }
-          ]
-        );
+        setShowWelcomeModal(true);
       }, 500);
     } catch (error: any) {
       console.error('Profile setup error:', error);
@@ -284,6 +277,10 @@ export default function ProfilePhotoScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
+      <WelcomeVideoModal
+        visible={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+      />
       <SafeAreaView style={styles.container}>
         {/* Header with Logo, Back and Skip */}
         <View style={styles.header}>
