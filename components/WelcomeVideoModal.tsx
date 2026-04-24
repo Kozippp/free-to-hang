@@ -48,7 +48,6 @@ export default function WelcomeVideoModal({ visible, onClose }: Props) {
       animationType="fade"
       transparent
       onRequestClose={handleClose}
-      statusBarTranslucent
     >
       <View style={styles.overlay}>
         <View style={styles.card}>
@@ -89,10 +88,12 @@ export default function WelcomeVideoModal({ visible, onClose }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   card: {
     backgroundColor: Colors.light.background,
