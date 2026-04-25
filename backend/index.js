@@ -127,16 +127,10 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/', (req, res) => {
-  console.log('🏥 Health check requested');
   res.json({
-    message: 'Free to Hang API töötab!',
+    status: 'ok',
     version: '1.0.1',
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    env: process.env.NODE_ENV,
-    supabase: supabase ? 'Connected' : 'Not connected',
-    debug: 'Authentication debugging enabled',
-    plans_backend: 'Ready - call /api/setup-plans to initialize database'
+    timestamp: new Date().toISOString()
   });
 });
 
