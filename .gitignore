@@ -37,6 +37,7 @@ web-build/
 expo-env.d.ts
 
 # Native
+android/app/src/main/assets/adi-registration.properties
 *.orig.*
 *.jks
 *.p8
