@@ -34,7 +34,8 @@
       "env": {
         "NODE_ENV": "production",
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
-        "EXPO_PUBLIC_SENTRY_DSN": "https://483fd8301b211919ad88b6e0607f48fd@o4511219784155136.ingest.de.sentry.io/4511219789135952"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://483fd8301b211919ad88b6e0607f48fd@o4511219784155136.ingest.de.sentry.io/4511219789135952",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "adi-verification": {
