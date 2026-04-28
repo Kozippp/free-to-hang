@@ -17,12 +17,48 @@ import { supabase } from '@/lib/supabase';
 
 export default function UsernameInputScreen() {
   const [username, setUsername] = useState('');
+  const [profileName, setProfileName] = useState('');
   const [isChecking, setIsChecking] = useState(false);
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { name } = useLocalSearchParams<{ name: string }>();
   const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (name) {
+      setProfileName(name);
+      return;
+    }
+
+    let cancelled = false;
+    const loadExistingProfileName = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+
+      const fallbackName =
+        typeof user.user_metadata?.name === 'string'
+          ? user.user_metadata.name.trim()
+          : typeof user.user_metadata?.full_name === 'string'
+            ? user.user_metadata.full_name.trim()
+            : '';
+
+      const { data } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const savedName = typeof data?.name === 'string' ? data.name.trim() : '';
+      const nextName = savedName && savedName !== 'Pending setup' ? savedName : fallbackName;
+      if (nextName && !cancelled) setProfileName(nextName);
+    };
+
+    void loadExistingProfileName();
+    return () => {
+      cancelled = true;
+    };
+  }, [name]);
 
   // Auto focus input when component mounts
   useEffect(() => {
@@ -76,6 +112,13 @@ export default function UsernameInputScreen() {
   const canContinue = isValidUsername && isAvailable === true && !isChecking;
 
   const handleContinue = async () => {
+    const finalName = profileName.trim();
+    if (!finalName) {
+      Alert.alert('Name Required', 'Please go back and enter your name first.');
+      router.replace('/(onboarding)/step-1');
+      return;
+    }
+
     if (!canContinue) {
       if (!isValidUsername) {
         Alert.alert('Invalid Username', 'Username must be at least 3 characters long and contain only letters, numbers, and underscores.');
@@ -119,10 +162,27 @@ export default function UsernameInputScreen() {
         return;
       }
 
+      const { error: profileUpdateError } = await supabase
+        .from('users')
+        .update({
+          name: finalName,
+          username: username.toLowerCase(),
+          onboarding_completed: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (profileUpdateError) {
+        console.error('Error saving onboarding progress:', profileUpdateError);
+        Alert.alert('Error', 'Failed to save onboarding progress. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
       // Success - username is reserved, proceed to next step
       router.push({
         pathname: '/(onboarding)/step-3',
-        params: { name: name!, username: username.toLowerCase() }
+        params: { name: finalName, username: username.toLowerCase() }
       });
     } catch (error: any) {
       console.error('Error in handleContinue:', error);
@@ -139,7 +199,11 @@ export default function UsernameInputScreen() {
   };
 
   const handleBack = () => {
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(onboarding)/step-1');
+    }
   };
 
   const getAvailabilityIndicator = () => {

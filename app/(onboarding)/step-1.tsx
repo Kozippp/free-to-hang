@@ -57,7 +57,9 @@ export default function NameInputScreen() {
   };
 
   const handleBack = () => {
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    }
   };
 
   return (

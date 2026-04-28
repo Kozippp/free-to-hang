@@ -66,7 +66,11 @@ export default function VibeInputScreen() {
             [
               {
                 text: 'OK',
-                onPress: () => router.push('/(onboarding)/step-2')
+                onPress: () =>
+                  router.push({
+                    pathname: '/(onboarding)/step-2',
+                    params: name ? { name } : {},
+                  })
               }
             ]
           );
@@ -94,7 +98,11 @@ export default function VibeInputScreen() {
         [
           {
             text: 'OK',
-            onPress: () => router.push('/(onboarding)/step-2')
+            onPress: () =>
+              router.push({
+                pathname: '/(onboarding)/step-2',
+                params: name ? { name } : {},
+              })
           }
         ]
       );
@@ -128,7 +136,11 @@ export default function VibeInputScreen() {
           [
             {
               text: 'OK',
-              onPress: () => router.push('/(onboarding)/step-2')
+              onPress: () =>
+                router.push({
+                  pathname: '/(onboarding)/step-2',
+                  params: name ? { name } : {},
+                })
             }
           ]
         );
@@ -156,7 +168,14 @@ export default function VibeInputScreen() {
   };
 
   const handleBack = () => {
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace({
+        pathname: '/(onboarding)/step-2',
+        params: name ? { name } : {},
+      });
+    }
   };
 
   const dismissKeyboard = () => {

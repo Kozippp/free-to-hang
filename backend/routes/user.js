@@ -77,6 +77,68 @@ router.put('/me', verifyToken, async (req, res) => {
   }
 });
 
+// DELETE /me - Permanently delete the authenticated account and related app data
+router.delete('/me', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Remove username holds first because they are not always covered by FK cascades.
+    const { error: reservationError } = await supabase
+      .from('username_reservations')
+      .delete()
+      .eq('user_id', userId);
+
+    if (reservationError) {
+      console.error('Account deletion reservation cleanup error:', reservationError);
+      return res.status(500).json({ error: 'Failed to delete account data' });
+    }
+
+    try {
+      const { data: avatarFiles, error: listError } = await supabase.storage
+        .from('avatars')
+        .list(userId);
+
+      if (!listError && Array.isArray(avatarFiles) && avatarFiles.length > 0) {
+        const paths = avatarFiles.map((file) => `${userId}/${file.name}`);
+        const { error: storageError } = await supabase.storage
+          .from('avatars')
+          .remove(paths);
+
+        if (storageError) {
+          console.error('Account deletion avatar cleanup error:', storageError);
+        }
+      } else if (listError) {
+        console.error('Account deletion avatar list error:', listError);
+      }
+    } catch (storageCleanupError) {
+      console.error('Account deletion avatar cleanup failed:', storageCleanupError);
+    }
+
+    // Deleting the public user row cascades app-owned tables that reference users(id).
+    const { error: profileDeleteError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', userId);
+
+    if (profileDeleteError) {
+      console.error('Account deletion profile error:', profileDeleteError);
+      return res.status(500).json({ error: 'Failed to delete account data' });
+    }
+
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId);
+
+    if (authDeleteError) {
+      console.error('Account deletion auth error:', authDeleteError);
+      return res.status(500).json({ error: 'Failed to delete authentication account' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Account deletion error:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
 // PATCH /status - update availability + chain notifications
 router.patch('/status', verifyToken, async (req, res) => {
   try {

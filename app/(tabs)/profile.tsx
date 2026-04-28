@@ -121,7 +121,7 @@ function formatQuietTimeShort(time: string | null, fallback: string): string {
 }
 
 export default function ProfileScreen() {
-  const { signOut, user: authUser } = useAuth();
+  const { signOut, deleteAccount, user: authUser } = useAuth();
   const { user, friends, offlineFriends, loadUserData, loadFriends, updateUserData } = useHangStore();
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -156,6 +156,7 @@ export default function ProfileScreen() {
   const [pushPrefsLoading, setPushPrefsLoading] = useState(false);
   const [pushPrefsError, setPushPrefsError] = useState<string | null>(null);
   const [pushPrefsSaving, setPushPrefsSaving] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [quietStartPickerVisible, setQuietStartPickerVisible] = useState(false);
   const [quietEndPickerVisible, setQuietEndPickerVisible] = useState(false);
   const [iosQuietWhich, setIosQuietWhich] = useState<'start' | 'end' | null>(null);
@@ -267,7 +268,7 @@ export default function ProfileScreen() {
   
   // Modal states
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsSubScreen, setSettingsSubScreen] = useState<'main' | 'notifications'>('main');
+  const [settingsSubScreen, setSettingsSubScreen] = useState<'main' | 'notifications' | 'deleteAccount'>('main');
   const [showFounderFeedback, setShowFounderFeedback] = useState(false);
   const [legalDoc, setLegalDoc] = useState<null | 'privacy' | 'terms'>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -304,22 +305,22 @@ export default function ProfileScreen() {
     if (showSettings) setSettingsSubScreen('main');
   }, [showSettings]);
 
-  const goBackFromNotificationsSettings = useCallback(() => {
+  const goBackFromSettingsSubScreen = useCallback(() => {
     setSettingsSubScreen('main');
   }, []);
 
-  const notificationsSettingsBackSwipe = useMemo(
+  const settingsSubScreenBackSwipe = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(settingsSubScreen === 'notifications')
+        .enabled(settingsSubScreen !== 'main')
         .activeOffsetX(24)
         .failOffsetY([-28, 28])
         .onEnd((e) => {
           if (e.translationX > 70) {
-            runOnJS(goBackFromNotificationsSettings)();
+            runOnJS(goBackFromSettingsSubScreen)();
           }
         }),
-    [settingsSubScreen, goBackFromNotificationsSettings]
+    [settingsSubScreen, goBackFromSettingsSubScreen]
   );
   
   // Edit profile states
@@ -662,6 +663,50 @@ export default function ProfileScreen() {
             }
           }
         }
+      ]
+    );
+  };
+
+  const handleDeleteAccount = async () => {
+    if (isDeletingAccount) return;
+
+    Alert.alert(
+      'Delete account',
+      'This will permanently delete your Free to Hang account, profile, friendships, plans, messages, and account data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete permanently?',
+              'Please confirm one more time that you want to permanently delete your account.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete permanently',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeletingAccount(true);
+                    try {
+                      await deleteAccount();
+                      setShowSettings(false);
+                      router.replace('/(auth)/sign-in');
+                    } catch (error) {
+                      Alert.alert(
+                        'Could not delete account',
+                        error instanceof Error ? error.message : 'Please try again.'
+                      );
+                    } finally {
+                      setIsDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
       ]
     );
   };
@@ -1313,7 +1358,7 @@ export default function ProfileScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.settingsModalHeader}>
             <View style={styles.settingsModalHeaderSide}>
-              {settingsSubScreen === 'notifications' ? (
+              {settingsSubScreen !== 'main' ? (
                 <TouchableOpacity
                   onPress={() => setSettingsSubScreen('main')}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -1325,7 +1370,11 @@ export default function ProfileScreen() {
               ) : null}
             </View>
             <Text style={styles.settingsModalTitleCenter} numberOfLines={1}>
-              {settingsSubScreen === 'main' ? 'Settings' : 'Notifications'}
+              {settingsSubScreen === 'main'
+                ? 'Settings'
+                : settingsSubScreen === 'notifications'
+                  ? 'Notifications'
+                  : 'Delete account'}
             </Text>
             <View style={styles.settingsModalHeaderSide}>
               <TouchableOpacity
@@ -1343,7 +1392,7 @@ export default function ProfileScreen() {
             </View>
           </View>
           
-          <GestureDetector gesture={notificationsSettingsBackSwipe}>
+          <GestureDetector gesture={settingsSubScreenBackSwipe}>
             <GestureScrollView style={styles.modalContent}>
             {settingsSubScreen === 'main' ? (
               <>
@@ -1404,10 +1453,26 @@ export default function ProfileScreen() {
                 <Text style={styles.legalRowText}>Give feedback to founder</Text>
                 <ChevronRight size={20} color={Colors.light.secondaryText} />
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.legalRow}
+                onPress={() => setSettingsSubScreen('deleteAccount')}
+                accessibilityRole="button"
+                accessibilityLabel="Delete account"
+              >
+                <Text style={styles.legalRowText}>Delete account</Text>
+                <ChevronRight size={20} color={Colors.light.secondaryText} />
+              </TouchableOpacity>
             </View>
+            
+            {/* Logout */}
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <LogOut size={20} color={Colors.light.destructive} />
+              <Text style={styles.logoutText}>Log Out</Text>
+            </TouchableOpacity>
 
             {/* Device Info */}
-            <View style={styles.settingsSection}>
+            <View style={[styles.settingsSection, styles.deviceInfoSection]}>
               <View style={styles.sectionHeader}>
                 <Smartphone size={20} color={Colors.light.text} />
                 <Text style={styles.sectionTitle}>Device Info</Text>
@@ -1420,14 +1485,8 @@ export default function ProfileScreen() {
                 <Text style={styles.deviceInfoText}>Joined: {userProfile.joinedDate}</Text>
               </View>
             </View>
-            
-            {/* Logout */}
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <LogOut size={20} color={Colors.light.destructive} />
-              <Text style={styles.logoutText}>Log Out</Text>
-            </TouchableOpacity>
               </>
-            ) : (
+            ) : settingsSubScreen === 'notifications' ? (
               <>
                 <View style={styles.settingsSection}>
                   <View style={styles.sectionHeader}>
@@ -1572,6 +1631,30 @@ export default function ProfileScreen() {
                   ) : null}
                 </View>
               </>
+            ) : (
+              <View style={styles.deleteAccountPage}>
+                <Text style={styles.deleteAccountPageTitle}>
+                  Do you want to delete your account?
+                </Text>
+                <Text style={styles.deleteAccountPageBody}>
+                  This permanently removes your Free to Hang account, profile, friendships,
+                  plans, messages, votes, and account data. This action cannot be undone.
+                </Text>
+                <TouchableOpacity
+                  style={styles.deleteAccountConfirmButton}
+                  onPress={handleDeleteAccount}
+                  disabled={isDeletingAccount}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete account permanently"
+                >
+                  {isDeletingAccount ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : null}
+                  <Text style={styles.deleteAccountConfirmText}>
+                    {isDeletingAccount ? 'Deleting account...' : 'Delete account'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
             </GestureScrollView>
           </GestureDetector>
@@ -2124,6 +2207,9 @@ const styles = StyleSheet.create({
   settingsSection: {
     marginBottom: 32,
   },
+  deviceInfoSection: {
+    marginTop: 28,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2265,6 +2351,37 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.destructive,
     marginLeft: 8,
+  },
+  deleteAccountPage: {
+    paddingTop: 24,
+  },
+  deleteAccountPageTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 16,
+  },
+  deleteAccountPageBody: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: Colors.light.secondaryText,
+    marginBottom: 32,
+  },
+  deleteAccountConfirmButton: {
+    minHeight: 56,
+    borderRadius: 16,
+    backgroundColor: Colors.light.destructive,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+  },
+  deleteAccountConfirmText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
   },
 
   usernameIndicator: {

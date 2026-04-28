@@ -4,6 +4,7 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
 import { Platform, Alert } from 'react-native';
 import { logger } from '@/lib/logger';
+import { API_URL } from '@/constants/config';
 import {
   identifyUser,
   resetAnalytics,
@@ -45,12 +46,45 @@ interface AuthContextType {
   signInWithApple: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   resendConfirmation: (email: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+
+const OAUTH_PLACEHOLDER_NAME = 'Pending setup';
+
+function getAppleCredentialName(credential: AppleAuthenticationCredential): string | null {
+  const fullName = credential.fullName;
+  const parts = [
+    fullName?.givenName,
+    fullName?.middleName,
+    fullName?.familyName,
+  ]
+    .map(part => part?.trim())
+    .filter(Boolean);
+
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
+function isTemporaryUsername(username?: string | null): boolean {
+  return !username || username.startsWith('tmp_');
+}
+
+function getKnownProfileName(userData: any, authUser: User): string | null {
+  const candidate =
+    userData?.name ||
+    authUser.user_metadata?.name ||
+    authUser.user_metadata?.full_name ||
+    authUser.user_metadata?.display_name;
+
+  if (typeof candidate !== 'string') return null;
+  const trimmed = candidate.trim();
+  if (!trimmed || trimmed === OAUTH_PLACEHOLDER_NAME) return null;
+  return trimmed;
+}
 
 export function useAuth() {
   const context = useContext(AuthContext);
@@ -65,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(false);
+  const [hasRecheckedOnboardingRoute, setHasRecheckedOnboardingRoute] = useState(false);
   const [navigationReady, setNavigationReady] = useState(false);
   const [initialSessionChecked, setInitialSessionChecked] = useState(false);
   const router = useRouter();
@@ -148,6 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (!hasCheckedOnboarding) {
             setHasCheckedOnboarding(false);
             setIsCheckingOnboarding(false);
+            setHasRecheckedOnboardingRoute(false);
             setNavigationReady(false);
           }
 
@@ -162,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           setHasCheckedOnboarding(false);
           setIsCheckingOnboarding(false);
+          setHasRecheckedOnboardingRoute(false);
           setNavigationReady(true);
         }
         
@@ -316,6 +353,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // User is not logged in and not in auth group
       logger.log('🔄 Redirecting to sign-in (no user)');
       setHasCheckedOnboarding(false);
+      setHasRecheckedOnboardingRoute(false);
       router.replace('/(auth)/sign-in');
     } else if (user && inAuthGroup && !hasCheckedOnboarding && !isCheckingOnboarding) {
       // User is logged in but in auth group - check onboarding status once
@@ -336,12 +374,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // User is already in tabs but onboarding hasn't been checked - this can happen on app restart
       logger.log('🔍 User already in tabs, checking onboarding status to complete loading');
       checkOnboardingStatus();
+    } else if (
+      user &&
+      inOnboardingGroup &&
+      hasCheckedOnboarding &&
+      navigationReady &&
+      !isCheckingOnboarding &&
+      !hasRecheckedOnboardingRoute
+    ) {
+      // If a completed user lands on onboarding via stale navigation/dev reload, verify and move them out.
+      logger.log('🔍 User is in onboarding after previous check, verifying destination');
+      setHasRecheckedOnboardingRoute(true);
+      checkOnboardingStatus();
     } else if (user && hasCheckedOnboarding && navigationReady) {
       // User is logged in, onboarding has been checked, and navigation is ready - ensure loading is false
       logger.log('✅ User authenticated and onboarding checked, ensuring loading is complete');
       setLoading(false);
     }
-  }, [user, segments, loading, hasCheckedOnboarding, navigationReady, isCheckingOnboarding, initialSessionChecked]);
+  }, [
+    user,
+    segments,
+    loading,
+    hasCheckedOnboarding,
+    navigationReady,
+    isCheckingOnboarding,
+    hasRecheckedOnboardingRoute,
+    initialSessionChecked,
+  ]);
 
   // After sign-in / onboarding, resume invite deep link from AsyncStorage
   useEffect(() => {
@@ -370,11 +429,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const maxLoadingTime = setTimeout(() => {
       logger.log('⚠️ Maximum loading time reached, forcing loading to complete');
       if (user) {
-        // If we have a user but still loading, assume they're ready for main app
+        // If the check stalls, keep account setup safe instead of exposing an incomplete profile.
         setHasCheckedOnboarding(true);
         setNavigationReady(true);
         setLoading(false);
-        router.replace('/(tabs)');
+        router.replace('/(onboarding)/step-1');
       } else {
         // If no user, go to auth
         setLoading(false);
@@ -403,9 +462,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsCheckingOnboarding(false);
       setNavigationReady(true);
       setLoading(false);
-      // Default to main app if we have a user
-      if (subject && segments[0] !== '(tabs)') {
-        router.replace('/(tabs)');
+      // Default to onboarding if the check cannot prove setup is complete.
+      if (subject && segments[0] !== '(onboarding)') {
+        router.replace('/(onboarding)/step-1');
       }
     }, 5000); // 5 second timeout
 
@@ -435,9 +494,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         logger.error('❌ Error checking user existence:', error);
-        // On other errors, default to main app for better UX
-        logger.log('🔄 Defaulting to main app due to error');
-        router.replace('/(tabs)');
+        // On other errors, keep setup gated instead of exposing an incomplete profile.
+        logger.log('🔄 Defaulting to onboarding due to profile check error');
+        router.replace('/(onboarding)/step-1');
         setNavigationReady(true);
         setLoading(false);
         setIsCheckingOnboarding(false);
@@ -463,7 +522,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         const goOnboarding = () => {
-          router.replace('/(onboarding)/step-1');
+          const profileName = getKnownProfileName(userData, subject);
+          const username =
+            typeof userData.username === 'string' && !isTemporaryUsername(userData.username)
+              ? userData.username
+              : null;
+
+          if (!profileName) {
+            router.replace('/(onboarding)/step-1');
+          } else if (!username) {
+            router.replace({
+              pathname: '/(onboarding)/step-2',
+              params: { name: profileName },
+            });
+          } else {
+            router.replace({
+              pathname: '/(onboarding)/step-3',
+              params: { name: profileName, username },
+            });
+          }
           setNavigationReady(true);
           setLoading(false);
           setIsCheckingOnboarding(false);
@@ -502,10 +579,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeoutId);
       
       logger.error('❌ Error in checkOnboardingStatus:', error);
-      // On unexpected errors, default to main app for better UX
-      logger.log('🔄 Defaulting to main app due to unexpected error');
-      if (segments[0] !== '(tabs)') {
-        router.replace('/(tabs)');
+      // On unexpected errors, keep setup gated instead of exposing an incomplete profile.
+      logger.log('🔄 Defaulting to onboarding due to unexpected error');
+      if (segments[0] !== '(onboarding)') {
+        router.replace('/(onboarding)/step-1');
       }
       setNavigationReady(true);
       setLoading(false);
@@ -683,6 +760,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resetAnalytics();
   };
 
+  const deleteAccount = async () => {
+    if (AUTH_MOCK_MODE) {
+      return;
+    }
+
+    try {
+      await deactivatePushToken();
+    } catch (error) {
+      logger.error('⚠️ Failed to deactivate push token before account deletion:', error);
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('No active session. Please sign in again.');
+    }
+
+    const response = await fetch(`${API_URL}/user/me`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (!response.ok) {
+      let message = 'Failed to delete account. Please try again.';
+      try {
+        const body = await response.json();
+        if (typeof body?.error === 'string') message = body.error;
+      } catch {
+        // Keep default message if the backend did not return JSON.
+      }
+      throw new Error(message);
+    }
+
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      logger.error('⚠️ Sign out after account deletion failed:', error);
+    }
+    trackSignOut();
+    resetAnalytics();
+  };
+
   const signInWithApple = async () => {
     if (AUTH_MOCK_MODE) {
       throw new Error('Mock mode: Apple sign-in is unavailable.');
@@ -723,6 +843,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Apple did not return an identity token. Please try again.');
     }
 
+    const appleFullName = getAppleCredentialName(credential);
+
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'apple',
       token: credential.identityToken,
@@ -733,8 +855,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
 
-    // Do not sync Apple full name into auth metadata here — profile name is set in onboarding
-    // (same flow as "Continue with Email": OAuth only verifies identity + email).
+    if (data.user && appleFullName) {
+      await supabase.auth.updateUser({
+        data: {
+          name: appleFullName,
+          full_name: appleFullName,
+        },
+      });
+
+      const { error: profileNameError } = await supabase
+        .from('users')
+        .update({
+          name: appleFullName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.user.id)
+        .eq('onboarding_completed', false);
+
+      if (profileNameError) {
+        logger.error('⚠️ Failed to sync Apple name to profile placeholder:', profileNameError);
+      }
+    }
 
     if (data.user) {
       trackSignIn({ userId: data.user.id, method: 'apple', success: true });
@@ -809,6 +950,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signOut,
+        deleteAccount,
         signInWithApple,
         signInWithGoogle,
         resendConfirmation,

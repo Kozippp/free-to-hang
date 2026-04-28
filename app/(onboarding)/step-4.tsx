@@ -150,7 +150,11 @@ export default function ProfilePhotoScreen() {
           [
             {
               text: 'OK',
-              onPress: () => router.push('/(onboarding)/step-2')
+              onPress: () =>
+                router.push({
+                  pathname: '/(onboarding)/step-2',
+                  params: name ? { name } : {},
+                })
             }
           ]
         );
@@ -220,7 +224,11 @@ export default function ProfilePhotoScreen() {
             [
               {
                 text: 'OK',
-                onPress: () => router.push('/(onboarding)/step-2')
+                onPress: () =>
+                  router.push({
+                    pathname: '/(onboarding)/step-2',
+                    params: name ? { name } : {},
+                  })
               }
             ]
           );
@@ -268,7 +276,21 @@ export default function ProfilePhotoScreen() {
   };
 
   const handleBack = () => {
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else if (name && username) {
+      router.replace({
+        pathname: '/(onboarding)/step-3',
+        params: { name, username },
+      });
+    } else if (name) {
+      router.replace({
+        pathname: '/(onboarding)/step-2',
+        params: { name },
+      });
+    } else {
+      router.replace('/(onboarding)/step-1');
+    }
   };
 
   return (
