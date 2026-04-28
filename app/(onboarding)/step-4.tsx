@@ -17,6 +17,8 @@ import Colors from '@/constants/colors';
 import { identifyUser, trackOnboardingCompleted } from '@/lib/analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const APPLE_FALLBACK_PROFILE_NAME = 'Apple User';
+
 export default function ProfilePhotoScreen() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -185,10 +187,11 @@ export default function ProfilePhotoScreen() {
       }
 
       // Prepare data with guaranteed required fields from onboarding
+      const savedProfileName = name === APPLE_FALLBACK_PROFILE_NAME ? username : name;
       const profileData = {
         id: authUser.id,
         email: authUser.email || authUser.user_metadata?.email || `user_${authUser.id}@example.com`,
-        name: name, // From onboarding step-1
+        name: savedProfileName, // From onboarding / Apple profile fallback
         username: username, // From onboarding step-2 (validated and reserved)
         vibe: vibe || null, // From onboarding step-3 (can be empty)
         avatar_url: avatarUrlForDb,

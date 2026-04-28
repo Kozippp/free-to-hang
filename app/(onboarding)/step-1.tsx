@@ -14,12 +14,14 @@ import { Stack, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { MAX_PROFILE_NAME_LENGTH } from '@/constants/limits';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function NameInputScreen() {
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const inputRef = useRef<TextInput>(null);
+  const { signOut } = useAuth();
 
   // Auto focus input when component mounts
   useEffect(() => {
@@ -56,9 +58,18 @@ export default function NameInputScreen() {
     }
   };
 
-  const handleBack = () => {
+  const handleBack = async () => {
     if (router.canGoBack()) {
       router.back();
+      return;
+    }
+
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Failed to sign out from onboarding:', error);
+    } finally {
+      router.replace('/(auth)/sign-in');
     }
   };
 

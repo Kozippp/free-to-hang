@@ -15,6 +15,8 @@ import { Check, X, ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 
+const APPLE_FALLBACK_PROFILE_NAME = 'Apple User';
+
 export default function UsernameInputScreen() {
   const [username, setUsername] = useState('');
   const [profileName, setProfileName] = useState('');
@@ -162,11 +164,15 @@ export default function UsernameInputScreen() {
         return;
       }
 
+      const selectedUsername = username.toLowerCase();
+      const savedProfileName =
+        finalName === APPLE_FALLBACK_PROFILE_NAME ? selectedUsername : finalName;
+
       const { error: profileUpdateError } = await supabase
         .from('users')
         .update({
-          name: finalName,
-          username: username.toLowerCase(),
+          name: savedProfileName,
+          username: selectedUsername,
           onboarding_completed: false,
           updated_at: new Date().toISOString(),
         })
@@ -182,7 +188,7 @@ export default function UsernameInputScreen() {
       // Success - username is reserved, proceed to next step
       router.push({
         pathname: '/(onboarding)/step-3',
-        params: { name: finalName, username: username.toLowerCase() }
+        params: { name: savedProfileName, username: selectedUsername }
       });
     } catch (error: any) {
       console.error('Error in handleContinue:', error);
