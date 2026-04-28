@@ -2,7 +2,7 @@
   "expo": {
     "name": "Free to Hang",
     "slug": "free-to-hang",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,8 +16,9 @@
     ],
     "ios": {
       "supportsTablet": true,
+      "useFrameworks": "static",
       "bundleIdentifier": "com.freetohang.app",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "associatedDomains": [
         "applinks:freetohang.com",
         "applinks:www.freetohang.com"

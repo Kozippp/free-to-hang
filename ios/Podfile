@@ -6,6 +6,7 @@ podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties
 
 ENV['RCT_NEW_ARCH_ENABLED'] = '0' if podfile_properties['newArchEnabled'] == 'false'
 ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] = podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
+$RNFirebaseAsStaticFramework = true
 
 platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 install! 'cocoapods',
@@ -15,7 +16,9 @@ prepare_react_native_project!
 
 target 'FreetoHang' do
   use_expo_modules!
-  use_frameworks! :linkage => :static
+  pod 'FirebaseCore', :modular_headers => true
+  pod 'FirebaseCoreInternal', :modular_headers => true
+  pod 'GoogleUtilities', :modular_headers => true
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
@@ -58,39 +61,6 @@ target 'FreetoHang' do
       target_installation_result.resource_bundle_targets.each do |resource_bundle_target|
         resource_bundle_target.build_configurations.each do |config|
           config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
-        end
-      end
-    end
-
-    # Xcode 16.3+ / 26.x Clang: fmt enables consteval via __cpp_consteval + clang version,
-    # but FMT_STRING + format-inl.h fails ("is not a constant expression"). -DFMT_USE_CONSTEVAL=0
-    # does not work because base.h redefines it. Force-off after fmt's detection block.
-    fmt_base = File.expand_path('Pods/fmt/include/fmt/base.h', __dir__)
-    if File.exist?(fmt_base)
-      content = File.read(fmt_base)
-      unless content.include?('FTH_FMT_FORCE_NO_CONSTEVAL')
-        content = content.sub(
-          /(#else\n#  define FMT_USE_CONSTEVAL 0\n#endif)\n(#if FMT_USE_CONSTEVAL)/m,
-          "\\1\n// FTH_FMT_FORCE_NO_CONSTEVAL: Apple Clang + fmt 11 (RN 0.79) local build\n#undef FMT_USE_CONSTEVAL\n#define FMT_USE_CONSTEVAL 0\n\\2"
-        )
-        File.chmod(0o644, fmt_base)
-        File.write(fmt_base, content)
-      end
-    end
-
-    # Fix for React Native 0.79 module name conflict
-    # React-jsitooling and React-RuntimeCore both try to define 'react_runtime' module
-    installer.pods_project.targets.each do |target|
-      if target.name == 'React-RuntimeCore'
-        target.build_configurations.each do |config|
-          config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-          config.build_settings['DEFINES_MODULE'] = 'NO'
-        end
-      end
-      if target.name == 'React-jsitooling'
-        target.build_configurations.each do |config|
-          config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-          config.build_settings['DEFINES_MODULE'] = 'NO'
         end
       end
     end
