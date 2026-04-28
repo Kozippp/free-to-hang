@@ -30,16 +30,6 @@ import useFriendsStore from '@/store/friendsStore';
 import useHangStore from '@/store/hangStore';
 import { deactivatePushToken } from '@/utils/pushNotifications';
 
-const agentDebugLog = (
-  runId: string,
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data: Record<string, unknown>
-) => {
-  fetch('http://127.0.0.1:7903/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a4fab'},body:JSON.stringify({sessionId:'7a4fab',runId,hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
-};
-
 const IS_PLACEHOLDER_KEY = !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
                            process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY === 'PLACEHOLDER_ANON_KEY_PANE_SIIA_ÕIGE_VÕTI';
 
@@ -775,13 +765,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // #region agent log
-    agentDebugLog('initial-delete-account', 'H1,H2', 'contexts/AuthContext.tsx:deleteAccount:start', 'Client account deletion started', {
-      hasCurrentUser: Boolean(user),
-      apiUrlConfigured: Boolean(API_URL),
-    });
-    // #endregion
-
     try {
       await deactivatePushToken();
     } catch (error) {
@@ -789,41 +772,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const { data: { session } } = await supabase.auth.getSession();
-    // #region agent log
-    agentDebugLog('initial-delete-account', 'H1', 'contexts/AuthContext.tsx:deleteAccount:session', 'Client session lookup completed', {
-      hasSession: Boolean(session),
-      hasAccessToken: Boolean(session?.access_token),
-    });
-    // #endregion
     if (!session?.access_token) {
       throw new Error('No active session. Please sign in again.');
     }
 
-    let response: Response;
-    try {
-      response = await fetch(`${API_URL}/user/me`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-    } catch (error) {
-      // #region agent log
-      agentDebugLog('initial-delete-account', 'H2', 'contexts/AuthContext.tsx:deleteAccount:network-error', 'Client delete API request failed before response', {
-        errorName: error instanceof Error ? error.name : 'UnknownError',
-        errorMessage: error instanceof Error ? error.message : 'Unknown request failure',
-      });
-      // #endregion
-      throw error;
-    }
-
-    // #region agent log
-    agentDebugLog('initial-delete-account', 'H2,H3,H4,H5', 'contexts/AuthContext.tsx:deleteAccount:response', 'Client delete API response received', {
-      ok: response.ok,
-      status: response.status,
-      statusText: response.statusText,
+    const response = await fetch(`${API_URL}/user/me`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
     });
-    // #endregion
 
     if (!response.ok) {
       let message = 'Failed to delete account. Please try again.';
@@ -833,12 +791,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // Keep default message if the backend did not return JSON.
       }
-      // #region agent log
-      agentDebugLog('initial-delete-account', 'H2,H3,H4,H5', 'contexts/AuthContext.tsx:deleteAccount:error-body', 'Client delete API returned an error', {
-        status: response.status,
-        message,
-      });
-      // #endregion
       throw new Error(message);
     }
 

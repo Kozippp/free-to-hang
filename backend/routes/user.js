@@ -6,10 +6,6 @@ const { handleFriendStatusChange } = require('../services/engagementService');
 // Use global supabase instance initialised in backend/index.js
 const supabase = global.supabase;
 
-const agentDebugLog = (runId, hypothesisId, location, message, data) => {
-  fetch('http://127.0.0.1:7903/ingest/28462891-67ff-4008-918c-b3b47aa19c24',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7a4fab'},body:JSON.stringify({sessionId:'7a4fab',runId,hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
-};
-
 // GET /me
 router.get('/me', verifyToken, async (req, res) => {
   const user = req.user;
@@ -86,26 +82,11 @@ router.delete('/me', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // #region agent log
-    agentDebugLog('initial-delete-account', 'H1,H2,H3,H4,H5', 'backend/routes/user.js:delete:start', 'Backend account deletion started', {
-      hasUserId: Boolean(userId),
-      hasSupabaseClient: Boolean(supabase),
-    });
-    // #endregion
-
     // Remove username holds first because they are not always covered by FK cascades.
     const { error: reservationError } = await supabase
       .from('username_reservations')
       .delete()
       .eq('user_id', userId);
-
-    // #region agent log
-    agentDebugLog('initial-delete-account', 'H3', 'backend/routes/user.js:delete:reservations', 'Backend username reservation cleanup completed', {
-      hasError: Boolean(reservationError),
-      errorCode: reservationError?.code,
-      errorMessage: reservationError?.message,
-    });
-    // #endregion
 
     if (reservationError) {
       console.error('Account deletion reservation cleanup error:', reservationError);
@@ -139,28 +120,12 @@ router.delete('/me', verifyToken, async (req, res) => {
       .delete()
       .eq('id', userId);
 
-    // #region agent log
-    agentDebugLog('initial-delete-account', 'H4', 'backend/routes/user.js:delete:profile', 'Backend user row delete completed', {
-      hasError: Boolean(profileDeleteError),
-      errorCode: profileDeleteError?.code,
-      errorMessage: profileDeleteError?.message,
-    });
-    // #endregion
-
     if (profileDeleteError) {
       console.error('Account deletion profile error:', profileDeleteError);
       return res.status(500).json({ error: 'Failed to delete account data' });
     }
 
     const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId);
-
-    // #region agent log
-    agentDebugLog('initial-delete-account', 'H5', 'backend/routes/user.js:delete:auth', 'Backend auth user delete completed', {
-      hasError: Boolean(authDeleteError),
-      errorCode: authDeleteError?.code,
-      errorMessage: authDeleteError?.message,
-    });
-    // #endregion
 
     if (authDeleteError) {
       console.error('Account deletion auth error:', authDeleteError);
