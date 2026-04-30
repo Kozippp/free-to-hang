@@ -643,7 +643,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
                     Find friends from your contacts
                   </Text>
 
-                  {/* Allow Access Button */}
+                  {/* Continue to the native contacts permission prompt */}
               <TouchableOpacity
                     onPress={handleRequestContactsAccess}
                     disabled={loadingContacts}
@@ -651,7 +651,7 @@ export default function AddFriendsModal({ visible, onClose }: AddFriendsModalPro
                   >
                     <Users size={20} color="white" />
                     <Text style={styles.newContactsButtonText}>
-                      {loadingContacts ? 'Checking Contacts...' : 'Allow Contacts Access'}
+                      {loadingContacts ? 'Checking Contacts...' : 'Continue'}
                     </Text>
                   </TouchableOpacity>
 
