@@ -42,8 +42,6 @@ export default function NotificationsScreen() {
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    startRealTimeUpdates,
-    stopRealTimeUpdates
   } = useNotificationsStore();
   const { plans: unseenPlans, fetchUnseenCounts, markControlPanelSeen, markChatSeen } = useUnseenStore();
   
@@ -74,17 +72,13 @@ export default function NotificationsScreen() {
     [navigateToPlans]
   );
 
+  // Notifications fetch + realtime are started globally in realtimeManager.
+  // Refresh unseen counts when this tab is opened (lightweight).
   useEffect(() => {
     if (user?.id) {
-      fetchNotifications(user.id);
-      startRealTimeUpdates(user.id);
       fetchUnseenCounts();
     }
-
-    return () => {
-      stopRealTimeUpdates();
-    };
-  }, [user?.id, fetchNotifications, startRealTimeUpdates, stopRealTimeUpdates]);
+  }, [user?.id, fetchUnseenCounts]);
 
   // Group notifications
   const groupedNotifications = useMemo(() => {

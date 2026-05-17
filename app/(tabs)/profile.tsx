@@ -136,8 +136,6 @@ export default function ProfileScreen() {
     declineFriendRequest,
     loadAllRelationships,
     forceRefresh,
-    startRealTimeUpdates,
-    stopRealTimeUpdates
   } = useFriendsStore();
   
   // Use real user data from hangStore, fallback to mock for missing fields
@@ -176,22 +174,19 @@ export default function ProfileScreen() {
 
   // Friend relationships disabled - no loading needed
 
-  // Start friends realtime when profile tab mounts
+  // Friends realtime is managed globally by realtimeManager.
+  // Refresh relationship lists when opening Profile if still empty.
   useEffect(() => {
-    if (authUser) {
-      console.log('👥 Starting friends realtime in profile tab...');
-      startRealTimeUpdates();
-
-      // Load initial friend data
-      loadAllRelationships();
+    if (!authUser?.id) return;
+    const { friends, incomingRequests, outgoingRequests } = useFriendsStore.getState();
+    if (
+      friends.length === 0 &&
+      incomingRequests.length === 0 &&
+      outgoingRequests.length === 0
+    ) {
+      void loadAllRelationships();
     }
-
-    // Stop realtime when leaving profile tab
-    return () => {
-      console.log('👥 Stopping friends realtime when leaving profile tab...');
-      stopRealTimeUpdates();
-    };
-  }, [authUser]); // Only depend on authUser to avoid infinite loops
+  }, [authUser?.id, loadAllRelationships]);
 
   // Update local state when hangStore data changes
   useEffect(() => {

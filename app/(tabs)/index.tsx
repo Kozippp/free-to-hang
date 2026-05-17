@@ -10,6 +10,7 @@ import {
   ScrollView,
   RefreshControl,
   KeyboardAvoidingView,
+  InteractionManager,
 } from 'react-native';
 import { 
   MessageCircle, 
@@ -41,6 +42,7 @@ import useHangStore from '@/store/hangStore';
 import { useAuth } from '@/contexts/AuthContext';
 import useUnseenStore from '@/store/unseenStore';
 import { useFocusEffect } from 'expo-router';
+import { markStartup } from '@/lib/startupTiming';
 
 export default function HangScreen() {
   const { 
@@ -68,6 +70,7 @@ export default function HangScreen() {
   // Mark the friends list as seen whenever the Hang tab comes into focus
   useFocusEffect(
     React.useCallback(() => {
+      markStartup('first_usable_screen');
       void markFriendsListSeen();
     }, [markFriendsListSeen])
   );
@@ -79,13 +82,14 @@ export default function HangScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const bgAnimatedValue = useRef(new Animated.Value(0)).current;
   
-  // Load user data when component mounts or auth user changes
   useEffect(() => {
-    if (authUser) {
-      loadUserData();
-      loadFriends();
-    }
-  }, [authUser]);
+    if (!authUser?.id) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void loadUserData();
+      void loadFriends();
+    });
+    return () => task.cancel();
+  }, [authUser?.id, loadUserData, loadFriends]);
   
   // Background gradient animation for offline state
   useEffect(() => {

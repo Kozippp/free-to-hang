@@ -16,6 +16,7 @@ import { uploadImage, deleteImage } from '@/lib/storage';
 import Colors from '@/constants/colors';
 import { identifyUser, trackOnboardingCompleted } from '@/lib/analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { writeOnboardingCache } from '@/lib/onboarding-cache';
 
 const APPLE_FALLBACK_PROFILE_NAME = 'Apple User';
 
@@ -242,6 +243,12 @@ export default function ProfilePhotoScreen() {
       }
 
       console.log('Profile saved successfully!');
+
+      await writeOnboardingCache(authUser.id, {
+        onboardingCompleted: true,
+        name: profileData.name,
+        username: profileData.username,
+      });
 
       // Remove the username reservation since registration is complete
       await supabase

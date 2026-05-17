@@ -29,6 +29,15 @@ import usePlansStore from '@/store/plansStore';
 import useFriendsStore from '@/store/friendsStore';
 import useHangStore from '@/store/hangStore';
 import { deactivatePushToken } from '@/utils/pushNotifications';
+import {
+  readOnboardingCache,
+  writeOnboardingCache,
+  clearOnboardingCache,
+} from '@/lib/onboarding-cache';
+import { markStartup } from '@/lib/startupTiming';
+
+const USER_PROFILE_FIELDS =
+  'id, name, username, onboarding_completed' as const;
 
 const IS_PLACEHOLDER_KEY = !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
                            process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY === 'PLACEHOLDER_ANON_KEY_PANE_SIIA_ÕIGE_VÕTI';
@@ -141,6 +150,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const lastOnboardingRequiredRef = useRef<boolean | null>(null);
   const onboardingCheckInFlightRef = useRef(false);
   const socialSignInNavigationPendingRef = useRef(false);
+  const usedOnboardingCacheFastPathRef = useRef(false);
+  const backgroundVerifyStartedRef = useRef(false);
   const router = useRouter();
   const segments = useSegments();
 
@@ -180,17 +191,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        markStartup('session_loaded', { hasSession: !!session?.user });
+
         if (session?.user) {
           logger.log('✅ Found existing session for user:', session.user.email);
           setUser(session.user);
-          // Don't set loading to false yet - wait for onboarding check
+
+          const cached = await readOnboardingCache(session.user.id);
+          if (cached?.onboardingCompleted) {
+            logger.log('⚡ Using cached onboarding_completed for fast startup');
+            usedOnboardingCacheFastPathRef.current = true;
+            lastOnboardingRequiredRef.current = false;
+            hasCheckedOnboardingRef.current = true;
+            setHasCheckedOnboarding(true);
+            setNavigationReady(true);
+            setLoading(false);
+            markStartup('onboarding_resolved', { source: 'cache' });
+          }
         } else {
           logger.log('❌ No existing session found');
           setUser(null);
           setLoading(false);
           setNavigationReady(true);
         }
-        
+
         setInitialSessionChecked(true);
       } catch (error) {
         logger.error('Error in initial session check:', error);
@@ -203,6 +227,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     checkInitialSession();
   }, []);
+
+  useEffect(() => {
+    if (
+      !initialSessionChecked ||
+      !user?.id ||
+      !usedOnboardingCacheFastPathRef.current ||
+      backgroundVerifyStartedRef.current
+    ) {
+      return;
+    }
+    backgroundVerifyStartedRef.current = true;
+    void checkOnboardingStatus(user, { backgroundVerify: true });
+  }, [initialSessionChecked, user?.id]);
 
   useEffect(() => {
     if (AUTH_MOCK_MODE || !initialSessionChecked) {
@@ -240,9 +277,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (event === 'SIGNED_OUT') {
           logger.log('👋 User signed out');
-          // Note: Push token already deactivated in signOut() function
-          // No need to deactivate again here as user is already signed out
-          
+          usedOnboardingCacheFastPathRef.current = false;
+          backgroundVerifyStartedRef.current = false;
           hasCheckedOnboardingRef.current = false;
           setHasCheckedOnboarding(false);
           setIsCheckingOnboarding(false);
@@ -447,8 +483,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logger.log('🔍 User is in onboarding after previous check, verifying destination');
       setHasRecheckedOnboardingRoute(true);
       checkOnboardingStatus();
+    } else if (
+      user &&
+      hasCheckedOnboarding &&
+      navigationReady &&
+      inAuthGroup &&
+      lastOnboardingRequiredRef.current === false
+    ) {
+      logger.log('🔄 Cached onboarded user leaving auth shell → tabs');
+      router.replace('/(tabs)');
+      setLoading(false);
     } else if (user && hasCheckedOnboarding && navigationReady) {
-      // User is logged in, onboarding has been checked, and navigation is ready - ensure loading is false
       logger.log('✅ User authenticated and onboarding checked, ensuring loading is complete');
       setLoading(false);
     }
@@ -507,7 +552,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(maxLoadingTime);
   }, [loading, user]);
 
-  const checkOnboardingStatus = async (sessionUser?: User | null) => {
+  const checkOnboardingStatus = async (
+    sessionUser?: User | null,
+    options?: { backgroundVerify?: boolean }
+  ) => {
     const subject = sessionUser ?? user;
     if (!subject || onboardingCheckInFlightRef.current) {
       logger.log('🚫 Skipping onboarding check:', {
@@ -517,6 +565,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       return;
     }
+
+    const backgroundVerify = options?.backgroundVerify === true;
 
     onboardingCheckInFlightRef.current = true;
     let completed = false;
@@ -529,32 +579,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     };
 
-    setIsCheckingOnboarding(true);
-    hasCheckedOnboardingRef.current = true;
-    setHasCheckedOnboarding(true); // Mark that we've checked to prevent loops
-    logger.log('🔍 Starting onboarding status check for user:', subject.email);
+    if (!backgroundVerify) {
+      setIsCheckingOnboarding(true);
+      hasCheckedOnboardingRef.current = true;
+      setHasCheckedOnboarding(true);
+    }
+    logger.log(
+      backgroundVerify
+        ? '🔍 Background onboarding verification for user:'
+        : '🔍 Starting onboarding status check for user:',
+      subject.email
+    );
 
     // Set a timeout to ensure this function always completes
     const timeoutId = setTimeout(() => {
+      if (backgroundVerify) {
+        if (!finishOnboardingCheck()) return;
+        return;
+      }
       logger.log('⚠️ Onboarding check timeout - forcing completion');
       if (!finishOnboardingCheck()) return;
       setNavigationReady(true);
       setLoading(false);
-      // Default to onboarding if the check cannot prove setup is complete.
       if (subject && segments[0] !== '(onboarding)') {
         lastOnboardingRequiredRef.current = true;
         router.replace('/(onboarding)/step-1');
       }
-    }, 5000); // 5 second timeout
+    }, 5000);
 
     try {
-      // Small delay to ensure smooth transition
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // First check if user exists in our users table
+      if (!backgroundVerify) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       const { data: userData, error } = await supabase
         .from('users')
-        .select('*')
+        .select(USER_PROFILE_FIELDS)
         .eq('id', subject.id)
         .single();
 
@@ -597,16 +657,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const goMainApp = () => {
           pendingAppleProfileNameRef.current = null;
           lastOnboardingRequiredRef.current = false;
-          if (segments[0] !== '(tabs)') {
-            router.replace('/(tabs)');
+          void writeOnboardingCache(subject.id, {
+            onboardingCompleted: true,
+            name: userData.name ?? null,
+            username: userData.username ?? null,
+          });
+          if (!backgroundVerify) {
+            if (segments[0] !== '(tabs)') {
+              router.replace('/(tabs)');
+            }
+            setNavigationReady(true);
+            setLoading(false);
           }
-          setNavigationReady(true);
-          setLoading(false);
+          markStartup('onboarding_resolved', { source: 'server', completed: true });
           finishOnboardingCheck();
         };
 
         const goOnboarding = () => {
           lastOnboardingRequiredRef.current = true;
+          void writeOnboardingCache(subject.id, {
+            onboardingCompleted: false,
+            name: userData.name ?? null,
+            username: userData.username ?? null,
+          });
           const knownProfileName = getKnownProfileName(
             userData,
             subject,
@@ -621,23 +694,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               ? userData.username
               : null;
 
-          if (!profileName) {
-            router.replace('/(onboarding)/step-1');
-          } else if (!username) {
-            pendingAppleProfileNameRef.current = profileName;
-            router.replace({
-              pathname: '/(onboarding)/step-2',
-              params: { name: profileName },
-            });
-          } else {
-            pendingAppleProfileNameRef.current = profileName;
-            router.replace({
-              pathname: '/(onboarding)/step-3',
-              params: { name: profileName, username },
-            });
+          if (!backgroundVerify) {
+            if (!profileName) {
+              router.replace('/(onboarding)/step-1');
+            } else if (!username) {
+              pendingAppleProfileNameRef.current = profileName;
+              router.replace({
+                pathname: '/(onboarding)/step-2',
+                params: { name: profileName },
+              });
+            } else {
+              pendingAppleProfileNameRef.current = profileName;
+              router.replace({
+                pathname: '/(onboarding)/step-3',
+                params: { name: profileName, username },
+              });
+            }
+            setNavigationReady(true);
+            setLoading(false);
+          } else if (segments[0] === '(tabs)') {
+            if (!profileName) {
+              router.replace('/(onboarding)/step-1');
+            } else if (!username) {
+              router.replace({
+                pathname: '/(onboarding)/step-2',
+                params: { name: profileName },
+              });
+            } else {
+              router.replace({
+                pathname: '/(onboarding)/step-3',
+                params: { name: profileName, username },
+              });
+            }
           }
-          setNavigationReady(true);
-          setLoading(false);
+          markStartup('onboarding_resolved', { source: 'server', completed: false });
           finishOnboardingCheck();
         };
 
@@ -722,7 +812,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Check if user exists in our users table
         const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('*')
+          .select(USER_PROFILE_FIELDS)
           .eq('id', data.user.id)
           .single();
 
@@ -765,6 +855,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (userData.onboarding_completed === true) {
             logger.log('✅ Existing user onboarding completed - will direct to main app');
+            void writeOnboardingCache(data.user.id, {
+              onboardingCompleted: true,
+              name: userData.name ?? null,
+              username: userData.username ?? null,
+            });
             markReady(false);
             setTimeout(() => {
               router.replace('/(tabs)');
@@ -852,12 +947,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Deactivate push token before signing out
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const signingOutUserId = session?.user?.id;
+
     try {
       logger.log('🔕 Deactivating push token...');
       await deactivatePushToken();
     } catch (error) {
       logger.error('⚠️ Failed to deactivate push token, continuing with sign out:', error);
+    }
+
+    if (signingOutUserId) {
+      await clearOnboardingCache(signingOutUserId);
     }
 
     const { error } = await supabase.auth.signOut();

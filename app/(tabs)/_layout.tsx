@@ -10,11 +10,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { initializeRealtimeManager, stopRealtimeManager } from "@/utils/realtimeManager";
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import WelcomeVideoModal from "@/components/WelcomeVideoModal";
+import LazyWelcomeVideoModal from "@/components/LazyWelcomeVideoModal";
+import { markStartup } from "@/lib/startupTiming";
 
-// ─────────────────────────────────────────────────────────────
-// Small reusable red dot
-// ─────────────────────────────────────────────────────────────
 function RedDot() {
   return (
     <View
@@ -41,26 +39,35 @@ export default function TabLayout() {
     newFriendsCount,
   } = useUnseenStore();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [welcomeFlagChecked, setWelcomeFlagChecked] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem('show_welcome_video').then((val) => {
-      if (val === 'true') {
-        AsyncStorage.removeItem('show_welcome_video');
+    markStartup("tabs_layout_mounted");
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void AsyncStorage.getItem("show_welcome_video").then((val) => {
+      if (cancelled) return;
+      setWelcomeFlagChecked(true);
+      if (val === "true") {
+        void AsyncStorage.removeItem("show_welcome_video");
         setTimeout(() => setShowWelcomeModal(true), 800);
       }
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Initialize global realtime manager when user is authenticated
   useEffect(() => {
     if (!user?.id) return;
-    initializeRealtimeManager(user.id);
+    initializeRealtimeManager(user.id, { defer: true });
     return () => {
       stopRealtimeManager();
     };
   }, [user?.id]);
 
-  // Sync app icon badge with total unseen
   useEffect(() => {
     const badgeCount =
       totalPlanUnseen + invitationUnreadCount + unreadCount + friendRequestCount + newFriendsCount;
@@ -75,10 +82,12 @@ export default function TabLayout() {
   return (
     <>
       <StatusBar style="dark" />
-      <WelcomeVideoModal
-        visible={showWelcomeModal}
-        onClose={() => setShowWelcomeModal(false)}
-      />
+      {welcomeFlagChecked && (
+        <LazyWelcomeVideoModal
+          visible={showWelcomeModal}
+          onClose={() => setShowWelcomeModal(false)}
+        />
+      )}
 
       <Tabs
         screenOptions={{
@@ -104,7 +113,6 @@ export default function TabLayout() {
           headerTitleAlign: "center",
         }}
       >
-        {/* Hang tab */}
         <Tabs.Screen
           name="index"
           options={{
@@ -118,7 +126,6 @@ export default function TabLayout() {
           }}
         />
 
-        {/* Plans tab */}
         <Tabs.Screen
           name="plans"
           options={{
@@ -132,7 +139,6 @@ export default function TabLayout() {
           }}
         />
 
-        {/* Notifications tab */}
         <Tabs.Screen
           name="notifications"
           options={{
@@ -147,7 +153,6 @@ export default function TabLayout() {
           }}
         />
 
-        {/* Profile tab */}
         <Tabs.Screen
           name="profile"
           options={{

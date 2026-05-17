@@ -2,13 +2,16 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Disable fast refresh to prevent excessive refreshing
+// Production: lazy-load modules at call sites for faster cold start.
+// Development: keep inlineRequires off for more predictable fast refresh.
+const isProduction = process.env.NODE_ENV === 'production';
+
 config.transformer = {
   ...config.transformer,
   getTransformOptions: async () => ({
     transform: {
       experimentalImportSupport: false,
-      inlineRequires: false,
+      inlineRequires: isProduction,
     },
   }),
 };

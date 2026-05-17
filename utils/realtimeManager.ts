@@ -1,4 +1,5 @@
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, InteractionManager } from 'react-native';
+import { markStartup } from '@/lib/startupTiming';
 import usePlansStore from '@/store/plansStore';
 import useFriendsStore from '@/store/friendsStore';
 import useHangStore from '@/store/hangStore';
@@ -43,7 +44,10 @@ function scheduleUnseenRefetch() {
  * Initialize the global realtime manager
  * Should be called once when user logs in
  */
-export function initializeRealtimeManager(userId: string) {
+export function initializeRealtimeManager(
+  userId: string,
+  options?: { defer?: boolean }
+) {
   if (isManagerInitialized && currentUserId === userId) {
     console.log('✅ Realtime manager already initialized for this user');
     return;
@@ -54,17 +58,27 @@ export function initializeRealtimeManager(userId: string) {
   isManagerInitialized = true;
   lastForegroundTime = Date.now();
 
-  // Remove existing listener if any
   if (appStateSubscription) {
     appStateSubscription.remove();
     appStateSubscription = null;
   }
 
-  // Set up global AppState listener
   appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
 
-  // Start all realtime subscriptions
-  startAllSubscriptions(userId);
+  const runStart = () => {
+    markStartup('realtime_started');
+    startAllSubscriptions(userId);
+  };
+
+  if (options?.defer) {
+    markStartup('realtime_deferred_start');
+    InteractionManager.runAfterInteractions(() => {
+      runStart();
+    });
+    return;
+  }
+
+  runStart();
 }
 
 /**

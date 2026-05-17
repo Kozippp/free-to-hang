@@ -44,14 +44,7 @@ export default function PlansScreen() {
     return Array.from(planMap.values());
   }, [invitations, activePlans]);
 
-  // Load plans from API when component mounts
-  // NOTE: Realtime subscriptions are now managed globally by realtimeManager
-  useEffect(() => {
-    if (user?.id) {
-      console.log('🔄 Loading plans for user:', user.id);
-      loadPlans(user.id);
-    }
-  }, [user?.id]); // Only depend on user.id to avoid infinite loops
+  // Initial plans load is handled by realtimeManager.startRealTimeUpdates → loadPlans
 
   useEffect(() => {
     if (!params.tab) {
