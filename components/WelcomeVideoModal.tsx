@@ -25,7 +25,7 @@ type Props = {
 
 export default function WelcomeVideoModal({ visible, onClose }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const player = useVideoPlayer(require('@/assets/F2H Tervitusvideo.mov'), (p) => {
+  const player = useVideoPlayer(require('@/assets/F2H-welcome.m4v'), (p) => {
     p.loop = false;
   });
 
